@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,19 +21,20 @@ type saveFile struct {
 	Gems    []Gem  `json:"gems"`
 }
 
-// Bumped when the format changes incompatibly: older saves are ignored.
-const saveVersion = 2
+// Bumped when the world format changes: older saves keep the progress
+// (credits, upgrades) but start on a fresh Moon.
+const saveVersion = 3
 
-func savePath() (string, error) {
+func saveDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "moon_sweeper", "save.json"), nil
+	return filepath.Join(dir, "moon_sweeper"), nil
 }
 
 func (g *Game) save() {
-	path, err := savePath()
+	dir, err := saveDir()
 	if err != nil {
 		log.Println("save:", err)
 		return
@@ -48,47 +52,71 @@ func (g *Game) save() {
 		log.Println("save:", err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	// The dust layer is mostly long runs of equal values: it compresses well.
+	var buf bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	zw.Write(data)
+	zw.Close()
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Println("save:", err)
 		return
 	}
 	// Write then rename, so a crash mid-save never corrupts the previous save.
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	path := filepath.Join(dir, "save.json.gz")
+	if err := os.WriteFile(path+".tmp", buf.Bytes(), 0o644); err != nil {
 		log.Println("save:", err)
 		return
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := os.Rename(path+".tmp", path); err != nil {
 		log.Println("save:", err)
 	}
 }
 
-func (g *Game) load() bool {
-	path, err := savePath()
+// load restores the last save. g.world stays nil when there is no world to
+// restore, including for saves from older versions of which only the
+// progress is kept.
+func (g *Game) load() {
+	dir, err := saveDir()
 	if err != nil {
-		return false
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
+		return
 	}
 	var sf saveFile
-	if err := json.Unmarshal(data, &sf); err != nil {
-		log.Println("load: corrupted save, starting fresh:", err)
-		return false
+	if data, err := readGzip(filepath.Join(dir, "save.json.gz")); err == nil {
+		if err := json.Unmarshal(data, &sf); err != nil {
+			log.Println("load: corrupted save, starting fresh:", err)
+			return
+		}
+	} else if data, err := os.ReadFile(filepath.Join(dir, "save.json")); err == nil {
+		// Flat-world save from before the Moon became a sphere.
+		if err := json.Unmarshal(data, &sf); err != nil {
+			return
+		}
+	} else {
+		return
 	}
-	if sf.Version != saveVersion {
-		log.Println("load: save from an older version, starting fresh")
-		return false
-	}
+
 	g.st = sf.State
-	if g.st.Levels == nil {
-		g.st.Levels = map[string]int{}
-	}
 	g.st.ToolTier = max(0, min(g.st.ToolTier, len(tools)-1))
+	if sf.Version != saveVersion {
+		log.Println("load: save from an older version, keeping progress on a new Moon")
+		return
+	}
 	g.player = sf.Player
 	g.world = NewWorld(sf.Seed)
 	g.world.SetDustBytes(sf.Dust)
 	g.world.Gems = sf.Gems
-	return true
+}
+
+func readGzip(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(zr)
 }

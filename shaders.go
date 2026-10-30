@@ -1,34 +1,25 @@
 package main
 
 // Every surface is painted by these shaders: no image file is ever loaded.
+// World positions are relative to the Moon's center, so normalize(fragPos)
+// is the local "up" anywhere on the surface.
 
 // shaderCommon holds the noise, lighting and fog shared by all fragment shaders.
 const shaderCommon = `
 uniform vec3 viewPos;
 uniform vec3 sunDir;
+uniform vec3 earthDir;
 
-const vec3 sunCol  = vec3(1.0, 0.94, 0.84);
-const vec3 skyFill = vec3(0.21, 0.23, 0.32);
-const vec3 rimCol  = vec3(0.45, 0.60, 1.00);
-const vec3 horizon = vec3(0.07, 0.075, 0.15);
-
-float hash12(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
+const vec3 sunCol   = vec3(1.0, 0.94, 0.84);
+const vec3 skyFill  = vec3(0.21, 0.23, 0.32);
+const vec3 earthCol = vec3(0.28, 0.40, 0.70);
+const vec3 rimCol   = vec3(0.45, 0.60, 1.00);
+const vec3 horizon  = vec3(0.07, 0.075, 0.15);
 
 float hash13(vec3 p) {
     p = fract(p * 0.1031);
     p += dot(p, p.zyx + 31.32);
     return fract((p.x + p.y) * p.z);
-}
-
-float vnoise2(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2(1, 0)), u.x),
-               mix(hash12(i + vec2(0, 1)), hash12(i + vec2(1, 1)), u.x), u.y);
 }
 
 float vnoise3(vec3 p) {
@@ -40,23 +31,18 @@ float vnoise3(vec3 p) {
                    mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), u.x), u.y), u.z);
 }
 
-float fbm2(vec2 p) {
-    float s = 0.0, a = 0.5;
-    for (int i = 0; i < 5; i++) { s += a * vnoise2(p); p = p * 2.03 + 17.0; a *= 0.5; }
-    return s;
-}
-
 float fbm3(vec3 p) {
     float s = 0.0, a = 0.5;
     for (int i = 0; i < 5; i++) { s += a * vnoise3(p); p = p * 2.03 + 17.0; a *= 0.5; }
     return s;
 }
 
-// Soft stylized lighting: wrapped sun, cool sky fill, rim light, specular.
-// shadow only dims the sun; spec is the highlight strength.
-vec3 shade(vec3 albedo, vec3 n, vec3 v, float shadow, float spec) {
+// Soft stylized lighting: wrapped sun, cool sky fill, earthshine on the
+// side facing the Earth, rim light and specular. shadow only dims the sun.
+vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float spec) {
     float wrap = clamp((dot(n, sunDir) + 0.3) / 1.3, 0.0, 1.0);
-    vec3 col = albedo * (sunCol * wrap * 1.35 * shadow + skyFill * (0.5 + 0.3 * n.y));
+    vec3 col = albedo * (sunCol * wrap * 1.35 * shadow + skyFill * (0.5 + 0.3 * dot(n, up)));
+    col += albedo * earthCol * max(dot(n, earthDir), 0.0) * 0.35;
     col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12;
     vec3 h = normalize(sunDir + v);
     col += sunCol * pow(max(dot(n, h), 0.0), 48.0) * spec * shadow;
@@ -86,57 +72,76 @@ void main() {
 const terrainFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
-uniform sampler2D texture0; // dust amount, 0..1, over the playable area
+uniform sampler2D texture0; // dust amounts: the 6 cube faces in a 3x2 atlas
+uniform float dustRes;      // cells per face side
+uniform float moonRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows: xyz center, w radius
 uniform float casterCount;
-uniform float time;
 out vec4 finalColor;
 ` + shaderCommon + `
+// Same cube projection as the game code (cubeFaces in mathx.go).
+float dustAt(vec3 d) {
+    vec3 a = abs(d);
+    int f; vec3 N, U, V;
+    if (a.x >= a.y && a.x >= a.z) {
+        if (d.x > 0.0) { f = 0; N = vec3(1, 0, 0); U = vec3(0, 0, -1); V = vec3(0, 1, 0); }
+        else           { f = 1; N = vec3(-1, 0, 0); U = vec3(0, 0, 1); V = vec3(0, 1, 0); }
+    } else if (a.y >= a.z) {
+        if (d.y > 0.0) { f = 2; N = vec3(0, 1, 0); U = vec3(1, 0, 0); V = vec3(0, 0, -1); }
+        else           { f = 3; N = vec3(0, -1, 0); U = vec3(1, 0, 0); V = vec3(0, 0, 1); }
+    } else {
+        if (d.z > 0.0) { f = 4; N = vec3(0, 0, 1); U = vec3(1, 0, 0); V = vec3(0, 1, 0); }
+        else           { f = 5; N = vec3(0, 0, -1); U = vec3(-1, 0, 0); V = vec3(0, 1, 0); }
+    }
+    float dn = dot(d, N);
+    vec2 uv = vec2(atan(dot(d, U) / dn), atan(dot(d, V) / dn)) * (2.0 / 3.14159265) + 0.5;
+    uv = clamp(uv, 0.5 / dustRes, 1.0 - 0.5 / dustRes); // don't bleed into the next face
+    vec2 cell = vec2(float(f - 3 * (f / 3)), float(f / 3));
+    return texture(texture0, (cell + uv) / vec2(3.0, 2.0)).r;
+}
+
 void main() {
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewPos - fragPos);
-    vec2 uv = fragPos.xz / 128.0;
-    bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
-    float dust = inside ? texture(texture0, uv).r : 1.0;
+    vec3 up = normalize(fragPos);
+    float dust = dustAt(up);
 
     // Bare regolith: cool gray with large soft blotches.
-    float big = fbm2(fragPos.xz * 0.035);
+    float big = fbm3(fragPos * 0.035);
     vec3 rock = mix(vec3(0.15, 0.155, 0.18), vec3(0.27, 0.27, 0.30), big);
-    rock *= 0.9 + 0.1 * vnoise2(fragPos.xz * 1.3);
+    rock *= 0.9 + 0.1 * vnoise3(fragPos * 1.3);
 
     // Dust: warm and pale, with organic edges instead of grid cells.
-    float edge = (fbm2(fragPos.xz * 2.2) - 0.5) * 0.35;
+    float edge = (fbm3(fragPos * 2.2) - 0.5) * 0.35;
     float cover = smoothstep(0.10, 0.38, dust + edge);
-    vec3 dustCol = mix(vec3(0.72, 0.68, 0.62), vec3(0.86, 0.82, 0.75), fbm2(fragPos.xz * 0.12 + 5.0));
+    vec3 dustCol = mix(vec3(0.72, 0.68, 0.62), vec3(0.86, 0.82, 0.75), fbm3(fragPos * 0.12 + 5.0));
     dustCol *= 0.9 + 0.1 * dust;
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
     albedo *= 1.0 - 0.18 * cover * (1.0 - cover) * 4.0;
 
+    // Soft shadows: is this point behind a caster, as seen from the sun?
     float shadow = 1.0;
     for (int i = 0; i < 16; i++) {
         if (float(i) >= casterCount) break;
-        vec3 c = casters[i].xyz;
-        vec3 sc = c - sunDir * ((c.y - fragPos.y) / sunDir.y);
-        float d = length(fragPos.xz - sc.xz) / casters[i].w;
+        vec3 rel = fragPos - casters[i].xyz;
+        float t = -dot(rel, sunDir);
+        if (t <= 0.0) continue;
+        float d = length(rel + sunDir * t) / casters[i].w;
         shadow *= mix(0.35, 1.0, smoothstep(0.3, 1.2, d));
     }
 
-    vec3 col = shade(albedo, n, v, shadow, 0.04 * cover);
-
+    vec3 col = shade(albedo, n, v, up, shadow, 0.04 * cover);
 
     float dist = length(viewPos - fragPos);
     if (brush.w > 0.0) {
-        float d = distance(fragPos.xz, brush.xz);
+        float d = length(up - normalize(brush.xyz)) * moonRadius;
         float w = 0.05 + dist * 0.003;
         float ring = 1.0 - smoothstep(0.0, w, abs(d - brush.w));
         float fill = (1.0 - smoothstep(brush.w - 0.6, brush.w, d)) * 0.08;
         col = mix(col, vec3(0.45, 1.0, 0.95), ring * 0.75 + fill);
     }
-    // Faint glowing line marking the edge of the playable area.
-    float e = min(min(fragPos.x, 128.0 - fragPos.x), min(fragPos.z, 128.0 - fragPos.z));
-    col += vec3(0.3, 0.8, 1.0) * (1.0 - smoothstep(0.0, 0.35, abs(e - 0.5))) * 0.25;
 
     finalColor = vec4(finish(col, dist), 1.0);
 }`
@@ -151,7 +156,7 @@ out vec4 finalColor;
 void main() {
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewPos - fragPos);
-    vec3 lit = shade(colDiffuse.rgb, n, v, 1.0, surface.x);
+    vec3 lit = shade(colDiffuse.rgb, n, v, normalize(fragPos), 1.0, surface.x);
     vec3 col = mix(lit, colDiffuse.rgb * 1.6, surface.y);
     finalColor = vec4(finish(col, length(viewPos - fragPos)), colDiffuse.a);
 }`
@@ -159,7 +164,7 @@ void main() {
 const skyFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
-uniform vec3 earthDir;
+uniform vec3 up; // the viewer's local up: the horizon follows them around the Moon
 uniform float time;
 out vec4 finalColor;
 ` + shaderCommon + `
@@ -167,6 +172,7 @@ vec3 earth(vec3 d, inout float cover) {
     const float dist = 100.0, radius = 7.5;
     vec3 c = earthDir * dist;
     float b = dot(d, c);
+    if (b < 0.0) return vec3(0.0);
     float disc = b * b - dot(c, c) + radius * radius;
     // Atmosphere halo just outside the disk.
     float closest = length(d * b - c);
@@ -190,7 +196,8 @@ vec3 earth(vec3 d, inout float cover) {
 
 void main() {
     vec3 d = normalize(fragPos - viewPos);
-    vec3 col = mix(horizon, vec3(0.008, 0.009, 0.03), smoothstep(-0.02, 0.5, d.y));
+    float h = dot(d, up);
+    vec3 col = mix(horizon, vec3(0.008, 0.009, 0.03), smoothstep(-0.02, 0.5, h));
 
     // Stars on a fine 3D grid of directions, gently twinkling.
     vec3 p = d * 220.0;
@@ -200,7 +207,7 @@ void main() {
         vec3 star = cell + 0.5 + (vec3(hash13(cell + 1.0), hash13(cell + 2.0), hash13(cell + 3.0)) - 0.5) * 0.6;
         float twinkle = 0.7 + 0.3 * sin(time * (1.0 + r * 4.0) + r * 50.0);
         float bright = (r - 0.97) / 0.03;
-        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.32, 0.0, length(p - star)) * bright * twinkle * smoothstep(-0.02, 0.12, d.y);
+        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.32, 0.0, length(p - star)) * bright * twinkle * smoothstep(-0.02, 0.12, h);
     }
 
     float cover = 0.0;

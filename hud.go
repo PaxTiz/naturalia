@@ -137,7 +137,7 @@ func (g *Game) drawStatus() {
 func (g *Game) drawBaseMarker(cam rl.Camera3D) {
 	gfx, u := g.gfx, uiScale()
 	w, h := screenSize()
-	dist := distXZ(g.player.Pos, basePos)
+	dist := arcDist(g.player.LocalUp(), basePos.norm())
 	if dist < 15 {
 		return
 	}

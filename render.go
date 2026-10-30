@@ -28,9 +28,9 @@ const (
 )
 
 type shaderLocs struct {
-	viewPos, sunDir, time       int32
-	brush, casters, casterCount int32
-	surface, earthDirLc         int32
+	viewPos, sunDir, earthDir, time int32
+	brush, casters, casterCount     int32
+	surface, up                     int32
 }
 
 // Graphics holds the GPU resources. Everything is generated at startup:
@@ -48,10 +48,9 @@ func loadShader(fs string) (rl.Shader, shaderLocs) {
 	sh := rl.LoadShaderFromMemory(meshVS, fs)
 	loc := func(name string) int32 { return rl.GetShaderLocation(sh, name) }
 	return sh, shaderLocs{
-		viewPos: loc("viewPos"), sunDir: loc("sunDir"), time: loc("time"),
+		viewPos: loc("viewPos"), sunDir: loc("sunDir"), earthDir: loc("earthDir"), time: loc("time"),
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
-		surface:    loc("surface"),
-		earthDirLc: loc("earthDir"),
+		surface: loc("surface"), up: loc("up"),
 	}
 }
 
@@ -91,10 +90,12 @@ func NewGraphics() *Graphics {
 	rl.SetTextureFilter(gfx.font.Texture, rl.FilterBilinear)
 	rl.SetTextureFilter(gfx.bold.Texture, rl.FilterBilinear)
 
-	rl.SetShaderValue(gfx.skySh, gfx.sLoc.earthDirLc, v3f(earthDir), rl.ShaderUniformVec3)
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(sunDir), rl.ShaderUniformVec3)
+		rl.SetShaderValue(s.sh, s.loc.earthDir, v3f(earthDir), rl.ShaderUniformVec3)
 	}
+	rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, "dustRes"), []float32{dustRes}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, "moonRadius"), []float32{moonRadius}, rl.ShaderUniformFloat)
 	return gfx
 }
 
@@ -136,7 +137,7 @@ func (g *Game) camera() rl.Camera3D {
 	return rl.Camera3D{
 		Position:   eye.rl(),
 		Target:     eye.add(g.player.Forward()).rl(),
-		Up:         rl.NewVector3(0, 1, 0),
+		Up:         g.player.LocalUp().rl(),
 		Fovy:       70,
 		Projection: rl.CameraPerspective,
 	}
@@ -150,6 +151,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
 	}
+	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
 
 	brush := []float32{0, 0, 0, 0}
 	if g.aimOK && g.mode == modePlay {
@@ -157,12 +159,13 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	}
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
 
-	// Soft shadows cast by the base and the drones.
+	// Soft shadows cast by the base and the drones (the base stands on the
+	// north pole, where up is +Y).
 	casters := []float32{
 		float32(basePos.X), float32(basePos.Y + 2.6), float32(basePos.Z), 3.4,
 		float32(terminalPos.X), float32(terminalPos.Y + 0.7), float32(terminalPos.Z), 0.8,
 	}
-	for _, d := range g.drones {
+	for _, d := range g.drones[:min(len(g.drones), maxCasters-2)] {
 		casters = append(casters, float32(d.Pos.X), float32(d.Pos.Y), float32(d.Pos.Z), 0.55)
 	}
 	n := min(len(casters)/4, maxCasters)
@@ -174,9 +177,12 @@ func (g *Game) Draw() {
 	gfx := g.gfx
 	cam := g.camera()
 
-	mats := g.terrain.model.GetMaterials()
-	mats[0].Shader = gfx.terrainSh
-	rl.SetMaterialTexture(&mats[0], rl.MapDiffuse, g.world.Upload())
+	dust := g.world.Upload()
+	for _, c := range g.terrain.chunks {
+		mats := c.model.GetMaterials()
+		mats[0].Shader = gfx.terrainSh
+		rl.SetMaterialTexture(&mats[0], rl.MapDiffuse, dust)
+	}
 	g.setUniforms(cam)
 
 	rl.BeginDrawing()
@@ -190,7 +196,16 @@ func (g *Game) Draw() {
 	rl.EnableDepthMask()
 	rl.EnableBackfaceCulling()
 
-	rl.DrawModel(g.terrain.model, rl.NewVector3(terrainOrigin, 0, terrainOrigin), 1, rl.White)
+	// The horizon is close on such a small Moon: only draw the chunks around
+	// the player. Culling is off because chunk winding differs per cube face.
+	up := g.player.LocalUp()
+	rl.DisableBackfaceCulling()
+	for _, c := range g.terrain.chunks {
+		if c.center.dot(up) > chunkCullCos {
+			rl.DrawModel(c.model, rl.NewVector3(0, 0, 0), 1, rl.White)
+		}
+	}
+	rl.EnableBackfaceCulling()
 	g.drawBase()
 	g.drawDrones()
 	g.drawGems()
@@ -202,7 +217,12 @@ func (g *Game) Draw() {
 	rl.EndDrawing()
 }
 
-var terminalPos = basePos.add(vec3{1.8, 0, -3.4})
+// chunkCullCos skips terrain chunks more than ~60° around the Moon from the
+// player: well past the horizon, even from a hilltop.
+var chunkCullCos = math.Cos(60 * math.Pi / 180)
+
+// terminalPos is set on the ground once the terrain exists.
+var terminalPos vec3
 
 var (
 	matGold  = color.RGBA{222, 170, 70, 255}
@@ -239,34 +259,45 @@ func (g *Game) drawBase() {
 }
 
 func (g *Game) drawDrones() {
-	gfx, up := g.gfx, vec3{0, 1, 0}
+	gfx := g.gfx
 	for _, d := range g.drones {
-		p := d.Pos.add(vec3{0, math.Sin(d.phase*3) * 0.08, 0})
-		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, up, 0, matWhite, 0.8, 0)
-		gfx.put(gfx.hemi, p.add(vec3{0, -0.06, 0}), vec3{0.15, 0.12, 0.15}, vec3{1, 0, 0}, 180, matDark, 1, 0)
+		up := d.Pos.norm()
+		axis, angle := orient(up)
+		downAxis, downAngle := orient(up.scale(-1))
+		t1, t2 := tangentBasis(up)
+		p := d.Pos.add(up.scale(math.Sin(d.phase*3) * 0.08))
+		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, matWhite, 0.8, 0)
+		gfx.put(gfx.hemi, p.sub(up.scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, matDark, 1, 0)
 		for i := range 4 {
 			a := math.Pi/4 + float64(i)*math.Pi/2
-			arm := p.add(vec3{math.Cos(a) * 0.45, 0.05, math.Sin(a) * 0.45})
+			arm := p.add(t1.scale(math.Cos(a) * 0.45)).add(t2.scale(math.Sin(a) * 0.45)).add(up.scale(0.05))
 			gfx.segment(gfx.cyl, p, arm, 0.025, matSteel, 0.4, 0)
-			gfx.put(gfx.cyl, arm.add(vec3{0, 0.04, 0}), vec3{0.19, 0.012, 0.19}, up, 0, color.RGBA{60, 64, 80, 150}, 0.2, 0)
+			gfx.segment(gfx.cyl, arm.add(up.scale(0.04)), arm.add(up.scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
 		}
 		light := colGreen
 		if g.tankFull() {
 			light = colRed
 		}
 		if math.Sin(d.phase*6) > 0 {
-			gfx.put(gfx.sphere, p.add(vec3{0, 0.15, 0}), vec3{0.045, 0.045, 0.045}, up, 0, light, 0, 1)
+			gfx.put(gfx.sphere, p.add(up.scale(0.15)), vec3{0.045, 0.045, 0.045}, axis, angle, light, 0, 1)
 		}
 	}
 }
 
+// gemDrawDist: crystals farther than this are below the horizon anyway.
+const gemDrawDist = 60.0
+
 // gemVisibility is how much of a crystal pokes out of the dust (0..1).
 func (g *Game) gemVisibility(gem Gem) float64 {
-	return clamp01(1 - g.world.DustAt(gem.X, gem.Z)*2.5)
+	if gem.Dir.sub(g.player.LocalUp()).length()*moonRadius > gemDrawDist {
+		return 0
+	}
+	return clamp01(1 - g.world.DustAt(gem.Dir)*2.5)
 }
 
 func (g *Game) gemPos(i int, gem Gem, s float64) vec3 {
-	return vec3{gem.X, g.terrain.Height(gem.X, gem.Z) + s*1.4 + math.Sin(g.clock*2+float64(i))*0.05, gem.Z}
+	lift := s*1.4 + math.Sin(g.clock*2+float64(i))*0.05
+	return g.terrain.Surface(gem.Dir).add(gem.Dir.scale(lift))
 }
 
 func (g *Game) drawGems() {
@@ -278,9 +309,10 @@ func (g *Game) drawGems() {
 		}
 		s := 0.06 + 0.16*vis
 		p := g.gemPos(i, gem, s)
-		spin := g.clock*50 + float64(i)*40
-		gfx.put(gfx.crystal, p, vec3{s, s * 1.7, s}, vec3{0, 1, 0}, spin, colCyan, 1, 0.45)
-		gfx.put(gfx.crystal, p, vec3{s, s * 1.2, s}, vec3{1, 0, 0}, 180, color.RGBA{60, 170, 220, 255}, 1, 0.45)
+		axis, angle := orient(gem.Dir)
+		downAxis, downAngle := orient(gem.Dir.scale(-1))
+		gfx.put(gfx.crystal, p, vec3{s, s * 1.7, s}, axis, angle, colCyan, 1, 0.45)
+		gfx.put(gfx.crystal, p, vec3{s, s * 1.2, s}, downAxis, downAngle, color.RGBA{60, 170, 220, 255}, 1, 0.45)
 	}
 }
 

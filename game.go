@@ -91,14 +91,18 @@ func NewGame() *Game {
 		rng:   rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 		hover: -1,
 	}
-	if !g.load() {
+	g.load()
+	if g.st.Levels == nil {
 		g.st.Levels = map[string]int{}
+	}
+	if g.world == nil {
 		g.world = NewWorld(g.rng.Uint64())
-		g.world.ScatterGems(g.rng, 60)
-		g.player.Pos = basePos.add(vec3{0, 0, -6})
+		g.world.ScatterGems(g.rng, 400)
+		g.player = Player{Pos: basePos.add(vec3{0, 0, -6}), Heading: vec3{0, 0, 1}}
 	}
 	g.terrain = NewTerrain(g.world.Seed)
-	g.player.Pos.Y = g.terrain.Height(g.player.Pos.X, g.player.Pos.Z)
+	g.player.Pos = g.terrain.Surface(g.player.Pos)
+	terminalPos = g.terrain.Surface(basePos.add(vec3{1.8, 0, -3.4}))
 	g.gfx = NewGraphics()
 	g.syncDrones()
 	return g
@@ -113,7 +117,7 @@ func (g *Game) setMode(m mode) {
 	}
 }
 
-func (g *Game) nearTerminal() bool { return distXZ(g.player.Pos, basePos) < terminalReach }
+func (g *Game) nearTerminal() bool { return g.player.Pos.sub(basePos).length() < terminalReach }
 
 func (g *Game) Update(dt float64) {
 	g.clock += dt
@@ -190,13 +194,13 @@ func (g *Game) updateSweeping(dt float64) {
 	from, steps := g.aim, 1
 	if g.sweeping {
 		from = g.lastSweep
-		steps = min(8, int(distXZ(g.aim, from)/(tool.Radius*0.5))+1)
+		steps = min(8, int(g.aim.sub(from).length()/(tool.Radius*0.5))+1)
 	}
 	for s := 1; s <= steps; s++ {
 		p := from.lerp(g.aim, float64(s)/float64(steps))
-		g.collect(g.world.Clean(p.X, p.Z, tool.Radius, amount, g.space()), p, tool.Radius, g.toolTip)
+		g.collect(g.world.Clean(p, tool.Radius, amount, g.space()), p, tool.Radius, g.toolTip)
 	}
-	for _, gem := range g.world.CollectGems(g.aim.X, g.aim.Z, tool.Radius) {
+	for _, gem := range g.world.CollectGems(g.aim, tool.Radius) {
 		g.collectGem(gem)
 	}
 	g.lastSweep, g.sweeping = g.aim, true
@@ -211,11 +215,13 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	g.st.Tank += grams
 	g.st.TotalDust += grams
 	n := min(8, int(grams*4+g.rng.Float64()))
+	up := at.norm()
+	t1, t2 := tangentBasis(up)
 	for range n {
 		a := g.rng.Float64() * 2 * math.Pi
 		r := math.Sqrt(g.rng.Float64()) * radius
-		x, z := at.X+math.Cos(a)*r, at.Z+math.Sin(a)*r
-		start := vec3{x, g.terrain.Height(x, z) + 0.05, z}
+		ground := g.terrain.Surface(at.add(t1.scale(math.Cos(a) * r)).add(t2.scale(math.Sin(a) * r)))
+		start := ground.add(up.scale(0.05))
 		travel := 0.35 + g.rng.Float64()*0.3
 		g.addParticle(Particle{
 			Pos: start, Vel: sink.sub(start).scale(1 / travel),
@@ -229,10 +235,10 @@ func (g *Game) collectGem(gem Gem) {
 	v := g.gemValue()
 	g.st.Credits += v
 	g.st.TotalEarned += v
-	pos := vec3{gem.X, g.terrain.Height(gem.X, gem.Z) + 0.3, gem.Z}
-	g.floaters = append(g.floaters, Floater{Pos: pos.add(vec3{0, 0.4, 0}), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
+	pos := g.terrain.Surface(gem.Dir).add(gem.Dir.scale(0.3))
+	g.floaters = append(g.floaters, Floater{Pos: pos.add(gem.Dir.scale(0.4)), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
 	for range 20 {
-		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64(), g.rng.Float64() - 0.5}.scale(4)
+		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.add(gem.Dir.scale(0.6)).scale(4)
 		g.addParticle(Particle{Pos: pos, Vel: vel, MaxLife: 0.7, Size: 0.06, C: colCyan, Falls: true, Additive: true})
 	}
 }
@@ -251,36 +257,45 @@ func (g *Game) sell() {
 func (g *Game) syncDrones() {
 	for len(g.drones) < g.st.Levels["drone"] {
 		p := basePos.add(vec3{0, 4, 0})
-		g.drones = append(g.drones, &Drone{Pos: p, Target: p, phase: g.rng.Float64() * 10})
+		g.drones = append(g.drones, &Drone{Pos: p, Target: basePos, phase: g.rng.Float64() * 10})
 	}
 }
+
+// droneRange is how far from the player drones look for dust: they follow
+// you around the Moon.
+const droneRange = 25.0
 
 func (g *Game) updateDrones(dt float64) {
 	radius := 0.8 + float64(g.st.ToolTier)*0.5
 	amount := 0.6 * g.powerMult() * dt
 	for _, d := range g.drones {
 		d.phase += dt
-		ground := g.terrain.Height(d.Pos.X, d.Pos.Z)
+		up := d.Pos.norm()
+		hover := droneHover
 		if g.tankFull() {
-			// Tank full: drones hover in place, waiting.
-			d.Pos.Y += (ground + droneHover + 0.5 - d.Pos.Y) * math.Min(1, dt*2)
+			hover += 0.5 // tank full: drones hover in place, waiting
+		} else {
+			d.retarget -= dt
+			arrived := up.sub(d.Target.norm()).length()*moonRadius < 0.3
+			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) {
+				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
+				d.retarget = 8 + g.rng.Float64()*5
+			}
+			if !arrived {
+				delta := d.Target.sub(d.Pos)
+				delta = delta.sub(up.scale(delta.dot(up))) // stay along the ground
+				d.Pos = d.Pos.add(delta.norm().scale(math.Min(delta.length(), droneSpeed*dt)))
+				up = d.Pos.norm()
+			}
+		}
+		r := d.Pos.length()
+		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
+		d.Pos = up.scale(r)
+		if g.tankFull() {
 			continue
 		}
-		d.retarget -= dt
-		arrived := distXZ(d.Pos, d.Target) < 0.3
-		if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target.X, d.Target.Z) < 0.05) {
-			x, z := g.world.FindDusty(g.rng)
-			d.Target = vec3{x, 0, z}
-			d.retarget = 8 + g.rng.Float64()*5
-		}
-		if !arrived {
-			delta := vec3{d.Target.X - d.Pos.X, 0, d.Target.Z - d.Pos.Z}
-			step := math.Min(delta.length(), droneSpeed*dt)
-			d.Pos = d.Pos.add(delta.norm().scale(step))
-		}
-		d.Pos.Y += (ground + droneHover - d.Pos.Y) * math.Min(1, dt*3)
-		g.collect(g.world.Clean(d.Pos.X, d.Pos.Z, radius, amount, g.space()), vec3{d.Pos.X, ground, d.Pos.Z}, radius, d.Pos)
-		for _, gem := range g.world.CollectGems(d.Pos.X, d.Pos.Z, radius) {
+		g.collect(g.world.Clean(up, radius, amount, g.space()), g.terrain.Surface(up), radius, d.Pos)
+		for _, gem := range g.world.CollectGems(up, radius) {
 			g.collectGem(gem)
 		}
 	}
@@ -305,7 +320,7 @@ func (g *Game) updateEffects(dt float64) {
 		}
 		p.Pos = p.Pos.add(p.Vel.scale(dt))
 		if p.Falls {
-			p.Vel.Y -= moonGravity * dt
+			p.Vel = p.Vel.sub(p.Pos.norm().scale(moonGravity * dt))
 		}
 		kept = append(kept, p)
 	}
@@ -314,7 +329,7 @@ func (g *Game) updateEffects(dt float64) {
 	keptF := g.floaters[:0]
 	for _, f := range g.floaters {
 		f.Life -= dt
-		f.Pos.Y += 0.6 * dt
+		f.Pos = f.Pos.add(f.Pos.norm().scale(0.6 * dt))
 		if f.Life > 0 {
 			keptF = append(keptF, f)
 		}

@@ -15,54 +15,56 @@ const (
 	mouseSens    = 0.0025
 )
 
+// Player walks on the sphere: "up" is always away from the Moon's center and
+// the heading is a vector tangent to the ground, carried along when walking.
 type Player struct {
 	Pos        vec3    `json:"pos"` // feet
-	Yaw        float64 `json:"yaw"`
+	Heading    vec3    `json:"heading"`
 	Pitch      float64 `json:"pitch"`
-	vy         float64
+	vr         float64 // radial (vertical) speed
 	onGround   bool
 	walkPhase  float64
 	moveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 }
 
-func (p *Player) Eye() vec3 { return p.Pos.add(vec3{0, eyeHeight, 0}) }
-
-// pushOut keeps the player outside a vertical cylinder around center.
-func (p *Player) pushOut(center vec3, radius float64) {
-	d := vec3{p.Pos.X - center.X, 0, p.Pos.Z - center.Z}
-	if l := d.length(); l < radius {
-		if l < 1e-6 {
-			d, l = vec3{0, 0, -1}, 1
-		}
-		p.Pos.X = center.X + d.X/l*radius
-		p.Pos.Z = center.Z + d.Z/l*radius
-	}
-}
+func (p *Player) LocalUp() vec3 { return p.Pos.norm() }
+func (p *Player) Eye() vec3     { return p.Pos.add(p.LocalUp().scale(eyeHeight)) }
 
 func (p *Player) Forward() vec3 {
-	cp := math.Cos(p.Pitch)
-	return vec3{cp * math.Sin(p.Yaw), math.Sin(p.Pitch), cp * math.Cos(p.Yaw)}
+	return p.Heading.scale(math.Cos(p.Pitch)).add(p.LocalUp().scale(math.Sin(p.Pitch)))
 }
 
-func (p *Player) Right() vec3 { f := p.Forward(); return vec3{-f.Z, 0, f.X}.norm() }
+func (p *Player) Right() vec3 { return p.Heading.cross(p.LocalUp()).norm() }
 func (p *Player) Up() vec3    { return p.Right().cross(p.Forward()) }
+
+// tangentHeading keeps the heading flat on the ground after moving.
+func (p *Player) tangentHeading() {
+	up := p.LocalUp()
+	h := p.Heading.sub(up.scale(p.Heading.dot(up)))
+	if h.length() < 1e-6 {
+		h, _ = tangentBasis(up)
+	}
+	p.Heading = h.norm()
+}
 
 // Update moves the player. With control false (menus) only gravity applies.
 func (p *Player) Update(dt float64, t *Terrain, control bool) {
+	p.tangentHeading()
+	up := p.LocalUp()
 	var move vec3
 	if control {
 		d := rl.GetMouseDelta()
-		p.Yaw -= float64(d.X) * mouseSens
+		turn := -float64(d.X) * mouseSens
+		p.Heading = p.Heading.scale(math.Cos(turn)).add(up.cross(p.Heading).scale(math.Sin(turn)))
 		p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*mouseSens))
 
 		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.
-		fwd := vec3{math.Sin(p.Yaw), 0, math.Cos(p.Yaw)}
-		right := vec3{-fwd.Z, 0, fwd.X}
+		right := p.Right()
 		if rl.IsKeyDown(rl.KeyW) {
-			move = move.add(fwd)
+			move = move.add(p.Heading)
 		}
 		if rl.IsKeyDown(rl.KeyS) {
-			move = move.sub(fwd)
+			move = move.sub(p.Heading)
 		}
 		if rl.IsKeyDown(rl.KeyD) {
 			move = move.add(right)
@@ -75,26 +77,26 @@ func (p *Player) Update(dt float64, t *Terrain, control bool) {
 			move = move.scale(sprintFactor)
 		}
 		if p.onGround && rl.IsKeyPressed(rl.KeySpace) {
-			p.vy = jumpSpeed
+			p.vr = jumpSpeed
 			p.onGround = false
 		}
 	}
 
-	p.Pos.X = math.Max(1, math.Min(worldSize-1, p.Pos.X+move.X*dt))
-	p.Pos.Z = math.Max(1, math.Min(worldSize-1, p.Pos.Z+move.Z*dt))
-	p.vy -= moonGravity * dt
-	p.Pos.Y += p.vy * dt
+	p.Pos = p.Pos.add(move.scale(dt))
+	p.vr -= moonGravity * dt
+	p.Pos = p.Pos.add(p.LocalUp().scale(p.vr * dt))
 
-	ground := t.Height(p.Pos.X, p.Pos.Z)
+	alt := t.Altitude(p.Pos)
 	// Stick to the ground on gentle downhill steps instead of floating off.
-	if p.onGround && p.vy <= 0 && p.Pos.Y-ground < 0.4 {
-		p.Pos.Y = ground
+	if p.onGround && p.vr <= 0 && alt < 0.4 {
+		p.Pos, alt = t.Surface(p.Pos), 0
 	}
-	if p.Pos.Y <= ground {
-		p.Pos.Y, p.vy, p.onGround = ground, 0, true
-	} else if p.Pos.Y-ground > 0.4 {
+	if alt <= 0 {
+		p.Pos, p.vr, p.onGround = t.Surface(p.Pos), 0, true
+	} else if alt > 0.4 {
 		p.onGround = false
 	}
+	p.tangentHeading()
 
 	speed := move.length()
 	target := 0.0
@@ -103,4 +105,17 @@ func (p *Player) Update(dt float64, t *Terrain, control bool) {
 		p.walkPhase += dt * speed * 1.6
 	}
 	p.moveAmount += (target - p.moveAmount) * math.Min(1, dt*8)
+}
+
+// pushOut keeps the player outside a vertical cylinder around center.
+func (p *Player) pushOut(center vec3, radius float64) {
+	up := center.norm()
+	d := p.Pos.sub(center)
+	d = d.sub(up.scale(d.dot(up)))
+	if l := d.length(); l < radius {
+		if l < 1e-6 {
+			d, l = p.Heading.scale(-1), 1
+		}
+		p.Pos = p.Pos.add(d.scale((radius - l) / l))
+	}
 }
