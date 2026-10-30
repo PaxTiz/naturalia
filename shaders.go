@@ -1,5 +1,7 @@
 package main
 
+import "strconv"
+
 // Every surface is painted by these shaders: no image file is ever loaded.
 // World positions are relative to the Moon's center, so normalize(fragPos)
 // is the local "up" anywhere on the surface.
@@ -69,7 +71,7 @@ void main() {
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }`
 
-const terrainFS = `#version 330
+var terrainFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
 uniform sampler2D texture0; // cache of the touched dust tiles
@@ -79,8 +81,12 @@ uniform float moonRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows: xyz center, w radius
 uniform float casterCount;
+uniform sampler2D texture2; // painted regolith: R tone, G pebbles, B hollows, A height
+uniform sampler2D texture3; // painted dust: R tone, G clumps, A height
 out vec4 finalColor;
-` + shaderCommon + `
+` + shaderCommon + textureCommon + `
+const float regolithTile = ` + ftoa(regolithTile) + `;
+const float dustTile = ` + ftoa(dustTile) + `;
 // Same cube projection as the game code (cubeFaces in mathx.go).
 float dustAt(vec3 d) {
     vec3 a = abs(d);
@@ -112,21 +118,35 @@ void main() {
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewPos - fragPos);
     vec3 up = normalize(fragPos);
+    float dist = length(viewPos - fragPos);
     float dust = dustAt(up);
 
-    // Bare regolith: cool gray with large soft blotches.
-    float big = fbm3(fragPos * 0.035);
-    vec3 rock = mix(vec3(0.15, 0.155, 0.18), vec3(0.27, 0.27, 0.30), big);
-    rock *= 0.9 + 0.1 * vnoise3(fragPos * 1.3);
+    // Painted textures, projected along the three axes. A second, larger
+    // scale fades in with distance to hide the tiling.
+    vec3 w = triWeights(n);
+    float far = smoothstep(12.0, 60.0, dist) * 0.65;
+    vec4 rg = mix(tri(texture2, fragPos, w, 1.0 / regolithTile), tri(texture2, fragPos, w, 1.0 / (regolithTile * 7.3)), far);
+    vec4 ds = mix(tri(texture3, fragPos, w, 1.0 / dustTile), tri(texture3, fragPos, w, 1.0 / (dustTile * 6.1)), far);
 
-    // Dust: warm and pale, with organic edges instead of grid cells.
-    float edge = (fbm3(fragPos * 2.2) - 0.5) * 0.35;
-    float cover = smoothstep(0.10, 0.38, dust + edge);
-    vec3 dustCol = mix(vec3(0.72, 0.68, 0.62), vec3(0.86, 0.82, 0.75), fbm3(fragPos * 0.12 + 5.0));
-    dustCol *= 0.9 + 0.1 * dust;
+    // Bare regolith: cool gray, large soft blotches, darker pebbles and hollows.
+    float big = fbm3(fragPos * 0.035);
+    vec3 rock = mix(vec3(0.13, 0.135, 0.16), vec3(0.29, 0.29, 0.33), big) * (0.55 + 0.9 * rg.r);
+    rock = mix(rock, vec3(0.17, 0.18, 0.22) * (0.7 + 0.8 * rg.r), rg.g * 0.55);
+    rock *= 1.0 - rg.b * 0.45;
+
+    // Dust settles in the hollows first; pebbles poke through thin layers.
+    float edge = (fbm3(fragPos * 1.7) - 0.5) * 0.3;
+    float cover = smoothstep(0.08, 0.36, dust + edge + (0.45 - rg.a) * 0.45 * (1.0 - dust));
+    vec3 dustCol = mix(vec3(0.70, 0.66, 0.60), vec3(0.88, 0.83, 0.75), fbm3(fragPos * 0.12 + 5.0));
+    dustCol *= 0.68 + 0.6 * ds.r;
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
-    albedo *= 1.0 - 0.18 * cover * (1.0 - cover) * 4.0;
+    albedo *= 1.0 - 0.22 * cover * (1.0 - cover) * 4.0;
+
+    // Relief of the textures, fading out with distance.
+    float fade = 1.0 - smoothstep(25.0, 70.0, dist);
+    float h = mix(rg.a * 0.06, ds.a * 0.03, cover);
+    n = bump(n, fragPos, h, fade);
 
     // Soft shadows: is this point behind a caster, as seen from the sun?
     float shadow = 1.0;
@@ -141,7 +161,6 @@ void main() {
 
     vec3 col = shade(albedo, n, v, up, shadow, 0.04 * cover);
 
-    float dist = length(viewPos - fragPos);
     if (brush.w > 0.0) {
         float d = length(up - normalize(brush.xyz)) * moonRadius;
         float w = 0.05 + dist * 0.003;
@@ -306,3 +325,30 @@ void main() {
 
     finalColor = vec4(vec3(1.0) - exp(-col * 1.35), 1.0);
 }`
+
+// textureCommon samples the painted textures: triplanar projection (no UVs
+// needed, works on any shape) and bump mapping from their height channel.
+const textureCommon = `
+vec3 triWeights(vec3 n) {
+    vec3 w = pow(abs(n), vec3(4.0));
+    return w / (w.x + w.y + w.z);
+}
+
+vec4 tri(sampler2D t, vec3 p, vec3 w, float scale) {
+    return texture(t, p.zy * scale) * w.x + texture(t, p.xz * scale) * w.y + texture(t, p.xy * scale) * w.z;
+}
+
+// bump tilts the normal along the slopes of height h (Mikkelsen's
+// derivative bump mapping); strength is the relief depth in meters.
+vec3 bump(vec3 n, vec3 p, float h, float strength) {
+    if (strength <= 0.0) return n;
+    vec3 dpdx = dFdx(p), dpdy = dFdy(p);
+    vec3 r1 = cross(dpdy, n), r2 = cross(n, dpdx);
+    float det = dot(dpdx, r1);
+    vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
+    return normalize(abs(det) * n - strength * grad);
+}
+`
+
+// ftoa writes a Go constant as a GLSL float literal.
+func ftoa(v float64) string { return strconv.FormatFloat(v, 'f', 3, 64) }

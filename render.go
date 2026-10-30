@@ -44,6 +44,7 @@ type Graphics struct {
 
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
 	terrainMat                                        rl.Material
+	tex                                               Textures
 	glow                                              rl.Texture2D
 	font, bold                                        rl.Font
 }
@@ -110,8 +111,13 @@ func NewGraphics() *Graphics {
 	}
 	// One material shared by every terrain patch. Patches are freed with
 	// UnloadMesh only: unloading a model would also free this shader.
+	gfx.tex = bakeTextures()
 	gfx.terrainMat = rl.LoadMaterialDefault()
 	gfx.terrainMat.Shader = gfx.terrainSh
+	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapNormal, rl.GetShaderLocation(gfx.terrainSh, "texture2"))
+	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapRoughness, rl.GetShaderLocation(gfx.terrainSh, "texture3"))
+	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
+	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 
 	// The Moon is big: see mountains far away, but keep the held tool, very
 	// close to the eye, from being clipped.

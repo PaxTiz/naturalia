@@ -1,0 +1,344 @@
+package main
+
+import (
+	"math"
+	"runtime"
+	"sync"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+// Every texture of the game is painted here, in code, at startup. They tile
+// seamlessly and pack several layers in their RGBA channels; the shaders
+// mix them with the object colors. A light posterization and stroke-like
+// noise give them a hand-painted feel.
+
+// tnoise is value noise that repeats every period lattice cells.
+func tnoise(x, y float64, period int, seed uint64) float64 {
+	ix, iy := math.Floor(x), math.Floor(y)
+	fx, fy := x-ix, y-iy
+	sx, sy := fx*fx*(3-2*fx), fy*fy*(3-2*fy)
+	wrap := func(v int) int { return ((v % period) + period) % period }
+	x0, y0 := wrap(int(ix)), wrap(int(iy))
+	x1, y1 := wrap(x0+1), wrap(y0+1)
+	a, b := hash2(x0, y0, seed), hash2(x1, y0, seed)
+	c, d := hash2(x0, y1, seed), hash2(x1, y1, seed)
+	top, bottom := a+(b-a)*sx, c+(d-c)*sx
+	return top + (bottom-top)*sy
+}
+
+// tfbm is tileable fractal noise; u, v in [0, 1) span one tile.
+func tfbm(u, v float64, period, octaves int, seed uint64) float64 {
+	sum, amp, norm := 0.0, 1.0, 0.0
+	for o := range octaves {
+		p := period << o
+		sum += amp * tnoise(u*float64(p), v*float64(p), p, seed+uint64(o)*131)
+		norm += amp
+		amp *= 0.5
+	}
+	return sum / norm
+}
+
+// tnoiseXY is tileable value noise with its own period on each axis.
+func tnoiseXY(x, y float64, px, py int, seed uint64) float64 {
+	ix, iy := math.Floor(x), math.Floor(y)
+	fx, fy := x-ix, y-iy
+	sx, sy := fx*fx*(3-2*fx), fy*fy*(3-2*fy)
+	x0, y0 := ((int(ix)%px)+px)%px, ((int(iy)%py)+py)%py
+	x1, y1 := (x0+1)%px, (y0+1)%py
+	a, b := hash2(x0, y0, seed), hash2(x1, y0, seed)
+	c, d := hash2(x0, y1, seed), hash2(x1, y1, seed)
+	top, bottom := a+(b-a)*sx, c+(d-c)*sx
+	return top + (bottom-top)*sy
+}
+
+// stretched is tileable fractal noise whose features are stretch times
+// longer along u than along v: brush strokes, brushed metal, streaks.
+func stretched(u, v float64, period, stretch, octaves int, seed uint64) float64 {
+	sum, amp, norm := 0.0, 1.0, 0.0
+	for o := range octaves {
+		px, py := period<<o, (period*stretch)<<o
+		sum += amp * tnoiseXY(u*float64(px), v*float64(py), px, py, seed+uint64(o)*131)
+		norm += amp
+		amp *= 0.5
+	}
+	return sum / norm
+}
+
+// strokes is noise stretched along a diagonal: brush strokes. Mixing
+// u+v and u-v keeps it tileable.
+func strokes(u, v float64, period int, seed uint64) float64 {
+	sum, amp, norm := 0.0, 1.0, 0.0
+	for o := range 3 {
+		px, py := period<<o, (period*5)<<o
+		sum += amp * tnoiseXY((u+v)*float64(px), (u-v)*float64(py), px, py, seed+uint64(o)*131)
+		norm += amp
+		amp *= 0.5
+	}
+	return sum / norm
+}
+
+// warped is tileable fractal noise seen through a gentle swirl: organic
+// paint daubs instead of grid-aligned blobs.
+func warped(u, v float64, period, octaves int, seed uint64) float64 {
+	wu := u + 0.04*(tfbm(u, v, 4, 3, seed+11)-0.5)
+	wv := v + 0.04*(tfbm(u, v, 4, 3, seed+12)-0.5)
+	return tfbm(wu, wv, period, octaves, seed)
+}
+
+// painterly pulls a value toward soft flat steps, like paint daubs.
+func painterly(v float64, steps float64) float64 {
+	k := v * steps
+	f := k - math.Floor(k)
+	stepped := (math.Floor(k) + smoothstep(0.35, 0.65, f)) / steps
+	return v*0.45 + stepped*0.55
+}
+
+// cellular scatters at most one round feature per cell of a tileable grid
+// and calls fn with the distance to the nearest center (in cell units).
+func cellular(u, v float64, cells int, seed uint64, fn func(d, r float64, h float64)) {
+	x, y := u*float64(cells), v*float64(cells)
+	cx, cy := int(math.Floor(x)), int(math.Floor(y))
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			gx, gy := cx+dx, cy+dy
+			wx, wy := ((gx%cells)+cells)%cells, ((gy%cells)+cells)%cells
+			px := float64(gx) + 0.15 + 0.7*hash2(wx, wy, seed)
+			py := float64(gy) + 0.15 + 0.7*hash2(wx, wy, seed+1)
+			fn(math.Hypot(x-px, y-py), hash2(wx, wy, seed+2), hash2(wx, wy, seed+3))
+		}
+	}
+}
+
+type texel struct{ r, g, b, a float64 } // all in [0, 1]
+
+// bake renders a size×size texture in parallel, with mipmaps for smooth
+// distant surfaces, repeating and trilinear filtered.
+func bake(size int, fn func(u, v float64) texel) rl.Texture2D {
+	pix := make([]byte, size*size*4)
+	var wg sync.WaitGroup
+	rows := make(chan int, size)
+	for y := range size {
+		rows <- y
+	}
+	close(rows)
+	for range runtime.NumCPU() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for y := range rows {
+				for x := range size {
+					t := fn((float64(x)+0.5)/float64(size), (float64(y)+0.5)/float64(size))
+					i := (y*size + x) * 4
+					pix[i] = byte(clamp01(t.r) * 255)
+					pix[i+1] = byte(clamp01(t.g) * 255)
+					pix[i+2] = byte(clamp01(t.b) * 255)
+					pix[i+3] = byte(clamp01(t.a) * 255)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	img := rl.GenImageColor(size, size, rl.White)
+	tex := rl.LoadTextureFromImage(img)
+	rl.UnloadImage(img)
+	rl.UpdateTexture(tex, pix)
+	rl.GenTextureMipmaps(&tex)
+	rl.SetTextureFilter(tex, rl.FilterTrilinear)
+	rl.SetTextureWrap(tex, rl.WrapRepeat)
+	return tex
+}
+
+// Regolith: R tone, G pebbles, B cavities (dark), A height.
+// One tile covers regolithTile meters.
+const regolithTile = 3.0
+
+func genRegolith() rl.Texture2D {
+	return bake(1024, func(u, v float64) texel {
+		base := tfbm(u, v, 6, 5, 501)
+		grain := tnoise(u*256, v*256, 256, 502)
+		h := base*0.3 + grain*0.04
+
+		// Stones of two sizes, plus a few big ones, with irregular outlines:
+		// the lookup position wobbles a little.
+		wu := u + 0.006*(tfbm(u, v, 24, 2, 503)-0.5)
+		wv := v + 0.006*(tfbm(u, v, 24, 2, 504)-0.5)
+		stone, stoneTone, stoneEdge := 0.0, 0.0, 0.0
+		layer := func(cells int, chance, rMin, rMax, height float64, seed uint64) {
+			cellular(wu, wv, cells, seed, func(d, r, tone float64) {
+				if r > chance {
+					return
+				}
+				rad := rMin + (rMax-rMin)*(r/chance)
+				if d >= rad {
+					return
+				}
+				x := d / rad
+				dome := math.Sqrt(1-x*x) * height
+				if dome > stone {
+					stone, stoneTone, stoneEdge = dome, tone, smoothstep(0.7, 1, x)
+				}
+			})
+		}
+		layer(34, 0.35, 0.10, 0.30, 0.35, 510)
+		layer(12, 0.30, 0.12, 0.32, 0.6, 511)
+		layer(4, 0.25, 0.15, 0.30, 0.9, 512)
+		h += stone * 0.5
+
+		crater := 0.0
+		cellular(u, v, 5, 520, func(d, r, _ float64) {
+			if r > 0.5 {
+				return
+			}
+			rad := 0.18 + 0.25*r
+			x := d / rad
+			if x < 1.5 {
+				bowl := math.Max(0, 1-x*x)
+				lip := (x - 1) / 0.25
+				crater += -bowl*bowl*0.5 + 0.18*math.Exp(-lip*lip)
+			}
+		})
+		h += crater * 0.35
+
+		tone := painterly(0.5+0.45*(tfbm(u, v, 4, 4, 530)-0.5)+0.25*(strokes(u, v, 8, 540)-0.5), 5)
+		tone += (grain - 0.5) * 0.12
+		if stone > 0 {
+			// Painted stones: a lit top and a dark outline.
+			tone = (0.3 + 0.35*stoneTone + stone*0.35) * (1 - 0.45*stoneEdge)
+		}
+		cavity := clamp01(-crater*1.2) + clamp01((0.4-base)*1.5)*0.4
+		return texel{tone, math.Min(1, stone*5), cavity, clamp01(h + 0.3)}
+	})
+}
+
+// Dust: R tone, G clumps, A height. One tile covers dustTile meters.
+const dustTile = 2.0
+
+func genDust() rl.Texture2D {
+	return bake(1024, func(u, v float64) texel {
+		clumps := warped(u, v, 6, 4, 601)
+		stroke := strokes(u, v, 4, 610)
+		tone := painterly(0.5+0.5*(clumps-0.5)+0.3*(stroke-0.5), 4)
+		h := clumps*0.5 + stroke*0.25 + tfbm(u, v, 24, 2, 620)*0.12
+		return texel{tone, clumps, 0, h}
+	})
+}
+
+// Panel: hull plates in a 2×2 grid with recessed seams, rivets, grime
+// streaks running down from the seams, and worn edges.
+// R paint tone, G grime, B wear, A height. One tile covers panelTile meters.
+const panelTile = 2.0
+
+func genPanel() rl.Texture2D {
+	return bake(512, func(u, v float64) texel {
+		gu, gv := math.Mod(u*2, 1), math.Mod(v*2, 1)
+		seam := math.Min(math.Min(gu, 1-gu), math.Min(gv, 1-gv)) // distance to a seam
+		h := 0.6 + 0.04*tfbm(u, v, 4, 3, 701)
+		h -= 0.35 * (1 - smoothstep(0.004, 0.012, seam))
+		// Rivets along the seams.
+		for _, along := range []float64{gu, gv} {
+			k := along * 8
+			f := k - math.Floor(k) - 0.5
+			if seam > 0.015 && seam < 0.045 {
+				d := math.Hypot(f/8, (seam-0.03)/1)
+				if d < 0.012 {
+					h += 0.25 * math.Sqrt(1-(d/0.012)*(d/0.012))
+				}
+			}
+		}
+		// Grime: streaks hanging under horizontal seams (v grows downward).
+		below := gv
+		streak := stretched(v, u, 2, 12, 3, 710) // long vertical streaks
+		grime := clamp01((1-smoothstep(0, 0.45, below))*streak*1.4 - 0.25)
+		grime = math.Max(grime, clamp01(tfbm(u, v, 3, 4, 720)-0.62)*1.5)
+		wear := clamp01((tfbm(u, v, 20, 3, 730) - 0.55) * 3 * (1 - smoothstep(0.01, 0.06, seam)))
+		tone := painterly(0.88+0.1*(strokes(u, v, 6, 740)-0.5), 5)
+		return texel{tone, grime, wear, h}
+	})
+}
+
+// Floor: diamond tread plate. R tone, G grime, A height. Tile = floorTile m.
+const floorTile = 1.2
+
+func genFloor() rl.Texture2D {
+	return bake(512, func(u, v float64) texel {
+		const n = 10
+		x, y := u*n, v*n
+		cx, cy := math.Mod(x, 1)-0.5, math.Mod(y, 1)-0.5
+		if int(math.Floor(x)+math.Floor(y))%2 == 0 {
+			cx, cy = cy, -cx // alternate the diamonds' direction
+		}
+		d := math.Abs(cx*0.9+cy*0.45) + math.Abs(cx*0.45-cy*0.9)*0.3
+		bump := 1 - smoothstep(0.12, 0.2, d)
+		grime := clamp01(tfbm(u, v, 4, 4, 801)*1.3 - 0.45)
+		tone := painterly(0.5+0.15*(tfbm(u, v, 6, 3, 810)-0.5)+bump*0.12, 5)
+		return texel{tone, grime, 0, 0.4 + bump*0.4}
+	})
+}
+
+// Metal: brushed steel with scratches. R tone, G scratches, A height.
+const metalTile = 1.0
+
+func genMetal() rl.Texture2D {
+	return bake(512, func(u, v float64) texel {
+		brushed := stretched(v, u, 2, 40, 3, 901)
+		// Scratches: thin contour lines of a stretched noise, here and there.
+		line := stretched(u, v, 3, 6, 2, 910)
+		scratch := (1 - smoothstep(0.003, 0.009, math.Abs(line-0.5))) * smoothstep(0.55, 0.7, tfbm(u, v, 4, 2, 920))
+		tone := painterly(0.6+0.25*(brushed-0.5)+0.12*(tfbm(u, v, 3, 3, 930)-0.5), 6)
+		return texel{tone + scratch*0.25, scratch, 0, 0.5 + 0.05*brushed - scratch*0.1}
+	})
+}
+
+// Paint: tinted objects. R stroke tone, B chipped edges, A height.
+const paintTile = 0.8
+
+func genPaint() rl.Texture2D {
+	return bake(512, func(u, v float64) texel {
+		tone := painterly(0.92+0.12*(strokes(u, v, 5, 1001)-0.5)+0.06*(tfbm(u, v, 12, 2, 1010)-0.5), 6)
+		chips := clamp01((tfbm(u, v, 16, 3, 1020) - 0.6) * 4)
+		return texel{tone, 0, chips, 0.5 + 0.05*tfbm(u, v, 10, 3, 1030) - chips*0.08}
+	})
+}
+
+// Fabric: a soft weave. R tone, A height.
+const fabricTile = 0.25
+
+func genFabric() rl.Texture2D {
+	return bake(256, func(u, v float64) texel {
+		const n = 24
+		wx := math.Sin(u * n * 2 * math.Pi)
+		wy := math.Sin(v * n * 2 * math.Pi)
+		over := 0.5 + 0.5*wx*wy
+		tone := painterly(0.85+0.1*over+0.08*(tfbm(u, v, 4, 3, 1101)-0.5), 6)
+		return texel{tone, 0, 0, 0.4 + 0.3*over}
+	})
+}
+
+// Hazard: diagonal yellow and black stripes, for the airlock.
+func genHazard() rl.Texture2D {
+	return bake(256, func(u, v float64) texel {
+		stripe := smoothstep(0.47, 0.53, math.Abs(math.Mod(u*4+v*4, 1)-0.5)*2)
+		dirt := tfbm(u, v, 4, 3, 1201)
+		return texel{stripe, 1 - stripe, dirt, 1}
+	})
+}
+
+// Textures are all the painted textures, baked once at startup.
+type Textures struct {
+	regolith, dust                             rl.Texture2D
+	panel, floor, metal, paint, fabric, hazard rl.Texture2D
+}
+
+func bakeTextures() Textures {
+	return Textures{
+		regolith: genRegolith(),
+		dust:     genDust(),
+		panel:    genPanel(),
+		floor:    genFloor(),
+		metal:    genMetal(),
+		paint:    genPaint(),
+		fabric:   genFabric(),
+		hazard:   genHazard(),
+	}
+}
