@@ -7,6 +7,7 @@ import (
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gomonobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/gofont/gosmallcaps"
 )
@@ -52,6 +53,8 @@ type Graphics struct {
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
+	mono                                              rl.Font
+	visor                                             rl.Texture2D
 	tex                                               Textures
 	glow                                              rl.Texture2D
 	font, bold                                        rl.Font
@@ -106,6 +109,9 @@ func NewGraphics() *Graphics {
 	gfx.font = rl.LoadFontFromMemory(".ttf", goregular.TTF, 64, runes)
 	gfx.bold = rl.LoadFontFromMemory(".ttf", gobold.TTF, 64, runes)
 	gfx.smallcaps = rl.LoadFontFromMemory(".ttf", gosmallcaps.TTF, 96, runes)
+	gfx.mono = rl.LoadFontFromMemory(".ttf", gomonobold.TTF, 64, runes)
+	rl.SetTextureFilter(gfx.mono.Texture, rl.FilterBilinear)
+	gfx.visor = genVisor()
 	rl.SetTextureFilter(gfx.smallcaps.Texture, rl.FilterBilinear)
 	rl.SetTextureFilter(gfx.font.Texture, rl.FilterBilinear)
 	rl.SetTextureFilter(gfx.bold.Texture, rl.FilterBilinear)
