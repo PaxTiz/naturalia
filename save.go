@@ -12,18 +12,18 @@ import (
 )
 
 type saveFile struct {
-	Version int    `json:"version"`
-	SavedAt int64  `json:"saved_at"`
-	State   State  `json:"state"`
-	Player  Player `json:"player"`
-	Seed    uint64 `json:"seed"`
-	Dust    []byte `json:"dust"`
-	Gems    []Gem  `json:"gems"`
+	Version   int                `json:"version"`
+	SavedAt   int64              `json:"saved_at"`
+	State     State              `json:"state"`
+	Player    Player             `json:"player"`
+	Seed      uint64             `json:"seed"`
+	Tiles     map[tileKey][]byte `json:"tiles"`     // cleaned tiles only, uint16 little-endian
+	Collected []tileKey          `json:"collected"` // tiles whose crystal was picked up
 }
 
 // Bumped when the world format changes: older saves keep the progress
 // (credits, upgrades) but start on a fresh Moon.
-const saveVersion = 3
+const saveVersion = 4
 
 func saveDir() (string, error) {
 	dir, err := os.UserConfigDir()
@@ -40,13 +40,13 @@ func (g *Game) save() {
 		return
 	}
 	data, err := json.Marshal(saveFile{
-		Version: saveVersion,
-		SavedAt: time.Now().Unix(),
-		State:   g.st,
-		Player:  g.player,
-		Seed:    g.world.Seed,
-		Dust:    g.world.DustBytes(),
-		Gems:    g.world.Gems,
+		Version:   saveVersion,
+		SavedAt:   time.Now().Unix(),
+		State:     g.st,
+		Player:    g.player,
+		Seed:      g.world.Seed,
+		Tiles:     g.world.TileBytes(),
+		Collected: g.world.CollectedKeys(),
 	})
 	if err != nil {
 		log.Println("save:", err)
@@ -104,8 +104,8 @@ func (g *Game) load() {
 	}
 	g.player = sf.Player
 	g.world = NewWorld(sf.Seed)
-	g.world.SetDustBytes(sf.Dust)
-	g.world.Gems = sf.Gems
+	g.world.SetTileBytes(sf.Tiles)
+	g.world.SetCollected(sf.Collected)
 }
 
 func readGzip(path string) ([]byte, error) {

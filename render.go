@@ -40,6 +40,7 @@ type Graphics struct {
 	tLoc, oLoc, sLoc           shaderLocs
 
 	sphere, hemi, cyl, cone, cube, crystal, sky rl.Model
+	terrainMat                                  rl.Material
 	glow                                        rl.Texture2D
 	font, bold                                  rl.Font
 }
@@ -94,8 +95,20 @@ func NewGraphics() *Graphics {
 		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(sunDir), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.earthDir, v3f(earthDir), rl.ShaderUniformVec3)
 	}
-	rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, "dustRes"), []float32{dustRes}, rl.ShaderUniformFloat)
-	rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, "moonRadius"), []float32{moonRadius}, rl.ShaderUniformFloat)
+	for name, v := range map[string]float32{
+		"faceCells": faceCells, "tileCells": tileCells, "tilesPerFace": tilesPerFace,
+		"atlasTiles": atlasTiles, "moonRadius": moonRadius,
+	} {
+		rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, name), []float32{v}, rl.ShaderUniformFloat)
+	}
+	// One material shared by every terrain patch. Patches are freed with
+	// UnloadMesh only: unloading a model would also free this shader.
+	gfx.terrainMat = rl.LoadMaterialDefault()
+	gfx.terrainMat.Shader = gfx.terrainSh
+
+	// The Moon is big: see mountains far away, but keep the held tool, very
+	// close to the eye, from being clipped.
+	rl.SetClipPlanes(0.05, 6000)
 	return gfx
 }
 
@@ -177,12 +190,11 @@ func (g *Game) Draw() {
 	gfx := g.gfx
 	cam := g.camera()
 
-	dust := g.world.Upload()
-	for _, c := range g.terrain.chunks {
-		mats := c.model.GetMaterials()
-		mats[0].Shader = gfx.terrainSh
-		rl.SetMaterialTexture(&mats[0], rl.MapDiffuse, dust)
-	}
+	atlas, lookup := g.world.Upload(g.player.Pos)
+	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapDiffuse, atlas)
+	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapSpecular, lookup)
+	patches := g.terrain.Visible(g.player.Eye())
+	g.nearGems = g.world.GemsNear(g.player.Pos, gemDrawDist)
 	g.setUniforms(cam)
 
 	rl.BeginDrawing()
@@ -196,14 +208,10 @@ func (g *Game) Draw() {
 	rl.EnableDepthMask()
 	rl.EnableBackfaceCulling()
 
-	// The horizon is close on such a small Moon: only draw the chunks around
-	// the player. Culling is off because chunk winding differs per cube face.
-	up := g.player.LocalUp()
+	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
-	for _, c := range g.terrain.chunks {
-		if c.center.dot(up) > chunkCullCos {
-			rl.DrawModel(c.model, rl.NewVector3(0, 0, 0), 1, rl.White)
-		}
+	for _, n := range patches {
+		rl.DrawMesh(n.mesh, gfx.terrainMat, rl.MatrixIdentity())
 	}
 	rl.EnableBackfaceCulling()
 	g.drawBase()
@@ -216,10 +224,6 @@ func (g *Game) Draw() {
 	g.drawHUD(cam)
 	rl.EndDrawing()
 }
-
-// chunkCullCos skips terrain chunks more than ~60° around the Moon from the
-// player: well past the horizon, even from a hilltop.
-var chunkCullCos = math.Cos(60 * math.Pi / 180)
 
 // terminalPos is set on the ground once the terrain exists.
 var terminalPos vec3
@@ -284,31 +288,28 @@ func (g *Game) drawDrones() {
 	}
 }
 
-// gemDrawDist: crystals farther than this are below the horizon anyway.
-const gemDrawDist = 60.0
+// gemDrawDist: crystals are only drawn this close; they are tiny anyway.
+const gemDrawDist = 80.0
 
 // gemVisibility is how much of a crystal pokes out of the dust (0..1).
 func (g *Game) gemVisibility(gem Gem) float64 {
-	if gem.Dir.sub(g.player.LocalUp()).length()*moonRadius > gemDrawDist {
-		return 0
-	}
 	return clamp01(1 - g.world.DustAt(gem.Dir)*2.5)
 }
 
-func (g *Game) gemPos(i int, gem Gem, s float64) vec3 {
-	lift := s*1.4 + math.Sin(g.clock*2+float64(i))*0.05
+func (g *Game) gemPos(gem Gem, s float64) vec3 {
+	lift := s*1.4 + math.Sin(g.clock*2+float64(gem.Key))*0.05
 	return g.terrain.Surface(gem.Dir).add(gem.Dir.scale(lift))
 }
 
 func (g *Game) drawGems() {
 	gfx := g.gfx
-	for i, gem := range g.world.Gems {
+	for _, gem := range g.nearGems {
 		vis := g.gemVisibility(gem)
 		if vis <= 0 {
 			continue
 		}
 		s := 0.06 + 0.16*vis
-		p := g.gemPos(i, gem, s)
+		p := g.gemPos(gem, s)
 		axis, angle := orient(gem.Dir)
 		downAxis, downAngle := orient(gem.Dir.scale(-1))
 		gfx.put(gfx.crystal, p, vec3{s, s * 1.7, s}, axis, angle, colCyan, 1, 0.45)
@@ -371,14 +372,14 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 		c.A = uint8(255 * clamp01(p.Life/p.MaxLife*1.5))
 		rl.DrawBillboard(cam, gfx.glow, p.Pos.rl(), float32(p.Size*4), c)
 	}
-	for i, gem := range g.world.Gems {
+	for _, gem := range g.nearGems {
 		vis := g.gemVisibility(gem)
 		if vis <= 0 {
 			continue
 		}
-		pulse := 0.75 + 0.25*math.Sin(g.clock*3+float64(i))
+		pulse := 0.75 + 0.25*math.Sin(g.clock*3+float64(gem.Key))
 		c := color.RGBA{80, 200, 230, uint8(160 * vis * pulse)}
-		rl.DrawBillboard(cam, gfx.glow, g.gemPos(i, gem, 0.06+0.16*vis).rl(), float32(1.4*vis), c)
+		rl.DrawBillboard(cam, gfx.glow, g.gemPos(gem, 0.06+0.16*vis).rl(), float32(1.4*vis), c)
 	}
 	if math.Mod(g.clock, 1.2) < 0.3 {
 		rl.DrawBillboard(cam, gfx.glow, basePos.add(vec3{0.45, 6.55, 0.4}).rl(), 0.9, color.RGBA{255, 80, 60, 200})

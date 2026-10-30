@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"math"
 	"math/rand/v2"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -69,6 +70,7 @@ type Game struct {
 	drones    []*Drone
 	particles []Particle
 	floaters  []Floater
+	nearGems  []Gem // crystals around the player, refreshed every frame
 
 	mode        mode
 	clock       float64
@@ -95,15 +97,18 @@ func NewGame() *Game {
 	if g.st.Levels == nil {
 		g.st.Levels = map[string]int{}
 	}
-	if g.world == nil {
+	fresh := g.world == nil
+	if fresh {
 		g.world = NewWorld(g.rng.Uint64())
-		g.world.ScatterGems(g.rng, 400)
+	}
+	g.terrain = NewTerrain(g.world.Seed) // also sets basePos on the ground
+	if fresh {
 		g.player = Player{Pos: basePos.add(vec3{0, 0, -6}), Heading: vec3{0, 0, 1}}
 	}
-	g.terrain = NewTerrain(g.world.Seed)
 	g.player.Pos = g.terrain.Surface(g.player.Pos)
 	terminalPos = g.terrain.Surface(basePos.add(vec3{1.8, 0, -3.4}))
 	g.gfx = NewGraphics()
+	g.terrain.Warm(g.player.Eye(), 5*time.Second)
 	g.syncDrones()
 	return g
 }

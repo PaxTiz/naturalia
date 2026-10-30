@@ -50,7 +50,7 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float spec) {
 }
 
 vec3 finish(vec3 col, float dist) {
-    col = mix(col, horizon, 1.0 - exp(-pow(dist / 170.0, 2.0)));
+    col = mix(col, horizon, 1.0 - exp(-pow(dist / 1800.0, 2.0)));
     return vec3(1.0) - exp(-col * 1.35); // soft exposure curve, no harsh clipping
 }
 `
@@ -72,8 +72,9 @@ void main() {
 const terrainFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
-uniform sampler2D texture0; // dust amounts: the 6 cube faces in a 3x2 atlas
-uniform float dustRes;      // cells per face side
+uniform sampler2D texture0; // cache of the touched dust tiles
+uniform sampler2D texture1; // lookup: where each tile sits in the cache (blue = cached)
+uniform float faceCells, tileCells, tilesPerFace, atlasTiles;
 uniform float moonRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows: xyz center, w radius
@@ -96,9 +97,15 @@ float dustAt(vec3 d) {
     }
     float dn = dot(d, N);
     vec2 uv = vec2(atan(dot(d, U) / dn), atan(dot(d, V) / dn)) * (2.0 / 3.14159265) + 0.5;
-    uv = clamp(uv, 0.5 / dustRes, 1.0 - 0.5 / dustRes); // don't bleed into the next face
-    vec2 cell = vec2(float(f - 3 * (f / 3)), float(f / 3));
-    return texture(texture0, (cell + uv) / vec2(3.0, 2.0)).r;
+    // Find the tile, then where the cache keeps it. Untouched tiles are full.
+    vec2 c = clamp(uv, 0.0, 1.0) * faceCells;
+    vec2 tile = min(floor(c / tileCells), vec2(tilesPerFace - 1.0));
+    ivec2 at = ivec2(tile) + ivec2(f - 3 * (f / 3), f / 3) * int(tilesPerFace);
+    vec4 entry = texelFetch(texture1, at, 0);
+    if (entry.b < 0.5) return 1.0;
+    vec2 local = clamp(c - tile * tileCells, 0.5, tileCells - 0.5);
+    vec2 slot = floor(entry.rg * 255.0 + 0.5);
+    return texture(texture0, (slot * tileCells + local) / (atlasTiles * tileCells)).r;
 }
 
 void main() {
