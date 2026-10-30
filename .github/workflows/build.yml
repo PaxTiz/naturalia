@@ -1,0 +1,20 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # Everything cross-compiles without cgo; macOS is only needed for lipo.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moon_sweeper-desktop
+          path: build/
