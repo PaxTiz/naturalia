@@ -25,13 +25,12 @@ var (
 
 const (
 	maxCasters = 16
-	maxMarks   = 8
 )
 
 type shaderLocs struct {
-	viewPos, sunDir, time                 int32
-	brush, casters, casterCount           int32
-	marks, markCount, surface, earthDirLc int32
+	viewPos, sunDir, time       int32
+	brush, casters, casterCount int32
+	surface, earthDirLc         int32
 }
 
 // Graphics holds the GPU resources. Everything is generated at startup:
@@ -51,7 +50,7 @@ func loadShader(fs string) (rl.Shader, shaderLocs) {
 	return sh, shaderLocs{
 		viewPos: loc("viewPos"), sunDir: loc("sunDir"), time: loc("time"),
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
-		marks: loc("marks"), markCount: loc("markCount"), surface: loc("surface"),
+		surface:    loc("surface"),
 		earthDirLc: loc("earthDir"),
 	}
 }
@@ -134,10 +133,6 @@ func (gfx *Graphics) segment(m rl.Model, a, b vec3, radius float64, c color.RGBA
 
 func (g *Game) camera() rl.Camera3D {
 	eye := g.player.Eye()
-	if g.shake > 0 {
-		s := g.shake * 0.25
-		eye = eye.add(vec3{(g.rng.Float64()*2 - 1) * s, (g.rng.Float64()*2 - 1) * s, (g.rng.Float64()*2 - 1) * s})
-	}
 	return rl.Camera3D{
 		Position:   eye.rl(),
 		Target:     eye.add(g.player.Forward()).rl(),
@@ -162,7 +157,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	}
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
 
-	// Soft shadows cast by the base, the drones and incoming meteors.
+	// Soft shadows cast by the base and the drones.
 	casters := []float32{
 		float32(basePos.X), float32(basePos.Y + 2.6), float32(basePos.Z), 3.4,
 		float32(terminalPos.X), float32(terminalPos.Y + 0.7), float32(terminalPos.Z), 0.8,
@@ -170,24 +165,9 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	for _, d := range g.drones {
 		casters = append(casters, float32(d.Pos.X), float32(d.Pos.Y), float32(d.Pos.Z), 0.55)
 	}
-	for _, m := range g.meteors {
-		p := m.From.lerp(m.To, m.T/m.Dur)
-		casters = append(casters, float32(p.X), float32(p.Y), float32(p.Z), 1.2)
-	}
 	n := min(len(casters)/4, maxCasters)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.casterCount, []float32{float32(n)}, rl.ShaderUniformFloat)
-
-	// Pulsing warning rings where meteors are about to hit.
-	var marks []float32
-	for _, m := range g.meteors[:min(len(g.meteors), maxMarks)] {
-		k := m.T / m.Dur
-		marks = append(marks, float32(m.To.X), float32(m.To.Z), float32(m.Radius*(0.4+0.6*k)), float32(0.3+0.6*k))
-	}
-	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.markCount, []float32{float32(len(marks) / 4)}, rl.ShaderUniformFloat)
-	if len(marks) > 0 {
-		rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.marks, marks, rl.ShaderUniformVec4, int32(len(marks)/4))
-	}
 }
 
 func (g *Game) Draw() {
@@ -214,7 +194,6 @@ func (g *Game) Draw() {
 	g.drawBase()
 	g.drawDrones()
 	g.drawGems()
-	g.drawMeteors()
 	g.drawTool()
 	g.drawGlows(cam)
 	rl.EndMode3D()
@@ -305,14 +284,6 @@ func (g *Game) drawGems() {
 	}
 }
 
-func (g *Game) drawMeteors() {
-	gfx := g.gfx
-	for _, m := range g.meteors {
-		head := m.From.lerp(m.To, m.T/m.Dur)
-		gfx.put(gfx.sphere, head, vec3{0.7, 0.7, 0.7}, vec3{0, 1, 0}, 0, color.RGBA{255, 225, 170, 255}, 0, 1)
-	}
-}
-
 // drawTool draws the held tool, in the lower right corner of the view.
 func (g *Game) drawTool() {
 	if g.mode == modePaused {
@@ -344,7 +315,7 @@ func (g *Game) drawTool() {
 	}
 }
 
-// drawGlows draws the soft sprites: dust particles, crystal and meteor glows.
+// drawGlows draws the soft sprites: dust particles and crystal glows.
 func (g *Game) drawGlows(cam rl.Camera3D) {
 	gfx := g.gfx
 	rl.DrawRenderBatchActive()
@@ -376,16 +347,6 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 		pulse := 0.75 + 0.25*math.Sin(g.clock*3+float64(i))
 		c := color.RGBA{80, 200, 230, uint8(160 * vis * pulse)}
 		rl.DrawBillboard(cam, gfx.glow, g.gemPos(i, gem, 0.06+0.16*vis).rl(), float32(1.4*vis), c)
-	}
-	for _, m := range g.meteors {
-		k := m.T / m.Dur
-		head := m.From.lerp(m.To, k)
-		back := m.From.sub(m.To).norm()
-		rl.DrawBillboard(cam, gfx.glow, head.rl(), 5, color.RGBA{255, 170, 80, 220})
-		for i := 1; i <= 14; i++ {
-			f := float64(i) / 14
-			rl.DrawBillboard(cam, gfx.glow, head.add(back.scale(f*14)).rl(), float32(3.2*(1-f)+0.4), color.RGBA{255, uint8(110 + 90*(1-f)), 50, uint8(170 * (1 - f))})
-		}
 	}
 	if math.Mod(g.clock, 1.2) < 0.3 {
 		rl.DrawBillboard(cam, gfx.glow, basePos.add(vec3{0.45, 6.55, 0.4}).rl(), 0.9, color.RGBA{255, 80, 60, 200})

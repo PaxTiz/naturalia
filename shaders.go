@@ -90,8 +90,6 @@ uniform sampler2D texture0; // dust amount, 0..1, over the playable area
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows: xyz center, w radius
 uniform float casterCount;
-uniform vec4 marks[8];      // meteor warnings: xz center, z radius, w intensity
-uniform float markCount;
 uniform float time;
 out vec4 finalColor;
 ` + shaderCommon + `
@@ -135,14 +133,6 @@ void main() {
         float ring = 1.0 - smoothstep(0.0, w, abs(d - brush.w));
         float fill = (1.0 - smoothstep(brush.w - 0.6, brush.w, d)) * 0.08;
         col = mix(col, vec3(0.45, 1.0, 0.95), ring * 0.75 + fill);
-    }
-    for (int i = 0; i < 8; i++) {
-        if (float(i) >= markCount) break;
-        float d = distance(fragPos.xz, marks[i].xy);
-        float pulse = 0.5 + 0.5 * sin(time * 12.0);
-        float ring = 1.0 - smoothstep(0.0, 0.25, abs(d - marks[i].z));
-        float disk = (1.0 - smoothstep(0.0, marks[i].z, d)) * 0.25;
-        col = mix(col, vec3(1.0, 0.35, 0.25), (ring + disk * pulse) * marks[i].w);
     }
     // Faint glowing line marking the edge of the playable area.
     float e = min(min(fragPos.x, 128.0 - fragPos.x), min(fragPos.z, 128.0 - fragPos.z));

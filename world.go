@@ -93,23 +93,6 @@ func (w *World) Clean(x, z, radius, amount, budget float64) float64 {
 	return got
 }
 
-func (w *World) Deposit(x, z, radius, amount float64) {
-	brush(x, z, radius, func(i int, d2 float64) bool {
-		w.dust[i] = float32(math.Min(1, float64(w.dust[i])+amount*(1-d2)))
-		return true
-	})
-}
-
-// Regen makes the dust slowly settle back everywhere.
-func (w *World) Regen(dt, rate float64) {
-	add := float32(dt * rate)
-	for i, d := range w.dust {
-		if d < 1 {
-			w.dust[i] = min(1, d+add)
-		}
-	}
-}
-
 // FindDusty samples a few random cells and returns the dustiest one.
 func (w *World) FindDusty(rng *rand.Rand) (float64, float64) {
 	best, bx, bz := float32(-1), 0, 0

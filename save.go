@@ -90,9 +90,5 @@ func (g *Game) load() bool {
 	g.world = NewWorld(sf.Seed)
 	g.world.SetDustBytes(sf.Dust)
 	g.world.Gems = sf.Gems
-	// The dust kept settling while the game was closed.
-	if away := time.Since(time.Unix(sf.SavedAt, 0)).Seconds(); away > 0 {
-		g.world.Regen(away, g.regenRate())
-	}
 	return true
 }

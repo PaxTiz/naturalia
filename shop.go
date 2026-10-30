@@ -56,20 +56,17 @@ var upgrades = []upgradeDef{
 	{"price", "Négociation", "La poussière et les cristaux se vendent 20% plus cher", 150, 2.1, 0},
 	{"drone", "Drone balayeur", "Un drone autonome qui nettoie à ta place", 300, 1.9, 0},
 	{"auto", "Téléporteur", "Vend à distance dès que le réservoir est plein", 1_500, 1, 1},
-	{"meteor", "Aimant à météores", "Plus de météorites, la poussière revient plus vite", 800, 2.0, 0},
 }
 
 func (g *Game) level(id string) float64 { return float64(g.st.Levels[id]) }
 
-func (g *Game) tool() Tool              { return tools[g.st.ToolTier] }
-func (g *Game) capacity() float64       { return 50 * math.Pow(1.6, g.level("tank")) }
-func (g *Game) powerMult() float64      { return math.Pow(1.3, g.level("power")) }
-func (g *Game) priceMult() float64      { return math.Pow(1.2, g.level("price")) }
-func (g *Game) meteorInterval() float64 { return 25 / math.Pow(1.25, g.level("meteor")) }
-func (g *Game) regenRate() float64      { return 0.002 * (1 + 0.2*g.level("meteor")) }
-func (g *Game) autoSell() bool          { return g.level("auto") > 0 }
-func (g *Game) space() float64          { return math.Max(0, g.capacity()-g.st.Tank) }
-func (g *Game) tankFull() bool          { return g.space() <= 1e-6 }
+func (g *Game) tool() Tool         { return tools[g.st.ToolTier] }
+func (g *Game) capacity() float64  { return 50 * math.Pow(1.6, g.level("tank")) }
+func (g *Game) powerMult() float64 { return math.Pow(1.3, g.level("power")) }
+func (g *Game) priceMult() float64 { return math.Pow(1.2, g.level("price")) }
+func (g *Game) autoSell() bool     { return g.level("auto") > 0 }
+func (g *Game) space() float64     { return math.Max(0, g.capacity()-g.st.Tank) }
+func (g *Game) tankFull() bool     { return g.space() <= 1e-6 }
 func (g *Game) gemValue() float64 {
 	return 20 * g.priceMult() * math.Pow(2.5, float64(g.st.ToolTier))
 }

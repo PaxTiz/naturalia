@@ -59,12 +59,6 @@ type Floater struct {
 	C    color.RGBA
 }
 
-type Meteor struct {
-	From, To vec3
-	T, Dur   float64
-	Radius   float64 // dust spread on impact
-}
-
 type Game struct {
 	st        State
 	player    Player
@@ -75,13 +69,10 @@ type Game struct {
 	drones    []*Drone
 	particles []Particle
 	floaters  []Floater
-	meteors   []Meteor
 
 	mode        mode
 	clock       float64
-	meteorTimer float64
 	saveTimer   float64
-	shake       float64
 	sellPop     float64 // timer of the "+X cr" pop next to the credits
 	sellPopText string
 	hover       int
@@ -110,7 +101,6 @@ func NewGame() *Game {
 	g.player.Pos.Y = g.terrain.Height(g.player.Pos.X, g.player.Pos.Z)
 	g.gfx = NewGraphics()
 	g.syncDrones()
-	g.meteorTimer = 6
 	return g
 }
 
@@ -159,8 +149,6 @@ func (g *Game) Update(dt float64) {
 	g.updateAim()
 	g.updateSweeping(dt)
 	g.updateDrones(dt)
-	g.updateMeteors(dt)
-	g.world.Regen(dt, g.regenRate())
 	g.updateEffects(dt)
 	if g.tankFull() && g.autoSell() {
 		g.sell()
@@ -298,44 +286,6 @@ func (g *Game) updateDrones(dt float64) {
 	}
 }
 
-func (g *Game) updateMeteors(dt float64) {
-	g.meteorTimer -= dt
-	if g.meteorTimer <= 0 {
-		g.meteorTimer = g.meteorInterval() * (0.6 + g.rng.Float64()*0.8)
-		x, z := 10+g.rng.Float64()*(worldSize-20), 10+g.rng.Float64()*(worldSize-20)
-		to := vec3{x, g.terrain.Height(x, z), z}
-		g.meteors = append(g.meteors, Meteor{From: to.add(vec3{70, 160, -50}), To: to, Dur: 2.2, Radius: 4 + g.rng.Float64()*5})
-	}
-	kept := g.meteors[:0]
-	for _, m := range g.meteors {
-		m.T += dt
-		if m.T >= m.Dur {
-			g.impact(m.To, m.Radius)
-			continue
-		}
-		kept = append(kept, m)
-	}
-	g.meteors = kept
-}
-
-func (g *Game) impact(at vec3, radius float64) {
-	g.world.Deposit(at.X, at.Z, radius, 1)
-	// The closer the impact, the harder the camera shakes.
-	g.shake = math.Max(g.shake, 0.6*clamp01(1-distXZ(at, g.player.Pos)/60))
-	if g.rng.Float64() < 0.4 {
-		g.world.Gems = append(g.world.Gems, Gem{at.X, at.Z})
-	}
-	for range 90 {
-		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() * 0.9, g.rng.Float64() - 0.5}.norm().scale(3 + g.rng.Float64()*9)
-		spark := g.rng.Float64() < 0.3
-		c := color.RGBA{215, 205, 185, 255}
-		if spark {
-			c = color.RGBA{255, 150, 60, 255}
-		}
-		g.addParticle(Particle{Pos: at.add(vec3{0, 0.2, 0}), Vel: vel, MaxLife: 0.8 + g.rng.Float64()*1.2, Size: 0.1 + g.rng.Float64()*0.15, C: c, Falls: true, Additive: spark})
-	}
-}
-
 func (g *Game) addParticle(p Particle) {
 	if len(g.particles) >= maxParticles {
 		return
@@ -345,7 +295,6 @@ func (g *Game) addParticle(p Particle) {
 }
 
 func (g *Game) updateEffects(dt float64) {
-	g.shake = math.Max(0, g.shake-dt)
 	g.sellPop = math.Max(0, g.sellPop-dt)
 
 	kept := g.particles[:0]
