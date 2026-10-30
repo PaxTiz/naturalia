@@ -58,6 +58,13 @@ type World struct {
 	slotOf    map[tileKey]int
 	slotTile  []tileKey // -1 when free
 	cacheTick int
+
+	// Cleaned fraction of every tile, for the hologram of the map table.
+	covTex   rl.Texture2D
+	covPix   []byte
+	covDirty bool
+
+	totalGems int // crystals on the whole Moon at the start
 }
 
 func NewWorld(seed uint64) *World {
@@ -283,7 +290,12 @@ func (w *World) Upload(player vec3) (rl.Texture2D, rl.Texture2D) {
 			w.assign(k, slot)
 		}
 		w.uploadTile(k, slot)
+		w.measure(k)
 		delete(w.dirty, k)
+	}
+	if w.covDirty {
+		rl.UpdateTexture(w.covTex, w.covPix)
+		w.covDirty = false
 	}
 	if w.indirPix != nil {
 		rl.UpdateTexture(w.indir, w.indirPix)
@@ -304,6 +316,12 @@ func (w *World) initGPU() {
 	rl.SetTextureFilter(w.indir, rl.FilterPoint)
 
 	w.indirPix = make([]byte, 3*tilesPerFace*2*tilesPerFace*4)
+
+	img = rl.GenImageColor(3*tilesPerFace, 2*tilesPerFace, rl.Black)
+	rl.ImageFormat(img, rl.UncompressedGrayscale)
+	w.covTex = rl.LoadTextureFromImage(img)
+	rl.UnloadImage(img)
+	w.covPix = make([]byte, 3*tilesPerFace*2*tilesPerFace)
 	w.slotOf = map[tileKey]int{}
 	w.slotTile = make([]tileKey, atlasTiles*atlasTiles)
 	for i := range w.slotTile {
@@ -430,5 +448,55 @@ func (w *World) CollectedKeys() []tileKey {
 func (w *World) SetCollected(keys []tileKey) {
 	for _, k := range keys {
 		w.collected[k] = true
+	}
+}
+
+// measure records how much of a tile has been cleaned, for the hologram.
+func (w *World) measure(k tileKey) {
+	sum := 0
+	for _, v := range w.tiles[k] {
+		sum += int(v)
+	}
+	cleaned := 1 - float64(sum)/float64(len(w.tiles[k])*fullDust)
+	w.covPix[w.indirIndex(k)/4] = byte(math.Round(clamp01(cleaned) * 255))
+	w.covDirty = true
+}
+
+// Coverage is the texture of cleaned fractions per tile.
+func (w *World) Coverage() rl.Texture2D { return w.covTex }
+
+// countGems counts the crystals of the whole Moon, collected or not.
+func (w *World) countGems() int {
+	collected := w.collected
+	w.collected = nil // gemIn skips collected ones: count them all
+	n := 0
+	for k := range tileKey(6 * tilesPerFace * tilesPerFace) {
+		if _, ok := w.gemIn(k); ok {
+			n++
+		}
+	}
+	w.collected = collected
+	return n
+}
+
+// Stats summarizes the cleaning progress for the map table.
+type Stats struct {
+	Cleaned        float64 // fraction of the Moon's dust removed
+	TilesVisited   int
+	TilesTotal     int
+	Gems, GemTotal int
+}
+
+func (w *World) Stats(totalDust float64) Stats {
+	if w.totalGems == 0 {
+		w.totalGems = w.countGems()
+	}
+	moonDust := 6 * faceCells * faceCells * gramsPerCell
+	return Stats{
+		Cleaned:      totalDust / moonDust,
+		TilesVisited: len(w.tiles),
+		TilesTotal:   6 * tilesPerFace * tilesPerFace,
+		Gems:         len(w.collected),
+		GemTotal:     w.totalGems,
 	}
 }

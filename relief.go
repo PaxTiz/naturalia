@@ -4,7 +4,7 @@ import "math"
 
 const (
 	moonRadius  = 1737.4 // the real Moon at 1/1 000 scale
-	padRadius   = 7.0    // the landing pad is flat within this distance
+	padRadius   = 22.0   // the ground is flat under the whole base
 	maxMountain = 330.0  // upper bound of the relief, for horizon culling
 
 	// The base sits at the bottom of a big crater: a flat floor, then smooth

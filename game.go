@@ -24,13 +24,22 @@ type mode int
 const (
 	modePaused mode = iota
 	modePlay
-	modeShop
+	modeShop  // research lab: upgrades
+	modeMap   // map table: state of the Moon
+	modeSleep // fading out, sleeping, waking up
+)
+
+// Sleep timeline, in seconds: fade out, sleep (the game saves), fade in.
+const (
+	sleepFadeOut = 1.2
+	sleepSave    = 2.2
+	sleepWake    = 3.2
+	sleepEnd     = 4.4
 )
 
 const (
 	maxParticles  = 900
 	saveInterval  = 30.0
-	terminalReach = 7.0 // how close to the base the terminal can be used
 	droneSpeed    = 5.0
 	droneHover    = 1.4
 	toolViewScale = 0.6 // the held tool is drawn smaller so it doesn't hide the brush
@@ -79,6 +88,12 @@ type Game struct {
 	sellPopText string
 	hover       int
 
+	walls    []segment2 // the base's walls, for collisions
+	doorOpen float64    // airlock doors: 0 closed, 1 open
+	burn     float64    // incinerator glow after a deposit
+	sleepT   float64    // time into the sleep sequence
+	wakeUp   bool       // a new game starts by waking up in bed
+
 	aim       vec3 // where the tool points on the ground
 	aimOK     bool
 	sweeping  bool
@@ -103,10 +118,11 @@ func NewGame() *Game {
 	}
 	g.terrain = NewTerrain(g.world.Seed) // also sets basePos on the ground
 	if fresh {
-		g.player = Player{Pos: basePos.add(vec3{0, 0, -6}), Heading: vec3{0, 0, 1}}
+		g.player = Player{Pos: toWorld(spawnSpot), Heading: vec3{0, 0, -1}}
+		g.wakeUp = true
 	}
 	g.player.Pos = g.terrain.Surface(g.player.Pos)
-	terminalPos = g.terrain.Surface(basePos.add(vec3{1.8, 0, -3.4}))
+	g.walls = baseWalls()
 	g.gfx = NewGraphics()
 	g.terrain.Warm(g.player.Eye(), 5*time.Second)
 	g.syncDrones()
@@ -122,39 +138,47 @@ func (g *Game) setMode(m mode) {
 	}
 }
 
-func (g *Game) nearTerminal() bool { return g.player.Pos.sub(basePos).length() < terminalReach }
-
 func (g *Game) Update(dt float64) {
 	g.clock += dt
 
 	if rl.IsKeyPressed(rl.KeyF11) {
 		rl.ToggleBorderlessWindowed()
 	}
+	closeKeys := rl.IsKeyPressed(rl.KeyEscape) || rl.IsKeyPressed(rl.KeyE) || rl.IsKeyPressed(rl.KeyTab)
 	switch g.mode {
 	case modePaused:
 		if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 			g.setMode(modePlay)
+			if g.wakeUp {
+				g.wakeUp = false
+				g.mode, g.sleepT = modeSleep, sleepWake
+			}
 		}
 	case modePlay:
 		switch {
 		case rl.IsKeyPressed(rl.KeyEscape) || !rl.IsWindowFocused():
 			g.setMode(modePaused)
-		case rl.IsKeyPressed(rl.KeyE) && g.nearTerminal():
-			g.setMode(modeShop)
+		case rl.IsKeyPressed(rl.KeyE):
+			if it, ok := g.nearbyUse(); ok {
+				g.use(it)
+			}
 		}
 	case modeShop:
-		if rl.IsKeyPressed(rl.KeyEscape) || rl.IsKeyPressed(rl.KeyE) || rl.IsKeyPressed(rl.KeyTab) {
+		if closeKeys {
 			g.setMode(modePlay)
 		}
-		if rl.IsKeyPressed(rl.KeySpace) {
-			g.sell()
-		}
 		g.updateShop()
+	case modeMap:
+		if closeKeys {
+			g.setMode(modePlay)
+		}
+	case modeSleep:
+		g.updateSleep(dt)
 	}
 
 	g.player.Update(dt, g.terrain, g.mode == modePlay)
-	g.player.pushOut(basePos, 2.4)
-	g.player.pushOut(terminalPos, 0.8)
+	collideBase(&g.player, g.walls)
+	g.updateBase(dt)
 	g.updateAim()
 	g.updateSweeping(dt)
 	g.updateDrones(dt)
@@ -174,6 +198,9 @@ func (g *Game) updateAim() {
 	p := &g.player
 	eye, fwd := p.Eye(), p.Forward()
 	g.aim, g.aimOK = g.terrain.Raycast(eye, fwd, g.tool().Reach)
+	if g.aimOK && arcDist(g.aim.norm(), baseUp) < baseReach {
+		g.aimOK = false // the ground under the base isn't swept
+	}
 
 	// The held tool: lower right of the view, pointing at the aimed spot.
 	bob := math.Sin(p.walkPhase) * 0.015 * p.moveAmount
@@ -261,48 +288,126 @@ func (g *Game) sell() {
 
 func (g *Game) syncDrones() {
 	for len(g.drones) < g.st.Levels["drone"] {
-		p := basePos.add(vec3{0, 4, 0})
+		p := toWorld(vec3{0, 8, 0})
 		g.drones = append(g.drones, &Drone{Pos: p, Target: basePos, phase: g.rng.Float64() * 10})
 	}
 }
 
-// droneRange is how far from the player drones look for dust: they follow
-// you around the Moon.
-const droneRange = 25.0
+const (
+	// droneRange is how far from the player drones look for dust: they
+	// follow you around the Moon.
+	droneRange = 25.0
+	// While the player is at the base, drones circle above the hub.
+	dockAltitude = 7.5
+	dockRadius   = 3.5
+)
 
 func (g *Game) updateDrones(dt float64) {
 	radius := 0.8 + float64(g.st.ToolTier)*0.5
 	amount := 0.6 * g.powerMult() * dt
-	for _, d := range g.drones {
+	docked := arcDist(g.player.LocalUp(), baseUp) < baseReach+15
+	for i, d := range g.drones {
 		d.phase += dt
 		up := d.Pos.norm()
 		hover := droneHover
-		if g.tankFull() {
+		switch {
+		case docked:
+			a := float64(i)/float64(len(g.drones))*2*math.Pi + g.clock*0.2
+			d.Target = toWorld(vec3{math.Cos(a) * dockRadius, 0, math.Sin(a) * dockRadius})
+			hover = dockAltitude
+		case g.tankFull():
 			hover += 0.5 // tank full: drones hover in place, waiting
-		} else {
+		default:
 			d.retarget -= dt
 			arrived := up.sub(d.Target.norm()).length()*moonRadius < 0.3
-			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) {
+			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || arcDist(d.Target.norm(), baseUp) < baseReach {
 				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
 				d.retarget = 8 + g.rng.Float64()*5
 			}
-			if !arrived {
-				delta := d.Target.sub(d.Pos)
-				delta = delta.sub(up.scale(delta.dot(up))) // stay along the ground
-				d.Pos = d.Pos.add(delta.norm().scale(math.Min(delta.length(), droneSpeed*dt)))
-				up = d.Pos.norm()
-			}
+		}
+		if g.tankFull() && !docked {
+			d.Target = d.Pos
+		}
+		delta := d.Target.sub(d.Pos)
+		delta = delta.sub(up.scale(delta.dot(up))) // stay along the ground
+		if delta.length() > 0.05 {
+			d.Pos = d.Pos.add(delta.norm().scale(math.Min(delta.length(), droneSpeed*dt)))
+			up = d.Pos.norm()
 		}
 		r := d.Pos.length()
 		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
 		d.Pos = up.scale(r)
-		if g.tankFull() {
+		if docked || g.tankFull() || arcDist(up, baseUp) < baseReach {
 			continue
 		}
 		g.collect(g.world.Clean(up, radius, amount, g.space()), g.terrain.Surface(up), radius, d.Pos)
 		for _, gem := range g.world.CollectGems(up, radius) {
 			g.collectGem(gem)
 		}
+	}
+}
+
+// updateBase animates the airlock doors and the incinerator glow.
+func (g *Game) updateBase(dt float64) {
+	open := 0.0
+	if toLocal(g.player.Pos).sub(airlockEnd).length() < 4 {
+		open = 1
+	}
+	g.doorOpen += (open - g.doorOpen) * math.Min(1, dt*4)
+	g.burn = math.Max(0, g.burn-dt*0.5)
+}
+
+// use runs what the player activates with E.
+func (g *Game) use(it interactable) {
+	switch it.use {
+	case useMap:
+		g.setMode(modeMap)
+	case useResearch:
+		g.setMode(modeShop)
+	case useBed:
+		g.mode, g.sleepT = modeSleep, 0
+	case useIncinerator:
+		g.deposit()
+	}
+}
+
+// deposit feeds the tank's dust to the incinerator, which turns it into credits.
+func (g *Game) deposit() {
+	hopper := toWorld(incineratorSpot.add(vec3{0, 2.6, 0}))
+	if g.st.Tank < 1 {
+		g.floaters = append(g.floaters, Floater{Pos: hopper.add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
+		return
+	}
+	earned := g.st.Tank * g.priceMult()
+	g.sell()
+	g.burn = 2
+	g.floaters = append(g.floaters, Floater{Pos: hopper.add(vec3{0, 0.6, 0}), Life: 2, Text: "+" + fmtNum(earned) + " cr", C: colGold})
+	// A stream of dust flying from the player into the hopper.
+	from := g.player.Eye().sub(g.player.LocalUp().scale(0.6))
+	for range 60 {
+		start := from.add(vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.scale(0.6))
+		travel := 0.4 + g.rng.Float64()*0.6
+		g.addParticle(Particle{
+			Pos: start, Vel: hopper.sub(start).scale(1 / travel),
+			MaxLife: travel, Size: 0.04 + g.rng.Float64()*0.05,
+			C: color.RGBA{215, 205, 185, 255},
+		})
+	}
+	for range 30 {
+		vel := vec3{g.rng.Float64() - 0.5, 1 + g.rng.Float64(), g.rng.Float64() - 0.5}.scale(1.5)
+		g.addParticle(Particle{Pos: hopper, Vel: vel, MaxLife: 0.6 + g.rng.Float64()*0.6, Size: 0.06, C: accentOrange, Additive: true})
+	}
+}
+
+// updateSleep runs the sleep sequence: fade out, save, wake up.
+func (g *Game) updateSleep(dt float64) {
+	before := g.sleepT
+	g.sleepT += dt
+	if before < sleepSave && g.sleepT >= sleepSave {
+		g.save()
+	}
+	if g.sleepT >= sleepEnd {
+		g.setMode(modePlay)
 	}
 }
 
@@ -353,9 +458,6 @@ func (g *Game) updateShop() {
 	}
 	if !rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 		return
-	}
-	if rl.CheckCollisionPointRec(mouse, sellButtonRect()) {
-		g.sell()
 	}
 	if g.hover >= 0 {
 		if it := items[g.hover]; it.affordable(g.st.Credits) {

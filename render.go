@@ -31,18 +31,21 @@ type shaderLocs struct {
 	viewPos, sunDir, earthDir, time int32
 	brush, casters, casterCount     int32
 	surface, up                     int32
+	lighting, room                  int32
+	globeCenter, globeRot           int32
+	playerDir                       int32
 }
 
 // Graphics holds the GPU resources. Everything is generated at startup:
 // shapes are meshes built in code and every surface is painted by shaders.
 type Graphics struct {
-	terrainSh, objectSh, skySh rl.Shader
-	tLoc, oLoc, sLoc           shaderLocs
+	terrainSh, objectSh, skySh, holoSh rl.Shader
+	tLoc, oLoc, sLoc, hLoc             shaderLocs
 
-	sphere, hemi, cyl, cone, cube, crystal, sky rl.Model
-	terrainMat                                  rl.Material
-	glow                                        rl.Texture2D
-	font, bold                                  rl.Font
+	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
+	terrainMat                                        rl.Material
+	glow                                              rl.Texture2D
+	font, bold                                        rl.Font
 }
 
 func loadShader(fs string) (rl.Shader, shaderLocs) {
@@ -52,6 +55,8 @@ func loadShader(fs string) (rl.Shader, shaderLocs) {
 		viewPos: loc("viewPos"), sunDir: loc("sunDir"), earthDir: loc("earthDir"), time: loc("time"),
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"),
+		lighting: loc("lighting"), room: loc("room"),
+		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
 	}
 }
 
@@ -60,6 +65,7 @@ func NewGraphics() *Graphics {
 	gfx.terrainSh, gfx.tLoc = loadShader(terrainFS)
 	gfx.objectSh, gfx.oLoc = loadShader(objectFS)
 	gfx.skySh, gfx.sLoc = loadShader(skyFS)
+	gfx.holoSh, gfx.hLoc = loadShader(holoFS)
 
 	model := func(m rl.Mesh, sh rl.Shader) rl.Model {
 		mod := rl.LoadModelFromMesh(m)
@@ -73,6 +79,7 @@ func NewGraphics() *Graphics {
 	gfx.cube = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
 	gfx.crystal = model(rl.GenMeshCone(1, 1, 6), gfx.objectSh)
 	gfx.sky = model(rl.GenMeshSphere(1, 24, 32), gfx.skySh)
+	gfx.holo = model(rl.GenMeshSphere(1, 32, 48), gfx.holoSh)
 
 	// Soft round sprite for particles and glows, generated in code.
 	img := rl.GenImageGradientRadial(64, 64, 0, rl.White, rl.Blank)
@@ -109,6 +116,17 @@ func NewGraphics() *Graphics {
 	// The Moon is big: see mountains far away, but keep the held tool, very
 	// close to the eye, from being clipped.
 	rl.SetClipPlanes(0.05, 6000)
+
+	// The base's ceiling lamps never move.
+	var lights []float32
+	for _, l := range baseLights() {
+		p := toWorld(l)
+		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), 1)
+	}
+	lights[3] = 1.4 // the hub is bigger
+	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "tilesPerFace"), []float32{tilesPerFace}, rl.ShaderUniformFloat)
 	return gfx
 }
 
@@ -118,7 +136,7 @@ type shaderWithLocs struct {
 }
 
 func (gfx *Graphics) shaders() []shaderWithLocs {
-	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.objectSh, gfx.oLoc}, {gfx.skySh, gfx.sLoc}}
+	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.objectSh, gfx.oLoc}, {gfx.skySh, gfx.sLoc}, {gfx.holoSh, gfx.hLoc}}
 }
 
 func v3f(v vec3) []float32 { return []float32{float32(v.X), float32(v.Y), float32(v.Z)} }
@@ -172,13 +190,13 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	}
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
 
-	// Soft shadows cast by the base and the drones (the base stands on the
-	// north pole, where up is +Y).
-	casters := []float32{
-		float32(basePos.X), float32(basePos.Y + 2.6), float32(basePos.Z), 3.4,
-		float32(terminalPos.X), float32(terminalPos.Y + 0.7), float32(terminalPos.Z), 0.8,
+	// Soft shadows cast by the base's domes and by the drones.
+	var casters []float32
+	for _, r := range rooms {
+		c := toWorld(r.center.add(vec3{0, r.wallH * 0.7, 0}))
+		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(r.radius*1.05))
 	}
-	for _, d := range g.drones[:min(len(g.drones), maxCasters-2)] {
+	for _, d := range g.drones[:min(len(g.drones), maxCasters-len(rooms))] {
 		casters = append(casters, float32(d.Pos.X), float32(d.Pos.Y), float32(d.Pos.Z), 0.55)
 	}
 	n := min(len(casters)/4, maxCasters)
@@ -217,50 +235,24 @@ func (g *Game) Draw() {
 	g.drawBase()
 	g.drawDrones()
 	g.drawGems()
+	if indoors(toLocal(g.player.Eye())) {
+		gfx.setLighting(litIndoor, vec3{})
+	}
 	g.drawTool()
+	gfx.setLighting(litSun, vec3{})
 	g.drawGlows(cam)
+	g.drawGlobe(cam)
 	rl.EndMode3D()
 
 	g.drawHUD(cam)
 	rl.EndDrawing()
 }
 
-// terminalPos is set on the ground once the terrain exists.
-var terminalPos vec3
-
 var (
-	matGold  = color.RGBA{222, 170, 70, 255}
 	matWhite = color.RGBA{232, 234, 240, 255}
 	matSteel = color.RGBA{150, 155, 170, 255}
 	matDark  = color.RGBA{48, 52, 66, 255}
 )
-
-func (g *Game) drawBase() {
-	gfx, p := g.gfx, basePos
-	up := vec3{0, 1, 0}
-
-	for i := range 4 {
-		a := math.Pi/4 + float64(i)*math.Pi/2
-		ca, sa := math.Cos(a), math.Sin(a)
-		foot := p.add(vec3{ca * 3.3, 0.12, sa * 3.3})
-		gfx.segment(gfx.cyl, p.add(vec3{ca * 1.3, 2.0, sa * 1.3}), foot, 0.07, matSteel, 0.5, 0)
-		gfx.put(gfx.hemi, p.add(vec3{ca * 3.3, 0, sa * 3.3}), vec3{0.5, 0.18, 0.5}, up, 0, matSteel, 0.4, 0)
-	}
-	gfx.put(gfx.cyl, p.add(vec3{0, 1.7, 0}), vec3{1.75, 1.35, 1.75}, up, 0, matGold, 0.9, 0)
-	gfx.put(gfx.cyl, p.add(vec3{0, 3.0, 0}), vec3{1.82, 0.14, 1.82}, up, 0, matDark, 0.3, 0)
-	gfx.put(gfx.sphere, p.add(vec3{0, 4.0, 0}), vec3{1.35, 1.15, 1.35}, up, 0, matWhite, 0.6, 0)
-	gfx.put(gfx.sphere, p.add(vec3{0, 4.2, -1.18}), vec3{0.42, 0.3, 0.2}, up, 0, color.RGBA{70, 190, 230, 255}, 1, 0.55)
-	gfx.segment(gfx.cyl, p.add(vec3{0.45, 4.9, 0.4}), p.add(vec3{0.45, 6.5, 0.4}), 0.03, matSteel, 0.5, 0)
-	gfx.put(gfx.hemi, p.add(vec3{-0.75, 5.0, 0.2}), vec3{0.55, 0.2, 0.55}, vec3{0, 0, 1}, 30, matWhite, 0.6, 0)
-	if math.Mod(g.clock, 1.2) < 0.3 {
-		gfx.put(gfx.sphere, p.add(vec3{0.45, 6.55, 0.4}), vec3{0.09, 0.09, 0.09}, up, 0, colRed, 0, 1)
-	}
-
-	t := terminalPos
-	gfx.put(gfx.cube, t.add(vec3{0, 0.65, 0}), vec3{0.8, 1.3, 0.5}, up, 0, matDark, 0.4, 0)
-	gfx.put(gfx.cube, t.add(vec3{0, 1.36, -0.05}), vec3{0.95, 0.12, 0.7}, vec3{1, 0, 0}, -12, matSteel, 0.5, 0)
-	gfx.put(gfx.cube, t.add(vec3{0, 0.95, -0.26}), vec3{0.62, 0.42, 0.02}, up, 0, color.RGBA{70, 210, 230, 255}, 0, 0.8)
-}
 
 func (g *Game) drawDrones() {
 	gfx := g.gfx
@@ -382,7 +374,7 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 		rl.DrawBillboard(cam, gfx.glow, g.gemPos(gem, 0.06+0.16*vis).rl(), float32(1.4*vis), c)
 	}
 	if math.Mod(g.clock, 1.2) < 0.3 {
-		rl.DrawBillboard(cam, gfx.glow, basePos.add(vec3{0.45, 6.55, 0.4}).rl(), 0.9, color.RGBA{255, 80, 60, 200})
+		rl.DrawBillboard(cam, gfx.glow, beaconTop().rl(), 0.9, color.RGBA{255, 80, 60, 200})
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()

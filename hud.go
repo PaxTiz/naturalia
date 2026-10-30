@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"math"
+	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -46,17 +48,12 @@ func (gfx *Graphics) banner(s string, y, size float32, c color.RGBA) {
 func shopPanel() rl.Rectangle {
 	u := uiScale()
 	w, h := screenSize()
-	return rl.NewRectangle((w-660*u)/2, (h-600*u)/2, 660*u, 600*u)
-}
-
-func sellButtonRect() rl.Rectangle {
-	p, u := shopPanel(), uiScale()
-	return rl.NewRectangle(p.X+20*u, p.Y+68*u, p.Width-40*u, 46*u)
+	return rl.NewRectangle((w-660*u)/2, (h-472*u)/2, 660*u, 472*u)
 }
 
 func shopItemRect(i int) rl.Rectangle {
 	p, u := shopPanel(), uiScale()
-	return rl.NewRectangle(p.X+20*u, p.Y+128*u+float32(i)*64*u, p.Width-40*u, 58*u)
+	return rl.NewRectangle(p.X+20*u, p.Y+76*u+float32(i)*64*u, p.Width-40*u, 58*u)
 }
 
 func (g *Game) drawHUD(cam rl.Camera3D) {
@@ -87,8 +84,9 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 		switch {
 		case g.st.TotalDust < 5:
 			gfx.banner("Vise le sol et maintiens le clic gauche pour balayer la poussière", h*0.62, 22*u, colWhite)
-		case g.nearTerminal():
-			gfx.banner("[E] Ouvrir le terminal de la base", h*0.62, 24*u, colCyan)
+		case g.hasUse():
+			it, _ := g.nearbyUse()
+			gfx.banner(it.prompt, h*0.62, 24*u, colCyan)
 		case g.tankFull() && !g.autoSell() && math.Mod(g.clock, 1) < 0.7:
 			gfx.banner("RÉSERVOIR PLEIN ! Retourne à la base pour vendre", h*0.62, 24*u, colRed)
 		case !g.aimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
@@ -102,6 +100,10 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 		g.drawPause()
 	case modeShop:
 		g.drawShop()
+	case modeMap:
+		g.drawMapPanel()
+	case modeSleep:
+		g.drawSleep()
 	}
 }
 
@@ -172,7 +174,7 @@ func (g *Game) drawPause() {
 	lines := []string{
 		"ZQSD / WASD : se déplacer      Maj : courir      Espace : sauter (gravité lunaire !)",
 		"Clic gauche : balayer la poussière visée",
-		"E : terminal de la base (vendre la poussière, acheter du matériel)",
+		"E : utiliser (incinérateur pour vendre, laboratoire, table de la carte, lit)",
 		"Échap : pause      F11 : plein écran",
 	}
 	for i, l := range lines {
@@ -188,20 +190,8 @@ func (g *Game) drawShop() {
 	rl.DrawRectangleRec(p, color.RGBA{16, 18, 34, 245})
 	rl.DrawRectangleLinesEx(p, 2*u, color.RGBA{60, 200, 220, 255})
 
-	gfx.title("TERMINAL DE LA BASE", p.X+20*u, p.Y+20*u, 28*u, colCyan)
+	gfx.title("LABORATOIRE DE RECHERCHE", p.X+20*u, p.Y+20*u, 28*u, colCyan)
 	gfx.textRight(fmtNum(g.st.Credits)+" cr", p.X+p.Width-20*u, p.Y+20*u, 28*u, colGold)
-
-	sb := sellButtonRect()
-	mouse := rl.GetMousePosition()
-	btn, txt := color.RGBA{40, 44, 70, 255}, colGray
-	if g.st.Tank >= 1 {
-		btn, txt = color.RGBA{100, 76, 20, 255}, colGold
-		if rl.CheckCollisionPointRec(mouse, sb) {
-			btn = color.RGBA{130, 100, 30, 255}
-		}
-	}
-	rl.DrawRectangleRec(sb, btn)
-	gfx.textCenter("VENDRE "+fmtNum(g.st.Tank)+" g  →  +"+fmtNum(g.st.Tank*g.priceMult())+" cr   [Espace]", sb.X+sb.Width/2, sb.Y+12*u, 22*u, txt)
 
 	for i, it := range g.shopItems() {
 		r := shopItemRect(i)
@@ -226,4 +216,66 @@ func (g *Game) drawShop() {
 		gfx.textRight(it.info, right, r.Y+33*u, 16*u, colGray)
 	}
 	gfx.textCenter("[E] ou [Échap] pour fermer", p.X+p.Width/2, p.Y+p.Height+10*u, 18*u, colGray)
+}
+
+// hasUse tells whether something can be used right now with E.
+func (g *Game) hasUse() bool {
+	_, ok := g.nearbyUse()
+	return ok
+}
+
+// drawMapPanel shows the state of the Moon next to the hologram.
+func (g *Game) drawMapPanel() {
+	gfx, u := g.gfx, uiScale()
+	_, h := screenSize()
+	s := g.world.Stats(g.st.TotalDust)
+	p := rl.NewRectangle(24*u, h/2-190*u, 420*u, 380*u)
+	rl.DrawRectangleRec(p, color.RGBA{10, 24, 34, 225})
+	rl.DrawRectangleLinesEx(p, 2*u, color.RGBA{60, 200, 220, 255})
+	gfx.title("ÉTAT DE LA LUNE", p.X+20*u, p.Y+18*u, 28*u, colCyan)
+
+	rows := []struct{ label, value string }{
+		{"Lune nettoyée", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
+		{"Poussière collectée", fmtNum(g.st.TotalDust) + " g"},
+		{"Zones visitées", fmt.Sprintf("%d / %d", s.TilesVisited, s.TilesTotal)},
+		{"Cristaux trouvés", fmt.Sprintf("%d / %d", s.Gems, s.GemTotal)},
+		{"Crédits gagnés", fmtNum(g.st.TotalEarned) + " cr"},
+		{"Distance de la base", fmtNum(arcDist(g.player.LocalUp(), baseUp)) + " m"},
+	}
+	for i, r := range rows {
+		y := p.Y + 72*u + float32(i)*40*u
+		gfx.text(r.label, p.X+20*u, y, 20*u, colGray)
+		gfx.textRight(r.value, p.X+p.Width-20*u, y, 20*u, colWhite)
+	}
+	y := p.Y + p.Height - 44*u
+	rl.DrawCircle(int32(p.X+26*u), int32(y+10*u), 6*u, colGold)
+	gfx.text("Base", p.X+38*u, y, 18*u, colGray)
+	rl.DrawCircle(int32(p.X+116*u), int32(y+10*u), 6*u, color.RGBA{255, 90, 70, 255})
+	gfx.text("Toi", p.X+128*u, y, 18*u, colGray)
+	rl.DrawCircle(int32(p.X+196*u), int32(y+10*u), 6*u, color.RGBA{190, 255, 255, 255})
+	gfx.text("Zones nettoyées", p.X+208*u, y, 18*u, colGray)
+	gfx.text("[E] ou [Échap] pour fermer", p.X, p.Y+p.Height+12*u, 18*u, colGray)
+}
+
+// drawSleep fades to black, shows the night passing, then fades back in.
+func (g *Game) drawSleep() {
+	gfx, u := g.gfx, uiScale()
+	w, h := screenSize()
+	t := g.sleepT
+	dark := 1.0
+	switch {
+	case t < sleepFadeOut:
+		dark = t / sleepFadeOut
+	case t > sleepWake:
+		dark = 1 - (t-sleepWake)/(sleepEnd-sleepWake)
+	}
+	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{0, 0, 4, uint8(255 * clamp01(dark))})
+	if t > sleepFadeOut*0.6 && t < sleepWake+0.3 {
+		a := uint8(255 * clamp01(math.Min(t-sleepFadeOut*0.6, sleepWake+0.3-t)*2))
+		dots := strings.Repeat(" z", 1+int(t*2)%3)
+		gfx.textCenter("Z"+dots+"…", w/2, h/2-30*u, 44*u, color.RGBA{180, 190, 255, a})
+		if t > sleepSave {
+			gfx.textCenter("Partie sauvegardée", w/2, h/2+30*u, 20*u, color.RGBA{150, 155, 178, a})
+		}
+	}
 }
