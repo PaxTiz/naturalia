@@ -79,7 +79,8 @@ type Game struct {
 	drones    []*Drone
 	particles []Particle
 	floaters  []Floater
-	nearGems  []Gem // crystals around the player, refreshed every frame
+	nearGems  []Gem  // crystals around the player, refreshed every frame
+	nearRocks []rock // boulders around the player
 
 	mode        mode
 	clock       float64
@@ -176,8 +177,10 @@ func (g *Game) Update(dt float64) {
 		g.updateSleep(dt)
 	}
 
+	g.nearRocks = g.world.RocksNear(g.player.Pos, rockDrawDist)
 	g.player.Update(dt, g.terrain, g.mode == modePlay)
 	collideBase(&g.player, g.walls)
+	g.collideRocks()
 	g.updateBase(dt)
 	g.updateAim()
 	g.updateSweeping(dt)
@@ -333,6 +336,9 @@ func (g *Game) updateDrones(dt float64) {
 		if delta.length() > 0.05 {
 			d.Pos = d.Pos.add(delta.norm().scale(math.Min(delta.length(), droneSpeed*dt)))
 			up = d.Pos.norm()
+		}
+		if arcDist(up, baseUp) < baseReach+6 {
+			hover = math.Max(hover, dockAltitude) // fly over the domes, not through them
 		}
 		r := d.Pos.length()
 		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)

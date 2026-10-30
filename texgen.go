@@ -252,7 +252,7 @@ func genPanel() rl.Texture2D {
 		grime := clamp01((1-smoothstep(0, 0.45, below))*streak*1.4 - 0.25)
 		grime = math.Max(grime, clamp01(tfbm(u, v, 3, 4, 720)-0.62)*1.5)
 		wear := clamp01((tfbm(u, v, 20, 3, 730) - 0.55) * 3 * (1 - smoothstep(0.01, 0.06, seam)))
-		tone := painterly(0.88+0.1*(strokes(u, v, 6, 740)-0.5), 5)
+		tone := painterly(0.9+0.05*(strokes(u, v, 6, 740)-0.5)+0.05*(warped(u, v, 4, 3, 745)-0.5), 5)
 		return texel{tone, grime, wear, h}
 	})
 }

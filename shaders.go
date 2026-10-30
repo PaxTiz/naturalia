@@ -60,12 +60,19 @@ vec3 finish(vec3 col, float dist) {
 const meshVS = `#version 330
 in vec3 vertexPosition;
 in vec3 vertexNormal;
+in vec2 vertexTexCoord;
 uniform mat4 mvp;
 uniform mat4 matModel;
 uniform mat4 matNormal;
 out vec3 fragPos;
 out vec3 fragNormal;
+out vec3 localPos;
+out vec3 localNormal;
+out vec2 fragTexCoord;
 void main() {
+    fragTexCoord = vertexTexCoord;
+    localPos = vertexPosition;
+    localNormal = vertexNormal;
     fragPos = vec3(matModel * vec4(vertexPosition, 1.0));
     fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 0.0)));
     gl_Position = mvp * vec4(vertexPosition, 1.0);
@@ -175,14 +182,19 @@ void main() {
 const objectFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
+in vec3 localPos;
+in vec3 localNormal;
+in vec2 fragTexCoord;
 uniform vec4 colDiffuse;
 uniform vec2 surface;     // x: specular strength, y: emissive (0..1)
 uniform float lighting;   // 0 sun, 1 lamps, 2 lamps on back faces, 3 lamps on faces turned toward room
 uniform vec3 room;
 uniform vec4 lights[12];  // ceiling lamps: xyz position, w intensity
 uniform float lightCount;
+uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
+uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
 out vec4 finalColor;
-` + shaderCommon + `
+` + shaderCommon + textureCommon + `
 // Warm, soft indoor lighting from the ceiling lamps.
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
     const vec3 lampCol = vec3(1.0, 0.9, 0.76);
@@ -200,15 +212,66 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
     return col;
 }
 
+// paint applies one of the painted materials to the base color; it returns
+// the albedo and sets the relief height h (meters) for the bump.
+vec3 paint(vec3 base, vec3 n, out float h) {
+    h = 0.0;
+    if (matInfo.x < 0.5) return base;
+    if (matInfo.x > 7.5) return base * texture(texture0, fragTexCoord).rgb; // decal, by UVs
+    vec3 p = matInfo.z > 0.5 ? localPos : fragPos;
+    vec3 w = triWeights(matInfo.z > 0.5 ? normalize(localNormal) : n);
+    float s = matInfo.y;
+    if (matInfo.x < 1.5) { // painted object: brush strokes, chipped edges showing metal
+        vec4 t = tri(texture0, p, w, s);
+        h = t.a * 0.004;
+        return mix(base * t.r, vec3(0.42, 0.42, 0.46) * t.r, t.b * 0.8);
+    }
+    if (matInfo.x < 2.5) { // hull panels: seams, rivets, grime streaks, worn edges
+        vec4 t = tri(texture1, p, w, s);
+        h = t.a * 0.02;
+        vec3 c = base * t.r;
+        c = mix(c, c * vec3(0.55, 0.5, 0.45), t.g * 0.75);
+        return mix(c, vec3(0.62, 0.64, 0.68), t.b * 0.6);
+    }
+    if (matInfo.x < 3.5) { // brushed metal with scratches
+        vec4 t = tri(texture2, p, w, s);
+        h = t.a * 0.003;
+        return base * (0.55 + 0.7 * t.r) + t.g * 0.15;
+    }
+    if (matInfo.x < 4.5) { // tread plate floor
+        vec4 t = tri(texture3, p, w, s);
+        h = t.a * 0.008;
+        return base * (0.45 + 0.9 * t.r) * (1.0 - 0.4 * t.g);
+    }
+    if (matInfo.x < 5.5) { // fabric
+        vec4 t = tri(texture4, p, w, s);
+        h = t.a * 0.003;
+        return base * (0.55 + 0.55 * t.r);
+    }
+    if (matInfo.x < 6.5) { // rock: the regolith texture, tinted
+        vec4 t = tri(texture5, p, w, s);
+        h = t.a * 0.05;
+        return base * (0.5 + 0.9 * t.r) * (1.0 - t.b * 0.4);
+    }
+    // hazard stripes
+    vec4 t = tri(texture6, p, w, s);
+    vec3 c = mix(vec3(0.08, 0.08, 0.09), vec3(0.95, 0.75, 0.15), t.r);
+    return c * (0.75 + 0.35 * t.b);
+}
+
 void main() {
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewPos - fragPos);
     bool inside = lighting > 0.5 && lighting < 1.5;
     if (lighting > 1.5 && lighting < 2.5 && !gl_FrontFacing) { inside = true; n = -n; }
     if (lighting > 2.5 && dot(n, room - fragPos) > 0.0) inside = true;
-    vec3 lit = inside ? indoor(colDiffuse.rgb, n, v, surface.x) : shade(colDiffuse.rgb, n, v, normalize(fragPos), 1.0, surface.x);
-    vec3 col = mix(lit, colDiffuse.rgb * 1.6, surface.y);
-    finalColor = vec4(finish(col, length(viewPos - fragPos)), colDiffuse.a);
+    float h;
+    vec3 albedo = paint(colDiffuse.rgb, n, h);
+    float dist = length(viewPos - fragPos);
+    n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
+    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), 1.0, surface.x);
+    vec3 col = mix(lit, albedo * 1.6, surface.y);
+    finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`
 
 // holoFS paints the hologram of the Moon above the map table: a glowing

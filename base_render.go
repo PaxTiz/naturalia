@@ -52,6 +52,7 @@ func (g *Game) drawBase() {
 	accents := []color.RGBA{accentCyan, accentOrange, accentBlue, accentPurple}
 	for ri, r := range rooms {
 		inside := toWorld(r.center.add(vec3{0, 1.2, 0}))
+		gfx.setMat(mtPanel, 1/2.4, false)
 		gfx.setLighting(litTowards, inside)
 		for i, p := range r.panels() {
 			col := matPanel
@@ -67,8 +68,10 @@ func (g *Game) drawBase() {
 
 		// Inside: floor, a glowing accent stripe along the walls, ceiling lamp.
 		gfx.setLighting(litIndoor, inside)
+		gfx.setMat(mtFloor, 1/floorTile, false)
 		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, floorTop - 0.1, 0})), vec3{r.radius, 0.1, r.radius}, vec3{0, 1, 0}, 0, matFloor, 0.2, 0)
 		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, floorTop - 0.095, 0})), vec3{r.radius * 0.45, 0.1, r.radius * 0.45}, vec3{0, 1, 0}, 0, matFloor2, 0.3, 0)
+		gfx.setMat(mtPlain, 1, false)
 		for _, p := range r.panels() {
 			if p.y0 > 0 {
 				continue
@@ -87,16 +90,20 @@ func (g *Game) drawBase() {
 		length := axis.length()
 		side := c.side()
 		gfx.setLighting(litTowards, toWorld(mid.add(vec3{0, 1.2, 0})))
+		gfx.setMat(mtPanel, 1/2.4, false)
 		for _, s := range []float64{-1, 1} {
 			wall := mid.add(side.scale(s * (c.width/2 + wallThick/2))).add(vec3{0, c.height / 2, 0})
 			gfx.box(wall, vec3{length, c.height, wallThick}, axis, matPanel, 0.4, 0)
 		}
 		gfx.box(mid.add(vec3{0, c.height + 0.06, 0}), vec3{length, 0.12, c.width + 2*wallThick}, axis, matPanel2, 0.4, 0)
 		gfx.setLighting(litIndoor, toWorld(mid))
+		gfx.setMat(mtFloor, 1/floorTile, false)
 		gfx.box(mid.add(vec3{0, floorTop - 0.05, 0}), vec3{length, 0.1, c.width}, axis, matFloor, 0.2, 0)
+		gfx.setMat(mtPlain, 1, false)
 		gfx.box(mid.add(vec3{0, c.height - 0.02, 0}), vec3{length * 0.7, 0.03, 0.25}, axis, lampWarm, 0, 1)
 	}
 
+	gfx.setMat(mtPanel, 1/2.4, false)
 	for _, p := range junctionPlates() {
 		room := toWorld(p.mid.sub(p.normal.scale(2)).add(vec3{0, 1.2, 0}))
 		gfx.setLighting(litTowards, room)
@@ -106,6 +113,8 @@ func (g *Game) drawBase() {
 	g.drawAirlock()
 	g.drawFurniture()
 	g.drawOutside()
+	g.drawSigns()
+	gfx.setMat(mtPlain, 1, false)
 	gfx.setLighting(litSun, vec3{})
 }
 
@@ -118,11 +127,15 @@ func (g *Game) drawAirlock() {
 	across := vec3{1, 0, 0}
 	half := (doorWidth+0.2)/2 + wallThick
 	for _, s := range []float64{-1, 1} {
-		gfx.box(end.add(vec3{s * half, 1.35, 0}), vec3{0.3, 2.7, 0.35}, across, matDark, 0.5, 0)
+		gfx.setMat(mtHazard, 2.5, false)
+		gfx.box(end.add(vec3{s * half, 1.35, 0}), vec3{0.3, 2.7, 0.35}, across, colWhite, 0.4, 0)
+		gfx.setMat(mtPanel, 1/1.6, false)
 		w := (doorWidth + 0.2) / 2
 		gfx.box(end.add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0}), vec3{w, doorHeight, 0.08}, across, matSteel, 0.6, 0)
 	}
+	gfx.setMat(mtMetal, 1, false)
 	gfx.box(end.add(vec3{0, 2.6, 0}), vec3{2*half + 0.3, 0.3, 0.35}, across, matDark, 0.5, 0)
+	gfx.setMat(mtPlain, 1, false)
 	lamp := colGreen
 	if g.doorOpen < 0.9 {
 		lamp = colGold
@@ -135,43 +148,56 @@ func (g *Game) drawFurniture() {
 	up := vec3{0, 1, 0}
 	gfx.setLighting(litIndoor, vec3{})
 
-	// Hub: the map table.
+	// Hub: the map table, and supply crates of all colors along the wall.
 	t := tableSpot
+	gfx.setMat(mtMetal, 1.5, false)
 	gfx.put(gfx.cyl, toWorld(t), vec3{0.85, 0.85, 0.85}, up, 0, matDark, 0.5, 0)
 	gfx.put(gfx.cyl, toWorld(t.add(vec3{0, 0.85, 0})), vec3{1.2, 0.08, 1.2}, up, 0, matSteel, 0.8, 0)
+	gfx.setMat(mtPlain, 1, false)
 	gfx.put(gfx.cyl, toWorld(t.add(vec3{0, 0.93, 0})), vec3{1.0, 0.02, 1.0}, up, 0, accentCyan, 0, 0.9)
-	for _, a := range []float64{0.8, 2.4, 3.9, 5.5} {
+	crateCols := []color.RGBA{{196, 120, 60, 255}, {90, 120, 150, 255}, {150, 140, 110, 255}, {120, 150, 95, 255}}
+	gfx.setMat(mtPaint, 1.5, false)
+	for i, a := range []float64{0.8, 2.4, 3.9, 5.5} {
 		crate := vec3{math.Cos(a) * 5.4, 0.35, math.Sin(a) * 5.4}
-		gfx.box(crate, vec3{0.7, 0.7, 0.7}, vec3{math.Cos(a + 0.4), 0, math.Sin(a + 0.4)}, color.RGBA{120, 112, 96, 255}, 0.2, 0)
+		face := vec3{math.Cos(a + 0.4), 0, math.Sin(a + 0.4)}
+		gfx.box(crate, vec3{0.7, 0.7, 0.7}, face, crateCols[i], 0.2, 0)
+		gfx.box(crate.add(vec3{0, 0.55, 0}), vec3{0.5, 0.4, 0.5}, vec3{math.Cos(a - 0.3), 0, math.Sin(a - 0.3)}, crateCols[(i+2)%4], 0.2, 0)
 	}
 
 	// Sale: the incinerator, glowing harder while it burns dust.
 	in := incineratorSpot
 	glow := float32(0.55 + 0.45*clamp01(g.burn))
+	gfx.setMat(mtMetal, 1.2, false)
 	gfx.put(gfx.cyl, toWorld(in), vec3{1.1, 1.9, 1.1}, up, 0, matSteel, 0.6, 0)
 	gfx.put(gfx.cyl, toWorld(in.add(vec3{0, 0.25, 0})), vec3{1.14, 0.12, 1.14}, up, 0, matDark, 0.3, 0)
-	gfx.put(gfx.cyl, toWorld(in.add(vec3{0, 1.6, 0})), vec3{1.14, 0.12, 1.14}, up, 0, matDark, 0.3, 0)
 	gfx.segment(gfx.cone, toWorld(in.add(vec3{0, 2.75, 0})), toWorld(in.add(vec3{0, 1.9, 0})), 0.95, matSteel, 0.6, 0)
-	gfx.box(in.add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, accentOrange, 0, glow)
 	gfx.segment(gfx.cyl, toWorld(in.add(vec3{-0.6, 1.5, 0.6})), toWorld(in.add(vec3{-0.6, 4.9, 0.6})), 0.18, matDark, 0.4, 0)
-	gfx.box(in.add(vec3{1.0, 1.0, 1.25}), vec3{0.5, 0.7, 0.3}, vec3{0, 0, 1}, matDark, 0.4, 0)
-	gfx.box(in.add(vec3{1.16, 1.1, 1.25}), vec3{0.36, 0.3, 0.02}, vec3{0, 0, 1}, colGreen, 0, 0.8)
+	gfx.setMat(mtHazard, 3, false)
+	gfx.put(gfx.cyl, toWorld(in.add(vec3{0, 1.6, 0})), vec3{1.14, 0.14, 1.14}, up, 0, colWhite, 0.3, 0)
+	gfx.setMat(mtPaint, 2, false)
+	gfx.box(in.add(vec3{1.0, 1.0, 1.25}), vec3{0.5, 0.7, 0.3}, vec3{0, 0, 1}, color.RGBA{70, 90, 80, 255}, 0.4, 0)
+	gfx.setMat(mtPlain, 1, false)
+	gfx.box(in.add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, accentOrange, 0, glow)
+	gfx.drawScreen(in.add(vec3{1.16, 1.1, 1.25}), vec3{1, 0, 0}, 0.38, 0.28, gfx.screens[3], 0.8)
 
 	// Research: a desk with three screens, between two server racks.
 	c := consoleSpot
+	gfx.setMat(mtMetal, 1.5, false)
 	gfx.box(c.add(vec3{-0.2, 0.78, 0}), vec3{0.9, 0.06, 2.2}, vec3{1, 0, 0}, matSteel, 0.6, 0)
 	for _, z := range []float64{-0.95, 0.95} {
 		gfx.box(c.add(vec3{-0.2, 0.38, z}), vec3{0.8, 0.76, 0.08}, vec3{1, 0, 0}, matDark, 0.3, 0)
 	}
-	for i, z := range []float64{-0.75, 0, 0.75} {
-		yaw := vec3{0, 0, 1}
-		if i != 1 {
-			yaw = vec3{-z * 0.4, 0, 1}.norm()
-		}
-		gfx.box(c.add(vec3{0.1, 1.28, z}), vec3{0.66, 0.46, 0.05}, yaw, accentBlue, 0, 0.75)
-	}
+	gfx.setMat(mtPaint, 2, false)
 	for _, z := range []float64{-2.3, 2.3} {
-		gfx.box(c.add(vec3{0, 0.95, z}), vec3{0.7, 1.9, 0.7}, vec3{1, 0, 0}, matDark, 0.4, 0)
+		gfx.box(c.add(vec3{0, 0.95, z}), vec3{0.7, 1.9, 0.7}, vec3{1, 0, 0}, color.RGBA{58, 64, 80, 255}, 0.4, 0)
+	}
+	gfx.setMat(mtPlain, 1, false)
+	for i, z := range []float64{-0.75, 0, 0.75} {
+		facing := vec3{-1, 0, z * 0.4}.norm()
+		gfx.drawScreen(c.add(vec3{0.1, 1.28, z}), facing, 0.66, 0.42, gfx.screens[i], 0.8)
+	}
+	gfx.setLighting(litIndoor, vec3{})
+	for _, z := range []float64{-2.3, 2.3} {
 		for k := range 5 {
 			on := float32(0.3)
 			if math.Sin(g.clock*3+float64(k)*1.7+z) > 0 {
@@ -181,13 +207,17 @@ func (g *Game) drawFurniture() {
 		}
 	}
 
-	// Sleep: a bed against the far wall and a bedside lamp.
+	// Sleep: a bed against the far wall, a rug and a bedside lamp.
 	b := bedSpot
-	gfx.box(b.add(vec3{0, 0.2, 0}), vec3{2.1, 0.4, 1.05}, vec3{1, 0, 0}, matDark, 0.3, 0)
-	gfx.box(b.add(vec3{0, 0.48, 0}), vec3{2.0, 0.16, 0.98}, vec3{1, 0, 0}, matWhite, 0.2, 0)
-	gfx.box(b.add(vec3{0.32, 0.58, 0}), vec3{1.36, 0.06, 1.0}, vec3{1, 0, 0}, accentPurple, 0.2, 0)
-	gfx.box(b.add(vec3{-0.72, 0.62, 0}), vec3{0.42, 0.12, 0.7}, vec3{1, 0, 0}, matWhite, 0.2, 0)
-	gfx.box(b.add(vec3{1.45, 0.3, 0.2}), vec3{0.5, 0.6, 0.5}, vec3{1, 0, 0}, matDark, 0.3, 0)
+	gfx.setMat(mtPaint, 2, false)
+	gfx.box(b.add(vec3{0, 0.2, 0}), vec3{2.1, 0.4, 1.05}, vec3{1, 0, 0}, color.RGBA{110, 80, 60, 255}, 0.3, 0)
+	gfx.box(b.add(vec3{1.45, 0.3, 0.2}), vec3{0.5, 0.6, 0.5}, vec3{1, 0, 0}, color.RGBA{110, 80, 60, 255}, 0.3, 0)
+	gfx.setMat(mtFabric, 1/fabricTile, false)
+	gfx.box(b.add(vec3{0, 0.48, 0}), vec3{2.0, 0.16, 0.98}, vec3{1, 0, 0}, matWhite, 0.1, 0)
+	gfx.box(b.add(vec3{0.32, 0.58, 0}), vec3{1.36, 0.06, 1.0}, vec3{1, 0, 0}, accentPurple, 0.1, 0)
+	gfx.box(b.add(vec3{-0.72, 0.62, 0}), vec3{0.42, 0.12, 0.7}, vec3{1, 0, 0}, matWhite, 0.1, 0)
+	gfx.box(b.add(vec3{0, floorTop + 0.005, -1.3}), vec3{1.8, 0.01, 1.1}, vec3{1, 0, 0}, color.RGBA{150, 70, 60, 255}, 0, 0)
+	gfx.setMat(mtPlain, 1, false)
 	gfx.put(gfx.sphere, toWorld(b.add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, up, 0, lampWarm, 0, 1)
 }
 
@@ -196,15 +226,21 @@ func (g *Game) drawOutside() {
 	gfx := g.gfx
 	gfx.setLighting(litSun, vec3{})
 	top := hubRoom.wallH + hubRoom.radius*0.55
+	gfx.setMat(mtMetal, 2, false)
 	gfx.segment(gfx.cyl, toWorld(vec3{1.5, top - 0.8, 1.5}), toWorld(vec3{1.5, top + 2.2, 1.5}), 0.05, matSteel, 0.5, 0)
+	gfx.setMat(mtPaint, 2, false)
 	gfx.put(gfx.hemi, toWorld(vec3{-1.8, top - 0.5, -1.2}), vec3{0.7, 0.25, 0.7}, vec3{0, 0, 1}, 25, matWhite, 0.6, 0)
-	if math.Mod(g.clock, 1.2) < 0.3 {
-		gfx.put(gfx.sphere, toWorld(vec3{1.5, top + 2.25, 1.5}), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
-	}
 	for _, z := range []float64{-7.5, -10.5} {
 		at := vec3{-12, 0, z}
+		gfx.setMat(mtMetal, 2, false)
 		gfx.segment(gfx.cyl, toWorld(at), toWorld(at.add(vec3{0, 1.2, 0})), 0.06, matSteel, 0.5, 0)
-		gfx.put(gfx.cube, toWorld(at.add(vec3{0, 1.3, 0})), vec3{2.6, 0.05, 1.5}, vec3{1, 0, 0}, -30, color.RGBA{40, 60, 120, 255}, 1, 0)
+		gfx.put(gfx.cube, toWorld(at.add(vec3{0, 1.28, 0})), vec3{2.7, 0.04, 1.6}, vec3{1, 0, 0}, -30, matSteel, 0.5, 0)
+		gfx.setMat(mtFloor, 3, false)
+		gfx.put(gfx.cube, toWorld(at.add(vec3{0, 1.31, 0})), vec3{2.6, 0.04, 1.5}, vec3{1, 0, 0}, -30, color.RGBA{50, 75, 150, 255}, 1, 0)
+	}
+	gfx.setMat(mtPlain, 1, false)
+	if math.Mod(g.clock, 1.2) < 0.3 {
+		gfx.put(gfx.sphere, toWorld(vec3{1.5, top + 2.25, 1.5}), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
 	}
 }
 
@@ -273,4 +309,28 @@ func rotationBetween(a, b vec3) rl.Matrix {
 		M2: float32(m[2][0]), M6: float32(m[2][1]), M10: float32(m[2][2]),
 		M15: 1,
 	}
+}
+
+// Painted materials of the object shader (the mat* names are colors).
+const (
+	mtPlain  = 0
+	mtPaint  = 1
+	mtPanel  = 2
+	mtMetal  = 3
+	mtFloor  = 4
+	mtFabric = 5
+	mtRock   = 6
+	mtHazard = 7
+	mtDecal  = 8 // the model's own texture, by UVs (signs)
+)
+
+// setMat selects the painted material of the next objects: scale is in
+// texture tiles per meter; objSpace makes the texture follow a moving object
+// (its unit mesh coordinates are used instead of world ones).
+func (gfx *Graphics) setMat(kind int, scale float32, objSpace bool) {
+	o := float32(0)
+	if objSpace {
+		o = 1
+	}
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.mat, []float32{float32(kind), scale, o}, rl.ShaderUniformVec3)
 }

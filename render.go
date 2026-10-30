@@ -1,12 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
+	"golang.org/x/image/font/gofont/gosmallcaps"
 )
 
 var (
@@ -32,6 +34,7 @@ type shaderLocs struct {
 	brush, casters, casterCount     int32
 	surface, up                     int32
 	lighting, room                  int32
+	mat                             int32
 	globeCenter, globeRot           int32
 	playerDir                       int32
 }
@@ -44,6 +47,11 @@ type Graphics struct {
 
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
 	terrainMat                                        rl.Material
+	signBox                                           rl.Model
+	rocks                                             []rl.Model
+	screens                                           []rl.Texture2D
+	signs                                             []sign
+	smallcaps                                         rl.Font
 	tex                                               Textures
 	glow                                              rl.Texture2D
 	font, bold                                        rl.Font
@@ -57,6 +65,7 @@ func loadShader(fs string) (rl.Shader, shaderLocs) {
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"),
 		lighting: loc("lighting"), room: loc("room"),
+		mat:         loc("matInfo"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
 	}
 }
@@ -96,6 +105,8 @@ func NewGraphics() *Graphics {
 	runes = append(runes, '…', '’', '→', '►', '◄')
 	gfx.font = rl.LoadFontFromMemory(".ttf", goregular.TTF, 64, runes)
 	gfx.bold = rl.LoadFontFromMemory(".ttf", gobold.TTF, 64, runes)
+	gfx.smallcaps = rl.LoadFontFromMemory(".ttf", gosmallcaps.TTF, 96, runes)
+	rl.SetTextureFilter(gfx.smallcaps.Texture, rl.FilterBilinear)
 	rl.SetTextureFilter(gfx.font.Texture, rl.FilterBilinear)
 	rl.SetTextureFilter(gfx.bold.Texture, rl.FilterBilinear)
 
@@ -118,6 +129,27 @@ func NewGraphics() *Graphics {
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapRoughness, rl.GetShaderLocation(gfx.terrainSh, "texture3"))
 	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
 	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
+
+	gfx.signBox = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
+	for i, c := range []color.RGBA{accentBlue, accentCyan, accentBlue, colGreen} {
+		gfx.screens = append(gfx.screens, paintScreen(i, c))
+	}
+	for _, s := range baseSigns() {
+		s.tex = paintSign(s, gfx.smallcaps)
+		gfx.signs = append(gfx.signs, s)
+	}
+
+	// Every object model gets the painted textures; the shader picks one.
+	objectMaps := []rl.Texture2D{gfx.tex.paint, gfx.tex.panel, gfx.tex.metal, gfx.tex.floor, gfx.tex.fabric, gfx.tex.regolith, gfx.tex.hazard}
+	for i := range objectMaps {
+		gfx.objectSh.UpdateLocation(rl.ShaderLocMapAlbedo+int32(i), rl.GetShaderLocation(gfx.objectSh, fmt.Sprintf("texture%d", i)))
+	}
+	for _, m := range []rl.Model{gfx.sphere, gfx.hemi, gfx.cyl, gfx.cone, gfx.cube, gfx.crystal} {
+		for i, t := range objectMaps {
+			rl.SetMaterialTexture(&m.GetMaterials()[0], int32(i), t)
+		}
+	}
+	gfx.rocks = rockModels(gfx.objectSh, objectMaps)
 
 	// The Moon is big: see mountains far away, but keep the held tool, very
 	// close to the eye, from being clipped.
@@ -238,6 +270,7 @@ func (g *Game) Draw() {
 		rl.DrawMesh(n.mesh, gfx.terrainMat, rl.MatrixIdentity())
 	}
 	rl.EnableBackfaceCulling()
+	g.drawRocks()
 	g.drawBase()
 	g.drawDrones()
 	g.drawGems()
@@ -268,14 +301,20 @@ func (g *Game) drawDrones() {
 		downAxis, downAngle := orient(up.scale(-1))
 		t1, t2 := tangentBasis(up)
 		p := d.Pos.add(up.scale(math.Sin(d.phase*3) * 0.08))
+		gfx.setMat(mtPaint, 2, true)
 		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, matWhite, 0.8, 0)
+		gfx.put(gfx.sphere, p.add(up.scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, accentOrange, 0.6, 0)
+		gfx.setMat(mtMetal, 3, true)
 		gfx.put(gfx.hemi, p.sub(up.scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, matDark, 1, 0)
 		for i := range 4 {
 			a := math.Pi/4 + float64(i)*math.Pi/2
 			arm := p.add(t1.scale(math.Cos(a) * 0.45)).add(t2.scale(math.Sin(a) * 0.45)).add(up.scale(0.05))
 			gfx.segment(gfx.cyl, p, arm, 0.025, matSteel, 0.4, 0)
+			gfx.setMat(mtPlain, 1, false)
 			gfx.segment(gfx.cyl, arm.add(up.scale(0.04)), arm.add(up.scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
+			gfx.setMat(mtMetal, 3, true)
 		}
+		gfx.setMat(mtPlain, 1, false)
 		light := colGreen
 		if g.tankFull() {
 			light = colRed
@@ -330,20 +369,40 @@ func (g *Game) drawTool() {
 	tip := neck.add(dir.scale(look.HeadLen * k))
 	hr, r := look.HandleR*k, look.HeadR*k
 
+	gfx.setMat(mtPaint, 8, true)
 	gfx.segment(gfx.cyl, base, neck, hr, look.HandleCol, 0.5, 0)
-	gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), neck.add(dir.scale(0.02*k)), math.Max(hr, r)*1.15, matSteel, 0.8, 0)
+	gfx.setMat(mtMetal, 6, true)
+	collar := math.Max(hr, r) * 1.15
+	if look.Head == headFlare {
+		collar = hr * 1.5 // the broom head is wide but flat
+	}
+	gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), neck.add(dir.scale(0.02*k)), collar, matSteel, 0.8, 0)
 	switch look.Head {
 	case headBlock:
+		gfx.setMat(mtFabric, 12, true)
 		gfx.segment(gfx.cyl, neck, tip, r, look.HeadCol, 0.2, 0)
 	case headTaper:
+		gfx.setMat(mtFabric, 12, true)
 		gfx.segment(gfx.cone, neck, tip, r, look.HeadCol, 0.2, 0)
 	case headFlare:
-		gfx.segment(gfx.cone, tip, neck, r, look.HeadCol, 0.2, 0)
+		// A push broom: a wide wooden head across the handle, bristles below.
+		right := g.player.Right()
+		across := right.sub(dir.scale(right.dot(dir))).norm()
+		depth := across.cross(dir)
+		width := look.HeadR * 3.2 * k
+		gfx.setMat(mtPaint, 8, true)
+		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.03*k)), across.scale(width), dir.scale(0.06*k), depth.scale(0.09*k), look.HandleCol, 0.3, 0)
+		gfx.setMat(mtFabric, 10, true)
+		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.12*k)), across.scale(width*0.96), dir.scale(0.13*k), depth.scale(0.07*k), look.HeadCol, 0.1, 0)
 	case headNozzle:
+		gfx.setMat(mtPaint, 6, true)
 		gfx.put(gfx.sphere, neck, vec3{r * 1.3, r * 1.3, r * 1.3}, vec3{0, 1, 0}, 0, look.HeadCol, 0.7, 0)
+		gfx.setMat(mtMetal, 6, true)
 		gfx.segment(gfx.cyl, neck, tip, r*0.7, look.HeadCol, 0.7, 0)
+		gfx.setMat(mtPlain, 1, false)
 		gfx.segment(gfx.cyl, tip.sub(dir.scale(0.015*k)), tip, r*0.85, colCyan, 0, look.Glow)
 	}
+	gfx.setMat(mtPlain, 1, false)
 }
 
 // drawGlows draws the soft sprites: dust particles and crystal glows.
@@ -384,4 +443,20 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()
+}
+
+// putBasis draws a unit model with its X, Y and Z axes sent to ax, ay and az
+// (their lengths scale it): any orientation, any proportions.
+func (gfx *Graphics) putBasis(m rl.Model, pos, ax, ay, az vec3, c color.RGBA, spec, emissive float32) {
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{spec, emissive}, rl.ShaderUniformVec2)
+	mat := m.GetMaterials()[0]
+	mat.GetMap(rl.MapAlbedo).Color = c
+	transform := rl.Matrix{
+		M0: float32(ax.X), M1: float32(ax.Y), M2: float32(ax.Z),
+		M4: float32(ay.X), M5: float32(ay.Y), M6: float32(ay.Z),
+		M8: float32(az.X), M9: float32(az.Y), M10: float32(az.Z),
+		M12: float32(pos.X), M13: float32(pos.Y), M14: float32(pos.Z), M15: 1,
+	}
+	rl.DrawMesh(m.GetMeshes()[0], mat, transform)
+	mat.GetMap(rl.MapAlbedo).Color = rl.White
 }
