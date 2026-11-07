@@ -351,7 +351,7 @@ func (g *Game) Draw() {
 	rl.EndTextureMode()
 
 	rl.BeginDrawing()
-	gfx.post.finish(sunUp, g.clock)
+	gfx.post.finish(cam, sunUp, g.clock)
 	g.drawHUD(cam)
 	rl.EndDrawing()
 }
@@ -475,6 +475,12 @@ func (g *Game) drawTool() {
 }
 
 // drawGlows draws the soft sprites: dust particles and crystal glows.
+// softness fades a particle as it reaches the ground, so its sprite
+// doesn't get cut by the terrain.
+func (g *Game) softness(p Particle) float64 {
+	return smoothstep(0, p.Size*3, g.terrain.Altitude(p.Pos))
+}
+
 func (g *Game) drawGlows(cam rl.Camera3D) {
 	gfx := g.gfx
 	rl.DrawRenderBatchActive()
@@ -485,7 +491,7 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 			continue
 		}
 		c := p.C
-		c.A = uint8(200 * clamp01(p.Life/p.MaxLife*1.5))
+		c.A = uint8(200 * clamp01(p.Life/p.MaxLife*1.5) * g.softness(p))
 		rl.DrawBillboard(cam, gfx.glow, p.Pos.rl(), float32(p.Size*3), c)
 	}
 
@@ -495,7 +501,7 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 			continue
 		}
 		c := p.C
-		c.A = uint8(255 * clamp01(p.Life/p.MaxLife*1.5))
+		c.A = uint8(255 * clamp01(p.Life/p.MaxLife*1.5) * g.softness(p))
 		rl.DrawBillboard(cam, gfx.glow, p.Pos.rl(), float32(p.Size*4), c)
 	}
 	for _, gem := range g.nearGems {

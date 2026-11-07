@@ -22,7 +22,7 @@ type postFX struct {
 	scene         rl.RenderTexture2D
 	bloom         [bloomLevels]rl.RenderTexture2D
 	down, up, img rl.Shader
-	locs          struct{ texel, first, exposure, sunUp, time int32 }
+	locs          struct{ texel, first, exposure, sunUp, time, sunScreen int32 }
 	exposure      float64 // adapts over time, like an eye
 }
 
@@ -58,6 +58,7 @@ func newPostFX() *postFX {
 	p.locs.exposure = rl.GetShaderLocation(p.img, "exposure")
 	p.locs.sunUp = rl.GetShaderLocation(p.img, "sunUp")
 	p.locs.time = rl.GetShaderLocation(p.img, "time")
+	p.locs.sunScreen = rl.GetShaderLocation(p.img, "sunScreen")
 	return p
 }
 
@@ -104,7 +105,7 @@ func blit(src rl.Texture2D, w, h int32) {
 }
 
 // finish turns the HDR scene into the final image on the screen.
-func (p *postFX) finish(sunUp, clock float64) {
+func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	// Bloom: halve again and again, then add each level back into the one
 	// above, blurring as it grows.
 	rl.BeginShaderMode(p.down)
@@ -132,6 +133,13 @@ func (p *postFX) finish(sunUp, clock float64) {
 	rl.SetShaderValue(p.img, p.locs.exposure, []float32{float32(p.exposure)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(p.img, p.locs.sunUp, []float32{float32(sunUp)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(p.img, p.locs.time, []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
+	// Light shafts when the sun is low and ahead.
+	eye := vec3{float64(cam.Position.X), float64(cam.Position.Y), float64(cam.Position.Z)}
+	fwd := vec3{float64(cam.Target.X), float64(cam.Target.Y), float64(cam.Target.Z)}.sub(eye).norm()
+	shafts := smoothstep(0.3, 0.85, fwd.dot(sunDir)) * smoothstep(-0.12, 0.0, sunUp) * (1 - smoothstep(0.15, 0.45, sunUp))
+	sp := rl.GetWorldToScreen(eye.add(sunDir.scale(1000)).rl(), cam)
+	sw, sh := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
+	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
 	rl.BeginShaderMode(p.img)
 	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "bloom"), p.bloom[0].Texture)
 	blit(p.scene.Texture, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()))
@@ -203,10 +211,28 @@ uniform sampler2D bloom;
 uniform float exposure;
 uniform float sunUp;        // sun height where the player stands
 uniform float time;
+uniform vec3 sunScreen;     // xy: the sun on screen (uv), z: light shafts strength
 out vec4 finalColor;
 
+// Light shafts: the bright parts (the bloom's source) smeared toward the
+// sun, so they stream out from behind the relief when the sun is low.
+vec3 shafts(vec2 uv) {
+    if (sunScreen.z <= 0.0) return vec3(0.0);
+    vec2 stride = (sunScreen.xy - uv) / 32.0;
+    vec3 sum = vec3(0.0);
+    float w = 1.0;
+    for (int i = 0; i < 32; i++) {
+        uv += stride;
+        sum += texture(bloom, uv).rgb * w;
+        w *= 0.92;
+    }
+    return sum / 32.0 * sunScreen.z;
+}
+
+vec3 rays; // light shafts, computed once per pixel in main
+
 vec3 image(vec2 uv) {
-    vec3 c = texture(texture0, uv).rgb + texture(bloom, uv).rgb * ` + ftoa(bloomStrength) + `;
+    vec3 c = texture(texture0, uv).rgb + texture(bloom, uv).rgb * ` + ftoa(bloomStrength) + ` + rays;
     // Filmic curve (ACES, Narkowicz's fit): deeper shadows and a soft
     // shoulder. The 0.53 keeps the mid-tones where the old curve had them.
     c *= exposure * 0.53;
@@ -231,6 +257,7 @@ float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 void main() {
     vec2 t = 1.0 / vec2(textureSize(texture0, 0));
     vec2 uv = fragTexCoord;
+    rays = shafts(uv) * vec3(1.0, 0.75, 0.5);
     vec3 c = image(uv);
 
     // FXAA, simplified: find the edge direction from the neighbors' luma

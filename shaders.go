@@ -71,6 +71,8 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
     float day = daylight(up);
     float wrap = smoothstep(-0.08, 0.3, dot(n, sunDir)) * (0.75 + 0.25 * max(dot(n, sunDir), 0.0));
     vec3 fill = mix(nightFill, skyFill, day);
+    // Shade turns a deeper, cooler violet where the sun doesn't reach.
+    fill *= mix(vec3(1.0), vec3(0.85, 0.9, 1.3), (1.0 - wrap * shadow) * day);
     vec3 col = albedo * (sunCol * wrap * 1.3 * shadow + fill * (0.55 + 0.3 * dot(n, up)) * ao);
     col += albedo * bounceCol * clamp(0.5 - 0.5 * dot(n, up), 0.0, 1.0) * day * ao;
     col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12 * (0.2 + 0.8 * day);

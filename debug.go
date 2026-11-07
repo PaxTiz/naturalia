@@ -74,8 +74,11 @@ func (g *Game) drawDebug() {
 // center, facing the sun; MS_SHOT_TURN (radians, to the right) and
 // MS_SHOT_PITCH then adjust the view.
 type shotRun struct {
-	file   string
-	frames int
+	file    string
+	frames  int
+	placed  bool
+	heading vec3 // the view, held against stray mouse motion
+	pitch   float64
 }
 
 func newShotRun(g *Game) *shotRun {
@@ -97,6 +100,7 @@ func newShotRun(g *Game) *shotRun {
 			g.player.Heading = g.player.Heading.scale(math.Cos(turn)).add(r.scale(math.Sin(turn)))
 		}
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
+		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
 		g.terrain.Warm(g.player.Eye(), 20*time.Second)
 	}
 	return s
@@ -109,6 +113,9 @@ func (s *shotRun) tick(g *Game) {
 		return
 	}
 	g.mode = modePlay
+	if s.placed {
+		g.player.Heading, g.player.Pitch = s.heading, s.pitch
+	}
 	if s.frames++; s.frames == 240 {
 		rl.TakeScreenshot(s.file)
 		os.Exit(0) // no save: the player was moved
