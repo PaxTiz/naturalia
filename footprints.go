@@ -20,12 +20,13 @@ type footprints struct {
 	last vec3
 }
 
-func (f *footprints) update(p *Player) {
+// update reports whether a new step was taken.
+func (f *footprints) update(p *Player) bool {
 	if !p.onGround {
-		return
+		return false
 	}
 	if f.n > 0 && p.Pos.sub(f.last).length() < stepLength {
-		return
+		return false
 	}
 	f.last = p.Pos
 	side := 0.12
@@ -34,6 +35,7 @@ func (f *footprints) update(p *Player) {
 	}
 	f.ring[f.n%maxSteps] = footprint{p.Pos.add(p.Right().scale(side)), p.Heading}
 	f.n++
+	return true
 }
 
 // upload sends the prints to the terrain shader: positions, then heading

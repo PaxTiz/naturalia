@@ -83,6 +83,8 @@ type Game struct {
 	nearRocks  []rock               // boulders around the player
 	pebbles    map[tileKey][]pebble // per tile, around the player
 	dbg        debugInfo
+	sfx        *synth
+	fov        float64 // degrees, eased by updateFov
 	steps      footprints
 	devils     []*dustDevil
 	devilTimer float64
@@ -113,6 +115,7 @@ func NewGame() *Game {
 	g := &Game{
 		rng:   rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 		hover: -1,
+		sfx:   newSynth(),
 	}
 	g.load()
 	if g.st.Levels == nil {
@@ -185,7 +188,14 @@ func (g *Game) Update(dt float64) {
 
 	g.nearRocks = g.world.RocksNear(g.player.Pos, rockDrawDist)
 	g.player.Update(dt, g.terrain, g.mode == modePlay)
-	g.steps.update(&g.player)
+	if g.steps.update(&g.player) {
+		g.sfx.step()
+	}
+	g.sfx.outside = !indoors(toLocal(g.player.Eye()))
+	g.sfx.sweeping = g.sweeping
+	g.sfx.power = math.Min(1, (g.powerMult()-1)/3)
+	g.sfx.update()
+	g.updateFov(dt)
 	collideBase(&g.player, g.walls)
 	g.collideRocks()
 	g.updateBase(dt)
@@ -280,6 +290,7 @@ func (g *Game) collectGem(gem Gem) {
 	g.st.TotalEarned += v
 	pos := g.terrain.Surface(gem.Dir).add(gem.Dir.scale(0.3))
 	g.floaters = append(g.floaters, Floater{Pos: pos.add(gem.Dir.scale(0.4)), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
+	g.sfx.beep(0.07, 0.3, 0.16, 880, 1175, 1568)
 	for range 20 {
 		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.add(gem.Dir.scale(0.6)).scale(4)
 		g.addParticle(Particle{Pos: pos, Vel: vel, MaxLife: 0.7, Size: 0.06, C: colCyan, Falls: true, Additive: true})
@@ -295,6 +306,7 @@ func (g *Game) sell() {
 	g.st.TotalEarned += earned
 	g.st.Tank = 0
 	g.sellPop, g.sellPopText = 1.5, "+"+fmtNum(earned)+" cr"
+	g.sfx.beep(0.08, 0.22, 0.14, 660, 990)
 }
 
 func (g *Game) syncDrones() {
@@ -390,6 +402,7 @@ func (g *Game) deposit() {
 	hopper := toWorld(incineratorSpot.add(vec3{0, 2.6, 0}))
 	if g.st.Tank < 1 {
 		g.floaters = append(g.floaters, Floater{Pos: hopper.add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
+		g.sfx.beep(0, 0.25, 0.12, 220)
 		return
 	}
 	earned := g.st.Tank * g.priceMult()
@@ -477,6 +490,9 @@ func (g *Game) updateShop() {
 		if it := items[g.hover]; it.affordable(g.st.Credits) {
 			g.st.Credits -= it.cost
 			it.buy()
+			g.sfx.beep(0.06, 0.18, 0.14, 523, 784)
+		} else {
+			g.sfx.beep(0, 0.15, 0.1, 180)
 		}
 	}
 }

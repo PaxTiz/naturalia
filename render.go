@@ -228,15 +228,42 @@ func (gfx *Graphics) segment(m rl.Model, a, b vec3, radius float64, c color.RGBA
 	gfx.put(m, a, vec3{radius, l, radius}, axis.norm(), angle, c, spec, emissive)
 }
 
+// camera follows the eye with a little life: a gentle bob and sway when
+// walking, a slight tremor while the tool runs, and the field of view
+// eased by updateFov.
 func (g *Game) camera() rl.Camera3D {
-	eye := g.player.Eye()
+	p := &g.player
+	eye := p.Eye()
+	walk := p.moveAmount
+	right, up := p.Right(), p.LocalUp()
+	eye = eye.add(up.scale(math.Sin(2*p.walkPhase) * 0.02 * walk)).add(right.scale(math.Sin(p.walkPhase) * 0.012 * walk))
+	camUp := up.add(right.scale(math.Sin(p.walkPhase) * 0.008 * walk))
+	if g.sweeping {
+		eye = eye.add(right.scale(math.Sin(g.clock*37) * 0.002)).add(up.scale(math.Sin(g.clock*23+1) * 0.002))
+	}
 	return rl.Camera3D{
 		Position:   eye.rl(),
-		Target:     eye.add(g.player.Forward()).rl(),
-		Up:         g.player.LocalUp().rl(),
-		Fovy:       70,
+		Target:     eye.add(p.Forward()).rl(),
+		Up:         camUp.rl(),
+		Fovy:       float32(g.fov),
 		Projection: rl.CameraPerspective,
 	}
+}
+
+// updateFov widens the view when running and narrows it a touch while
+// sweeping, smoothly.
+func (g *Game) updateFov(dt float64) {
+	target := 70.0
+	switch {
+	case g.sweeping:
+		target = 67
+	case rl.IsKeyDown(rl.KeyLeftShift) && g.player.moveAmount > 0.5:
+		target = 76
+	}
+	if g.fov == 0 {
+		g.fov = target
+	}
+	g.fov += (target - g.fov) * (1 - math.Exp(-dt*5))
 }
 
 func (g *Game) setUniforms(cam rl.Camera3D) {

@@ -22,4 +22,5 @@ func main() {
 		g.Draw()
 	}
 	g.save()
+	rl.CloseAudioDevice()
 }
