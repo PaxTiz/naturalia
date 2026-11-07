@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image/color"
 	"math"
 	"unsafe"
 
@@ -9,7 +10,7 @@ import (
 
 const (
 	rockShapes   = 5
-	rockDrawDist = 70.0
+	rockDrawDist = 150.0 // far enough to dot the plains at mid distance
 )
 
 // rockModels sculpts count rock shapes with the given sphere resolution.
@@ -83,14 +84,14 @@ type rock struct {
 // nor on the polar ice.
 func (w *World) rocksIn(k tileKey) []rock {
 	f, tx, ty := k.split()
-	count := int(hash3(f, tx, ty, w.Seed+201) * 4.5)
+	count := int(hash3(f, tx, ty, w.Seed+201) * 8)
 	var rocks []rock
 	for i := range count {
 		s := w.Seed + 210 + uint64(i)*7
 		ci := tx*tileCells + int(hash3(f, tx, ty, s)*tileCells)
 		cj := ty*tileCells + int(hash3(f, tx, ty, s+1)*tileCells)
 		size := 0.2 + 0.7*math.Pow(hash3(f, tx, ty, s+2), 3)
-		if hash3(f, tx, ty, s+3) < 0.06 {
+		if hash3(f, tx, ty, s+3) < 0.1 {
 			size = 1.4 + 1.3*hash3(f, tx, ty, s+4) // a big boulder
 		}
 		d := cellDir(f, ci, cj)
@@ -116,21 +117,24 @@ func (w *World) RocksNear(c vec3, dist float64) []rock {
 	return out
 }
 
+// drawRocks draws the rocks around the player, one instanced call per shape.
+// They shrink away at the edge of the drawing distance rather than pop.
 func (g *Game) drawRocks() {
 	gfx := g.gfx
-	gfx.setLighting(litSun, vec3{})
-	gfx.setMat(mtRock, float32(1/regolithTile), false)
+	var mats [rockShapes][]rl.Matrix
 	for _, r := range g.nearRocks {
 		up := r.dir
 		t1, t2 := tangentBasis(up)
 		ax := t1.scale(math.Cos(r.yaw)).add(t2.scale(math.Sin(r.yaw)))
 		az := ax.cross(up)
-		ground := g.terrain.Surface(r.dir).sub(up.scale(r.size * 0.12))
-		v := 140 + 60*r.tone
-		col := rgb(v, v*0.6, v*0.46) // rusty red, like the regolith
-		gfx.putBasis(gfx.rocks[r.shape], ground, ax.scale(r.size), up.scale(r.size), az.scale(r.size), col, 0.1, 0)
+		ground := g.terrain.Surface(r.dir)
+		size := r.size * (1 - smoothstep(rockDrawDist*0.8, rockDrawDist, ground.sub(g.player.Pos).length()))
+		mats[r.shape] = append(mats[r.shape], basisMatrix(ground.sub(up.scale(size*0.12)), ax.scale(size), up.scale(size), az.scale(size)))
 	}
-	gfx.setMat(mtPlain, 1, false)
+	gfx.drawInstanced(gfx.rocks, mats[:], func(k int) color.RGBA {
+		v := 140 + 15*float64(k)
+		return rgb(v, v*0.6, v*0.46) // rusty red, like the regolith
+	})
 }
 
 // collideRocks keeps the player out of the bigger rocks.

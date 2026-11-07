@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image/color"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -74,13 +75,7 @@ func (g *Game) drawPebbles() {
 			// Shrink away near the edge rather than pop.
 			size := p.size * (1 - smoothstep(pebbleDist*0.75, pebbleDist, dist))
 			ground := p.ground.sub(p.dir.scale(size * (0.15 + 0.45*g.world.DustAt(p.dir))))
-			ax, ay, az := p.ax.scale(size), p.dir.scale(size), p.az.scale(size)
-			mats[p.shape] = append(mats[p.shape], rl.Matrix{
-				M0: float32(ax.X), M1: float32(ax.Y), M2: float32(ax.Z),
-				M4: float32(ay.X), M5: float32(ay.Y), M6: float32(ay.Z),
-				M8: float32(az.X), M9: float32(az.Y), M10: float32(az.Z),
-				M12: float32(ground.X), M13: float32(ground.Y), M14: float32(ground.Z), M15: 1,
-			})
+			mats[p.shape] = append(mats[p.shape], basisMatrix(ground, p.ax.scale(size), p.dir.scale(size), p.az.scale(size)))
 		}
 	})
 	for k := range g.pebbles {
@@ -89,22 +84,42 @@ func (g *Game) drawPebbles() {
 		}
 	}
 
+	g.dbg.pebbles = 0
+	for _, m := range mats {
+		g.dbg.pebbles += len(m)
+	}
+	gfx.drawInstanced(gfx.pebbles, mats[:], func(k int) color.RGBA {
+		v := 120 + 30*float64(k)
+		return rgb(v, v*0.58, v*0.45)
+	})
+}
+
+// drawInstanced draws rock models, each at all of its transforms in one
+// call, tinted by tone(shape).
+func (gfx *Graphics) drawInstanced(models []rl.Model, mats [][]rl.Matrix, tone func(k int) color.RGBA) {
 	gfx.setLighting(litSun, vec3{})
 	gfx.setMat(mtRock, float32(1/regolithTile), false)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{0.1, 0}, rl.ShaderUniformVec2)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.instanced, []float32{1}, rl.ShaderUniformFloat)
-	g.dbg.pebbles = 0
-	for k, m := range gfx.pebbles {
-		g.dbg.pebbles += len(mats[k])
+	for k, m := range models {
 		if len(mats[k]) == 0 {
 			continue
 		}
 		mat := m.GetMaterials()[0]
-		v := 120 + 30*float64(k)
-		mat.GetMap(rl.MapAlbedo).Color = rgb(v, v*0.58, v*0.45)
+		mat.GetMap(rl.MapAlbedo).Color = tone(k)
 		rl.DrawMeshInstanced(m.GetMeshes()[0], mat, mats[k], len(mats[k]))
 		mat.GetMap(rl.MapAlbedo).Color = rl.White
 	}
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.instanced, []float32{0}, rl.ShaderUniformFloat)
 	gfx.setMat(mtPlain, 1, false)
+}
+
+// basisMatrix sends a model's X, Y and Z axes to ax, ay and az, at pos.
+func basisMatrix(pos, ax, ay, az vec3) rl.Matrix {
+	return rl.Matrix{
+		M0: float32(ax.X), M1: float32(ax.Y), M2: float32(ax.Z),
+		M4: float32(ay.X), M5: float32(ay.Y), M6: float32(ay.Z),
+		M8: float32(az.X), M9: float32(az.Y), M10: float32(az.Z),
+		M12: float32(pos.X), M13: float32(pos.Y), M14: float32(pos.Z), M15: 1,
+	}
 }

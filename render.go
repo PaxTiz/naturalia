@@ -490,12 +490,6 @@ func (gfx *Graphics) putBasis(m rl.Model, pos, ax, ay, az vec3, c color.RGBA, sp
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{spec, emissive}, rl.ShaderUniformVec2)
 	mat := m.GetMaterials()[0]
 	mat.GetMap(rl.MapAlbedo).Color = c
-	transform := rl.Matrix{
-		M0: float32(ax.X), M1: float32(ax.Y), M2: float32(ax.Z),
-		M4: float32(ay.X), M5: float32(ay.Y), M6: float32(ay.Z),
-		M8: float32(az.X), M9: float32(az.Y), M10: float32(az.Z),
-		M12: float32(pos.X), M13: float32(pos.Y), M14: float32(pos.Z), M15: 1,
-	}
-	rl.DrawMesh(m.GetMeshes()[0], mat, transform)
+	rl.DrawMesh(m.GetMeshes()[0], mat, basisMatrix(pos, ax, ay, az))
 	mat.GetMap(rl.MapAlbedo).Color = rl.White
 }

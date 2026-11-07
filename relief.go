@@ -85,10 +85,11 @@ func (r Relief) raw(d vec3) float64 {
 	canyon, inCanyon := r.canyon(d, p)
 	volcano, onVolcano := r.volcano(d, p)
 
-	// Plains: long gentle swells, no small-scale bumps.
+	// Plains: long gentle swells, enough to catch the low light and break
+	// the flat color areas, still no small-scale bumps.
 	h := 14*(fbm3(p.scale(1.0/900), r.seed+11, 2)-0.5) +
-		4*(fbm3(p.scale(1.0/220), r.seed+12, 2)-0.5) +
-		1*(fbm3(p.scale(1.0/70), r.seed+13, 2)-0.5)
+		7*(fbm3(p.scale(1.0/220), r.seed+12, 2)-0.5) +
+		2.5*(fbm3(p.scale(1.0/70), r.seed+13, 2)-0.5)
 
 	// Hills and dunes keep off the landmarks, whose shapes read better clean.
 	clear := away * (1 - ice) * (1 - onVolcano) * (1 - inCanyon)
@@ -132,11 +133,11 @@ func (r Relief) hills(d, p vec3) float64 {
 // facing it and a steeper (but still rounded) lee side. They gather where
 // hills don't, and break up into shorter crests at the edges of a field.
 func (r Relief) dunes(p vec3) float64 {
-	mask := smoothstep(0.5, 0.62, fbm3(p.scale(1.0/1100), r.seed+70, 2)) * (1 - r.hillMask(p))
+	mask := smoothstep(0.42, 0.56, fbm3(p.scale(1.0/1100), r.seed+70, 2)) * (1 - r.hillMask(p))
 	if mask <= 0 {
 		return 0
 	}
-	const wavelength = 45.0
+	const wavelength = 55.0
 	wind := vec3{0.8, 0.25, -0.55}.norm()
 	s := p.dot(wind)/wavelength + 1.6*fbm3(p.scale(1.0/160), r.seed+71, 2)
 	f := s - math.Floor(s)
@@ -145,7 +146,7 @@ func (r Relief) dunes(p vec3) float64 {
 		ridge = 1 - smoothstep(0.7, 1, f)
 	}
 	crest := smoothstep(0.3, 0.6, fbm3(p.scale(1.0/90), r.seed+72, 2)+mask*0.25)
-	return 5 * ridge * crest * mask
+	return 7 * ridge * crest * mask
 }
 
 // volcano: a wide shield with a caldera on top and lava flows running down
