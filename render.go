@@ -247,6 +247,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	// Objects take the relief's shadow from where the player stands: they
 	// that matter are close, far ones are too small to tell.
 	sun, ao := g.terrain.light(g.terrain.Surface(g.player.Pos))
+	g.dbg.sun, g.dbg.ao = sun, ao
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(ao)}, rl.ShaderUniformVec2)
 
 	brush := []float32{0, 0, 0, 0}
@@ -277,6 +278,7 @@ func (g *Game) Draw() {
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapSpecular, lookup)
 	patches := g.terrain.Visible(g.player.Eye())
+	g.dbg.patches = len(patches)
 	g.nearGems = g.world.GemsNear(g.player.Pos, gemDrawDist)
 	g.setUniforms(cam)
 

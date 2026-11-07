@@ -82,6 +82,7 @@ type Game struct {
 	nearGems   []Gem                // crystals around the player, refreshed every frame
 	nearRocks  []rock               // boulders around the player
 	pebbles    map[tileKey][]pebble // per tile, around the player
+	dbg        debugInfo
 	devils     []*dustDevil
 	devilTimer float64
 
@@ -144,6 +145,7 @@ func (g *Game) setMode(m mode) {
 
 func (g *Game) Update(dt float64) {
 	g.clock += dt
+	g.updateDebug(dt)
 
 	if rl.IsKeyPressed(rl.KeyF11) {
 		rl.ToggleBorderlessWindowed()

@@ -93,7 +93,9 @@ func (g *Game) drawPebbles() {
 	gfx.setMat(mtRock, float32(1/regolithTile), false)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{0.1, 0}, rl.ShaderUniformVec2)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.instanced, []float32{1}, rl.ShaderUniformFloat)
+	g.dbg.pebbles = 0
 	for k, m := range gfx.pebbles {
+		g.dbg.pebbles += len(mats[k])
 		if len(mats[k]) == 0 {
 			continue
 		}

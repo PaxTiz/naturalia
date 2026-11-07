@@ -171,11 +171,13 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 		case !g.aimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
 			gfx.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
 		}
-		gfx.caps("ZQSD bouger · MAJ courir · ESPACE sauter · CLIC balayer · E utiliser · ÉCHAP pause", 34*u, h-40*u, 14*u, withAlpha(visorDim, 0.9))
+		gfx.caps("ZQSD bouger · MAJ courir · ESPACE sauter · CLIC balayer · E utiliser · ÉCHAP pause · F3 debug", 34*u, h-40*u, 14*u, withAlpha(visorDim, 0.9))
 	}
 	if g.mode != modePaused {
 		g.drawStatus()
 	}
+
+	g.drawDebug()
 
 	switch g.mode {
 	case modePaused:
