@@ -77,12 +77,12 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
 }
 
 // finish fades distant surfaces into the dusty air, the sky's own color
-// along the view, then applies the exposure.
+// along the view. The result is HDR: the exposure and the tone curve come
+// later, on the whole image (post.go).
 vec3 finish(vec3 col, float dist) {
     vec3 d = normalize(fragPos - viewPos);
     vec3 haze = skyColor(d, normalize(viewPos));
-    col = mix(col, haze, 1.0 - exp(-pow(dist / 1900.0, 1.3)));
-    return vec3(1.0) - exp(-col * 1.35); // soft exposure curve, no harsh clipping
+    return mix(col, haze, 1.0 - exp(-pow(dist / 1900.0, 1.3)));
 }
 `
 
@@ -378,7 +378,7 @@ void main() {
     float dist = length(viewPos - fragPos);
     n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
     vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x, mix(0.35, 1.0, ground.y), surface.x);
-    vec3 col = mix(lit, albedo * 1.6, surface.y);
+    vec3 col = mix(lit, albedo * 2.6, surface.y); // emissive goes past white: it blooms
     finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`
 
@@ -497,7 +497,7 @@ void main() {
     float s = max(dot(d, sunDir), 0.0);
     col += sunCol * (smoothstep(0.99975, 0.99988, s) * 5.0 + pow(s, 900.0) * 1.2 + pow(s, 40.0) * 0.15);
 
-    finalColor = vec4(vec3(1.0) - exp(-col * 1.35), 1.0);
+    finalColor = vec4(col, 1.0);
 }`
 
 // textureCommon samples the painted textures: triplanar projection (no UVs

@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"math"
+	"os"
 	"runtime"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -63,5 +65,45 @@ func (g *Game) drawDebug() {
 	rl.DrawRectangleRec(rl.NewRectangle(x, y, 420*u, float32(len(lines))*step+20*u), withAlpha(rl.Black, 0.6))
 	for i, s := range lines {
 		rl.DrawTextEx(gfx.mono, s, rl.NewVector2(x+12*u, y+10*u+float32(i)*step), size, 0, visorCyan)
+	}
+}
+
+// shotRun checks the rendering without playing. With MS_SHOT=file.png the
+// game takes a screenshot after a few seconds and quits without saving;
+// MS_SHOT_UP=x,y,z first stands the player at that direction from Mars'
+// center, facing the sun.
+type shotRun struct {
+	file   string
+	frames int
+}
+
+func newShotRun(g *Game) *shotRun {
+	s := &shotRun{file: os.Getenv("MS_SHOT")}
+	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
+		var d vec3
+		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
+		up := d.norm()
+		g.player.Pos = g.terrain.Surface(up)
+		h := sunDir.sub(up.scale(sunDir.dot(up)))
+		if h.length() < 0.1 { // the sun is overhead or right underfoot
+			h, _ = tangentBasis(up)
+		}
+		g.player.Heading = h.norm()
+		g.player.Pitch = max(-0.25, math.Asin(up.dot(sunDir))-0.12)
+		g.terrain.Warm(g.player.Eye(), 20*time.Second)
+	}
+	return s
+}
+
+// tick runs after Update: it keeps the game playing even though the window
+// is not focused, and takes the shot once the exposure has settled.
+func (s *shotRun) tick(g *Game) {
+	if s.file == "" {
+		return
+	}
+	g.mode = modePlay
+	if s.frames++; s.frames == 240 {
+		rl.TakeScreenshot(s.file)
+		os.Exit(0) // no save: the player was moved
 	}
 }

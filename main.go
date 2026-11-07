@@ -13,10 +13,12 @@ func main() {
 	rl.SetExitKey(0)
 
 	g := NewGame()
+	shot := newShotRun(g)
 	for !rl.WindowShouldClose() {
 		// Clamp so a window drag or a hitch doesn't teleport everything.
 		dt := min(float64(rl.GetFrameTime()), 0.05)
 		g.Update(dt)
+		shot.tick(g)
 		g.Draw()
 	}
 	g.save()

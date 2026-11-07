@@ -55,6 +55,7 @@ type Graphics struct {
 	terrainMat                                        *rl.Material // own allocation: see NewGraphics
 	signBox                                           rl.Model
 	rocks, pebbles                                    []rl.Model
+	post                                              *postFX
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -82,6 +83,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 
 func NewGraphics() *Graphics {
 	gfx := &Graphics{}
+	gfx.post = newPostFX()
 	gfx.terrainSh, gfx.tLoc = loadShaderVS(terrainVS, terrainFS)
 	gfx.objectSh, gfx.oLoc = loadShaderVS(objectVS, objectFS)
 	gfx.objectSh.UpdateLocation(rl.ShaderLocVertexInstancetransform, rl.GetShaderLocationAttrib(gfx.objectSh, "instanceTransform"))
@@ -282,7 +284,10 @@ func (g *Game) Draw() {
 	g.nearGems = g.world.GemsNear(g.player.Pos, gemDrawDist)
 	g.setUniforms(cam)
 
-	rl.BeginDrawing()
+	sunUp := g.player.Pos.norm().dot(sunDir)
+	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors(toLocal(g.player.Eye())))
+	gfx.post.resize()
+	rl.BeginTextureMode(gfx.post.scene)
 	rl.ClearBackground(rl.Black)
 	rl.BeginMode3D(cam)
 
@@ -313,7 +318,10 @@ func (g *Game) Draw() {
 	g.drawGlows(cam)
 	g.drawGlobe(cam)
 	rl.EndMode3D()
+	rl.EndTextureMode()
 
+	rl.BeginDrawing()
+	gfx.post.finish(sunUp, g.clock)
 	g.drawHUD(cam)
 	rl.EndDrawing()
 }
