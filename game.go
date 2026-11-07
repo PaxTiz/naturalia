@@ -70,17 +70,19 @@ type Floater struct {
 }
 
 type Game struct {
-	st        State
-	player    Player
-	world     *World
-	terrain   *Terrain
-	gfx       *Graphics
-	rng       *rand.Rand
-	drones    []*Drone
-	particles []Particle
-	floaters  []Floater
-	nearGems  []Gem  // crystals around the player, refreshed every frame
-	nearRocks []rock // boulders around the player
+	st         State
+	player     Player
+	world      *World
+	terrain    *Terrain
+	gfx        *Graphics
+	rng        *rand.Rand
+	drones     []*Drone
+	particles  []Particle
+	floaters   []Floater
+	nearGems   []Gem  // crystals around the player, refreshed every frame
+	nearRocks  []rock // boulders around the player
+	devils     []*dustDevil
+	devilTimer float64
 
 	mode        mode
 	clock       float64
@@ -186,6 +188,7 @@ func (g *Game) Update(dt float64) {
 	g.updateSweeping(dt)
 	g.updateDrones(dt)
 	g.updateEffects(dt)
+	g.updateDevils(dt)
 	if g.tankFull() && g.autoSell() {
 		g.sell()
 	}

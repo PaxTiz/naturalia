@@ -44,6 +44,11 @@ type shaderLocs struct {
 type Graphics struct {
 	terrainSh, objectSh, skySh, holoSh rl.Shader
 	tLoc, oLoc, sLoc, hLoc             shaderLocs
+	devilSh                            rl.Shader
+	dLoc                               shaderLocs
+	devilLoc                           int32
+	devilMesh                          rl.Mesh
+	devilMat                           rl.Material
 
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
 	terrainMat                                        rl.Material
@@ -59,8 +64,10 @@ type Graphics struct {
 	font, bold                                        rl.Font
 }
 
-func loadShader(fs string) (rl.Shader, shaderLocs) {
-	sh := rl.LoadShaderFromMemory(meshVS, fs)
+func loadShader(fs string) (rl.Shader, shaderLocs) { return loadShaderVS(meshVS, fs) }
+
+func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
+	sh := rl.LoadShaderFromMemory(vs, fs)
 	loc := func(name string) int32 { return rl.GetShaderLocation(sh, name) }
 	return sh, shaderLocs{
 		viewPos: loc("viewPos"), sunDir: loc("sunDir"), time: loc("time"),
@@ -78,6 +85,11 @@ func NewGraphics() *Graphics {
 	gfx.objectSh, gfx.oLoc = loadShader(objectFS)
 	gfx.skySh, gfx.sLoc = loadShader(skyFS)
 	gfx.holoSh, gfx.hLoc = loadShader(holoFS)
+	gfx.devilSh, gfx.dLoc = loadShaderVS(devilVS, devilFS)
+	gfx.devilLoc = rl.GetShaderLocation(gfx.devilSh, "devil")
+	gfx.devilMesh = rl.GenMeshPlane(1, 1, 32, 16)
+	gfx.devilMat = rl.LoadMaterialDefault()
+	gfx.devilMat.Shader = gfx.devilSh
 
 	model := func(m rl.Mesh, sh rl.Shader) rl.Model {
 		mod := rl.LoadModelFromMesh(m)
@@ -178,7 +190,7 @@ type shaderWithLocs struct {
 }
 
 func (gfx *Graphics) shaders() []shaderWithLocs {
-	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.objectSh, gfx.oLoc}, {gfx.skySh, gfx.sLoc}, {gfx.holoSh, gfx.hLoc}}
+	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.objectSh, gfx.oLoc}, {gfx.skySh, gfx.sLoc}, {gfx.holoSh, gfx.hLoc}, {gfx.devilSh, gfx.dLoc}}
 }
 
 func v3f(v vec3) []float32 { return []float32{float32(v.X), float32(v.Y), float32(v.Z)} }
@@ -278,6 +290,7 @@ func (g *Game) Draw() {
 	g.drawBase()
 	g.drawDrones()
 	g.drawGems()
+	g.drawDevils()
 	if indoors(toLocal(g.player.Eye())) {
 		gfx.setLighting(litIndoor, vec3{})
 	}
