@@ -12,49 +12,11 @@ const (
 	rockDrawDist = 70.0
 )
 
-// rockModels sculpts a few boulder shapes: spheres bumped by noise, with a
-// flattened base so they sit on the ground.
-func rockModels(sh rl.Shader, maps []rl.Texture2D) []rl.Model {
+// rockModels sculpts count rock shapes with the given sphere resolution.
+func rockModels(sh rl.Shader, maps []rl.Texture2D, count int, seed uint64, rings, slices int) []rl.Model {
 	var models []rl.Model
-	for k := range rockShapes {
-		mesh := rl.GenMeshSphere(1, 14, 18)
-		n := int(mesh.VertexCount)
-		verts := unsafe.Slice(mesh.Vertices, n*3)
-		norms := unsafe.Slice(mesh.Normals, n*3)
-		seed := uint64(1300 + k*17)
-		pos := make([]vec3, n)
-		for i := range n {
-			d := vec3{float64(verts[i*3]), float64(verts[i*3+1]), float64(verts[i*3+2])}.norm()
-			r := 1 + 0.55*(fbm3(d.scale(1.4), seed, 3)-0.5) + 0.12*(fbm3(d.scale(4), seed+1, 2)-0.5)
-			p := d.scale(r)
-			p.Y *= 0.68
-			if p.Y < -0.15 {
-				p.Y = -0.15 + (p.Y+0.15)*0.25 // flat-ish bottom
-			}
-			pos[i] = p
-		}
-		// Smooth normals: average the faces around each shared position.
-		key := func(p vec3) [3]int32 {
-			return [3]int32{int32(math.Round(p.X * 1e4)), int32(math.Round(p.Y * 1e4)), int32(math.Round(p.Z * 1e4))}
-		}
-		acc := map[[3]int32]vec3{}
-		for t := 0; t+2 < n; t += 3 {
-			fn := pos[t+1].sub(pos[t]).cross(pos[t+2].sub(pos[t]))
-			if fn.dot(pos[t]) < 0 {
-				fn = fn.scale(-1)
-			}
-			for j := range 3 {
-				acc[key(pos[t+j])] = acc[key(pos[t+j])].add(fn)
-			}
-		}
-		for i, p := range pos {
-			nr := acc[key(p)].norm()
-			verts[i*3], verts[i*3+1], verts[i*3+2] = float32(p.X), float32(p.Y), float32(p.Z)
-			norms[i*3], norms[i*3+1], norms[i*3+2] = float32(nr.X), float32(nr.Y), float32(nr.Z)
-		}
-		rl.UpdateMeshBuffer(mesh, 0, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Vertices)), n*12), 0)
-		rl.UpdateMeshBuffer(mesh, 2, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Normals)), n*12), 0)
-		m := rl.LoadModelFromMesh(mesh)
+	for k := range count {
+		m := rl.LoadModelFromMesh(sculptRock(seed+uint64(k)*17, rings, slices))
 		mat := &m.GetMaterials()[0]
 		mat.Shader = sh
 		for i, t := range maps {
@@ -63,6 +25,48 @@ func rockModels(sh rl.Shader, maps []rl.Texture2D) []rl.Model {
 		models = append(models, m)
 	}
 	return models
+}
+
+// sculptRock makes a sphere bumped by noise, with a flattened base so it
+// sits on the ground.
+func sculptRock(seed uint64, rings, slices int) rl.Mesh {
+	mesh := rl.GenMeshSphere(1, rings, slices)
+	n := int(mesh.VertexCount)
+	verts := unsafe.Slice(mesh.Vertices, n*3)
+	norms := unsafe.Slice(mesh.Normals, n*3)
+	pos := make([]vec3, n)
+	for i := range n {
+		d := vec3{float64(verts[i*3]), float64(verts[i*3+1]), float64(verts[i*3+2])}.norm()
+		r := 1 + 0.55*(fbm3(d.scale(1.4), seed, 3)-0.5) + 0.12*(fbm3(d.scale(4), seed+1, 2)-0.5)
+		p := d.scale(r)
+		p.Y *= 0.68
+		if p.Y < -0.15 {
+			p.Y = -0.15 + (p.Y+0.15)*0.25 // flat-ish bottom
+		}
+		pos[i] = p
+	}
+	// Smooth normals: average the faces around each shared position.
+	key := func(p vec3) [3]int32 {
+		return [3]int32{int32(math.Round(p.X * 1e4)), int32(math.Round(p.Y * 1e4)), int32(math.Round(p.Z * 1e4))}
+	}
+	acc := map[[3]int32]vec3{}
+	for t := 0; t+2 < n; t += 3 {
+		fn := pos[t+1].sub(pos[t]).cross(pos[t+2].sub(pos[t]))
+		if fn.dot(pos[t]) < 0 {
+			fn = fn.scale(-1)
+		}
+		for j := range 3 {
+			acc[key(pos[t+j])] = acc[key(pos[t+j])].add(fn)
+		}
+	}
+	for i, p := range pos {
+		nr := acc[key(p)].norm()
+		verts[i*3], verts[i*3+1], verts[i*3+2] = float32(p.X), float32(p.Y), float32(p.Z)
+		norms[i*3], norms[i*3+1], norms[i*3+2] = float32(nr.X), float32(nr.Y), float32(nr.Z)
+	}
+	rl.UpdateMeshBuffer(mesh, 0, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Vertices)), n*12), 0)
+	rl.UpdateMeshBuffer(mesh, 2, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Normals)), n*12), 0)
+	return mesh
 }
 
 // rock is a boulder lying on the ground.

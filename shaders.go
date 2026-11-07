@@ -107,6 +107,38 @@ void main() {
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }`
 
+// objectVS is meshVS that can also draw instances (DrawMeshInstanced),
+// each with its own transform.
+const objectVS = `#version 330
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+in vec2 vertexTexCoord;
+in mat4 instanceTransform;
+uniform mat4 mvp;
+uniform mat4 matModel;
+uniform mat4 matNormal;
+uniform float instanced;
+out vec3 fragPos;
+out vec3 fragNormal;
+out vec3 localPos;
+out vec3 localNormal;
+out vec2 fragTexCoord;
+void main() {
+    fragTexCoord = vertexTexCoord;
+    localPos = vertexPosition;
+    localNormal = vertexNormal;
+    if (instanced > 0.5) {
+        vec4 p = instanceTransform * vec4(vertexPosition, 1.0);
+        fragPos = p.xyz;
+        fragNormal = normalize(transpose(inverse(mat3(instanceTransform))) * vertexNormal);
+        gl_Position = mvp * p; // mvp is only view and projection here
+        return;
+    }
+    fragPos = vec3(matModel * vec4(vertexPosition, 1.0));
+    fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 0.0)));
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+}`
+
 // terrainVS decodes the light baked in the length of the normals (see
 // Terrain.light).
 const terrainVS = `#version 330
@@ -266,6 +298,7 @@ uniform float lighting;   // 0 sun, 1 lamps, 2 lamps on back faces, 3 lamps on f
 uniform vec3 room;
 uniform vec4 lights[12];  // ceiling lamps: xyz position, w intensity
 uniform float lightCount;
+uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
 out vec4 finalColor;
@@ -344,7 +377,7 @@ void main() {
     vec3 albedo = paint(colDiffuse.rgb, n, h);
     float dist = length(viewPos - fragPos);
     n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
-    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), 1.0, 1.0, surface.x);
+    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x, mix(0.35, 1.0, ground.y), surface.x);
     vec3 col = mix(lit, albedo * 1.6, surface.y);
     finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`

@@ -32,7 +32,8 @@ const (
 type shaderLocs struct {
 	viewPos, sunDir, time       int32
 	brush, casters, casterCount int32
-	surface, up                 int32
+	surface, up, instanced      int32
+	ground                      int32
 	lighting, room              int32
 	mat                         int32
 	globeCenter, globeRot       int32
@@ -53,7 +54,7 @@ type Graphics struct {
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
 	terrainMat                                        *rl.Material // own allocation: see NewGraphics
 	signBox                                           rl.Model
-	rocks                                             []rl.Model
+	rocks, pebbles                                    []rl.Model
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -72,7 +73,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 	return sh, shaderLocs{
 		viewPos: loc("viewPos"), sunDir: loc("sunDir"), time: loc("time"),
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
-		surface: loc("surface"), up: loc("up"),
+		surface: loc("surface"), up: loc("up"), instanced: loc("instanced"), ground: loc("ground"),
 		lighting: loc("lighting"), room: loc("room"),
 		mat:         loc("matInfo"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
@@ -82,7 +83,8 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 func NewGraphics() *Graphics {
 	gfx := &Graphics{}
 	gfx.terrainSh, gfx.tLoc = loadShaderVS(terrainVS, terrainFS)
-	gfx.objectSh, gfx.oLoc = loadShader(objectFS)
+	gfx.objectSh, gfx.oLoc = loadShaderVS(objectVS, objectFS)
+	gfx.objectSh.UpdateLocation(rl.ShaderLocVertexInstancetransform, rl.GetShaderLocationAttrib(gfx.objectSh, "instanceTransform"))
 	gfx.skySh, gfx.sLoc = loadShader(skyFS)
 	gfx.holoSh, gfx.hLoc = loadShader(holoFS)
 	gfx.devilSh, gfx.dLoc = loadShaderVS(devilVS, devilFS)
@@ -169,7 +171,8 @@ func NewGraphics() *Graphics {
 			rl.SetMaterialTexture(&m.GetMaterials()[0], int32(i), t)
 		}
 	}
-	gfx.rocks = rockModels(gfx.objectSh, objectMaps)
+	gfx.rocks = rockModels(gfx.objectSh, objectMaps, rockShapes, 1300, 14, 18)
+	gfx.pebbles = rockModels(gfx.objectSh, objectMaps, pebbleShapes, 1700, 5, 7)
 
 	// Mars is big: see mountains far away, but keep the held tool, very
 	// close to the eye, from being clipped.
@@ -241,6 +244,10 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
 	}
 	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
+	// Objects take the relief's shadow from where the player stands: they
+	// that matter are close, far ones are too small to tell.
+	sun, ao := g.terrain.light(g.terrain.Surface(g.player.Pos))
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(ao)}, rl.ShaderUniformVec2)
 
 	brush := []float32{0, 0, 0, 0}
 	if g.aimOK && g.mode == modePlay {
@@ -291,6 +298,7 @@ func (g *Game) Draw() {
 	}
 	rl.EnableBackfaceCulling()
 	g.drawRocks()
+	g.drawPebbles()
 	g.drawBase()
 	g.drawDrones()
 	g.drawGems()

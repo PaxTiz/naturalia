@@ -79,8 +79,9 @@ type Game struct {
 	drones     []*Drone
 	particles  []Particle
 	floaters   []Floater
-	nearGems   []Gem  // crystals around the player, refreshed every frame
-	nearRocks  []rock // boulders around the player
+	nearGems   []Gem                // crystals around the player, refreshed every frame
+	nearRocks  []rock               // boulders around the player
+	pebbles    map[tileKey][]pebble // per tile, around the player
 	devils     []*dustDevil
 	devilTimer float64
 
