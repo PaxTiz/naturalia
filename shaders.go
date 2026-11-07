@@ -13,10 +13,11 @@ const shaderCommon = `
 uniform vec3 viewPos;
 uniform vec3 sunDir;
 
-const vec3 sunCol    = vec3(1.0, 0.92, 0.80);
-const vec3 skyFill   = vec3(0.42, 0.30, 0.22);
-const vec3 nightFill = vec3(0.05, 0.05, 0.08);
-const vec3 bounceCol = vec3(0.30, 0.15, 0.08);
+// Flat, graphic look: a strong warm sun against cool violet shade.
+const vec3 sunCol    = vec3(1.05, 0.76, 0.54);
+const vec3 skyFill   = vec3(0.20, 0.16, 0.26);
+const vec3 nightFill = vec3(0.04, 0.045, 0.09);
+const vec3 bounceCol = vec3(0.22, 0.10, 0.05);
 const vec3 rimCol    = vec3(1.00, 0.70, 0.50);
 const vec3 phobosDir = vec3(0.451, 0.551, -0.702);
 const vec3 deimosDir = vec3(-0.204, 0.865, 0.458);
@@ -45,15 +46,16 @@ float fbm3(vec3 p) {
 // daylight: 1 when the sun is well above the local horizon, 0 at night.
 float daylight(vec3 up) { return smoothstep(-0.12, 0.18, dot(sunDir, up)); }
 
-// skyColor is the color of the sky seen along d: butterscotch by day,
-// hazier toward the horizon, bluish around the sun, a blue glow at sunset.
+// skyColor is the color of the sky seen along d: a clean gradient from a
+// peach horizon to a deep dusty rose overhead, bluish around the sun, a
+// blue glow at sunset.
 vec3 skyColor(vec3 d, vec3 up) {
     float h = dot(d, up);
     float s = max(dot(d, sunDir), 0.0);
     float day = daylight(up);
-    vec3 col = mix(vec3(1.40, 0.80, 0.54), vec3(0.72, 0.44, 0.30), smoothstep(-0.05, 0.6, h));
-    col = mix(col, vec3(0.89, 1.03, 1.27), pow(s, 12.0) * 0.8);
-    col += vec3(1.0, 0.9, 0.75) * pow(s, 3.0) * 0.25;
+    vec3 col = mix(vec3(1.00, 0.52, 0.32), vec3(0.36, 0.16, 0.18), smoothstep(-0.02, 0.55, h));
+    col = mix(col, vec3(0.89, 1.03, 1.27), pow(s, 16.0) * 0.6);
+    col += vec3(1.0, 0.8, 0.6) * pow(s, 4.0) * 0.18;
     vec3 night = mix(vec3(0.05, 0.035, 0.04), vec3(0.008, 0.009, 0.02), smoothstep(-0.05, 0.5, h));
     col = mix(night, col, day);
     float dusk = smoothstep(-0.35, -0.05, dot(sunDir, up)) * (1.0 - day * 0.7);
@@ -61,12 +63,13 @@ vec3 skyColor(vec3 d, vec3 up) {
     return col;
 }
 
-// Soft stylized lighting: wrapped sun, warm sky fill from the dusty air,
+// Graphic stylized lighting: a sun with a crisp but soft terminator, cool
+// fill from the sky,
 // red light bounced by the ground, rim light and specular. shadow only
 // dims the sun, ao (ambient occlusion) only the fill and the bounce.
 vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float spec) {
     float day = daylight(up);
-    float wrap = clamp((dot(n, sunDir) + 0.3) / 1.3, 0.0, 1.0);
+    float wrap = smoothstep(-0.08, 0.3, dot(n, sunDir)) * (0.75 + 0.25 * max(dot(n, sunDir), 0.0));
     vec3 fill = mix(nightFill, skyFill, day);
     vec3 col = albedo * (sunCol * wrap * 1.3 * shadow + fill * (0.55 + 0.3 * dot(n, up)) * ao);
     col += albedo * bounceCol * clamp(0.5 - 0.5 * dot(n, up), 0.0, 1.0) * day * ao;
@@ -76,13 +79,16 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
     return col;
 }
 
-// finish fades distant surfaces into the dusty air, the sky's own color
-// along the view. The result is HDR: the exposure and the tone curve come
-// later, on the whole image (post.go).
+// finish fades distant surfaces into the dusty air: first a violet veil,
+// then the sky's own color along the view, so relief stacks up in flat
+// layers. The result is HDR: the exposure and the tone curve come later,
+// on the whole image (post.go).
 vec3 finish(vec3 col, float dist) {
     vec3 d = normalize(fragPos - viewPos);
     vec3 haze = skyColor(d, normalize(viewPos));
-    return mix(col, haze, 1.0 - exp(-pow(dist / 1900.0, 1.3)));
+    vec3 veil = haze * vec3(0.62, 0.52, 0.72);
+    col = mix(col, veil, (1.0 - exp(-dist / 1300.0)) * 0.42);
+    return mix(col, haze, 1.0 - exp(-pow(dist / 3300.0, 1.6)));
 }
 `
 
@@ -228,16 +234,18 @@ void main() {
 
     // Bare regolith: rusty red, large soft blotches, darker pebbles and
     // hollows. Dark basalt on the volcano; layered rock on steep walls.
-    float big = fbm3(fragPos * 0.035);
+    // Big soft-edged patches of flat color, like painted shapes.
+    float big = fbm3(fragPos * 0.02);
+    big = (floor(big * 4.0) + smoothstep(0.35, 0.65, fract(big * 4.0))) / 4.0;
     vec3 rock = mix(vec3(0.30, 0.13, 0.07), vec3(0.55, 0.27, 0.14), big);
     rock = mix(rock, mix(vec3(0.15, 0.11, 0.10), vec3(0.30, 0.21, 0.17), big), basalt);
     float layer = fract(alt / 9.0 + (fbm3(fragPos * 0.02) - 0.5) * 0.8);
     vec3 strata = mix(vec3(0.62, 0.36, 0.20), vec3(0.36, 0.15, 0.08), smoothstep(0.3, 0.45, layer) * (1.0 - smoothstep(0.75, 0.9, layer)));
     strata = mix(strata, vec3(0.75, 0.55, 0.38), smoothstep(0.92, 0.97, layer) * 0.6);
     rock = mix(rock, mix(strata, strata * vec3(0.55, 0.5, 0.55), basalt), steep);
-    rock *= 0.55 + 0.9 * rg.r;
-    rock = mix(rock, rock * 0.75, rg.g * 0.55);
-    rock *= 1.0 - rg.b * 0.45;
+    rock *= 0.82 + 0.36 * rg.r;
+    rock = mix(rock, rock * 0.85, rg.g * 0.5);
+    rock *= 1.0 - rg.b * 0.2;
     // Polar ice: bluish white with faint layers.
     vec3 iceCol = mix(vec3(0.70, 0.78, 0.88), vec3(0.92, 0.95, 1.0), smoothstep(0.3, 0.7, fract(alt / 2.5 + big)));
     rock = mix(rock, iceCol * (0.85 + 0.25 * rg.r), ice);
@@ -249,15 +257,19 @@ void main() {
     dustCol = mix(dustCol, vec3(0.42, 0.27, 0.19), basalt * 0.7);
     dustCol = mix(dustCol, strata * 1.15, steep * 0.45 * (1.0 - basalt));
     dustCol = mix(dustCol, vec3(0.97, 0.93, 0.92), ice * 0.95); // dust mixed with frost
-    dustCol *= 0.68 + 0.6 * ds.r;
+    dustCol *= 0.88 + 0.2 * ds.r;
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
     albedo *= 1.0 - 0.22 * cover * (1.0 - cover) * 4.0;
 
     // Relief of the textures, fading out with distance.
     float fade = 1.0 - smoothstep(25.0, 70.0, dist);
-    float h = mix(rg.a * 0.06, ds.a * 0.03, cover);
+    float h = mix(rg.a * 0.03, ds.a * 0.012, cover);
     n = bump(n, fragPos, h, fade);
+    // Steep relief shows its facets; plains stay smooth.
+    vec3 face = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
+    face *= sign(dot(face, up));
+    n = normalize(mix(n, face, smoothstep(0.25, 0.6, steep) * 0.85));
 
     // Soft shadows: is this point behind a caster, as seen from the sun?
     float shadow = 1.0;
@@ -359,7 +371,7 @@ vec3 paint(vec3 base, vec3 n, out float h) {
     if (matInfo.x < 6.5) { // rock: the regolith texture, tinted
         vec4 t = tri(texture5, p, w, s);
         h = t.a * 0.05;
-        return base * (0.5 + 0.9 * t.r) * (1.0 - t.b * 0.4);
+        return base * (0.8 + 0.35 * t.r) * (1.0 - t.b * 0.15);
     }
     // hazard stripes
     vec4 t = tri(texture6, p, w, s);
@@ -377,6 +389,10 @@ void main() {
     vec3 albedo = paint(colDiffuse.rgb, n, h);
     float dist = length(viewPos - fragPos);
     n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
+    if (matInfo.x > 5.5 && matInfo.x < 6.5) { // rocks show their facets
+        vec3 face = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
+        n = face * sign(dot(face, n));
+    }
     vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x, mix(0.35, 1.0, ground.y), surface.x);
     vec3 col = mix(lit, albedo * 2.6, surface.y); // emissive goes past white: it blooms
     finalColor = vec4(finish(col, dist), colDiffuse.a);

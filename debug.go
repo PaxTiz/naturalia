@@ -71,7 +71,8 @@ func (g *Game) drawDebug() {
 // shotRun checks the rendering without playing. With MS_SHOT=file.png the
 // game takes a screenshot after a few seconds and quits without saving;
 // MS_SHOT_UP=x,y,z first stands the player at that direction from Mars'
-// center, facing the sun.
+// center, facing the sun; MS_SHOT_TURN (radians, to the right) and
+// MS_SHOT_PITCH then adjust the view.
 type shotRun struct {
 	file   string
 	frames int
@@ -90,6 +91,12 @@ func newShotRun(g *Game) *shotRun {
 		}
 		g.player.Heading = h.norm()
 		g.player.Pitch = max(-0.25, math.Asin(up.dot(sunDir))-0.12)
+		var turn float64
+		if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TURN"), "%f", &turn); err == nil {
+			r := g.player.Right()
+			g.player.Heading = g.player.Heading.scale(math.Cos(turn)).add(r.scale(math.Sin(turn)))
+		}
+		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
 		g.terrain.Warm(g.player.Eye(), 20*time.Second)
 	}
 	return s
