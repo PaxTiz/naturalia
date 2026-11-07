@@ -83,6 +83,7 @@ type Game struct {
 	nearRocks  []rock               // boulders around the player
 	pebbles    map[tileKey][]pebble // per tile, around the player
 	dbg        debugInfo
+	steps      footprints
 	devils     []*dustDevil
 	devilTimer float64
 
@@ -184,6 +185,7 @@ func (g *Game) Update(dt float64) {
 
 	g.nearRocks = g.world.RocksNear(g.player.Pos, rockDrawDist)
 	g.player.Update(dt, g.terrain, g.mode == modePlay)
+	g.steps.update(&g.player)
 	collideBase(&g.player, g.walls)
 	g.collideRocks()
 	g.updateBase(dt)

@@ -181,6 +181,9 @@ uniform float marsRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows: xyz center, w radius
 uniform float casterCount;
+uniform vec4 steps[48];     // footprints, newest first: xyz position
+uniform vec4 stepDirs[48];  // xyz heading, w strength
+uniform float stepCount;
 uniform sampler2D texture2; // painted regolith: R tone, G pebbles, B hollows, A height
 uniform sampler2D texture3; // painted dust: R tone, G clumps, A height
 out vec4 finalColor;
@@ -261,6 +264,25 @@ void main() {
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
     albedo *= 1.0 - 0.22 * cover * (1.0 - cover) * 4.0;
+
+    // Boot prints pressed in the dust: a darker sole with treads, and a
+    // lighter rim of pushed-up dust around it.
+    if (dist < 40.0 && cover > 0.05) {
+        float print = 0.0, rim = 0.0, tread = 0.0;
+        for (int i = 0; i < 48; i++) {
+            if (float(i) >= stepCount) break;
+            vec3 rel = fragPos - steps[i].xyz;
+            if (dot(rel, rel) > 0.09) continue;
+            vec3 f = stepDirs[i].xyz;
+            vec2 q = vec2(dot(rel, cross(f, up)), dot(rel, f));
+            q.x *= 1.0 + 0.35 * smoothstep(0.02, -0.1, q.y); // narrower heel
+            float d = length(q / vec2(0.06, 0.15));
+            float m = (1.0 - smoothstep(0.8, 1.0, d)) * stepDirs[i].w;
+            if (m > print) { print = m; tread = step(0.0, sin(q.y * 120.0)); }
+            rim = max(rim, smoothstep(0.85, 1.0, d) * (1.0 - smoothstep(1.0, 1.25, d)) * stepDirs[i].w);
+        }
+        albedo *= 1.0 - cover * (print * (0.32 + 0.12 * tread) - rim * 0.15);
+    }
 
     // Relief of the textures, fading out with distance.
     float fade = 1.0 - smoothstep(25.0, 70.0, dist);

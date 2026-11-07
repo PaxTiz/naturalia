@@ -34,6 +34,7 @@ type shaderLocs struct {
 	brush, casters, casterCount int32
 	surface, up, instanced      int32
 	ground                      int32
+	steps, stepDirs, stepCount  int32
 	lighting, room              int32
 	mat                         int32
 	globeCenter, globeRot       int32
@@ -75,6 +76,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 		viewPos: loc("viewPos"), sunDir: loc("sunDir"), time: loc("time"),
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"), instanced: loc("instanced"), ground: loc("ground"),
+		steps: loc("steps"), stepDirs: loc("stepDirs"), stepCount: loc("stepCount"),
 		lighting: loc("lighting"), room: loc("room"),
 		mat:         loc("matInfo"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
@@ -257,6 +259,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		brush = []float32{float32(g.aim.X), float32(g.aim.Y), float32(g.aim.Z), float32(g.tool().Radius)}
 	}
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
+	g.steps.upload(gfx)
 
 	// Soft shadows cast by the base's domes and by the drones.
 	var casters []float32
