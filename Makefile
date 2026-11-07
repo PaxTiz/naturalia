@@ -1,4 +1,4 @@
-APP     := moon_sweeper
+APP     := mars_sweeper
 OUT     := build
 LDFLAGS := -s -w
 

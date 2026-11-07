@@ -3,7 +3,7 @@ package main
 import "math"
 
 const (
-	moonRadius  = 1737.4 // the real Moon at 1/1 000 scale
+	marsRadius  = 3389.5 // the real planet at 1/1 000 scale
 	padRadius   = 22.0   // the ground is flat under the whole base
 	maxMountain = 330.0  // upper bound of the relief, for horizon culling
 
@@ -18,13 +18,13 @@ const (
 // the ground there; it is set when the terrain is created.
 var (
 	baseUp  = vec3{0, 1, 0}
-	basePos = baseUp.scale(moonRadius)
+	basePos = baseUp.scale(marsRadius)
 )
 
-// Relief is the Moon's ground shape, smooth everywhere: vast plains with a
+// Relief is Mars' ground shape, smooth everywhere: vast plains with a
 // light relief, regions of rounded hills of every size, a few big
 // mountains and craters now and then. Hills, mountains and craters are
-// scattered procedurally over 3D grids of cells, so the whole Moon costs
+// scattered procedurally over 3D grids of cells, so the whole of Mars costs
 // no memory.
 type Relief struct {
 	seed  uint64
@@ -34,7 +34,7 @@ type Relief struct {
 func newRelief(seed uint64) Relief {
 	r := Relief{seed: seed}
 	r.baseH = r.raw(baseUp)
-	basePos = baseUp.scale(moonRadius + r.baseH)
+	basePos = baseUp.scale(marsRadius + r.baseH)
 	return r
 }
 
@@ -46,7 +46,7 @@ func (r Relief) Height(d vec3) float64 {
 }
 
 func (r Relief) raw(d vec3) float64 {
-	p := d.scale(moonRadius)
+	p := d.scale(marsRadius)
 	fromBase := arcDist(d, baseUp)
 
 	// Plains: long gentle swells, no small-scale bumps.
@@ -81,7 +81,7 @@ func (r Relief) hills(d, p vec3) float64 {
 	h := 0.0
 	featuresNear(d, 230, 0.6, r.seed+61, func(f feature) {
 		radius := 45 + 70*f.rand(4)
-		x := f.dir.sub(d).length() * moonRadius / radius
+		x := f.dir.sub(d).length() * marsRadius / radius
 		if x >= 1 {
 			return
 		}
@@ -93,7 +93,7 @@ func (r Relief) hills(d, p vec3) float64 {
 }
 
 // feature is a random point scattered in one cell of a 3D grid, kept only
-// when it lands close to the Moon's surface (so features spread evenly).
+// when it lands close to Mars' surface (so features spread evenly).
 type feature struct {
 	dir     vec3
 	x, y, z int // its grid cell
@@ -103,7 +103,7 @@ type feature struct {
 // featuresNear calls fn for the features of the cells around d. Features
 // must not reach farther than one cell size from their center.
 func featuresNear(d vec3, cell, chance float64, seed uint64, fn func(f feature)) {
-	p := d.scale(moonRadius)
+	p := d.scale(marsRadius)
 	cx, cy, cz := int(math.Floor(p.X/cell)), int(math.Floor(p.Y/cell)), int(math.Floor(p.Z/cell))
 	for dz := -1; dz <= 1; dz++ {
 		for dy := -1; dy <= 1; dy++ {
@@ -114,7 +114,7 @@ func featuresNear(d vec3, cell, chance float64, seed uint64, fn func(f feature))
 				}
 				f := feature{x: x, y: y, z: z, seed: seed}
 				c := vec3{(float64(x) + f.rand(1)) * cell, (float64(y) + f.rand(2)) * cell, (float64(z) + f.rand(3)) * cell}
-				if math.Abs(c.length()-moonRadius) > cell/2 {
+				if math.Abs(c.length()-marsRadius) > cell/2 {
 					continue
 				}
 				f.dir = c.norm()
@@ -135,7 +135,7 @@ func (r Relief) mountains(d, p vec3) float64 {
 			return // keep them clear of the spawn crater
 		}
 		height := 140 + 100*f.rand(5)
-		dist := f.dir.sub(d).length() * moonRadius
+		dist := f.dir.sub(d).length() * marsRadius
 		if dist > radius+80 {
 			return
 		}
@@ -160,7 +160,7 @@ func (r Relief) craters(d vec3, cell, chance, rMin, rMax float64, seed uint64) f
 		if arcDist(f.dir, baseUp) < radius*1.8+spawnRim*1.5 {
 			return // keep the spawn crater clean
 		}
-		x := f.dir.sub(d).length() * moonRadius / radius
+		x := f.dir.sub(d).length() * marsRadius / radius
 		if x > 1.8 {
 			return
 		}
@@ -173,7 +173,7 @@ func (r Relief) craters(d vec3, cell, chance, rMin, rMax float64, seed uint64) f
 
 // arcDist is the distance in meters along the surface between two directions.
 func arcDist(a, b vec3) float64 {
-	return math.Acos(math.Max(-1, math.Min(1, a.dot(b)))) * moonRadius
+	return math.Acos(math.Max(-1, math.Min(1, a.dot(b)))) * marsRadius
 }
 
 // rand returns the k-th random value tied to this feature.

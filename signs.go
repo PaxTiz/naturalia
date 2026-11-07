@@ -30,7 +30,7 @@ func baseSigns() []sign {
 		inHub(east, "RECHERCHE", accentBlue),
 		inHub(north, "QUARTIERS", accentPurple),
 		inHub(south, "SAS 01 - SORTIE", colGold),
-		{at: airlockEnd.add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE LUNAIRE - SAS 01", accent: colGold},
+		{at: airlockEnd.add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: colGold},
 	}
 }
 

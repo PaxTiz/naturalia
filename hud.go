@@ -328,7 +328,7 @@ func (g *Game) drawPause() {
 	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{2, 6, 14, 200})
 	g.drawVisor()
 
-	title := "MOON SWEEPER"
+	title := "MARS SWEEPER"
 	size := 84 * u
 	tw := rl.MeasureTextEx(gfx.smallcaps, title, size, size*0.12).X
 	gfx.caps(title, w/2-tw/2+3*u, h*0.2+3*u, size, color.RGBA{0, 0, 0, 160})
@@ -339,7 +339,7 @@ func (g *Game) drawPause() {
 	}
 
 	keys := [][2]string{
-		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter (gravité lunaire !)"},
+		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter"},
 		{"CLIC", "balayer la poussière visée"}, {"E", "utiliser : incinérateur, labo, carte, lit"},
 		{"ÉCHAP", "pause"}, {"F11", "plein écran"},
 	}
@@ -423,16 +423,16 @@ func (g *Game) hasUse() bool {
 	return ok
 }
 
-// drawMapPanel shows the state of the Moon next to the hologram.
+// drawMapPanel shows the state of Mars next to the hologram.
 func (g *Game) drawMapPanel() {
 	gfx, u := g.gfx, uiScale()
 	_, h := screenSize()
 	s := g.world.Stats(g.st.TotalDust)
 	p := rl.NewRectangle(40*u, h/2-170*u, 440*u, 390*u)
-	g.terminal(p, "ÉTAT DE LA LUNE", visorCyan)
+	g.terminal(p, "ÉTAT DE MARS", visorCyan)
 
 	rows := []struct{ label, value string }{
-		{"LUNE NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
+		{"MARS NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
 		{"POUSSIÈRE COLLECTÉE", fmtNum(g.st.TotalDust) + " g"},
 		{"ZONES VISITÉES", fmt.Sprintf("%d/%d", s.TilesVisited, s.TilesTotal)},
 		{"CRISTAUX TROUVÉS", fmt.Sprintf("%d/%d", s.Gems, s.GemTotal)},

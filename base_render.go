@@ -249,12 +249,12 @@ func beaconTop() vec3 {
 	return toWorld(vec3{1.5, hubRoom.wallH + hubRoom.radius*0.55 + 2.25, 1.5})
 }
 
-// drawGlobe draws the hologram of the Moon above the map table.
+// drawGlobe draws the hologram of Mars above the map table.
 func (g *Game) drawGlobe(cam rl.Camera3D) {
 	gfx := g.gfx
 	center := toWorld(tableSpot.add(vec3{0, globeHeight, 0}))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
-	// Turn the player's spot on the Moon toward the viewer, a bit raised,
+	// Turn the player's spot on Mars toward the viewer, a bit raised,
 	// with a slow sway so the hologram feels alive.
 	toViewer := g.player.Eye().sub(center)
 	toViewer = vec3{toViewer.X, 0, toViewer.Z}.norm()

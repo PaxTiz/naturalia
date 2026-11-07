@@ -1,4 +1,4 @@
-module moon_sweeper
+module mars_sweeper
 
 go 1.27.3
 

@@ -22,15 +22,15 @@ type saveFile struct {
 }
 
 // Bumped when the world format changes: older saves keep the progress
-// (credits, upgrades) but start on a fresh Moon.
-const saveVersion = 4
+// (credits, upgrades) but start on a fresh Mars.
+const saveVersion = 5
 
 func saveDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "moon_sweeper"), nil
+	return filepath.Join(dir, "mars_sweeper"), nil
 }
 
 func (g *Game) save() {
@@ -88,7 +88,7 @@ func (g *Game) load() {
 			return
 		}
 	} else if data, err := os.ReadFile(filepath.Join(dir, "save.json")); err == nil {
-		// Flat-world save from before the Moon became a sphere.
+		// Flat-world save from the very first version.
 		if err := json.Unmarshal(data, &sf); err != nil {
 			return
 		}
@@ -99,7 +99,7 @@ func (g *Game) load() {
 	g.st = sf.State
 	g.st.ToolTier = max(0, min(g.st.ToolTier, len(tools)-1))
 	if sf.Version != saveVersion {
-		log.Println("load: save from an older version, keeping progress on a new Moon")
+		log.Println("load: save from an older version, keeping progress on a new Mars")
 		return
 	}
 	g.player = sf.Player

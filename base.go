@@ -4,7 +4,7 @@ import (
 	"math"
 )
 
-// The moon base sits on the north pole, where up is +Y and the ground is
+// The Mars base sits on the north pole, where up is +Y and the ground is
 // flat over the whole base: everything here is laid out in local
 // coordinates (x, y, z) relative to basePos, with y up.
 //
@@ -260,7 +260,7 @@ type interactable struct {
 }
 
 var interactables = []interactable{
-	{tableSpot, 2.6, useMap, "[E] Consulter l'état de la Lune"},
+	{tableSpot, 2.6, useMap, "[E] Consulter l'état de Mars"},
 	{incineratorSpot, 2.8, useIncinerator, "[E] Déposer la poussière dans l'incinérateur"},
 	{consoleSpot, 2.8, useResearch, "[E] Ouvrir le laboratoire de recherche"},
 	{bedSpot, 2.6, useBed, "[E] Dormir"},

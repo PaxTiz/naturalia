@@ -6,7 +6,7 @@ import (
 
 func main() {
 	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagMsaa4xHint | rl.FlagVsyncHint)
-	rl.InitWindow(1280, 720, "Moon Sweeper")
+	rl.InitWindow(1280, 720, "Mars Sweeper")
 	defer rl.CloseWindow()
 	rl.SetWindowMinSize(800, 450)
 	// Escape pauses the game instead of quitting it.

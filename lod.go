@@ -12,7 +12,7 @@ import (
 
 const (
 	nodeQuads      = 32   // quads per node side
-	maxLevel       = 7    // deepest level: ~0.67 m between vertices
+	maxLevel       = 8    // deepest level: ~0.65 m between vertices
 	splitFactor    = 2.5  // split a node when closer than this many node sizes
 	uploadsPerTick = 16   // node meshes sent to the GPU per frame at most
 	maxLoadedNodes = 1000 // older unused meshes get freed beyond this
@@ -84,7 +84,7 @@ func (t *Terrain) newNode(face, level int, a0, b0, size float64) *lodNode {
 	n.center = faceDir(face, a0+size/2, b0+size/2)
 	n.centerPos = t.Surface(n.center)
 	ang := size * math.Pi / 4 // equiangular faces: coordinates are angles
-	n.arc = ang * moonRadius
+	n.arc = ang * marsRadius
 	n.angulRad = ang * 0.75
 	return n
 }
@@ -167,8 +167,8 @@ func (t *Terrain) upload(limit int) {
 func (t *Terrain) Visible(eye vec3) []*lodNode {
 	t.frame++
 	t.upload(uploadsPerTick)
-	// Beyond this angle around the Moon, even mountain tops are below the horizon.
-	horizon := math.Acos(math.Min(1, moonRadius/eye.length())) + math.Acos(moonRadius/(moonRadius+maxMountain))
+	// Beyond this angle around Mars, even mountain tops are below the horizon.
+	horizon := math.Acos(math.Min(1, marsRadius/eye.length())) + math.Acos(marsRadius/(marsRadius+maxMountain))
 	var draw []*lodNode
 	for _, r := range t.roots {
 		t.visit(r, eye, eye.norm(), horizon, &draw)
@@ -244,7 +244,7 @@ func (t *Terrain) Warm(eye vec3, timeout time.Duration) {
 	}
 }
 
-func (t *Terrain) SurfaceRadius(d vec3) float64 { return moonRadius + t.Height(d) }
+func (t *Terrain) SurfaceRadius(d vec3) float64 { return marsRadius + t.Height(d) }
 
 // Surface returns the ground point in direction d (any length).
 func (t *Terrain) Surface(d vec3) vec3 {

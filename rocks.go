@@ -68,7 +68,7 @@ func rockModels(sh rl.Shader, maps []rl.Texture2D) []rl.Model {
 
 // rock is a boulder lying on the ground.
 type rock struct {
-	dir   vec3 // from the Moon's center
+	dir   vec3 // from Mars' center
 	size  float64
 	shape int
 	yaw   float64
@@ -104,7 +104,7 @@ func (w *World) RocksNear(c vec3, dist float64) []rock {
 	var out []rock
 	tilesNear(c, dist, func(k tileKey) {
 		for _, r := range w.rocksIn(k) {
-			if r.dir.sub(c).length()*moonRadius <= dist {
+			if r.dir.sub(c).length()*marsRadius <= dist {
 				out = append(out, r)
 			}
 		}

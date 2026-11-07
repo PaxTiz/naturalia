@@ -127,7 +127,7 @@ func orient(up vec3) (vec3, float64) {
 	return axis.norm(), angle
 }
 
-// The Moon's surface is addressed through a cube projected on the sphere
+// Mars' surface is addressed through a cube projected on the sphere
 // (equiangular, so cells keep a near-constant size). Each face has a normal
 // and two axes; the shaders use the same table.
 type cubeFace struct{ n, u, v vec3 }

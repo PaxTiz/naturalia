@@ -122,7 +122,7 @@ func NewGraphics() *Graphics {
 	}
 	for name, v := range map[string]float32{
 		"faceCells": faceCells, "tileCells": tileCells, "tilesPerFace": tilesPerFace,
-		"atlasTiles": atlasTiles, "moonRadius": moonRadius,
+		"atlasTiles": atlasTiles, "marsRadius": marsRadius,
 	} {
 		rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, name), []float32{v}, rl.ShaderUniformFloat)
 	}
@@ -157,9 +157,9 @@ func NewGraphics() *Graphics {
 	}
 	gfx.rocks = rockModels(gfx.objectSh, objectMaps)
 
-	// The Moon is big: see mountains far away, but keep the held tool, very
+	// Mars is big: see mountains far away, but keep the held tool, very
 	// close to the eye, from being clipped.
-	rl.SetClipPlanes(0.05, 6000)
+	rl.SetClipPlanes(0.05, 9000)
 
 	// The base's ceiling lamps never move.
 	var lights []float32

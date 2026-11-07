@@ -10,12 +10,12 @@ const (
 	eyeHeight    = 1.7
 	walkSpeed    = 5.0
 	sprintFactor = 1.7
-	moonGravity  = 1.62
-	jumpSpeed    = 3.2
+	marsGravity  = 3.71
+	jumpSpeed    = 2.9
 	mouseSens    = 0.0025
 )
 
-// Player walks on the sphere: "up" is always away from the Moon's center and
+// Player walks on the sphere: "up" is always away from Mars' center and
 // the heading is a vector tangent to the ground, carried along when walking.
 type Player struct {
 	Pos        vec3    `json:"pos"` // feet
@@ -83,7 +83,7 @@ func (p *Player) Update(dt float64, t *Terrain, control bool) {
 	}
 
 	p.Pos = p.Pos.add(move.scale(dt))
-	p.vr -= moonGravity * dt
+	p.vr -= marsGravity * dt
 	p.Pos = p.Pos.add(p.LocalUp().scale(p.vr * dt))
 
 	alt := t.Altitude(p.Pos)

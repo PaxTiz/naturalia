@@ -25,7 +25,7 @@ const (
 	modePaused mode = iota
 	modePlay
 	modeShop  // research lab: upgrades
-	modeMap   // map table: state of the Moon
+	modeMap   // map table: state of Mars
 	modeSleep // fading out, sleeping, waking up
 )
 
@@ -298,7 +298,7 @@ func (g *Game) syncDrones() {
 
 const (
 	// droneRange is how far from the player drones look for dust: they
-	// follow you around the Moon.
+	// follow you around Mars.
 	droneRange = 25.0
 	// While the player is at the base, drones circle above the hub.
 	dockAltitude = 7.5
@@ -322,7 +322,7 @@ func (g *Game) updateDrones(dt float64) {
 			hover += 0.5 // tank full: drones hover in place, waiting
 		default:
 			d.retarget -= dt
-			arrived := up.sub(d.Target.norm()).length()*moonRadius < 0.3
+			arrived := up.sub(d.Target.norm()).length()*marsRadius < 0.3
 			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || arcDist(d.Target.norm(), baseUp) < baseReach {
 				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
 				d.retarget = 8 + g.rng.Float64()*5
@@ -436,7 +436,7 @@ func (g *Game) updateEffects(dt float64) {
 		}
 		p.Pos = p.Pos.add(p.Vel.scale(dt))
 		if p.Falls {
-			p.Vel = p.Vel.sub(p.Pos.norm().scale(moonGravity * dt))
+			p.Vel = p.Vel.sub(p.Pos.norm().scale(marsGravity * dt))
 		}
 		kept = append(kept, p)
 	}

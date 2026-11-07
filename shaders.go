@@ -3,7 +3,7 @@ package main
 import "strconv"
 
 // Every surface is painted by these shaders: no image file is ever loaded.
-// World positions are relative to the Moon's center, so normalize(fragPos)
+// World positions are relative to Mars' center, so normalize(fragPos)
 // is the local "up" anywhere on the surface.
 
 // shaderCommon holds the noise, lighting and fog shared by all fragment shaders.
@@ -84,7 +84,7 @@ in vec3 fragNormal;
 uniform sampler2D texture0; // cache of the touched dust tiles
 uniform sampler2D texture1; // lookup: where each tile sits in the cache (blue = cached)
 uniform float faceCells, tileCells, tilesPerFace, atlasTiles;
-uniform float moonRadius;
+uniform float marsRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows: xyz center, w radius
 uniform float casterCount;
@@ -169,7 +169,7 @@ void main() {
     vec3 col = shade(albedo, n, v, up, shadow, 0.04 * cover);
 
     if (brush.w > 0.0) {
-        float d = length(up - normalize(brush.xyz)) * moonRadius;
+        float d = length(up - normalize(brush.xyz)) * marsRadius;
         float w = 0.05 + dist * 0.003;
         float ring = 1.0 - smoothstep(0.0, w, abs(d - brush.w));
         float fill = (1.0 - smoothstep(brush.w - 0.6, brush.w, d)) * 0.08;
@@ -274,7 +274,7 @@ void main() {
     finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`
 
-// holoFS paints the hologram of the Moon above the map table: a glowing
+// holoFS paints the hologram of Mars above the map table: a glowing
 // grid, the cleaned areas, the base and the player. Drawn additively.
 const holoFS = `#version 330
 in vec3 fragPos;
@@ -282,7 +282,7 @@ in vec3 fragNormal;
 uniform sampler2D texture0; // cleaned fraction of each dust tile
 uniform vec3 viewPos;
 uniform vec3 globeCenter;
-uniform mat4 globeRot; // world → Moon frame: turns the player's spot toward the viewer
+uniform mat4 globeRot; // world → Mars frame: turns the player's spot toward the viewer
 uniform vec3 playerDir;
 uniform float tilesPerFace;
 uniform float time;
@@ -308,7 +308,7 @@ float coverage(vec3 d) {
 }
 
 void main() {
-    // Back to the Moon's own frame.
+    // Back to Mars' own frame.
     vec3 w = normalize(fragPos - globeCenter);
     vec3 d = normalize((globeRot * vec4(w, 0.0)).xyz);
 
@@ -333,7 +333,7 @@ void main() {
 const skyFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
-uniform vec3 up; // the viewer's local up: the horizon follows them around the Moon
+uniform vec3 up; // the viewer's local up: the horizon follows them around Mars
 uniform float time;
 out vec4 finalColor;
 ` + shaderCommon + `

@@ -12,10 +12,10 @@ import (
 
 const (
 	tileCells    = 128 // dust cells per tile side
-	tilesPerFace = 80  // tiles per cube face side
+	tilesPerFace = 156 // tiles per cube face side
 	faceCells    = tileCells * tilesPerFace
 	// Arc length of one cell (~27 cm), and the dust a full cell holds (4 g/m²).
-	cellArc      = math.Pi / 2 * moonRadius / faceCells
+	cellArc      = math.Pi / 2 * marsRadius / faceCells
 	gramsPerCell = cellArc * cellArc * 4
 	tileArc      = cellArc * tileCells
 
@@ -35,14 +35,14 @@ func (k tileKey) split() (f, tx, ty int) {
 	return i / (tilesPerFace * tilesPerFace), i % tilesPerFace, i / tilesPerFace % tilesPerFace
 }
 
-// Gem is a helium-3 crystal hidden under the dust. There is at most one per
+// Gem is a crystal hidden under the dust. There is at most one per
 // tile, placed procedurally, so only the collected ones need remembering.
 type Gem struct {
 	Key tileKey
 	Dir vec3
 }
 
-// World is the dust covering the whole Moon. Untouched ground is implicitly
+// World is the dust covering the whole of Mars. Untouched ground is implicitly
 // full; only the tiles that were cleaned are stored. The GPU gets a cache of
 // the nearby touched tiles plus a table telling where each tile sits in it.
 type World struct {
@@ -64,7 +64,7 @@ type World struct {
 	covPix   []byte
 	covDirty bool
 
-	totalGems int // crystals on the whole Moon at the start
+	totalGems int // crystals on the whole of Mars at the start
 }
 
 func NewWorld(seed uint64) *World {
@@ -155,7 +155,7 @@ func (w *World) brush(center vec3, radius float64, fn func(cell *uint16, d2 floa
 	for j := cj - span; j <= cj+span; j++ {
 		for i := ci - span; i <= ci+span; i++ {
 			d := w.dirOf(f, i, j)
-			chord := d.sub(c).length() * moonRadius
+			chord := d.sub(c).length() * marsRadius
 			d2 := chord * chord / (radius * radius)
 			if d2 > 1 {
 				continue
@@ -195,7 +195,7 @@ func (w *World) FindDusty(rng *rand.Rand, around vec3, spread float64) vec3 {
 	best, bestDir := -1.0, up
 	for range 24 {
 		a, r := rng.Float64()*2*math.Pi, math.Sqrt(rng.Float64())*spread
-		d := up.scale(moonRadius).add(t1.scale(math.Cos(a) * r)).add(t2.scale(math.Sin(a) * r)).norm()
+		d := up.scale(marsRadius).add(t1.scale(math.Cos(a) * r)).add(t2.scale(math.Sin(a) * r)).norm()
 		if dust := w.DustAt(d); dust > best {
 			best, bestDir = dust, d
 		}
@@ -243,7 +243,7 @@ func (w *World) GemsNear(c vec3, dist float64) []Gem {
 	c = c.norm()
 	var gems []Gem
 	tilesNear(c, dist, func(k tileKey) {
-		if g, ok := w.gemIn(k); ok && g.Dir.sub(c).length()*moonRadius <= dist {
+		if g, ok := w.gemIn(k); ok && g.Dir.sub(c).length()*marsRadius <= dist {
 			gems = append(gems, g)
 		}
 	})
@@ -340,7 +340,7 @@ func (w *World) refreshCache(up vec3) {
 	}
 	var near []cand
 	for k := range w.tiles {
-		if d := tileCenter(k).sub(up).length() * moonRadius; d < cacheRadius {
+		if d := tileCenter(k).sub(up).length() * marsRadius; d < cacheRadius {
 			near = append(near, cand{k, d})
 		}
 	}
@@ -465,7 +465,7 @@ func (w *World) measure(k tileKey) {
 // Coverage is the texture of cleaned fractions per tile.
 func (w *World) Coverage() rl.Texture2D { return w.covTex }
 
-// countGems counts the crystals of the whole Moon, collected or not.
+// countGems counts the crystals of the whole of Mars, collected or not.
 func (w *World) countGems() int {
 	collected := w.collected
 	w.collected = nil // gemIn skips collected ones: count them all
@@ -481,7 +481,7 @@ func (w *World) countGems() int {
 
 // Stats summarizes the cleaning progress for the map table.
 type Stats struct {
-	Cleaned        float64 // fraction of the Moon's dust removed
+	Cleaned        float64 // fraction of Mars' dust removed
 	TilesVisited   int
 	TilesTotal     int
 	Gems, GemTotal int
@@ -491,9 +491,9 @@ func (w *World) Stats(totalDust float64) Stats {
 	if w.totalGems == 0 {
 		w.totalGems = w.countGems()
 	}
-	moonDust := 6 * faceCells * faceCells * gramsPerCell
+	marsDust := 6 * faceCells * faceCells * gramsPerCell
 	return Stats{
-		Cleaned:      totalDust / moonDust,
+		Cleaned:      totalDust / marsDust,
 		TilesVisited: len(w.tiles),
 		TilesTotal:   6 * tilesPerFace * tilesPerFace,
 		Gems:         len(w.collected),
