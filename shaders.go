@@ -63,13 +63,13 @@ vec3 skyColor(vec3 d, vec3 up) {
 
 // Soft stylized lighting: wrapped sun, warm sky fill from the dusty air,
 // red light bounced by the ground, rim light and specular. shadow only
-// dims the sun.
-vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float spec) {
+// dims the sun, ao (ambient occlusion) only the fill and the bounce.
+vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float spec) {
     float day = daylight(up);
     float wrap = clamp((dot(n, sunDir) + 0.3) / 1.3, 0.0, 1.0);
     vec3 fill = mix(nightFill, skyFill, day);
-    vec3 col = albedo * (sunCol * wrap * 1.3 * shadow + fill * (0.55 + 0.3 * dot(n, up)));
-    col += albedo * bounceCol * clamp(0.5 - 0.5 * dot(n, up), 0.0, 1.0) * day;
+    vec3 col = albedo * (sunCol * wrap * 1.3 * shadow + fill * (0.55 + 0.3 * dot(n, up)) * ao);
+    col += albedo * bounceCol * clamp(0.5 - 0.5 * dot(n, up), 0.0, 1.0) * day * ao;
     col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12 * (0.2 + 0.8 * day);
     vec3 h = normalize(sunDir + v);
     col += sunCol * pow(max(dot(n, h), 0.0), 48.0) * spec * shadow;
@@ -107,9 +107,34 @@ void main() {
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }`
 
+// terrainVS decodes the light baked in the length of the normals (see
+// Terrain.light).
+const terrainVS = `#version 330
+in vec3 vertexPosition;
+in vec3 vertexNormal;
+in vec2 vertexTexCoord;
+uniform mat4 mvp;
+out vec3 fragPos;
+out vec3 fragNormal;
+out vec2 fragTexCoord;
+out float fragSun;
+out float fragAO;
+void main() {
+    float l = length(vertexNormal) - 1.0;
+    float occ = floor(l + 0.01);
+    fragSun = clamp((l - occ) / 0.9, 0.0, 1.0);
+    fragAO = occ / 31.0;
+    fragTexCoord = vertexTexCoord;
+    fragPos = vertexPosition; // terrain meshes are drawn with no transform
+    fragNormal = normalize(vertexNormal);
+    gl_Position = mvp * vec4(vertexPosition, 1.0);
+}`
+
 var terrainFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
+in float fragSun;
+in float fragAO;
 in vec2 fragTexCoord;       // ground kind: x polar ice, y volcanic basalt
 uniform sampler2D texture0; // cache of the touched dust tiles
 uniform sampler2D texture1; // lookup: where each tile sits in the cache (blue = cached)
@@ -213,7 +238,10 @@ void main() {
         shadow *= mix(0.35, 1.0, smoothstep(0.3, 1.2, d));
     }
 
-    vec3 col = shade(albedo, n, v, up, shadow, mix(0.04 * cover, 0.6, ice * (1.0 - cover)));
+    // The relief's own shadow and occlusion, baked in the vertices.
+    shadow *= fragSun;
+    float ao = mix(0.35, 1.0, fragAO);
+    vec3 col = shade(albedo, n, v, up, shadow, ao, mix(0.04 * cover, 0.6, ice * (1.0 - cover)));
 
     if (brush.w > 0.0) {
         float d = length(up - normalize(brush.xyz)) * marsRadius;
@@ -316,7 +344,7 @@ void main() {
     vec3 albedo = paint(colDiffuse.rgb, n, h);
     float dist = length(viewPos - fragPos);
     n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
-    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), 1.0, surface.x);
+    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), 1.0, 1.0, surface.x);
     vec3 col = mix(lit, albedo * 1.6, surface.y);
     finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`

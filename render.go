@@ -81,7 +81,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 
 func NewGraphics() *Graphics {
 	gfx := &Graphics{}
-	gfx.terrainSh, gfx.tLoc = loadShader(terrainFS)
+	gfx.terrainSh, gfx.tLoc = loadShaderVS(terrainVS, terrainFS)
 	gfx.objectSh, gfx.oLoc = loadShader(objectFS)
 	gfx.skySh, gfx.sLoc = loadShader(skyFS)
 	gfx.holoSh, gfx.hLoc = loadShader(holoFS)

@@ -125,6 +125,26 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			kinds[j*(nodeQuads+1)+i] = [2]float32{float32(t.Ice(d)), float32(t.Basalt(d))}
 		}
 	}
+	// The light is costly: computed every other vertex, then interpolated.
+	const half = nodeQuads/2 + 1
+	var suns, aos [half * half]float64
+	for j := range half {
+		for i := range half {
+			suns[j*half+i], aos[j*half+i] = t.light(at(i*2, j*2))
+		}
+	}
+	lights := make([]float64, (nodeQuads+1)*(nodeQuads+1))
+	for j := range nodeQuads + 1 {
+		for i := range nodeQuads + 1 {
+			i0, j0 := min(i/2, half-2), min(j/2, half-2)
+			fx, fy := float64(i-i0*2)/2, float64(j-j0*2)/2
+			lerp := func(v *[half * half]float64) float64 {
+				k := j0*half + i0
+				return (v[k]*(1-fx)+v[k+1]*fx)*(1-fy) + (v[k+half]*(1-fx)+v[k+half+1]*fx)*fy
+			}
+			lights[j*(nodeQuads+1)+i] = 1 + math.Round(lerp(&aos)*31) + 0.9*lerp(&suns)
+		}
+	}
 	skirt := n.arc/nodeQuads*1.5 + 0.5
 	for vz := range side {
 		for vx := range side {
@@ -135,6 +155,7 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			if nrm.dot(p) < 0 {
 				nrm = nrm.scale(-1)
 			}
+			nrm = nrm.scale(lights[j*(nodeQuads+1)+i])
 			if vx != i+1 || vz != j+1 {
 				p = p.sub(p.norm().scale(skirt))
 			}
@@ -146,6 +167,48 @@ func (t *Terrain) build(n *lodNode) nodeData {
 		}
 	}
 	return nodeData{n, verts, norms, uvs}
+}
+
+// light returns, for a ground point, how much of the sun the relief lets
+// through (soft-edged) and how open the sky is around it (ambient
+// occlusion). The sun is fixed in space, so both are computed once per
+// vertex. Sampling distances are fixed in meters, so the result does not
+// change with the level of detail. The shader receives them in the length
+// of the normal: whole part the occlusion in 1/31 steps, then 0.9 × sun.
+func (t *Terrain) light(p vec3) (sun, ao float64) {
+	up := p.norm()
+	sun = 1
+	if up.dot(sunDir) > -0.15 { // night side: the sun is gone anyway
+		start := p.add(up.scale(0.3))
+		for s := 1.5; s < 4000; s *= 1.45 {
+			q := start.add(sunDir.scale(s))
+			if q.length()-marsRadius > maxMountain {
+				break // above every peak
+			}
+			h := q.length() - t.SurfaceRadius(q.norm())
+			sun = min(sun, 14*h/s) // penumbra of about 4°
+			if sun <= 0 {
+				sun = 0
+				break
+			}
+		}
+	}
+
+	// Occlusion: steepest horizon in 6 directions, at a few distances.
+	u, v := tangentBasis(up)
+	h0 := t.SurfaceRadius(up)
+	open := 0.0
+	for k := range 6 {
+		a := float64(k) * math.Pi / 3
+		dir := u.scale(math.Cos(a)).add(v.scale(math.Sin(a)))
+		slope := 0.0
+		for _, dist := range [...]float64{2, 6, 16, 45} {
+			d := p.add(dir.scale(dist)).norm()
+			slope = max(slope, (t.SurfaceRadius(d)-h0)/dist)
+		}
+		open += 1 - slope/math.Sqrt(1+slope*slope) // 1 - sin of the horizon angle
+	}
+	return sun, open / 6
 }
 
 // upload turns finished node data into GPU meshes, a few per frame.
