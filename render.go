@@ -22,8 +22,7 @@ var (
 	colCyan  = color.RGBA{120, 235, 245, 255}
 
 	// Direction toward the sun: low on the horizon for long soft shadows.
-	sunDir   = vec3{-0.5, 0.62, -0.6}.norm()
-	earthDir = vec3{0.35, 0.38, 0.86}.norm()
+	sunDir = vec3{-0.5, 0.62, -0.6}.norm()
 )
 
 const (
@@ -31,13 +30,13 @@ const (
 )
 
 type shaderLocs struct {
-	viewPos, sunDir, earthDir, time int32
-	brush, casters, casterCount     int32
-	surface, up                     int32
-	lighting, room                  int32
-	mat                             int32
-	globeCenter, globeRot           int32
-	playerDir                       int32
+	viewPos, sunDir, time       int32
+	brush, casters, casterCount int32
+	surface, up                 int32
+	lighting, room              int32
+	mat                         int32
+	globeCenter, globeRot       int32
+	playerDir                   int32
 }
 
 // Graphics holds the GPU resources. Everything is generated at startup:
@@ -64,7 +63,7 @@ func loadShader(fs string) (rl.Shader, shaderLocs) {
 	sh := rl.LoadShaderFromMemory(meshVS, fs)
 	loc := func(name string) int32 { return rl.GetShaderLocation(sh, name) }
 	return sh, shaderLocs{
-		viewPos: loc("viewPos"), sunDir: loc("sunDir"), earthDir: loc("earthDir"), time: loc("time"),
+		viewPos: loc("viewPos"), sunDir: loc("sunDir"), time: loc("time"),
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"),
 		lighting: loc("lighting"), room: loc("room"),
@@ -118,7 +117,6 @@ func NewGraphics() *Graphics {
 
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(sunDir), rl.ShaderUniformVec3)
-		rl.SetShaderValue(s.sh, s.loc.earthDir, v3f(earthDir), rl.ShaderUniformVec3)
 	}
 	for name, v := range map[string]float32{
 		"faceCells": faceCells, "tileCells": tileCells, "tilesPerFace": tilesPerFace,

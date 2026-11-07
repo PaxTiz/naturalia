@@ -6,17 +6,20 @@ import "strconv"
 // World positions are relative to Mars' center, so normalize(fragPos)
 // is the local "up" anywhere on the surface.
 
-// shaderCommon holds the noise, lighting and fog shared by all fragment shaders.
+// shaderCommon holds the noise, sky, lighting and haze shared by all
+// fragment shaders. The sun is fixed in space: walking around Mars brings
+// sunsets and nights, so the sky and the fill light follow the local up.
 const shaderCommon = `
 uniform vec3 viewPos;
 uniform vec3 sunDir;
-uniform vec3 earthDir;
 
-const vec3 sunCol   = vec3(1.0, 0.94, 0.84);
-const vec3 skyFill  = vec3(0.21, 0.23, 0.32);
-const vec3 earthCol = vec3(0.28, 0.40, 0.70);
-const vec3 rimCol   = vec3(0.45, 0.60, 1.00);
-const vec3 horizon  = vec3(0.07, 0.075, 0.15);
+const vec3 sunCol    = vec3(1.0, 0.92, 0.80);
+const vec3 skyFill   = vec3(0.42, 0.30, 0.22);
+const vec3 nightFill = vec3(0.05, 0.05, 0.08);
+const vec3 bounceCol = vec3(0.30, 0.15, 0.08);
+const vec3 rimCol    = vec3(1.00, 0.70, 0.50);
+const vec3 phobosDir = vec3(0.451, 0.551, -0.702);
+const vec3 deimosDir = vec3(-0.204, 0.865, 0.458);
 
 float hash13(vec3 p) {
     p = fract(p * 0.1031);
@@ -39,20 +42,46 @@ float fbm3(vec3 p) {
     return s;
 }
 
-// Soft stylized lighting: wrapped sun, cool sky fill, earthshine on the
-// side facing the Earth, rim light and specular. shadow only dims the sun.
+// daylight: 1 when the sun is well above the local horizon, 0 at night.
+float daylight(vec3 up) { return smoothstep(-0.12, 0.18, dot(sunDir, up)); }
+
+// skyColor is the color of the sky seen along d: butterscotch by day,
+// hazier toward the horizon, bluish around the sun, a blue glow at sunset.
+vec3 skyColor(vec3 d, vec3 up) {
+    float h = dot(d, up);
+    float s = max(dot(d, sunDir), 0.0);
+    float day = daylight(up);
+    vec3 col = mix(vec3(1.40, 0.80, 0.54), vec3(0.72, 0.44, 0.30), smoothstep(-0.05, 0.6, h));
+    col = mix(col, vec3(0.89, 1.03, 1.27), pow(s, 12.0) * 0.8);
+    col += vec3(1.0, 0.9, 0.75) * pow(s, 3.0) * 0.25;
+    vec3 night = mix(vec3(0.05, 0.035, 0.04), vec3(0.008, 0.009, 0.02), smoothstep(-0.05, 0.5, h));
+    col = mix(night, col, day);
+    float dusk = smoothstep(-0.35, -0.05, dot(sunDir, up)) * (1.0 - day * 0.7);
+    col += vec3(0.25, 0.45, 0.95) * pow(s, 6.0) * dusk * 1.4;
+    return col;
+}
+
+// Soft stylized lighting: wrapped sun, warm sky fill from the dusty air,
+// red light bounced by the ground, rim light and specular. shadow only
+// dims the sun.
 vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float spec) {
+    float day = daylight(up);
     float wrap = clamp((dot(n, sunDir) + 0.3) / 1.3, 0.0, 1.0);
-    vec3 col = albedo * (sunCol * wrap * 1.35 * shadow + skyFill * (0.5 + 0.3 * dot(n, up)));
-    col += albedo * earthCol * max(dot(n, earthDir), 0.0) * 0.35;
-    col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12;
+    vec3 fill = mix(nightFill, skyFill, day);
+    vec3 col = albedo * (sunCol * wrap * 1.3 * shadow + fill * (0.55 + 0.3 * dot(n, up)));
+    col += albedo * bounceCol * clamp(0.5 - 0.5 * dot(n, up), 0.0, 1.0) * day;
+    col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12 * (0.2 + 0.8 * day);
     vec3 h = normalize(sunDir + v);
     col += sunCol * pow(max(dot(n, h), 0.0), 48.0) * spec * shadow;
     return col;
 }
 
+// finish fades distant surfaces into the dusty air, the sky's own color
+// along the view, then applies the exposure.
 vec3 finish(vec3 col, float dist) {
-    col = mix(col, horizon, 1.0 - exp(-pow(dist / 1800.0, 2.0)));
+    vec3 d = normalize(fragPos - viewPos);
+    vec3 haze = skyColor(d, normalize(viewPos));
+    col = mix(col, haze, 1.0 - exp(-pow(dist / 1900.0, 1.3)));
     return vec3(1.0) - exp(-col * 1.35); // soft exposure curve, no harsh clipping
 }
 `
@@ -337,38 +366,36 @@ uniform vec3 up; // the viewer's local up: the horizon follows them around Mars
 uniform float time;
 out vec4 finalColor;
 ` + shaderCommon + `
-vec3 earth(vec3 d, inout float cover) {
-    const float dist = 100.0, radius = 7.5;
-    vec3 c = earthDir * dist;
-    float b = dot(d, c);
-    if (b < 0.0) return vec3(0.0);
-    float disc = b * b - dot(c, c) + radius * radius;
-    // Atmosphere halo just outside the disk.
-    float closest = length(d * b - c);
-    vec3 halo = vec3(0.35, 0.6, 1.0) * exp(-max(closest - radius, 0.0) * 1.4) * 0.35;
-    if (disc < 0.0) return halo;
-    vec3 p = d * (b - sqrt(disc));
-    vec3 n = normalize(p - c);
-    float land = smoothstep(0.52, 0.56, fbm3(n * 2.6 + 3.0));
-    vec3 col = mix(vec3(0.06, 0.20, 0.55), vec3(0.20, 0.45, 0.22), land);
-    col = mix(col, vec3(0.95, 0.85, 0.65) * 0.8, land * smoothstep(0.62, 0.7, fbm3(n * 5.0)));
-    float clouds = smoothstep(0.5, 0.72, fbm3(n * 4.0 + vec3(time * 0.004, 0.0, 0.0)));
-    col = mix(col, vec3(0.95), clouds * 0.85);
-    // Lit three-quarters toward the viewer, so the Earth reads well in the sky.
-    vec3 earthLight = normalize(sunDir - earthDir * 1.2);
-    float day = smoothstep(-0.15, 0.35, dot(n, earthLight));
-    col *= 0.04 + 1.2 * day;
-    col += vec3(0.35, 0.6, 1.0) * pow(1.0 - max(dot(n, -d), 0.0), 2.5) * (0.15 + 0.85 * day);
-    cover = smoothstep(0.0, 0.08, disc / radius);
-    return mix(halo, col, cover);
+// moon draws one of the two small moons: a lumpy gray rock, lit by the
+// sun. It returns its color and sets cover where it hides the sky.
+vec3 moon(vec3 d, vec3 dir, float radius, float seed, inout float cover) {
+    float c = dot(d, dir);
+    if (c < 0.995) return vec3(0.0);
+    // Position on the disk, in units of its radius.
+    vec3 t1 = normalize(cross(dir, vec3(0.0, 1.0, 0.0)));
+    vec3 t2 = cross(t1, dir);
+    vec2 q = vec2(dot(d, t1), dot(d, t2)) / radius;
+    float a = atan(q.y, q.x);
+    float edge = 1.0 + 0.16 * (vnoise3(vec3(cos(a), sin(a), seed) * 1.6) - 0.5) * 2.0;
+    float r = length(q) / edge;
+    float k = 1.0 - smoothstep(0.92, 1.0, r);
+    if (k <= 0.0) return vec3(0.0);
+    vec3 n = normalize(t1 * q.x + t2 * q.y - dir * sqrt(max(0.0, 1.0 - r * r)));
+    // Lit three-quarters toward the viewer, so the moons read well in the sky.
+    float lit = clamp((dot(n, normalize(sunDir - dir * 1.2)) + 0.15) / 1.15, 0.0, 1.0);
+    float craters = vnoise3(vec3(q * 3.0, seed)) * 0.5 + vnoise3(vec3(q * 7.0, seed + 3.0)) * 0.25;
+    vec3 col = vec3(0.55, 0.50, 0.46) * (0.6 + 0.6 * craters) * (0.08 + 1.1 * lit);
+    cover = k;
+    return col * k;
 }
 
 void main() {
     vec3 d = normalize(fragPos - viewPos);
     float h = dot(d, up);
-    vec3 col = mix(horizon, vec3(0.008, 0.009, 0.03), smoothstep(-0.02, 0.5, h));
+    vec3 col = skyColor(d, up);
+    float day = daylight(up);
 
-    // Stars on a fine 3D grid of directions, gently twinkling.
+    // Stars come out at night only, on a fine 3D grid of directions.
     vec3 p = d * 220.0;
     vec3 cell = floor(p);
     float r = hash13(cell);
@@ -376,15 +403,20 @@ void main() {
         vec3 star = cell + 0.5 + (vec3(hash13(cell + 1.0), hash13(cell + 2.0), hash13(cell + 3.0)) - 0.5) * 0.6;
         float twinkle = 0.7 + 0.3 * sin(time * (1.0 + r * 4.0) + r * 50.0);
         float bright = (r - 0.97) / 0.03;
-        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.32, 0.0, length(p - star)) * bright * twinkle * smoothstep(-0.02, 0.12, h);
+        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.32, 0.0, length(p - star)) * bright * twinkle * smoothstep(-0.02, 0.12, h) * (1.0 - day);
     }
 
+    // Phobos, then tiny Deimos: pale in the day sky, bright at night.
     float cover = 0.0;
-    vec3 e = earth(d, cover);
-    col = mix(col, vec3(0.0), cover) + e;
+    vec3 m = moon(d, phobosDir, 0.04, 1.0, cover);
+    col = mix(col, m + col * (0.55 * day), cover);
+    cover = 0.0;
+    m = moon(d, deimosDir, 0.015, 7.0, cover);
+    col = mix(col, m + col * (0.55 * day), cover);
 
+    // The sun looks smaller from Mars, with a soft glow in the dusty air.
     float s = max(dot(d, sunDir), 0.0);
-    col += sunCol * (smoothstep(0.9993, 0.9996, s) * 4.0 + pow(s, 600.0) * 1.5 + pow(s, 14.0) * 0.12);
+    col += sunCol * (smoothstep(0.99975, 0.99988, s) * 5.0 + pow(s, 900.0) * 1.2 + pow(s, 40.0) * 0.15);
 
     finalColor = vec4(vec3(1.0) - exp(-col * 1.35), 1.0);
 }`
@@ -402,12 +434,16 @@ vec4 tri(sampler2D t, vec3 p, vec3 w, float scale) {
 }
 
 // bump tilts the normal along the slopes of height h (Mikkelsen's
-// derivative bump mapping); strength is the relief depth in meters.
+// derivative bump mapping); strength is the relief depth in meters. It
+// fades out on faces far from n, like the terrain's skirts seen edge-on,
+// where the derivatives give a meaningless tilt.
 vec3 bump(vec3 n, vec3 p, float h, float strength) {
     if (strength <= 0.0) return n;
     vec3 dpdx = dFdx(p), dpdy = dFdy(p);
     vec3 r1 = cross(dpdy, n), r2 = cross(n, dpdx);
     float det = dot(dpdx, r1);
+    strength *= smoothstep(0.3, 0.6, abs(det) / max(length(cross(dpdx, dpdy)), 1e-12));
+    if (strength <= 0.0) return n;
     vec3 grad = sign(det) * (dFdx(h) * r1 + dFdy(h) * r2);
     return normalize(abs(det) * n - strength * grad);
 }
