@@ -51,7 +51,7 @@ type Graphics struct {
 	devilMat                           rl.Material
 
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
-	terrainMat                                        rl.Material
+	terrainMat                                        *rl.Material // own allocation: see NewGraphics
 	signBox                                           rl.Model
 	rocks                                             []rl.Model
 	screens                                           []rl.Texture2D
@@ -139,12 +139,16 @@ func NewGraphics() *Graphics {
 	// One material shared by every terrain patch. Patches are freed with
 	// UnloadMesh only: unloading a model would also free this shader.
 	gfx.tex = bakeTextures()
-	gfx.terrainMat = rl.LoadMaterialDefault()
+	// Kept apart from Graphics: with cgo, passing a pointer into a Go object
+	// makes the runtime check that whole object for Go pointers, and
+	// Graphics holds slices.
+	mat := rl.LoadMaterialDefault()
+	gfx.terrainMat = &mat
 	gfx.terrainMat.Shader = gfx.terrainSh
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapNormal, rl.GetShaderLocation(gfx.terrainSh, "texture2"))
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapRoughness, rl.GetShaderLocation(gfx.terrainSh, "texture3"))
-	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
-	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
+	rl.SetMaterialTexture(gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
+	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 
 	gfx.signBox = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
 	for i, c := range []color.RGBA{accentBlue, accentCyan, accentBlue, colGreen} {
@@ -263,8 +267,8 @@ func (g *Game) Draw() {
 	cam := g.camera()
 
 	atlas, lookup := g.world.Upload(g.player.Pos)
-	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapDiffuse, atlas)
-	rl.SetMaterialTexture(&gfx.terrainMat, rl.MapSpecular, lookup)
+	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
+	rl.SetMaterialTexture(gfx.terrainMat, rl.MapSpecular, lookup)
 	patches := g.terrain.Visible(g.player.Eye())
 	g.nearGems = g.world.GemsNear(g.player.Pos, gemDrawDist)
 	g.setUniforms(cam)
@@ -283,7 +287,7 @@ func (g *Game) Draw() {
 	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
 	for _, n := range patches {
-		rl.DrawMesh(n.mesh, gfx.terrainMat, rl.MatrixIdentity())
+		rl.DrawMesh(n.mesh, *gfx.terrainMat, rl.MatrixIdentity())
 	}
 	rl.EnableBackfaceCulling()
 	g.drawRocks()
