@@ -1,7 +1,6 @@
 package main
 
 import (
-	"image/color"
 	"math"
 	"unsafe"
 
@@ -123,8 +122,8 @@ func (g *Game) drawRocks() {
 		ax := t1.scale(math.Cos(r.yaw)).add(t2.scale(math.Sin(r.yaw)))
 		az := ax.cross(up)
 		ground := g.terrain.Surface(r.dir).sub(up.scale(r.size * 0.12))
-		v := uint8(150 + 60*r.tone)
-		col := color.RGBA{v, v, v + 8, 255}
+		v := 140 + 60*r.tone
+		col := rgb(v, v*0.6, v*0.46) // rusty red, like the regolith
 		gfx.putBasis(gfx.rocks[r.shape], ground, ax.scale(r.size), up.scale(r.size), az.scale(r.size), col, 0.1, 0)
 	}
 	gfx.setMat(mtPlain, 1, false)

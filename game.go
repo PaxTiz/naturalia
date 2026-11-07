@@ -261,7 +261,7 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 		g.addParticle(Particle{
 			Pos: start, Vel: sink.sub(start).scale(1 / travel),
 			MaxLife: travel, Size: 0.03 + g.rng.Float64()*0.04,
-			C: color.RGBA{215, 205, 185, 255},
+			C: color.RGBA{210, 140, 95, 255},
 		})
 	}
 }
@@ -396,7 +396,7 @@ func (g *Game) deposit() {
 		g.addParticle(Particle{
 			Pos: start, Vel: hopper.sub(start).scale(1 / travel),
 			MaxLife: travel, Size: 0.04 + g.rng.Float64()*0.05,
-			C: color.RGBA{215, 205, 185, 255},
+			C: color.RGBA{210, 140, 95, 255},
 		})
 	}
 	for range 30 {

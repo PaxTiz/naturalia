@@ -40,9 +40,9 @@ const (
 	volcanoRadius  = 1500.0
 	volcanoHeight  = 380.0
 	calderaRadius  = 190.0
-	calderaDepth   = 30.0
+	calderaDepth   = 40.0
 	capRadius      = 640.0
-	capThickness   = 16.0
+	capThickness   = 26.0
 	canyonDepth    = 80.0
 	canyonHalfW    = 260.0
 	canyonFrom     = -1100.0 // along the axis, from its center
@@ -136,7 +136,7 @@ func (r Relief) dunes(p vec3) float64 {
 	if mask <= 0 {
 		return 0
 	}
-	const wavelength = 38.0
+	const wavelength = 45.0
 	wind := vec3{0.8, 0.25, -0.55}.norm()
 	s := p.dot(wind)/wavelength + 1.6*fbm3(p.scale(1.0/160), r.seed+71, 2)
 	f := s - math.Floor(s)
@@ -145,7 +145,7 @@ func (r Relief) dunes(p vec3) float64 {
 		ridge = 1 - smoothstep(0.7, 1, f)
 	}
 	crest := smoothstep(0.3, 0.6, fbm3(p.scale(1.0/90), r.seed+72, 2)+mask*0.25)
-	return 3.5 * ridge * crest * mask
+	return 5 * ridge * crest * mask
 }
 
 // volcano: a wide shield with a caldera on top and lava flows running down
@@ -172,9 +172,9 @@ func (r Relief) volcano(d, p vec3) (float64, float64) {
 	h += 4 * flows * smoothstep(0.3, 0.5, x) * (1 - smoothstep(0.75, 1, x))
 
 	// Caldera: a flat-floored pit, plus a smaller one nested off-center.
-	h -= calderaDepth * (1 - smoothstep(calderaRadius*0.7, calderaRadius*1.25, dist))
+	h -= calderaDepth * (1 - smoothstep(calderaRadius*0.75, calderaRadius*1.2, dist))
 	inner := arcDist(d, toward2(volcanoCenter, t1, 60))
-	h -= 14 * (1 - smoothstep(50, 100, inner))
+	h -= 20 * (1 - smoothstep(45, 95, inner))
 	return h, on
 }
 
@@ -203,15 +203,19 @@ func (r Relief) canyon(d, p vec3) (float64, float64) {
 	return -canyonDepth * taper * depth, smoothstep(1.4, 1, x) * taper
 }
 
-// Ice is how much of the polar cap covers direction d (0..1).
-func (r Relief) Ice(d vec3) float64 {
+// capInside is how far inside the polar cap's ragged edge d is, in meters
+// (negative outside).
+func (r Relief) capInside(d vec3) float64 {
 	dist := arcDist(d, capCenter)
 	if dist > capRadius*1.3 {
-		return 0
+		return -dist
 	}
-	edge := capRadius + 70*(fbm3(d.scale(marsRadius/260), r.seed+101, 2)-0.5)
-	return smoothstep(-30, 30, edge-dist)
+	return capRadius + 70*(fbm3(d.scale(marsRadius/260), r.seed+101, 2)-0.5) - dist
 }
+
+// Ice is how much of the polar cap covers direction d (0..1). The white
+// starts right at the foot of the ice cliff.
+func (r Relief) Ice(d vec3) float64 { return smoothstep(-12, 12, r.capInside(d)) }
 
 // iceCap: a low dome of ice, carved by spiral troughs like the real one.
 func (r Relief) iceCap(d, p vec3, ice float64) float64 {
@@ -219,7 +223,7 @@ func (r Relief) iceCap(d, p vec3, ice float64) float64 {
 		return 0
 	}
 	dist := arcDist(d, capCenter)
-	h := capThickness * ice * (0.6 + 0.4*(1-math.Pow(dist/capRadius, 2)))
+	h := capThickness * smoothstep(-10, 70, r.capInside(d)) * (0.6 + 0.4*(1-math.Pow(dist/capRadius, 2)))
 	t1, t2 := tangentBasis(capCenter)
 	angle := math.Atan2(d.dot(t2), d.dot(t1))
 	s := angle/(2*math.Pi)*3 + dist/250 + 0.3*fbm3(p.scale(1.0/150), r.seed+102, 2)

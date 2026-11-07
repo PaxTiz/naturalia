@@ -110,6 +110,7 @@ void main() {
 var terrainFS = `#version 330
 in vec3 fragPos;
 in vec3 fragNormal;
+in vec2 fragTexCoord;       // ground kind: x polar ice, y volcanic basalt
 uniform sampler2D texture0; // cache of the touched dust tiles
 uniform sampler2D texture1; // lookup: where each tile sits in the cache (blue = cached)
 uniform float faceCells, tileCells, tilesPerFace, atlasTiles;
@@ -164,16 +165,33 @@ void main() {
     vec4 rg = mix(tri(texture2, fragPos, w, 1.0 / regolithTile), tri(texture2, fragPos, w, 1.0 / (regolithTile * 7.3)), far);
     vec4 ds = mix(tri(texture3, fragPos, w, 1.0 / dustTile), tri(texture3, fragPos, w, 1.0 / (dustTile * 6.1)), far);
 
-    // Bare regolith: cool gray, large soft blotches, darker pebbles and hollows.
+    float ice = fragTexCoord.x, basalt = fragTexCoord.y;
+    float steep = smoothstep(0.88, 0.7, dot(normalize(fragNormal), up));
+    float alt = length(fragPos) - marsRadius;
+
+    // Bare regolith: rusty red, large soft blotches, darker pebbles and
+    // hollows. Dark basalt on the volcano; layered rock on steep walls.
     float big = fbm3(fragPos * 0.035);
-    vec3 rock = mix(vec3(0.13, 0.135, 0.16), vec3(0.29, 0.29, 0.33), big) * (0.55 + 0.9 * rg.r);
-    rock = mix(rock, vec3(0.17, 0.18, 0.22) * (0.7 + 0.8 * rg.r), rg.g * 0.55);
+    vec3 rock = mix(vec3(0.30, 0.13, 0.07), vec3(0.55, 0.27, 0.14), big);
+    rock = mix(rock, mix(vec3(0.15, 0.11, 0.10), vec3(0.30, 0.21, 0.17), big), basalt);
+    float layer = fract(alt / 9.0 + (fbm3(fragPos * 0.02) - 0.5) * 0.8);
+    vec3 strata = mix(vec3(0.62, 0.36, 0.20), vec3(0.36, 0.15, 0.08), smoothstep(0.3, 0.45, layer) * (1.0 - smoothstep(0.75, 0.9, layer)));
+    strata = mix(strata, vec3(0.75, 0.55, 0.38), smoothstep(0.92, 0.97, layer) * 0.6);
+    rock = mix(rock, mix(strata, strata * vec3(0.55, 0.5, 0.55), basalt), steep);
+    rock *= 0.55 + 0.9 * rg.r;
+    rock = mix(rock, rock * 0.75, rg.g * 0.55);
     rock *= 1.0 - rg.b * 0.45;
+    // Polar ice: bluish white with faint layers.
+    vec3 iceCol = mix(vec3(0.70, 0.78, 0.88), vec3(0.92, 0.95, 1.0), smoothstep(0.3, 0.7, fract(alt / 2.5 + big)));
+    rock = mix(rock, iceCol * (0.85 + 0.25 * rg.r), ice);
 
     // Dust settles in the hollows first; pebbles poke through thin layers.
     float edge = (fbm3(fragPos * 1.7) - 0.5) * 0.3;
     float cover = smoothstep(0.08, 0.36, dust + edge + (0.45 - rg.a) * 0.45 * (1.0 - dust));
-    vec3 dustCol = mix(vec3(0.70, 0.66, 0.60), vec3(0.88, 0.83, 0.75), fbm3(fragPos * 0.12 + 5.0));
+    vec3 dustCol = mix(vec3(0.74, 0.43, 0.24), vec3(0.88, 0.58, 0.36), fbm3(fragPos * 0.12 + 5.0));
+    dustCol = mix(dustCol, vec3(0.42, 0.27, 0.19), basalt * 0.7);
+    dustCol = mix(dustCol, strata * 1.15, steep * 0.45 * (1.0 - basalt));
+    dustCol = mix(dustCol, vec3(0.97, 0.93, 0.92), ice * 0.95); // dust mixed with frost
     dustCol *= 0.68 + 0.6 * ds.r;
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
@@ -195,7 +213,7 @@ void main() {
         shadow *= mix(0.35, 1.0, smoothstep(0.3, 1.2, d));
     }
 
-    vec3 col = shade(albedo, n, v, up, shadow, 0.04 * cover);
+    vec3 col = shade(albedo, n, v, up, shadow, mix(0.04 * cover, 0.6, ice * (1.0 - cover)));
 
     if (brush.w > 0.0) {
         float d = length(up - normalize(brush.xyz)) * marsRadius;
