@@ -76,7 +76,8 @@ type rock struct {
 }
 
 // rocksIn lists the rocks of a dust tile: placed procedurally, mostly small
-// stones, now and then a big boulder. None around the base.
+// stones, now and then a big boulder. None around the base
+// nor on the polar ice.
 func (w *World) rocksIn(k tileKey) []rock {
 	f, tx, ty := k.split()
 	count := int(hash3(f, tx, ty, w.Seed+201) * 4.5)
@@ -90,7 +91,7 @@ func (w *World) rocksIn(k tileKey) []rock {
 			size = 1.4 + 1.3*hash3(f, tx, ty, s+4) // a big boulder
 		}
 		d := cellDir(f, ci, cj)
-		if arcDist(d, baseUp) < baseReach+size+4 {
+		if arcDist(d, baseUp) < baseReach+size+4 || (Relief{seed: w.Seed}).Ice(d) > 0.3 {
 			continue
 		}
 		rocks = append(rocks, rock{d, size, int(hash3(f, tx, ty, s+5) * rockShapes), hash3(f, tx, ty, s+6) * 2 * math.Pi, hash3(f, tx, ty, s+7)})

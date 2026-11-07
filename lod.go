@@ -41,6 +41,7 @@ const (
 type nodeData struct {
 	n            *lodNode
 	verts, norms []float32
+	uvs          []float32 // ground kind for the shader: polar ice, volcanic basalt
 }
 
 // Terrain draws the relief with a level of detail that follows the player:
@@ -116,6 +117,14 @@ func (t *Terrain) build(n *lodNode) nodeData {
 	const side = nodeQuads + 3
 	verts := make([]float32, side*side*3)
 	norms := make([]float32, side*side*3)
+	uvs := make([]float32, side*side*2)
+	kinds := make([][2]float32, (nodeQuads+1)*(nodeQuads+1))
+	for j := range nodeQuads + 1 {
+		for i := range nodeQuads + 1 {
+			d := at(i, j).norm()
+			kinds[j*(nodeQuads+1)+i] = [2]float32{float32(t.Ice(d)), float32(t.Basalt(d))}
+		}
+	}
 	skirt := n.arc/nodeQuads*1.5 + 0.5
 	for vz := range side {
 		for vx := range side {
@@ -132,9 +141,11 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			k := (vz*side + vx) * 3
 			verts[k], verts[k+1], verts[k+2] = float32(p.X), float32(p.Y), float32(p.Z)
 			norms[k], norms[k+1], norms[k+2] = float32(nrm.X), float32(nrm.Y), float32(nrm.Z)
+			kind := kinds[j*(nodeQuads+1)+i]
+			uvs[(vz*side+vx)*2], uvs[(vz*side+vx)*2+1] = kind[0], kind[1]
 		}
 	}
-	return nodeData{n, verts, norms}
+	return nodeData{n, verts, norms, uvs}
 }
 
 // upload turns finished node data into GPU meshes, a few per frame.
@@ -152,7 +163,9 @@ func (t *Terrain) upload(limit int) {
 			n := int(mesh.VertexCount)
 			copy(unsafe.Slice(mesh.Vertices, n*3), r.verts)
 			copy(unsafe.Slice(mesh.Normals, n*3), r.norms)
+			copy(unsafe.Slice(mesh.Texcoords, n*2), r.uvs)
 			rl.UpdateMeshBuffer(mesh, 0, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Vertices)), n*12), 0)
+			rl.UpdateMeshBuffer(mesh, 1, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Texcoords)), n*8), 0)
 			rl.UpdateMeshBuffer(mesh, 2, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Normals)), n*12), 0)
 			r.n.mesh, r.n.state = mesh, nodeReady
 			t.loaded = append(t.loaded, r.n)
