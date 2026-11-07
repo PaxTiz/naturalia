@@ -181,7 +181,9 @@ uniform sampler2D texture1; // lookup: where each tile sits in the cache (blue =
 uniform float faceCells, tileCells, tilesPerFace, atlasTiles;
 uniform float marsRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
-uniform vec4 casters[16];   // soft shadows: xyz center, w radius
+uniform vec4 casters[16];   // soft shadows of the domes, far away: xyz center, w radius
+uniform vec4 lightVP[4];    // the shadow map's camera (shadow.go), by columns
+uniform sampler2D shadowMap; // depth of the objects around the player, seen from the sun
 uniform float casterCount;
 uniform vec4 steps[48];     // footprints, newest first: xyz position
 uniform vec4 stepDirs[48];  // xyz heading, w strength
@@ -295,15 +297,29 @@ void main() {
     face *= sign(dot(face, up));
     n = normalize(mix(n, face, smoothstep(0.25, 0.6, steep) * 0.85));
 
-    // Soft shadows: is this point behind a caster, as seen from the sun?
+    // Shadows of the objects around the player, from the shadow map,
+    // softened over 3x3 texels and faded out at its edge.
+    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragPos, 1.0);
+    vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
+    vec2 border = abs(sc.xy - 0.5) * 2.0;
+    float mapped = 1.0 - smoothstep(0.85, 1.0, max(border.x, border.y));
     float shadow = 1.0;
+    if (mapped > 0.0) {
+        vec2 t = 1.0 / vec2(textureSize(shadowMap, 0));
+        float lit = 0.0;
+        for (int y = -1; y <= 1; y++)
+            for (int x = -1; x <= 1; x++)
+                lit += step(sc.z - 0.0003, texture(shadowMap, sc.xy + vec2(x, y) * t * 1.3).r);
+        shadow = mix(1.0, mix(0.35, 1.0, lit / 9.0), mapped);
+    }
+    // Beyond the map, the domes still cast a soft round shadow.
     for (int i = 0; i < 16; i++) {
-        if (float(i) >= casterCount) break;
+        if (float(i) >= casterCount || mapped >= 1.0) break;
         vec3 rel = fragPos - casters[i].xyz;
         float t = -dot(rel, sunDir);
         if (t <= 0.0) continue;
         float d = length(rel + sunDir * t) / casters[i].w;
-        shadow *= mix(0.35, 1.0, smoothstep(0.3, 1.2, d));
+        shadow *= mix(1.0, mix(0.35, 1.0, smoothstep(0.3, 1.2, d)), 1.0 - mapped);
     }
 
     // The relief's own shadow and occlusion, baked in the vertices.
@@ -335,6 +351,7 @@ uniform vec3 room;
 uniform vec4 lights[12];  // ceiling lamps: xyz position, w intensity
 uniform float lightCount;
 uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
+uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
 out vec4 finalColor;
@@ -404,6 +421,7 @@ vec3 paint(vec3 base, vec3 n, out float h) {
 }
 
 void main() {
+    if (shadowPass > 0.5) { finalColor = vec4(gl_FragCoord.z); return; }
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewPos - fragPos);
     bool inside = lighting > 0.5 && lighting < 1.5;

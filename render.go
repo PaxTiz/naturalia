@@ -35,6 +35,7 @@ type shaderLocs struct {
 	surface, up, instanced      int32
 	ground                      int32
 	steps, stepDirs, stepCount  int32
+	lightVP, shadowPass         int32
 	lighting, room              int32
 	mat                         int32
 	globeCenter, globeRot       int32
@@ -57,6 +58,7 @@ type Graphics struct {
 	signBox                                           rl.Model
 	rocks, pebbles                                    []rl.Model
 	post                                              *postFX
+	shadow                                            *shadowMap
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -77,6 +79,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"), instanced: loc("instanced"), ground: loc("ground"),
 		steps: loc("steps"), stepDirs: loc("stepDirs"), stepCount: loc("stepCount"),
+		lightVP: loc("lightVP"), shadowPass: loc("shadowPass"),
 		lighting: loc("lighting"), room: loc("room"),
 		mat:         loc("matInfo"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
@@ -155,6 +158,9 @@ func NewGraphics() *Graphics {
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapRoughness, rl.GetShaderLocation(gfx.terrainSh, "texture3"))
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
+	gfx.shadow = newShadowMap()
+	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(gfx.terrainSh, "shadowMap"))
+	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
 
 	gfx.signBox = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
 	for i, c := range []color.RGBA{accentBlue, accentCyan, accentBlue, colGreen} {
@@ -275,7 +281,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
 	}
 	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
-	// Objects take the relief's shadow from where the player stands: they
+	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
 	sun, ao := g.terrain.light(g.terrain.Surface(g.player.Pos))
 	g.dbg.sun, g.dbg.ao = sun, ao
@@ -288,18 +294,20 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
 	g.steps.upload(gfx)
 
-	// Soft shadows cast by the base's domes and by the drones.
+	// Soft round shadows of the base's domes, for when the base is beyond
+	// the shadow map.
 	var casters []float32
 	for _, r := range rooms {
 		c := toWorld(r.center.add(vec3{0, r.wallH * 0.7, 0}))
 		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(r.radius*1.05))
 	}
-	for _, d := range g.drones[:min(len(g.drones), maxCasters-len(rooms))] {
-		casters = append(casters, float32(d.Pos.X), float32(d.Pos.Y), float32(d.Pos.Z), 0.55)
-	}
 	n := min(len(casters)/4, maxCasters)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.casterCount, []float32{float32(n)}, rl.ShaderUniformFloat)
+	// As four columns: passing a Matrix by value is unreliable without cgo.
+	m := gfx.shadow.lightVP
+	cols := []float32{m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15}
+	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
 
 func (g *Game) Draw() {
@@ -312,6 +320,12 @@ func (g *Game) Draw() {
 	patches := g.terrain.Visible(g.player.Eye())
 	g.dbg.patches = len(patches)
 	g.nearGems = g.world.GemsNear(g.player.Pos, gemDrawDist)
+	// Objects cast their shadows first, then the scene is lit with them.
+	gfx.shadow.render(gfx, g.player.Pos, func() {
+		g.drawRocks()
+		g.drawBase()
+		g.drawDrones()
+	})
 	g.setUniforms(cam)
 
 	sunUp := g.player.Pos.norm().dot(sunDir)
