@@ -103,6 +103,18 @@ func newShotRun(g *Game) *shotRun {
 		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
 		g.terrain.Warm(g.player.Eye(), 20*time.Second)
 	}
+	// MS_SHOT_AT=x,z,yaw stands in the base (local coordinates, yaw in
+	// radians from +X toward +Z), for views of the buildings.
+	if v := os.Getenv("MS_SHOT_AT"); s.file != "" && v != "" {
+		var x, z, yaw float64
+		fmt.Sscanf(v, "%f,%f,%f", &x, &z, &yaw)
+		g.player.Pos = toWorld(vec3{x, floorTop, z})
+		g.player.Heading = vec3{math.Cos(yaw), 0, math.Sin(yaw)}
+		g.player.Pitch = 0.05
+		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
+		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
+		g.terrain.Warm(g.player.Eye(), 20*time.Second)
+	}
 	return s
 }
 

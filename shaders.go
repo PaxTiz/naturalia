@@ -353,6 +353,7 @@ uniform float lightCount;
 uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
 uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
+uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: height of their floor
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
 out vec4 finalColor;
 ` + shaderCommon + textureCommon + `
@@ -429,6 +430,12 @@ void main() {
     if (lighting > 2.5 && dot(n, room - fragPos) > 0.0) inside = true;
     float h;
     vec3 albedo = paint(colDiffuse.rgb, n, h);
+    if (wear.x > 0.0 && !inside) { // big flat shapes of dust, no grain
+        float patch = 0.75 + 0.25 * sin(fragPos.x * 0.7 + 1.3) * sin(fragPos.z * 0.9);
+        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, n.y) * 0.6 * patch * wear.x);
+        float foot = 1.0 - smoothstep(0.05, 0.55, fragPos.y - wear.y);
+        albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.32), foot * wear.x);
+    }
     float dist = length(viewPos - fragPos);
     n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
     if (matInfo.x > 5.5 && matInfo.x < 6.5) { // rocks show their facets

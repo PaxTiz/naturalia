@@ -37,7 +37,7 @@ type shaderLocs struct {
 	steps, stepDirs, stepCount  int32
 	lightVP, shadowPass         int32
 	lighting, room              int32
-	mat                         int32
+	mat, wear                   int32
 	globeCenter, globeRot       int32
 	playerDir                   int32
 }
@@ -59,6 +59,7 @@ type Graphics struct {
 	rocks, pebbles                                    []rl.Model
 	post                                              *postFX
 	shadow                                            *shadowMap
+	buildings                                         []*building
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -81,7 +82,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 		steps: loc("steps"), stepDirs: loc("stepDirs"), stepCount: loc("stepCount"),
 		lightVP: loc("lightVP"), shadowPass: loc("shadowPass"),
 		lighting: loc("lighting"), room: loc("room"),
-		mat:         loc("matInfo"),
+		mat: loc("matInfo"), wear: loc("wear"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
 	}
 }

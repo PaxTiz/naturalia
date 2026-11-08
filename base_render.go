@@ -50,11 +50,29 @@ func (g *Game) drawBase() {
 	defer rl.EnableBackfaceCulling()
 
 	accents := []color.RGBA{accentCyan, accentOrange, accentBlue, accentPurple}
+	if gfx.buildings == nil {
+		for _, bp := range plans {
+			gfx.buildings = append(gfx.buildings, buildPlan(bp, gfx.objectSh))
+		}
+	}
+	// Red dust settles on the faces turned up and at the foot of the walls.
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(basePos.Y)}, rl.ShaderUniformVec2)
+	for _, b := range gfx.buildings {
+		b.draw(gfx)
+		for _, p := range b.bp.Props {
+			if k := kitProps[p.Kit]; k.draw != nil {
+				k.draw(g, b.bp.At.add(p.At))
+			}
+		}
+	}
 	for ri, r := range rooms {
 		inside := toWorld(r.center.add(vec3{0, 1.2, 0}))
 		gfx.setMat(mtPanel, 1/2.4, false)
 		gfx.setLighting(litTowards, inside)
 		for i, p := range r.panels() {
+			if r.plan != nil {
+				break
+			}
 			col := matPanel
 			if i%2 == 1 {
 				col = matPanel2
@@ -64,7 +82,9 @@ func (g *Game) drawBase() {
 		}
 		// Dome roof.
 		gfx.setLighting(litBack, inside)
-		gfx.put(gfx.hemi, toWorld(r.center.add(vec3{0, r.wallH, 0})), vec3{r.radius + 0.1, r.radius * 0.55, r.radius + 0.1}, vec3{0, 1, 0}, 0, matPanel, 0.5, 0)
+		if r.plan == nil {
+			gfx.put(gfx.hemi, toWorld(r.center.add(vec3{0, r.wallH, 0})), vec3{r.radius + 0.1, r.radius * 0.55, r.radius + 0.1}, vec3{0, 1, 0}, 0, matPanel, 0.5, 0)
+		}
 
 		// Inside: floor, a glowing accent stripe along the walls, ceiling lamp.
 		gfx.setLighting(litIndoor, inside)
@@ -116,6 +136,7 @@ func (g *Game) drawBase() {
 	g.drawSigns()
 	gfx.setMat(mtPlain, 1, false)
 	gfx.setLighting(litSun, vec3{})
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
 }
 
 // drawAirlock draws the outer door: a frame and two panels sliding apart
@@ -163,22 +184,6 @@ func (g *Game) drawFurniture() {
 		gfx.box(crate, vec3{0.7, 0.7, 0.7}, face, crateCols[i], 0.2, 0)
 		gfx.box(crate.add(vec3{0, 0.55, 0}), vec3{0.5, 0.4, 0.5}, vec3{math.Cos(a - 0.3), 0, math.Sin(a - 0.3)}, crateCols[(i+2)%4], 0.2, 0)
 	}
-
-	// Sale: the incinerator, glowing harder while it burns dust.
-	in := incineratorSpot
-	glow := float32(0.55 + 0.45*clamp01(g.burn))
-	gfx.setMat(mtMetal, 1.2, false)
-	gfx.put(gfx.cyl, toWorld(in), vec3{1.1, 1.9, 1.1}, up, 0, matSteel, 0.6, 0)
-	gfx.put(gfx.cyl, toWorld(in.add(vec3{0, 0.25, 0})), vec3{1.14, 0.12, 1.14}, up, 0, matDark, 0.3, 0)
-	gfx.segment(gfx.cone, toWorld(in.add(vec3{0, 2.75, 0})), toWorld(in.add(vec3{0, 1.9, 0})), 0.95, matSteel, 0.6, 0)
-	gfx.segment(gfx.cyl, toWorld(in.add(vec3{-0.6, 1.5, 0.6})), toWorld(in.add(vec3{-0.6, 4.9, 0.6})), 0.18, matDark, 0.4, 0)
-	gfx.setMat(mtHazard, 3, false)
-	gfx.put(gfx.cyl, toWorld(in.add(vec3{0, 1.6, 0})), vec3{1.14, 0.14, 1.14}, up, 0, colWhite, 0.3, 0)
-	gfx.setMat(mtPaint, 2, false)
-	gfx.box(in.add(vec3{1.0, 1.0, 1.25}), vec3{0.5, 0.7, 0.3}, vec3{0, 0, 1}, color.RGBA{70, 90, 80, 255}, 0.4, 0)
-	gfx.setMat(mtPlain, 1, false)
-	gfx.box(in.add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, accentOrange, 0, glow)
-	gfx.drawScreen(in.add(vec3{1.16, 1.1, 1.25}), vec3{1, 0, 0}, 0.38, 0.28, gfx.screens[3], 0.8)
 
 	// Research: a desk with three screens, between two server racks.
 	c := consoleSpot

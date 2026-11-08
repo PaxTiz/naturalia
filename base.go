@@ -19,7 +19,8 @@ type room struct {
 	center   vec3 // local, on the floor
 	radius   float64
 	wallH    float64
-	openings []float64 // angles (radians, atan2(z, x)) of the doorways
+	openings []float64  // angles (radians, atan2(z, x)) of the doorways
+	plan     *Blueprint // drawn from the kit when set
 }
 
 // corridor is a straight rectangular tube between two rooms (or outside).
@@ -41,10 +42,10 @@ const (
 var (
 	east, west, north, south = 0.0, math.Pi, math.Pi / 2, -math.Pi / 2
 
-	hubRoom      = room{vec3{0, 0, 0}, 6.5, 2.8, []float64{east, west, north, south}}
-	saleRoom     = room{vec3{-13, 0, 0}, 4, 2.6, []float64{east}}
-	researchRoom = room{vec3{13, 0, 0}, 4, 2.6, []float64{west}}
-	sleepRoom    = room{vec3{0, 0, 13}, 4, 2.6, []float64{south}}
+	hubRoom      = room{vec3{0, 0, 0}, 6.5, 2.8, []float64{east, west, north, south}, nil}
+	saleRoom     = salePlan.room()
+	researchRoom = room{vec3{13, 0, 0}, 4, 2.6, []float64{west}, nil}
+	sleepRoom    = room{vec3{0, 0, 13}, 4, 2.6, []float64{south}, nil}
 	rooms        = []room{hubRoom, saleRoom, researchRoom, sleepRoom}
 
 	airlockEnd = vec3{0, 0, -10.5}
@@ -59,7 +60,7 @@ var (
 // Furniture spots, local.
 var (
 	tableSpot       = vec3{0, 0, 0}
-	incineratorSpot = vec3{-14.6, 0, 0}
+	incineratorSpot = salePlan.spot("incinerator")
 	consoleSpot     = vec3{15.3, 0, 0}
 	bedSpot         = vec3{0, 0, 15.1}
 	spawnSpot       = vec3{0, 0, 11.6} // wake up next to the bed
@@ -172,15 +173,14 @@ type obstacle struct {
 	radius float64
 }
 
-var baseObstacles = []obstacle{
+var baseObstacles = append(planObstacles(), []obstacle{
 	{tableSpot, 1.25},
-	{incineratorSpot, 1.4},
 	{consoleSpot.add(vec3{-0.3, 0, 0}), 1.0},
 	{consoleSpot.add(vec3{0, 0, 2.3}), 0.6},
 	{consoleSpot.add(vec3{0, 0, -2.3}), 0.6},
 	{bedSpot.add(vec3{-0.55, 0, 0}), 0.6},
 	{bedSpot.add(vec3{0.55, 0, 0}), 0.6},
-}
+}...)
 
 // collide keeps a player of the given radius out of walls and furniture.
 func collideBase(p *Player, walls []segment2) {
@@ -259,12 +259,11 @@ type interactable struct {
 	prompt string
 }
 
-var interactables = []interactable{
+var interactables = append(planInteractables(), []interactable{
 	{tableSpot, 2.6, useMap, "[E] Consulter l'état de Mars"},
-	{incineratorSpot, 2.8, useIncinerator, "[E] Déposer la poussière dans l'incinérateur"},
 	{consoleSpot, 2.8, useResearch, "[E] Ouvrir le laboratoire de recherche"},
 	{bedSpot, 2.6, useBed, "[E] Dormir"},
-}
+}...)
 
 // nearbyUse returns what the player can use right now: the closest
 // interactable within reach that they roughly face.
