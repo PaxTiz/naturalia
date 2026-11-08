@@ -79,10 +79,20 @@ type shotRun struct {
 	placed  bool
 	heading vec3 // the view, held against stray mouse motion
 	pitch   float64
+	mode    mode
 }
 
 func newShotRun(g *Game) *shotRun {
-	s := &shotRun{file: os.Getenv("MS_SHOT")}
+	s := &shotRun{file: os.Getenv("MS_SHOT"), mode: modePlay}
+	// MS_SHOT_MODE opens a screen for the shot: shop, map or pause.
+	switch os.Getenv("MS_SHOT_MODE") {
+	case "shop":
+		s.mode = modeShop
+	case "map":
+		s.mode = modeMap
+	case "pause":
+		s.mode = modePaused
+	}
 	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
 		var d vec3
 		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
@@ -124,7 +134,7 @@ func (s *shotRun) tick(g *Game) {
 	if s.file == "" {
 		return
 	}
-	g.mode = modePlay
+	g.mode = s.mode
 	if s.placed {
 		g.player.Heading, g.player.Pitch = s.heading, s.pitch
 	}
