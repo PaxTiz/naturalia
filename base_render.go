@@ -64,35 +64,6 @@ func (g *Game) drawBase() {
 		}
 	}
 
-	// Inside: floors, a glowing accent stripe along the walls, ceiling lamps.
-	accents := []color.RGBA{accentCyan, accentOrange, accentBlue, accentPurple}
-	gfx.setLighting(litIndoor, vec3{})
-	for ri, r := range rooms {
-		gfx.setMat(mtFloor, 1/floorTile, false)
-		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, floorTop - 0.1, 0})), vec3{r.radius, 0.1, r.radius}, vec3{0, 1, 0}, 0, matFloor, 0.2, 0)
-		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, floorTop - 0.095, 0})), vec3{r.radius * 0.45, 0.1, r.radius * 0.45}, vec3{0, 1, 0}, 0, matFloor2, 0.3, 0)
-		gfx.setMat(mtPlain, 1, false)
-		for _, p := range r.panels() {
-			if p.y0 > 0 {
-				continue
-			}
-			out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
-			tangent := vec3{-out.Z, 0, out.X}
-			strip := p.mid.sub(out.scale(wallThick/2 + 0.012)).add(vec3{0, 1.0, 0})
-			gfx.box(strip, vec3{p.width * 0.96, 0.06, 0.01}, tangent, accents[ri], 0, 0.7)
-		}
-		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, r.wallH + r.radius*0.5, 0})), vec3{0.45, 0.05, 0.45}, vec3{0, 1, 0}, 0, lampWarm, 0, 1)
-	}
-	for _, c := range corridors {
-		mid := c.from.lerp(c.to, 0.5)
-		axis := c.to.sub(c.from)
-		length := axis.length()
-		gfx.setMat(mtFloor, 1/floorTile, false)
-		gfx.box(mid.add(vec3{0, floorTop - 0.05, 0}), vec3{length, 0.1, c.width}, axis, matFloor, 0.2, 0)
-		gfx.setMat(mtPlain, 1, false)
-		gfx.box(mid.add(vec3{0, c.height - 0.02, 0}), vec3{length * 0.7, 0.03, 0.25}, axis, lampWarm, 0, 1)
-	}
-
 	g.drawAirlock()
 	g.drawBeacon()
 	g.drawSigns()

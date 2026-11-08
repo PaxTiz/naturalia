@@ -31,6 +31,12 @@ var tokens = map[string]token{
 	"rack.slate":     {color.RGBA{58, 64, 80, 255}, mtPlain, 1, 0.4, 0},
 	"hazard":         {colWhite, mtHazard, 2.5, 0.3, 0},
 	"neon.cyan":      {accentCyan, mtPlain, 1, 0, 0.8},
+	"neon.orange":    {accentOrange, mtPlain, 1, 0, 0.8},
+	"neon.blue":      {accentBlue, mtPlain, 1, 0, 0.8},
+	"neon.purple":    {accentPurple, mtPlain, 1, 0, 0.8},
+	"lamp.warm":      {lampWarm, mtPlain, 1, 0, 1},
+	"floor.slate":    {color.RGBA{74, 78, 92, 255}, mtPlain, 1, 0.25, 0},
+	"floor.inlay":    {color.RGBA{96, 102, 120, 255}, mtPlain, 1, 0.3, 0},
 	"solar.blue":     {color.RGBA{40, 62, 130, 255}, mtPlain, 1, 0.9, 0},
 	"crate.ochre":    {color.RGBA{196, 132, 60, 255}, mtPlain, 1, 0.2, 0},
 	"crate.slate":    {color.RGBA{88, 116, 146, 255}, mtPlain, 1, 0.2, 0},
@@ -43,12 +49,13 @@ var tokens = map[string]token{
 
 // Blueprint is a building as data.
 type Blueprint struct {
-	ID    string
-	At    vec3 // local, center of the floor
-	Shape Dome
-	Style string // token of the walls and roof
-	Doors []Door
-	Props []Prop
+	ID     string
+	At     vec3 // local, center of the floor
+	Shape  Dome
+	Style  string // token of the walls and roof
+	Accent string // token of the glowing stripes inside
+	Doors  []Door
+	Props  []Prop
 }
 
 type Dome struct{ Radius, WallH float64 }
@@ -68,10 +75,11 @@ func polar(r, a float64) vec3 { return vec3{math.Cos(a) * r, 0, math.Sin(a) * r}
 
 var (
 	hubPlan = Blueprint{
-		ID:    "core:hub",
-		Shape: Dome{Radius: 6.5, WallH: 2.8},
-		Style: "habitat.white",
-		Doors: []Door{{east}, {west}, {north}, {south}},
+		ID:     "core:hub",
+		Accent: "neon.cyan",
+		Shape:  Dome{Radius: 6.5, WallH: 2.8},
+		Style:  "habitat.white",
+		Doors:  []Door{{east}, {west}, {north}, {south}},
 		Props: []Prop{
 			{Kit: "maptable"},
 			{Kit: "crate.stack", At: polar(5.4, 0.8), Seed: 1},
@@ -81,11 +89,12 @@ var (
 		},
 	}
 	salePlan = Blueprint{
-		ID:    "core:sale",
-		At:    vec3{-13, 0, 0},
-		Shape: Dome{Radius: 4, WallH: 2.6},
-		Style: "habitat.white",
-		Doors: []Door{{east}},
+		ID:     "core:sale",
+		Accent: "neon.orange",
+		At:     vec3{-13, 0, 0},
+		Shape:  Dome{Radius: 4, WallH: 2.6},
+		Style:  "habitat.white",
+		Doors:  []Door{{east}},
 		Props: []Prop{
 			{Kit: "incinerator", At: vec3{-1.6, 0, 0}},
 			{Kit: "crate.stack", At: vec3{1.2, 0, 2.4}, Seed: 3},
@@ -93,20 +102,22 @@ var (
 		},
 	}
 	researchPlan = Blueprint{
-		ID:    "core:research",
-		At:    vec3{13, 0, 0},
-		Shape: Dome{Radius: 4, WallH: 2.6},
-		Style: "habitat.white",
-		Doors: []Door{{west}},
-		Props: []Prop{{Kit: "console", At: vec3{2.3, 0, 0}}},
+		ID:     "core:research",
+		Accent: "neon.blue",
+		At:     vec3{13, 0, 0},
+		Shape:  Dome{Radius: 4, WallH: 2.6},
+		Style:  "habitat.white",
+		Doors:  []Door{{west}},
+		Props:  []Prop{{Kit: "console", At: vec3{2.3, 0, 0}}},
 	}
 	sleepPlan = Blueprint{
-		ID:    "core:sleep",
-		At:    vec3{0, 0, 13},
-		Shape: Dome{Radius: 4, WallH: 2.6},
-		Style: "habitat.white",
-		Doors: []Door{{south}},
-		Props: []Prop{{Kit: "bed", At: vec3{0, 0, 2.1}}},
+		ID:     "core:sleep",
+		Accent: "neon.purple",
+		At:     vec3{0, 0, 13},
+		Shape:  Dome{Radius: 4, WallH: 2.6},
+		Style:  "habitat.white",
+		Doors:  []Door{{south}},
+		Props:  []Prop{{Kit: "bed", At: vec3{0, 0, 2.1}}},
 	}
 
 	// plans in the order of rooms: the hub first.
@@ -251,13 +262,55 @@ func (b *building) room(bp *Blueprint) {
 			b.part("steel", litTowards, in).box(w.add(tangent.scale(s*(doorWidth/2+0.13))).add(vec3{0, (doorHeight + 0.1) / 2, 0}), vec3{0.26, doorHeight + 0.1, 0.42}, tangent, 0.05)
 		}
 		b.part("hazard", litTowards, in).box(w.add(vec3{0, doorHeight + 0.2, 0}), vec3{doorWidth + 0.52, 0.22, 0.42}, tangent, 0.05)
-		b.part("neon.cyan", litIndoor, vec3{}).box(w.add(vec3{0, doorHeight + 0.2, 0}).sub(out.scale(0.22)), vec3{doorWidth * 0.6, 0.05, 0.02}, tangent, 0)
+		b.part(bp.Accent, litIndoor, vec3{}).box(w.add(vec3{0, doorHeight + 0.2, 0}).sub(out.scale(0.22)), vec3{doorWidth * 0.6, 0.05, 0.02}, tangent, 0)
 	}
+	b.interior(bp, r)
 	for _, p := range bp.Props {
 		if k := kitProps[p.Kit]; k.build != nil {
 			k.build(b, bp.At.add(p.At), p.Seed)
 		}
 	}
+}
+
+// interior: a flat floor with a steel-ringed inlay, a glowing stripe along
+// the walls, steel ribs under the dome and a ceiling lamp.
+func (b *building) interior(bp *Blueprint, r room) {
+	up := vec3{0, 1, 0}
+	floor := r.center.add(vec3{0, floorTop - 0.1, 0})
+	b.part("floor.slate", litIndoor, vec3{}).prism(floor, up, r.radius, r.radius, 0.1, 48, 0)
+	b.part("steel", litIndoor, vec3{}).prism(floor, up, r.radius*0.47, r.radius*0.47, 0.104, 40, 0)
+	b.part("floor.inlay", litIndoor, vec3{}).prism(floor, up, r.radius*0.44, r.radius*0.44, 0.106, 40, 0)
+	for _, p := range r.panels() {
+		if p.y0 > 0 {
+			continue
+		}
+		out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
+		strip := p.mid.sub(out.scale(wallThick/2 + 0.015)).add(vec3{0, 1.0, 0})
+		b.part(bp.Accent, litIndoor, vec3{}).box(strip, vec3{p.width * 0.94, 0.07, 0.02}, vec3{-out.Z, 0, out.X}, 0.008)
+	}
+	// Ribs follow the inside of the dome up to the lamp's collar.
+	a, bh := r.radius+0.02, r.radius*0.55-0.06
+	top := r.center.add(vec3{0, r.wallH, 0})
+	const ribs, steps = 8, 7
+	for k := range ribs {
+		th := (float64(k) + 0.5) * 2 * math.Pi / ribs
+		out := vec3{math.Cos(th), 0, math.Sin(th)}
+		side := vec3{-out.Z, 0, out.X}
+		pt := func(i int) vec3 {
+			phi := float64(i) / steps * 1.25
+			return top.add(out.scale(a * math.Cos(phi))).add(vec3{0, bh * math.Sin(phi), 0})
+		}
+		for i := range steps {
+			p0, p1 := pt(i), pt(i+1)
+			along := p1.sub(p0)
+			l := along.length()
+			along = along.scale(1 / l)
+			b.part("steel", litIndoor, vec3{}).boxBasis(p0.lerp(p1, 0.5).sub(along.cross(side).scale(0.05)), [3]vec3{side, along, side.cross(along)}, vec3{0.12, l + 0.02, 0.1}, 0.02)
+		}
+	}
+	lamp := r.center.add(vec3{0, r.wallH + r.radius*0.5, 0})
+	b.part("steel", litIndoor, vec3{}).prism(lamp.add(vec3{0, -0.02, 0}), up, 0.62, 0.55, 0.12, 24, 0.02)
+	b.part("lamp.warm", litIndoor, vec3{}).prism(lamp.add(vec3{0, -0.06, 0}), up, 0.48, 0.48, 0.05, 24, 0)
 }
 
 // corridor: panels with joints, a dark plinth outside, a roof slab and
@@ -292,6 +345,13 @@ func (b *building) corridor(c corridor) {
 		}
 		b.part("steel", litTowards, in).box(at.add(vec3{0, c.height + 0.14, 0}), vec3{0.14, 0.1, c.width + 2*wallThick + 0.16}, dir, 0.03)
 	}
+	// Inside: a flat floor edged with steel, a lamp strip under the roof.
+	b.part("floor.slate", litIndoor, vec3{}).box(mid.add(vec3{0, floorTop - 0.05, 0}), vec3{length, 0.1, c.width}, dir, 0)
+	for _, s := range []float64{-1, 1} {
+		b.part("steel", litIndoor, vec3{}).box(mid.add(side.scale(s*(c.width/2-0.1))).add(vec3{0, floorTop - 0.045, 0}), vec3{length, 0.1, 0.2}, dir, 0.01)
+	}
+	b.part("steel", litIndoor, vec3{}).box(mid.add(vec3{0, c.height - 0.03, 0}), vec3{length * 0.72, 0.06, 0.34}, dir, 0.015)
+	b.part("lamp.warm", litIndoor, vec3{}).box(mid.add(vec3{0, c.height - 0.07, 0}), vec3{length * 0.7, 0.03, 0.25}, dir, 0)
 }
 
 // airlock: the outer frame. The sliding doors move: see drawAirlock.

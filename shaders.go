@@ -357,18 +357,19 @@ uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: heig
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
 out vec4 finalColor;
 ` + shaderCommon + textureCommon + `
-// Warm, soft indoor lighting from the ceiling lamps.
+// Indoor lighting, same rule as outside: warm lamps, cool violet shade,
+// a crisp but soft turn from one to the other.
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
-    const vec3 lampCol = vec3(1.0, 0.9, 0.76);
-    vec3 col = albedo * vec3(0.30, 0.30, 0.34);
+    const vec3 lampCol = vec3(1.0, 0.86, 0.68);
+    vec3 col = albedo * vec3(0.22, 0.20, 0.32);
     for (int i = 0; i < 12; i++) {
         if (float(i) >= lightCount) break;
         vec3 l = lights[i].xyz - fragPos;
         float d = length(l);
         l /= d;
         float att = lights[i].w / (1.0 + 0.12 * d * d);
-        float wrap = clamp((dot(n, l) + 0.4) / 1.4, 0.0, 1.0);
-        col += albedo * lampCol * wrap * att * 1.4;
+        float wrap = smoothstep(-0.2, 0.45, dot(n, l));
+        col += albedo * lampCol * wrap * att * 1.5;
         col += lampCol * pow(max(dot(n, normalize(l + v)), 0.0), 40.0) * spec * att * 0.6;
     }
     return col;
