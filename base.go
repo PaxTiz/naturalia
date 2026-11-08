@@ -42,10 +42,10 @@ const (
 var (
 	east, west, north, south = 0.0, math.Pi, math.Pi / 2, -math.Pi / 2
 
-	hubRoom      = room{vec3{0, 0, 0}, 6.5, 2.8, []float64{east, west, north, south}, nil}
+	hubRoom      = hubPlan.room()
 	saleRoom     = salePlan.room()
-	researchRoom = room{vec3{13, 0, 0}, 4, 2.6, []float64{west}, nil}
-	sleepRoom    = room{vec3{0, 0, 13}, 4, 2.6, []float64{south}, nil}
+	researchRoom = researchPlan.room()
+	sleepRoom    = sleepPlan.room()
 	rooms        = []room{hubRoom, saleRoom, researchRoom, sleepRoom}
 
 	airlockEnd = vec3{0, 0, -10.5}
@@ -59,10 +59,10 @@ var (
 
 // Furniture spots, local.
 var (
-	tableSpot       = vec3{0, 0, 0}
+	tableSpot       = hubPlan.spot("maptable")
 	incineratorSpot = salePlan.spot("incinerator")
-	consoleSpot     = vec3{15.3, 0, 0}
-	bedSpot         = vec3{0, 0, 15.1}
+	consoleSpot     = researchPlan.spot("console")
+	bedSpot         = sleepPlan.spot("bed")
 	spawnSpot       = vec3{0, 0, 11.6} // wake up next to the bed
 )
 
@@ -173,14 +173,7 @@ type obstacle struct {
 	radius float64
 }
 
-var baseObstacles = append(planObstacles(), []obstacle{
-	{tableSpot, 1.25},
-	{consoleSpot.add(vec3{-0.3, 0, 0}), 1.0},
-	{consoleSpot.add(vec3{0, 0, 2.3}), 0.6},
-	{consoleSpot.add(vec3{0, 0, -2.3}), 0.6},
-	{bedSpot.add(vec3{-0.55, 0, 0}), 0.6},
-	{bedSpot.add(vec3{0.55, 0, 0}), 0.6},
-}...)
+var baseObstacles = planObstacles()
 
 // collide keeps a player of the given radius out of walls and furniture.
 func collideBase(p *Player, walls []segment2) {
@@ -259,11 +252,7 @@ type interactable struct {
 	prompt string
 }
 
-var interactables = append(planInteractables(), []interactable{
-	{tableSpot, 2.6, useMap, "[E] Consulter l'état de Mars"},
-	{consoleSpot, 2.8, useResearch, "[E] Ouvrir le laboratoire de recherche"},
-	{bedSpot, 2.6, useBed, "[E] Dormir"},
-}...)
+var interactables = planInteractables()
 
 // nearbyUse returns what the player can use right now: the closest
 // interactable within reach that they roughly face.

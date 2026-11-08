@@ -48,46 +48,26 @@ func (g *Game) drawBase() {
 	gfx := g.gfx
 	rl.DisableBackfaceCulling()
 	defer rl.EnableBackfaceCulling()
-
-	accents := []color.RGBA{accentCyan, accentOrange, accentBlue, accentPurple}
-	if gfx.buildings == nil {
-		for _, bp := range plans {
-			gfx.buildings = append(gfx.buildings, buildPlan(bp, gfx.objectSh))
-		}
+	if gfx.base == nil {
+		gfx.base = buildBase(gfx.objectSh)
+		gfx.doorPanel = doorPanelModel(gfx.objectSh)
 	}
+
 	// Red dust settles on the faces turned up and at the foot of the walls.
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(basePos.Y)}, rl.ShaderUniformVec2)
-	for _, b := range gfx.buildings {
-		b.draw(gfx)
-		for _, p := range b.bp.Props {
+	gfx.base.draw(gfx)
+	for _, bp := range plans {
+		for _, p := range bp.Props {
 			if k := kitProps[p.Kit]; k.draw != nil {
-				k.draw(g, b.bp.At.add(p.At))
+				k.draw(g, bp.At.add(p.At))
 			}
 		}
 	}
-	for ri, r := range rooms {
-		inside := toWorld(r.center.add(vec3{0, 1.2, 0}))
-		gfx.setMat(mtPanel, 1/2.4, false)
-		gfx.setLighting(litTowards, inside)
-		for i, p := range r.panels() {
-			if r.plan != nil {
-				break
-			}
-			col := matPanel
-			if i%2 == 1 {
-				col = matPanel2
-			}
-			tangent := vec3{-math.Sin(p.angle), 0, math.Cos(p.angle)}
-			gfx.box(p.mid.add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, wallThick}, tangent, col, 0.4, 0)
-		}
-		// Dome roof.
-		gfx.setLighting(litBack, inside)
-		if r.plan == nil {
-			gfx.put(gfx.hemi, toWorld(r.center.add(vec3{0, r.wallH, 0})), vec3{r.radius + 0.1, r.radius * 0.55, r.radius + 0.1}, vec3{0, 1, 0}, 0, matPanel, 0.5, 0)
-		}
 
-		// Inside: floor, a glowing accent stripe along the walls, ceiling lamp.
-		gfx.setLighting(litIndoor, inside)
+	// Inside: floors, a glowing accent stripe along the walls, ceiling lamps.
+	accents := []color.RGBA{accentCyan, accentOrange, accentBlue, accentPurple}
+	gfx.setLighting(litIndoor, vec3{})
+	for ri, r := range rooms {
 		gfx.setMat(mtFloor, 1/floorTile, false)
 		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, floorTop - 0.1, 0})), vec3{r.radius, 0.1, r.radius}, vec3{0, 1, 0}, 0, matFloor, 0.2, 0)
 		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, floorTop - 0.095, 0})), vec3{r.radius * 0.45, 0.1, r.radius * 0.45}, vec3{0, 1, 0}, 0, matFloor2, 0.3, 0)
@@ -103,149 +83,51 @@ func (g *Game) drawBase() {
 		}
 		gfx.put(gfx.cyl, toWorld(r.center.add(vec3{0, r.wallH + r.radius*0.5, 0})), vec3{0.45, 0.05, 0.45}, vec3{0, 1, 0}, 0, lampWarm, 0, 1)
 	}
-
 	for _, c := range corridors {
 		mid := c.from.lerp(c.to, 0.5)
 		axis := c.to.sub(c.from)
 		length := axis.length()
-		side := c.side()
-		gfx.setLighting(litTowards, toWorld(mid.add(vec3{0, 1.2, 0})))
-		gfx.setMat(mtPanel, 1/2.4, false)
-		for _, s := range []float64{-1, 1} {
-			wall := mid.add(side.scale(s * (c.width/2 + wallThick/2))).add(vec3{0, c.height / 2, 0})
-			gfx.box(wall, vec3{length, c.height, wallThick}, axis, matPanel, 0.4, 0)
-		}
-		gfx.box(mid.add(vec3{0, c.height + 0.06, 0}), vec3{length, 0.12, c.width + 2*wallThick}, axis, matPanel2, 0.4, 0)
-		gfx.setLighting(litIndoor, toWorld(mid))
 		gfx.setMat(mtFloor, 1/floorTile, false)
 		gfx.box(mid.add(vec3{0, floorTop - 0.05, 0}), vec3{length, 0.1, c.width}, axis, matFloor, 0.2, 0)
 		gfx.setMat(mtPlain, 1, false)
 		gfx.box(mid.add(vec3{0, c.height - 0.02, 0}), vec3{length * 0.7, 0.03, 0.25}, axis, lampWarm, 0, 1)
 	}
 
-	gfx.setMat(mtPanel, 1/2.4, false)
-	for _, p := range junctionPlates() {
-		room := toWorld(p.mid.sub(p.normal.scale(2)).add(vec3{0, 1.2, 0}))
-		gfx.setLighting(litTowards, room)
-		gfx.box(p.mid.add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, wallThick * 1.5}, vec3{-p.normal.Z, 0, p.normal.X}, matPanel2, 0.4, 0)
-	}
-
 	g.drawAirlock()
-	g.drawFurniture()
-	g.drawOutside()
+	g.drawBeacon()
 	g.drawSigns()
 	gfx.setMat(mtPlain, 1, false)
 	gfx.setLighting(litSun, vec3{})
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
 }
 
-// drawAirlock draws the outer door: a frame and two panels sliding apart
-// when the player comes close.
+// drawAirlock draws the moving parts of the outer door: two leaves sliding
+// apart when the player comes close, and the status light.
 func (g *Game) drawAirlock() {
 	gfx := g.gfx
 	end := airlockEnd
 	gfx.setLighting(litSun, vec3{})
-	across := vec3{1, 0, 0}
-	half := (doorWidth+0.2)/2 + wallThick
+	steel := tokens["steel"]
+	gfx.setMat(steel.mat, steel.scale, false)
+	w := (doorWidth + 0.2) / 2
 	for _, s := range []float64{-1, 1} {
-		gfx.setMat(mtHazard, 2.5, false)
-		gfx.box(end.add(vec3{s * half, 1.35, 0}), vec3{0.3, 2.7, 0.35}, across, colWhite, 0.4, 0)
-		gfx.setMat(mtPanel, 1/1.6, false)
-		w := (doorWidth + 0.2) / 2
-		gfx.box(end.add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0}), vec3{w, doorHeight, 0.08}, across, matSteel, 0.6, 0)
+		at := end.add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0})
+		gfx.put(gfx.doorPanel, toWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, 0, steel.col, steel.spec, 0)
 	}
-	gfx.setMat(mtMetal, 1, false)
-	gfx.box(end.add(vec3{0, 2.6, 0}), vec3{2*half + 0.3, 0.3, 0.35}, across, matDark, 0.5, 0)
 	gfx.setMat(mtPlain, 1, false)
 	lamp := colGreen
 	if g.doorOpen < 0.9 {
 		lamp = colGold
 	}
-	gfx.box(end.add(vec3{0, 2.6, -0.2}), vec3{1.2, 0.08, 0.04}, across, lamp, 0, 1)
+	gfx.box(end.add(vec3{0, 2.6, -0.2}), vec3{1.2, 0.08, 0.04}, vec3{1, 0, 0}, lamp, 0, 1)
 }
 
-func (g *Game) drawFurniture() {
-	gfx := g.gfx
-	up := vec3{0, 1, 0}
-	gfx.setLighting(litIndoor, vec3{})
-
-	// Hub: the map table, and supply crates of all colors along the wall.
-	t := tableSpot
-	gfx.setMat(mtMetal, 1.5, false)
-	gfx.put(gfx.cyl, toWorld(t), vec3{0.85, 0.85, 0.85}, up, 0, matDark, 0.5, 0)
-	gfx.put(gfx.cyl, toWorld(t.add(vec3{0, 0.85, 0})), vec3{1.2, 0.08, 1.2}, up, 0, matSteel, 0.8, 0)
-	gfx.setMat(mtPlain, 1, false)
-	gfx.put(gfx.cyl, toWorld(t.add(vec3{0, 0.93, 0})), vec3{1.0, 0.02, 1.0}, up, 0, accentCyan, 0, 0.9)
-	crateCols := []color.RGBA{{196, 120, 60, 255}, {90, 120, 150, 255}, {150, 140, 110, 255}, {120, 150, 95, 255}}
-	gfx.setMat(mtPaint, 1.5, false)
-	for i, a := range []float64{0.8, 2.4, 3.9, 5.5} {
-		crate := vec3{math.Cos(a) * 5.4, 0.35, math.Sin(a) * 5.4}
-		face := vec3{math.Cos(a + 0.4), 0, math.Sin(a + 0.4)}
-		gfx.box(crate, vec3{0.7, 0.7, 0.7}, face, crateCols[i], 0.2, 0)
-		gfx.box(crate.add(vec3{0, 0.55, 0}), vec3{0.5, 0.4, 0.5}, vec3{math.Cos(a - 0.3), 0, math.Sin(a - 0.3)}, crateCols[(i+2)%4], 0.2, 0)
-	}
-
-	// Research: a desk with three screens, between two server racks.
-	c := consoleSpot
-	gfx.setMat(mtMetal, 1.5, false)
-	gfx.box(c.add(vec3{-0.2, 0.78, 0}), vec3{0.9, 0.06, 2.2}, vec3{1, 0, 0}, matSteel, 0.6, 0)
-	for _, z := range []float64{-0.95, 0.95} {
-		gfx.box(c.add(vec3{-0.2, 0.38, z}), vec3{0.8, 0.76, 0.08}, vec3{1, 0, 0}, matDark, 0.3, 0)
-	}
-	gfx.setMat(mtPaint, 2, false)
-	for _, z := range []float64{-2.3, 2.3} {
-		gfx.box(c.add(vec3{0, 0.95, z}), vec3{0.7, 1.9, 0.7}, vec3{1, 0, 0}, color.RGBA{58, 64, 80, 255}, 0.4, 0)
-	}
-	gfx.setMat(mtPlain, 1, false)
-	for i, z := range []float64{-0.75, 0, 0.75} {
-		facing := vec3{-1, 0, z * 0.4}.norm()
-		gfx.drawScreen(c.add(vec3{0.1, 1.28, z}), facing, 0.66, 0.42, gfx.screens[i], 0.8)
-	}
-	gfx.setLighting(litIndoor, vec3{})
-	for _, z := range []float64{-2.3, 2.3} {
-		for k := range 5 {
-			on := float32(0.3)
-			if math.Sin(g.clock*3+float64(k)*1.7+z) > 0 {
-				on = 1
-			}
-			gfx.box(c.add(vec3{-0.36, 0.4 + float64(k)*0.3, z}), vec3{0.5, 0.04, 0.02}, vec3{0, 0, 1}, colGreen, 0, on)
-		}
-	}
-
-	// Sleep: a bed against the far wall, a rug and a bedside lamp.
-	b := bedSpot
-	gfx.setMat(mtPaint, 2, false)
-	gfx.box(b.add(vec3{0, 0.2, 0}), vec3{2.1, 0.4, 1.05}, vec3{1, 0, 0}, color.RGBA{110, 80, 60, 255}, 0.3, 0)
-	gfx.box(b.add(vec3{1.45, 0.3, 0.2}), vec3{0.5, 0.6, 0.5}, vec3{1, 0, 0}, color.RGBA{110, 80, 60, 255}, 0.3, 0)
-	gfx.setMat(mtFabric, 1/fabricTile, false)
-	gfx.box(b.add(vec3{0, 0.48, 0}), vec3{2.0, 0.16, 0.98}, vec3{1, 0, 0}, matWhite, 0.1, 0)
-	gfx.box(b.add(vec3{0.32, 0.58, 0}), vec3{1.36, 0.06, 1.0}, vec3{1, 0, 0}, accentPurple, 0.1, 0)
-	gfx.box(b.add(vec3{-0.72, 0.62, 0}), vec3{0.42, 0.12, 0.7}, vec3{1, 0, 0}, matWhite, 0.1, 0)
-	gfx.box(b.add(vec3{0, floorTop + 0.005, -1.3}), vec3{1.8, 0.01, 1.1}, vec3{1, 0, 0}, color.RGBA{150, 70, 60, 255}, 0, 0)
-	gfx.setMat(mtPlain, 1, false)
-	gfx.put(gfx.sphere, toWorld(b.add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, up, 0, lampWarm, 0, 1)
-}
-
-// drawOutside: an antenna and a beacon on the hub, solar panels nearby.
-func (g *Game) drawOutside() {
-	gfx := g.gfx
-	gfx.setLighting(litSun, vec3{})
-	top := hubRoom.wallH + hubRoom.radius*0.55
-	gfx.setMat(mtMetal, 2, false)
-	gfx.segment(gfx.cyl, toWorld(vec3{1.5, top - 0.8, 1.5}), toWorld(vec3{1.5, top + 2.2, 1.5}), 0.05, matSteel, 0.5, 0)
-	gfx.setMat(mtPaint, 2, false)
-	gfx.put(gfx.hemi, toWorld(vec3{-1.8, top - 0.5, -1.2}), vec3{0.7, 0.25, 0.7}, vec3{0, 0, 1}, 25, matWhite, 0.6, 0)
-	for _, z := range []float64{-7.5, -10.5} {
-		at := vec3{-12, 0, z}
-		gfx.setMat(mtMetal, 2, false)
-		gfx.segment(gfx.cyl, toWorld(at), toWorld(at.add(vec3{0, 1.2, 0})), 0.06, matSteel, 0.5, 0)
-		gfx.put(gfx.cube, toWorld(at.add(vec3{0, 1.28, 0})), vec3{2.7, 0.04, 1.6}, vec3{1, 0, 0}, -30, matSteel, 0.5, 0)
-		gfx.setMat(mtFloor, 3, false)
-		gfx.put(gfx.cube, toWorld(at.add(vec3{0, 1.31, 0})), vec3{2.6, 0.04, 1.5}, vec3{1, 0, 0}, -30, color.RGBA{50, 75, 150, 255}, 1, 0)
-	}
-	gfx.setMat(mtPlain, 1, false)
+// drawBeacon blinks the red light on top of the hub's antenna.
+func (g *Game) drawBeacon() {
 	if math.Mod(g.clock, 1.2) < 0.3 {
-		gfx.put(gfx.sphere, toWorld(vec3{1.5, top + 2.25, 1.5}), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
+		g.gfx.setLighting(litSun, vec3{})
+		g.gfx.setMat(mtPlain, 1, false)
+		g.gfx.put(g.gfx.sphere, beaconTop(), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
 	}
 }
 

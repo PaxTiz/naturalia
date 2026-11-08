@@ -59,7 +59,8 @@ type Graphics struct {
 	rocks, pebbles                                    []rl.Model
 	post                                              *postFX
 	shadow                                            *shadowMap
-	buildings                                         []*building
+	base                                              *building
+	doorPanel                                         rl.Model
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
