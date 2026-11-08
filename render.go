@@ -165,7 +165,7 @@ func NewGraphics() *Graphics {
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
 
 	gfx.signBox = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
-	for i, c := range []color.RGBA{accentBlue, accentCyan, accentBlue, colGreen} {
+	for i, c := range []color.RGBA{accentCyan, accentBlue, accentCyan, accentOrange} {
 		gfx.screens = append(gfx.screens, paintScreen(i, c))
 	}
 	for _, s := range baseSigns() {

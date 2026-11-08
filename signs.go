@@ -34,29 +34,23 @@ func baseSigns() []sign {
 	}
 }
 
-// paintSign draws a sign's texture: dark plate, accent stripe, worn edges
-// and the text in small capitals.
+// paintSign draws a sign's texture in flat colors: a dark steel plate, an
+// accent tab on the left with a hazard notch, and the text in small capitals.
 func paintSign(s sign, font rl.Font) rl.Texture2D {
 	const h = 128
 	w := int(math.Round(s.width / signHeight * h))
-	img := rl.GenImageColor(w, h, color.RGBA{34, 37, 46, 255})
-	// Painted wear: lighter specks near the edges.
-	for i := range w * h / 30 {
-		x, y := int(hash2(i, 0, 77)*float64(w)), int(hash2(i, 1, 77)*float64(h))
-		edge := math.Min(math.Min(float64(x), float64(w-x)), math.Min(float64(y), float64(h-y)))
-		if edge < 14 || hash2(i, 2, 77) > 0.85 {
-			rl.ImageDrawPixel(img, int32(x), int32(y), color.RGBA{70, 74, 86, 255})
-		}
-	}
-	rl.ImageDrawRectangleLines(img, rl.NewRectangle(6, 6, float32(w-12), h-12), 3, color.RGBA{90, 95, 110, 255})
-	rl.ImageDrawRectangle(img, 14, h-26, int32(w-28), 8, s.accent)
+	img := rl.GenImageColor(w, h, color.RGBA{44, 48, 60, 255})
+	rl.ImageDrawRectangle(img, 0, 0, int32(w), 6, color.RGBA{64, 70, 86, 255})
+	rl.ImageDrawRectangle(img, 0, h-6, int32(w), 6, color.RGBA{30, 33, 42, 255})
+	rl.ImageDrawRectangle(img, 0, 0, 34, h, s.accent)
+	rl.ImageDrawRectangle(img, 44, h-22, int32(w-58), 5, s.accent)
 	size := float32(64)
 	tw := rl.MeasureTextEx(font, s.text, size, 2).X
-	if tw > float32(w-40) {
-		size *= float32(w-40) / tw
+	if tw > float32(w-90) {
+		size *= float32(w-90) / tw
 		tw = rl.MeasureTextEx(font, s.text, size, 2).X
 	}
-	rl.ImageDrawTextEx(img, rl.NewVector2((float32(w)-tw)/2, (h-26-size)/2+4), font, s.text, size, 2, color.RGBA{236, 232, 220, 255})
+	rl.ImageDrawTextEx(img, rl.NewVector2(34+(float32(w-34)-tw)/2, (h-22-size)/2+2), font, s.text, size, 2, color.RGBA{236, 232, 220, 255})
 	// The cube's front face shows the image upside down.
 	rl.ImageFlipVertical(img)
 	tex := rl.LoadTextureFromImage(img)
@@ -82,32 +76,29 @@ func (g *Game) drawSigns() {
 	gfx.setMat(mtPlain, 1, false)
 }
 
-// paintScreen draws a fake computer display: a header, lines of text-like
-// bars and a small chart, in the accent color.
+// paintScreen draws a fake computer display in flat colors: a header,
+// rows of readouts and a filled chart, in the accent color.
 func paintScreen(seed int, accent color.RGBA) rl.Texture2D {
 	const w, h = 256, 160
 	dim := color.RGBA{accent.R / 3, accent.G / 3, accent.B / 3, 255}
-	img := rl.GenImageColor(w, h, color.RGBA{8, 14, 24, 255})
-	rl.ImageDrawRectangle(img, 0, 0, w, 18, dim)
-	rl.ImageDrawRectangle(img, 8, 6, 60, 6, accent)
-	for i := range 7 {
-		y := int32(28 + i*12)
-		length := int32(30 + hash2(seed, i, 91)*110)
-		rl.ImageDrawRectangle(img, 10, y, length, 5, dim)
-		if hash2(seed, i, 92) > 0.6 {
-			rl.ImageDrawRectangle(img, 14+length, y, 24, 5, accent)
+	img := rl.GenImageColor(w, h, color.RGBA{10, 20, 30, 255})
+	rl.ImageDrawRectangle(img, 0, 0, w, 20, dim)
+	rl.ImageDrawRectangle(img, 0, 0, 8, 20, accent)
+	rl.ImageDrawRectangle(img, 16, 7, 56, 6, accent)
+	for i := range 6 {
+		y := int32(32 + i*14)
+		length := int32(30 + hash2(seed, i, 91)*90)
+		rl.ImageDrawRectangle(img, 10, y, length, 6, dim)
+		if hash2(seed, i, 92) > 0.55 {
+			rl.ImageDrawRectangle(img, 112, y, 22, 6, accent)
 		}
 	}
-	// A little line chart in the right part.
-	prev := int32(0)
-	for x := int32(0); x < 90; x += 3 {
-		y := int32(120 - 50*tnoise(float64(x)/20, float64(seed), 64, 93))
-		if x > 0 {
-			rl.ImageDrawLine(img, 155+x-3, prev, 155+x, y, accent)
-		}
-		prev = y
+	// A filled chart in the right part.
+	for x := int32(0); x < 96; x += 6 {
+		top := int32(140 - 60*tnoise(float64(x)/24, float64(seed), 64, 93))
+		rl.ImageDrawRectangle(img, 150+x, top, 5, 146-top, dim)
+		rl.ImageDrawRectangle(img, 150+x, top, 5, 3, accent)
 	}
-	rl.ImageDrawRectangleLines(img, rl.NewRectangle(150, 60, 100, 90), 1, dim)
 	rl.ImageFlipVertical(img)
 	tex := rl.LoadTextureFromImage(img)
 	rl.UnloadImage(img)
