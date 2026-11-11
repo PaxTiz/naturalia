@@ -71,15 +71,14 @@ func sculptRock(seed uint64, rings, slices int) rl.Mesh {
 
 // drawRocks draws the rocks around the player, one instanced call per shape.
 // They shrink away at the edge of the drawing distance rather than pop.
-func (g *Game) drawRocks() {
-	gfx := g.gfx
+func (gfx *Graphics) drawRocks(g *Game) {
 	var mats [planet.RockShapes][]rl.Matrix
 	for _, r := range g.nearRocks {
 		up := r.Dir
 		t1, t2 := mathx.TangentBasis(up)
 		ax := t1.Scale(math.Cos(r.Yaw)).Add(t2.Scale(math.Sin(r.Yaw)))
 		az := ax.Cross(up)
-		ground := g.terrain.Surface(r.Dir)
+		ground := gfx.terrain.Surface(r.Dir)
 		size := r.Size * (1 - mathx.Smoothstep(rockDrawDist*0.8, rockDrawDist, ground.Sub(g.player.Pos).Length()))
 		mats[r.Shape] = append(mats[r.Shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
 	}
@@ -95,6 +94,6 @@ func (g *Game) collideRocks() {
 		if r.Size < 0.6 {
 			continue
 		}
-		g.player.pushOut(g.terrain.Surface(r.Dir), r.Size*0.85)
+		g.player.pushOut(g.world.Relief.Surface(r.Dir), r.Size*0.85)
 	}
 }

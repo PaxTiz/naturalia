@@ -173,8 +173,7 @@ func (g *Game) entityUse(i int) base.Interactable {
 
 // drawEntities draws the entities around the player, standing up from the
 // ground.
-func (g *Game) drawEntities() {
-	gfx := g.gfx
+func (gfx *Graphics) drawEntities(g *Game) {
 	for _, i := range g.entitiesNear(entityDrawDist) {
 		e := g.st.Entities[i]
 		def, ok := reg.Entities.Get(e.Kind)

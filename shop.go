@@ -135,3 +135,15 @@ func fmtNum(v float64) string {
 	}
 	return fmt.Sprintf("%.2e", v*1000)
 }
+
+// buy pays for a shop item and gets it, when there is enough credit.
+func (g *Game) buy(it shopItem) {
+	if !it.affordable(g.st.Credits) {
+		g.sfx.Beep(0, 0.15, 0.1, 180)
+		return
+	}
+	g.st.Credits -= it.cost
+	it.buy()
+	g.emit(content.Event{Name: content.EvBuy, ID: it.id, Amount: it.cost})
+	g.sfx.Beep(0.06, 0.18, 0.14, 523, 784)
+}

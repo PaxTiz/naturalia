@@ -26,8 +26,8 @@ type debugInfo struct {
 }
 
 // updateDebug toggles the overlay and refreshes its slower measures.
-func (g *Game) updateDebug(dt float64) {
-	d := &g.dbg
+func (gfx *Graphics) updateDebug(g *Game, dt float64) {
+	d := &gfx.dbg
 	if rl.IsKeyPressed(rl.KeyF3) {
 		d.on = !d.on
 	}
@@ -46,13 +46,13 @@ func (g *Game) updateDebug(dt float64) {
 	}
 }
 
-func (g *Game) drawDebug() {
-	d := &g.dbg
+func (gfx *Graphics) drawDebug(g *Game) {
+	d := &gfx.dbg
 	if !d.on {
 		return
 	}
-	gfx, u := g.gfx, uiScale()
-	t := g.terrain
+	u := uiScale()
+	t := gfx.terrain
 	up := g.player.Pos.Norm()
 	lines := []string{
 		fmt.Sprintf("FPS %d   image %.1f ms   pire %.1f ms", rl.GetFPS(), d.frameMs, d.worstMs),
@@ -91,7 +91,7 @@ type shotRun struct {
 	perf    float64 // summed frame times (MS_SHOT_PERF)
 }
 
-func newShotRun(g *Game) *shotRun {
+func newShotRun(g *Game, gfx *Graphics) *shotRun {
 	s := &shotRun{file: os.Getenv("MS_SHOT"), mode: modePlay}
 	// MS_SHOT_MODE opens a screen for the shot: shop, map or pause.
 	switch os.Getenv("MS_SHOT_MODE") {
@@ -111,7 +111,7 @@ func newShotRun(g *Game) *shotRun {
 		var d vec3
 		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
 		up := d.Norm()
-		g.player.Pos = g.terrain.Surface(up)
+		g.player.Pos = gfx.terrain.Surface(up)
 		h := planet.SunDir.Sub(up.Scale(planet.SunDir.Dot(up)))
 		if h.Length() < 0.1 { // the sun is overhead or right underfoot
 			h, _ = mathx.TangentBasis(up)
@@ -125,7 +125,7 @@ func newShotRun(g *Game) *shotRun {
 		}
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
-		g.terrain.Warm(g.player.Eye(), 20*time.Second)
+		gfx.terrain.Warm(g.player.Eye(), 20*time.Second)
 	}
 	// MS_SHOT_AT=x,z,yaw stands in the base (local coordinates, yaw in
 	// radians from +X toward +Z), for views of the buildings.
@@ -137,7 +137,7 @@ func newShotRun(g *Game) *shotRun {
 		g.player.Pitch = 0.05
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
-		g.terrain.Warm(g.player.Eye(), 20*time.Second)
+		gfx.terrain.Warm(g.player.Eye(), 20*time.Second)
 	}
 	return s
 }

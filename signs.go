@@ -69,8 +69,7 @@ func paintSign(s sign, font rl.Font) rl.Texture2D {
 	return tex
 }
 
-func (g *Game) drawSigns() {
-	gfx := g.gfx
+func (gfx *Graphics) drawSigns(g *Game) {
 	gfx.setMat(content.MtDecal, 1, false)
 	for _, s := range gfx.signs {
 		rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, s.tex)

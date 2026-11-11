@@ -29,13 +29,15 @@ func main() {
 	loadContent()
 	log.Println("packs:", content.PackList())
 	g := NewGame()
-	shot := newShotRun(g)
+	gfx := NewGraphics(g)
+	shot := newShotRun(g, gfx)
 	for !rl.WindowShouldClose() {
 		// Clamp so a window drag or a hitch doesn't teleport everything.
 		dt := min(float64(rl.GetFrameTime()), 0.05)
+		gfx.update(g, dt)
 		g.Update(dt)
 		shot.tick(g)
-		g.Draw()
+		gfx.Draw(g)
 	}
 	g.save()
 	rl.CloseAudioDevice()

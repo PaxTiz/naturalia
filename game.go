@@ -9,7 +9,6 @@ import (
 	"mars_sweeper/internal/planet"
 	"math"
 	"math/rand/v2"
-	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -82,16 +81,11 @@ type Game struct {
 	st        State
 	player    Player
 	world     *planet.World
-	terrain   *Terrain
-	gfx       *Graphics
 	rng       *rand.Rand
 	drones    []*Drone
 	particles []Particle
 	floaters  []Floater
-	nearGems  []planet.Gem                // crystals around the player, refreshed every frame
-	nearRocks []planet.Rock               // boulders around the player
-	pebbles   map[planet.TileKey][]pebble // per tile, around the player
-	dbg       debugInfo
+	nearRocks []planet.Rock // boulders around the player
 	sfx       *audio.Synth
 	fov       float64 // degrees, eased by updateFov
 	steps     footprints
@@ -100,17 +94,13 @@ type Game struct {
 
 	mode        mode
 	clock       float64
-	camEye      vec3 // the camera's position in double precision (camera)
-	origin      vec3 // the shaders' origin this frame (setUniforms)
 	saveTimer   float64
 	sellPop     float64 // timer of the "+X cr" pop next to the credits
 	sellPopText string
 	message     string  // said by a mod (say), shown on the visor...
 	messageT    float64 // ...for this long still
-	hover       int
-	shopScroll  int // first row shown in the shop
-	itemSel     int // which carried item F places (R cycles)
-	driving     int // index in st.Entities of the vehicle driven, -1 on foot
+	itemSel     int     // which carried item F places (R cycles)
+	driving     int     // index in st.Entities of the vehicle driven, -1 on foot
 
 	walls    []base.Segment // the base's walls, for collisions
 	doorOpen float64        // airlock doors: 0 closed, 1 open
@@ -130,7 +120,6 @@ type Game struct {
 func NewGame() *Game {
 	g := &Game{
 		rng:     rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
-		hover:   -1,
 		driving: -1,
 		sfx:     audio.New(),
 	}
@@ -146,15 +135,12 @@ func NewGame() *Game {
 		g.world = planet.NewWorld(g.rng.Uint64(), &reg.Terrain)
 	}
 	base.Origin = planet.BaseUp.Scale(planet.Radius + g.world.Relief.BaseHeight())
-	g.terrain = NewTerrain(g.world.Relief)
 	if fresh {
 		g.player = Player{Pos: base.ToWorld(base.SpawnSpot), Heading: vec3{0, 0, -1}}
 		g.wakeUp = true
 	}
 	g.player.Pos = g.world.Relief.Surface(g.player.Pos)
 	g.walls = base.Walls()
-	g.gfx = NewGraphics()
-	g.terrain.Warm(g.player.Eye(), 5*time.Second)
 	g.syncDrones()
 	return g
 }
@@ -170,7 +156,6 @@ func (g *Game) setMode(m mode) {
 
 func (g *Game) Update(dt float64) {
 	g.clock += dt
-	g.updateDebug(dt)
 
 	if rl.IsKeyPressed(rl.KeyF11) {
 		rl.ToggleBorderlessWindowed()
@@ -198,7 +183,6 @@ func (g *Game) Update(dt float64) {
 		if closeKeys {
 			g.setMode(modePlay)
 		}
-		g.updateShop()
 	case modeMap:
 		if closeKeys {
 			g.setMode(modePlay)
@@ -500,35 +484,4 @@ func (g *Game) updateEffects(dt float64) {
 		}
 	}
 	g.floaters = keptF
-}
-
-func (g *Game) updateShop() {
-	items := g.shopItems()
-	wheel := rl.GetMouseWheelMove()
-	if wheel < 0 || rl.IsKeyPressed(rl.KeyDown) {
-		g.shopScroll++
-	} else if wheel > 0 || rl.IsKeyPressed(rl.KeyUp) {
-		g.shopScroll--
-	}
-	g.shopScroll = max(0, min(g.shopScroll, len(items)-shopRows))
-	mouse := rl.GetMousePosition()
-	g.hover = -1
-	for i := g.shopScroll; i < min(len(items), g.shopScroll+shopRows); i++ {
-		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-g.shopScroll)) {
-			g.hover = i
-		}
-	}
-	if !rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-		return
-	}
-	if g.hover >= 0 {
-		if it := items[g.hover]; it.affordable(g.st.Credits) {
-			g.st.Credits -= it.cost
-			it.buy()
-			g.emit(content.Event{Name: content.EvBuy, ID: it.id, Amount: it.cost})
-			g.sfx.Beep(0.06, 0.18, 0.14, 523, 784)
-		} else {
-			g.sfx.Beep(0, 0.15, 0.1, 180)
-		}
-	}
 }

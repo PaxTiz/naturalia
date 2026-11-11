@@ -30,7 +30,7 @@ type pebble struct {
 
 // pebblesIn places the pebbles of a dust tile, mostly a few centimeters
 // wide. None on the base's pad nor on the polar ice.
-func (g *Game) pebblesIn(k planet.TileKey) []pebble {
+func (gfx *Graphics) pebblesIn(g *Game, k planet.TileKey) []pebble {
 	f, tx, ty := k.Split()
 	var out []pebble
 	for i := range pebblesPerTile {
@@ -38,7 +38,7 @@ func (g *Game) pebblesIn(k planet.TileKey) []pebble {
 		a := (float64(tx*planet.TileCells) + mathx.Hash3(f, tx, ty, s)*planet.TileCells) / planet.FaceCells * 2
 		b := (float64(ty*planet.TileCells) + mathx.Hash3(f, tx, ty, s+1)*planet.TileCells) / planet.FaceCells * 2
 		d := mathx.FaceDir(f, a-1, b-1)
-		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || g.terrain.Ice(d) > 0.3 {
+		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || gfx.terrain.Ice(d) > 0.3 {
 			continue
 		}
 		t1, t2 := mathx.TangentBasis(d)
@@ -46,7 +46,7 @@ func (g *Game) pebblesIn(k planet.TileKey) []pebble {
 		ax := t1.Scale(math.Cos(yaw)).Add(t2.Scale(math.Sin(yaw)))
 		out = append(out, pebble{
 			dir:    d,
-			ground: g.terrain.Surface(d),
+			ground: gfx.terrain.Surface(d),
 			size:   0.025 + 0.11*math.Pow(mathx.Hash3(f, tx, ty, s+2), 2.5),
 			shape:  int(mathx.Hash3(f, tx, ty, s+4) * pebbleShapes),
 			ax:     ax,
@@ -58,19 +58,18 @@ func (g *Game) pebblesIn(k planet.TileKey) []pebble {
 
 // drawPebbles draws the pebbles near the player, one instanced call per
 // shape. They sink into thick dust and come out where it is swept.
-func (g *Game) drawPebbles() {
-	gfx := g.gfx
-	if g.pebbles == nil {
-		g.pebbles = map[planet.TileKey][]pebble{}
+func (gfx *Graphics) drawPebbles(g *Game) {
+	if gfx.nearPebbles == nil {
+		gfx.nearPebbles = map[planet.TileKey][]pebble{}
 	}
 	near := map[planet.TileKey]bool{}
 	var mats [pebbleShapes][]rl.Matrix
 	planet.TilesNear(g.player.Pos, pebbleDist, func(k planet.TileKey) {
 		near[k] = true
-		ps, ok := g.pebbles[k]
+		ps, ok := gfx.nearPebbles[k]
 		if !ok {
-			ps = g.pebblesIn(k)
-			g.pebbles[k] = ps
+			ps = gfx.pebblesIn(g, k)
+			gfx.nearPebbles[k] = ps
 		}
 		for _, p := range ps {
 			dist := p.ground.Sub(g.player.Pos).Length()
@@ -83,15 +82,15 @@ func (g *Game) drawPebbles() {
 			mats[p.shape] = append(mats[p.shape], basisMatrix(ground, p.ax.Scale(size), p.dir.Scale(size), p.az.Scale(size)))
 		}
 	})
-	for k := range g.pebbles {
+	for k := range gfx.nearPebbles {
 		if !near[k] {
-			delete(g.pebbles, k)
+			delete(gfx.nearPebbles, k)
 		}
 	}
 
-	g.dbg.pebbles = 0
+	gfx.dbg.pebbles = 0
 	for _, m := range mats {
-		g.dbg.pebbles += len(m)
+		gfx.dbg.pebbles += len(m)
 	}
 	gfx.drawInstanced(gfx.pebbles, mats[:], func(k int) color.RGBA {
 		v := 120 + 30*float64(k)

@@ -263,8 +263,8 @@ func shopItemRect(i int) rl.Rectangle {
 	return rl.NewRectangle(p.X+18*u, p.Y+72*u+float32(i)*64*u, p.Width-36*u, 58*u)
 }
 
-func (g *Game) drawHUD(cam rl.Camera3D) {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawHUD(g *Game, cam rl.Camera3D) {
+	u := uiScale()
 	_, h := screenSize()
 
 	for _, f := range g.floaters {
@@ -277,21 +277,21 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 	}
 
 	if g.mode == modePlay || g.mode == modeMap || g.mode == modeShop {
-		g.drawVisor()
+		gfx.drawVisor(g)
 	}
 
 	if g.mode == modePlay {
-		g.drawBaseMarker(cam)
-		g.drawCompass()
-		g.drawReticle()
-		g.drawHeldItem()
+		gfx.drawBaseMarker(g, cam)
+		gfx.drawCompass(g)
+		gfx.drawReticle(g)
+		gfx.drawHeldItem(g)
 		switch {
 		case g.driving >= 0:
 			v, _ := g.driven()
 			gfx.prompt("E", "Descendre du "+strings.ToLower(v.Name), h*0.64, visorCyan)
 		case g.st.TotalDust < 5:
 			gfx.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
-		case g.hasUse():
+		case gfx.hasUse(g):
 			it, _ := g.nearbyUse()
 			gfx.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
 		case g.tankFull() && !g.autoSell() && math.Mod(g.clock, 1) < 0.7:
@@ -299,44 +299,44 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 		case !g.aimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
 			gfx.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
 		}
-		g.drawHints()
+		gfx.drawHints(g)
 		if g.messageT > 0 {
 			gfx.prompt("", g.message, h*0.2, withAlpha(visorCyan, math.Min(1, g.messageT)))
 		}
 	}
 	if g.mode != modePaused {
-		g.drawStatus()
+		gfx.drawStatus(g)
 	}
 
-	g.drawDebug()
+	gfx.drawDebug(g)
 
 	switch g.mode {
 	case modePaused:
-		g.drawPause()
+		gfx.drawPause(g)
 	case modeShop:
-		g.drawShop()
+		gfx.drawShop(g)
 	case modeMap:
-		g.drawMapPanel()
+		gfx.drawMapPanel(g)
 	case modeSleep:
-		g.drawSleep()
+		gfx.drawSleep(g)
 	}
 }
 
 // drawVisor lays the helmet's visor over the view.
-func (g *Game) drawVisor() {
+func (gfx *Graphics) drawVisor(g *Game) {
 	w, h := screenSize()
-	src := rl.NewRectangle(0, 0, float32(g.gfx.visor.Width), float32(g.gfx.visor.Height))
-	rl.DrawTexturePro(g.gfx.visor, src, rl.NewRectangle(0, 0, w, h), rl.NewVector2(0, 0), 0, rl.White)
+	src := rl.NewRectangle(0, 0, float32(gfx.visor.Width), float32(gfx.visor.Height))
+	rl.DrawTexturePro(gfx.visor, src, rl.NewRectangle(0, 0, w, h), rl.NewVector2(0, 0), 0, rl.White)
 }
 
 // drawHints lists the controls along the bottom of the visor, as keys.
 // drawHeldItem: what F places, under the status panel.
-func (g *Game) drawHeldItem() {
+func (gfx *Graphics) drawHeldItem(g *Game) {
 	it, n := g.heldItem()
 	if it == nil {
 		return
 	}
-	gfx, u := g.gfx, uiScale()
+	u := uiScale()
 	x, y := 40*u, 158*u
 	label := fmt.Sprintf("%s ×%d", it.Name, n)
 	w := gfx.width(label, 16*u) + 150*u
@@ -351,8 +351,8 @@ func (g *Game) drawHeldItem() {
 	gfx.caps("changer", kx, y+11*u, 12*u, visorDim)
 }
 
-func (g *Game) drawHints() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawHints(g *Game) {
+	u := uiScale()
 	w, h := screenSize()
 	hints := [][2]string{
 		{"ZQSD", "bouger"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"CLIC", "balayer"},
@@ -372,7 +372,7 @@ func (g *Game) drawHints() {
 }
 
 // drawReticle: a thin ring with four ticks; brighter when the ground is in reach.
-func (g *Game) drawReticle() {
+func (gfx *Graphics) drawReticle(g *Game) {
 	u := uiScale()
 	w, h := screenSize()
 	cx, cy := w/2, h/2
@@ -390,8 +390,8 @@ func (g *Game) drawReticle() {
 }
 
 // drawStatus: credits, tool and tank, top left of the visor.
-func (g *Game) drawStatus() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawStatus(g *Game) {
+	u := uiScale()
 	r := rl.NewRectangle(32*u, 28*u, 300*u, 112*u)
 	visorPanel(r, colGold)
 	left, right, y := r.X+20*u, r.X+r.Width-18*u, r.Y
@@ -444,8 +444,8 @@ func (g *Game) drawStatus() {
 
 // drawCompass: a heading strip at the top of the visor, north being the
 // way to the base (it stands on the north pole).
-func (g *Game) drawCompass() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawCompass(g *Game) {
+	u := uiScale()
 	w, _ := screenSize()
 	up := g.player.LocalUp()
 	north := planet.BaseUp.Sub(up.Scale(planet.BaseUp.Dot(up)))
@@ -498,8 +498,8 @@ func (g *Game) drawCompass() {
 }
 
 // drawBaseMarker shows where the base is when it is in view.
-func (g *Game) drawBaseMarker(cam rl.Camera3D) {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawBaseMarker(g *Game, cam rl.Camera3D) {
+	u := uiScale()
 	w, h := screenSize()
 	if planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < 25 {
 		return
@@ -543,11 +543,11 @@ func marsEmblem(cx, cy, r float32) {
 	rl.DrawRing(rl.NewVector2(cx, cy), r+2*uiScale(), r+4*uiScale(), 200, 340, 48, color.RGBA{255, 170, 120, 120})
 }
 
-func (g *Game) drawPause() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawPause(g *Game) {
+	u := uiScale()
 	w, h := screenSize()
 	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{8, 4, 10, 215}, color.RGBA{20, 8, 10, 235})
-	g.drawVisor()
+	gfx.drawVisor(g)
 
 	// Emblem and title, centered as one block.
 	title := "MARS SWEEPER"
@@ -585,8 +585,8 @@ func (g *Game) drawPause() {
 // terminal draws a base computer screen: a charcoal body under an
 // off-white header, like the habitat panels, with an accent square, a
 // hazard block at its end and an accent line beneath.
-func (g *Game) terminal(p rl.Rectangle, title string, accent color.RGBA) {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) terminal(g *Game, p rl.Rectangle, title string, accent color.RGBA) {
+	u := uiScale()
 	w, h := screenSize()
 	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{0, 0, 0, 90}, color.RGBA{0, 0, 0, 170})
 	cut := 16 * u
@@ -600,10 +600,10 @@ func (g *Game) terminal(p rl.Rectangle, title string, accent color.RGBA) {
 	gfx.title(title, p.X+46*u, p.Y+13*u, 25*u, uiInk)
 }
 
-func (g *Game) drawShop() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawShop(g *Game) {
+	u := uiScale()
 	p := shopPanel()
-	g.terminal(p, "LABORATOIRE DE RECHERCHE", visorCyan)
+	gfx.terminal(g, p, "LABORATOIRE DE RECHERCHE", visorCyan)
 	right := p.X + p.Width - 72*u
 	vw := rl.MeasureTextEx(gfx.mono, fmtNum(g.st.Credits)+" cr", 24*u, 0).X
 	coin := rl.NewVector2(right-vw-16*u, p.Y+26*u)
@@ -613,12 +613,12 @@ func (g *Game) drawShop() {
 
 	items := g.shopItems()
 	for i, it := range items {
-		if i < g.shopScroll || i >= g.shopScroll+shopRows {
+		if i < gfx.shopScroll || i >= gfx.shopScroll+shopRows {
 			continue
 		}
-		r := shopItemRect(i - g.shopScroll)
+		r := shopItemRect(i - gfx.shopScroll)
 		bg := uiRow
-		if i == g.hover {
+		if i == gfx.hover {
 			bg = uiRowLit
 		}
 		fillCut(r, 8*u, bg)
@@ -629,7 +629,7 @@ func (g *Game) drawShop() {
 		if it.maxed {
 			state = colGold
 		}
-		if i == g.hover {
+		if i == gfx.hover {
 			rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+8*u, 3*u, r.Height-8*u), state)
 		}
 		tile := rl.NewRectangle(r.X+8*u, r.Y+7*u, 44*u, 44*u)
@@ -653,15 +653,15 @@ func (g *Game) drawShop() {
 		track := rl.NewRectangle(p.X+p.Width-12*u, top.Y, 4*u, bottom.Y+bottom.Height-top.Y)
 		rl.DrawRectangleRec(track, uiTrack)
 		h := track.Height * shopRows / float32(len(items))
-		y := track.Y + (track.Height-h)*float32(g.shopScroll)/float32(len(items)-shopRows)
+		y := track.Y + (track.Height-h)*float32(gfx.shopScroll)/float32(len(items)-shopRows)
 		rl.DrawRectangleRec(rl.NewRectangle(track.X, y, track.Width, h), visorCyan)
 	}
-	g.closeHint(p.X+p.Width/2, p.Y+p.Height+16*u, true)
+	gfx.closeHint(g, p.X+p.Width/2, p.Y+p.Height+16*u, true)
 }
 
 // closeHint says how to leave a terminal, under it.
-func (g *Game) closeHint(x, y float32, centered bool) {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) closeHint(g *Game, x, y float32, centered bool) {
+	u := uiScale()
 	s := "OU ÉCHAP POUR FERMER"
 	kw := rl.MeasureTextEx(gfx.mono, "E", 14*u, 0).X + 12*u
 	if centered {
@@ -672,18 +672,18 @@ func (g *Game) closeHint(x, y float32, centered bool) {
 }
 
 // hasUse tells whether something can be used right now with E.
-func (g *Game) hasUse() bool {
+func (gfx *Graphics) hasUse(g *Game) bool {
 	_, ok := g.nearbyUse()
 	return ok
 }
 
 // drawMapPanel shows the state of Mars next to the hologram.
-func (g *Game) drawMapPanel() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawMapPanel(g *Game) {
+	u := uiScale()
 	_, h := screenSize()
 	s := g.world.Stats(g.st.TotalDust)
 	p := rl.NewRectangle(40*u, h/2-190*u, 440*u, 380*u)
-	g.terminal(p, "ÉTAT DE MARS", visorCyan)
+	gfx.terminal(g, p, "ÉTAT DE MARS", visorCyan)
 
 	rows := []struct{ label, value string }{
 		{"MARS NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
@@ -712,12 +712,12 @@ func (g *Game) drawMapPanel() {
 		gfx.caps(l.label, x+12*u, y+1*u, 14*u, uiMuted)
 		x += gfx.capsWidth(l.label, 14*u) + 40*u
 	}
-	g.closeHint(p.X, p.Y+p.Height+16*u, false)
+	gfx.closeHint(g, p.X, p.Y+p.Height+16*u, false)
 }
 
 // drawSleep fades to black, shows the night passing, then fades back in.
-func (g *Game) drawSleep() {
-	gfx, u := g.gfx, uiScale()
+func (gfx *Graphics) drawSleep(g *Game) {
+	u := uiScale()
 	w, h := screenSize()
 	t := g.sleepT
 	dark := 1.0
@@ -735,5 +735,40 @@ func (g *Game) drawSleep() {
 		if t > sleepSave {
 			gfx.capsCenter("PARTIE SAUVEGARDÉE", w/2, h/2+30*u, 16*u, withAlpha(uiMuted, a))
 		}
+	}
+}
+
+// update follows the interface's input: the debug overlay, the shop. It
+// runs before the game's update.
+func (gfx *Graphics) update(g *Game, dt float64) {
+	gfx.updateDebug(g, dt)
+	if g.mode == modeShop {
+		gfx.updateShop(g)
+	}
+}
+
+// updateShop scrolls the shop, follows the mouse over its rows and buys
+// the one clicked.
+func (gfx *Graphics) updateShop(g *Game) {
+	items := g.shopItems()
+	wheel := rl.GetMouseWheelMove()
+	if wheel < 0 || rl.IsKeyPressed(rl.KeyDown) {
+		gfx.shopScroll++
+	} else if wheel > 0 || rl.IsKeyPressed(rl.KeyUp) {
+		gfx.shopScroll--
+	}
+	gfx.shopScroll = max(0, min(gfx.shopScroll, len(items)-shopRows))
+	mouse := rl.GetMousePosition()
+	gfx.hover = -1
+	for i := gfx.shopScroll; i < min(len(items), gfx.shopScroll+shopRows); i++ {
+		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-gfx.shopScroll)) {
+			gfx.hover = i
+		}
+	}
+	if !rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+		return
+	}
+	if gfx.hover >= 0 {
+		g.buy(items[gfx.hover])
 	}
 }

@@ -41,14 +41,13 @@ func (gfx *Graphics) box(c, size, across vec3, col color.RGBA, spec, emissive fl
 }
 
 // kitDraws draw the moving and glowing parts of kit pieces, each frame.
-var kitDraws = map[string]func(g *Game, at vec3){
+var kitDraws = map[string]func(gfx *Graphics, g *Game, at vec3){
 	"core:incinerator": drawIncinerator,
 	"core:console":     drawConsole,
 	"core:bed":         drawBed,
 }
 
-func (g *Game) drawBase() {
-	gfx := g.gfx
+func (gfx *Graphics) drawBase(g *Game) {
 	rl.DisableBackfaceCulling()
 	defer rl.EnableBackfaceCulling()
 	if gfx.base == nil {
@@ -65,14 +64,14 @@ func (g *Game) drawBase() {
 	for _, bp := range base.Plans {
 		for _, p := range bp.Props {
 			if draw := kitDraws[content.Qualify(p.Kit)]; draw != nil {
-				draw(g, bp.At.Add(p.At))
+				draw(gfx, g, bp.At.Add(p.At))
 			}
 		}
 	}
 
-	g.drawAirlock()
-	g.drawBeacon()
-	g.drawSigns()
+	gfx.drawAirlock(g)
+	gfx.drawBeacon(g)
+	gfx.drawSigns(g)
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
@@ -80,8 +79,7 @@ func (g *Game) drawBase() {
 
 // drawAirlock draws the moving parts of the outer door: two leaves sliding
 // apart when the player comes close, and the status light.
-func (g *Game) drawAirlock() {
-	gfx := g.gfx
+func (gfx *Graphics) drawAirlock(g *Game) {
 	end := base.AirlockEnd
 	gfx.setLighting(mesh.LitSun, vec3{})
 	steel := tok("steel")
@@ -100,11 +98,11 @@ func (g *Game) drawAirlock() {
 }
 
 // drawBeacon blinks the red light on top of the hub's antenna.
-func (g *Game) drawBeacon() {
+func (gfx *Graphics) drawBeacon(g *Game) {
 	if math.Mod(g.clock, 1.2) < 0.3 {
-		g.gfx.setLighting(mesh.LitSun, vec3{})
-		g.gfx.setMat(content.MtPlain, 1, false)
-		g.gfx.put(g.gfx.sphere, beaconTop(), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
+		gfx.setLighting(mesh.LitSun, vec3{})
+		gfx.setMat(content.MtPlain, 1, false)
+		gfx.put(gfx.sphere, beaconTop(), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
 	}
 }
 
@@ -114,8 +112,7 @@ func beaconTop() vec3 {
 }
 
 // drawGlobe draws the hologram of Mars above the map table.
-func (g *Game) drawGlobe(cam rl.Camera3D) {
-	gfx := g.gfx
+func (gfx *Graphics) drawGlobe(g *Game, cam rl.Camera3D) {
 	center := base.ToWorld(base.TableSpot.Add(vec3{0, globeHeight, 0}))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
 	// Turn the player's spot on Mars toward the viewer, a bit raised,
@@ -221,8 +218,7 @@ func (b *baseModels) draw(gfx *Graphics) {
 }
 
 // drawIncinerator: the window glows harder while it burns dust.
-func drawIncinerator(g *Game, in vec3) {
-	gfx := g.gfx
+func drawIncinerator(gfx *Graphics, g *Game, in vec3) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
 	glow := float32(0.55 + 0.45*mathx.Clamp01(g.burn))
@@ -231,8 +227,7 @@ func drawIncinerator(g *Game, in vec3) {
 }
 
 // drawConsole: three screens and the blinking lights of the racks.
-func drawConsole(g *Game, c vec3) {
-	gfx := g.gfx
+func drawConsole(gfx *Graphics, g *Game, c vec3) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
 	for i, z := range []float64{-0.75, 0, 0.75} {
@@ -252,8 +247,7 @@ func drawConsole(g *Game, c vec3) {
 	}
 }
 
-func drawBed(g *Game, at vec3) {
-	gfx := g.gfx
+func drawBed(gfx *Graphics, g *Game, at vec3) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.put(gfx.sphere, base.ToWorld(at.Add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, lampWarm, 0, 1)

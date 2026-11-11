@@ -73,11 +73,10 @@ func spawnDevil(g *Game) {
 
 // drawDevils draws the whirlwinds as see-through swirling tubes, shaped
 // and animated by their shaders. Drawn after the opaque scenery.
-func (g *Game) drawDevils() {
+func (gfx *Graphics) drawDevils(g *Game) {
 	if len(g.devils) == 0 {
 		return
 	}
-	gfx := g.gfx
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthMask()
 	rl.DisableBackfaceCulling()
