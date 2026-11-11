@@ -73,7 +73,7 @@ type Graphics struct {
 	font, bold                                        rl.Font
 }
 
-func loadShader(fs string) (rl.Shader, shaderLocs) { return loadShaderVS(meshVS, fs) }
+func loadShader(fs string) (rl.Shader, shaderLocs) { return loadShaderVS(glsl("mesh.vert"), fs) }
 
 func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 	sh := rl.LoadShaderFromMemory(vs, fs)
@@ -93,12 +93,12 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 func NewGraphics() *Graphics {
 	gfx := &Graphics{}
 	gfx.post = newPostFX()
-	gfx.terrainSh, gfx.tLoc = loadShaderVS(terrainVS, terrainFS)
-	gfx.objectSh, gfx.oLoc = loadShaderVS(objectVS, objectFS)
+	gfx.terrainSh, gfx.tLoc = loadShaderVS(glsl("terrain.vert"), glsl("terrain.frag"))
+	gfx.objectSh, gfx.oLoc = loadShaderVS(glsl("object.vert"), glsl("object.frag"))
 	gfx.objectSh.UpdateLocation(rl.ShaderLocVertexInstancetransform, rl.GetShaderLocationAttrib(gfx.objectSh, "instanceTransform"))
-	gfx.skySh, gfx.sLoc = loadShader(skyFS)
-	gfx.holoSh, gfx.hLoc = loadShader(holoFS)
-	gfx.devilSh, gfx.dLoc = loadShaderVS(devilVS, devilFS)
+	gfx.skySh, gfx.sLoc = loadShader(glsl("sky.frag"))
+	gfx.holoSh, gfx.hLoc = loadShader(glsl("holo.frag"))
+	gfx.devilSh, gfx.dLoc = loadShaderVS(glsl("devil.vert"), glsl("devil.frag"))
 	gfx.devilLoc = rl.GetShaderLocation(gfx.devilSh, "devil")
 	gfx.devilMesh = rl.GenMeshPlane(1, 1, 32, 16)
 	gfx.devilMat = rl.LoadMaterialDefault()
@@ -288,7 +288,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
 	}
-	// The shaders' origin (shaderCommon): the eye snapped to a 32 m grid,
+	// The shaders' origin (common.glsl): the eye snapped to a 32 m grid,
 	// so the tile offsets they derive from it stay put between snaps.
 	e := g.camEye
 	snap := func(v float64) float64 { return float64(float32(math.Floor(v/32) * 32)) }
