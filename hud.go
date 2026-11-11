@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 	"strings"
 
@@ -445,7 +446,7 @@ func (g *Game) drawCompass() {
 	gfx, u := g.gfx, uiScale()
 	w, _ := screenSize()
 	up := g.player.LocalUp()
-	north := baseUp.Sub(up.Scale(baseUp.Dot(up)))
+	north := planet.BaseUp.Sub(up.Scale(planet.BaseUp.Dot(up)))
 	if north.Length() < 1e-6 {
 		return // standing on the pole itself
 	}
@@ -484,7 +485,7 @@ func (g *Game) drawCompass() {
 		}
 	}
 	tri(rl.NewVector2(cx, top+30*u), rl.NewVector2(cx-6*u, top+38*u), rl.NewVector2(cx+6*u, top+38*u), visorCyan)
-	if dist := arcDist(up, baseUp); dist > 15 {
+	if dist := planet.ArcDist(up, planet.BaseUp); dist > 15 {
 		s := "BASE  " + fmtNum(dist) + " M"
 		sw := gfx.capsWidth(s, 13*u)
 		chip := rl.NewRectangle(cx-sw/2-18*u, top+42*u, sw+30*u, 20*u)
@@ -498,7 +499,7 @@ func (g *Game) drawCompass() {
 func (g *Game) drawBaseMarker(cam rl.Camera3D) {
 	gfx, u := g.gfx, uiScale()
 	w, h := screenSize()
-	if arcDist(g.player.LocalUp(), baseUp) < 25 {
+	if planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < 25 {
 		return
 	}
 	target := basePos.Add(vec3{0, 9, 0})
@@ -688,7 +689,7 @@ func (g *Game) drawMapPanel() {
 		{"ZONES VISITÉES", fmt.Sprintf("%d / %d", s.TilesVisited, s.TilesTotal)},
 		{"CRISTAUX TROUVÉS", fmt.Sprintf("%d / %d", s.Gems, s.GemTotal)},
 		{"CRÉDITS GAGNÉS", fmtNum(g.st.TotalEarned) + " cr"},
-		{"DISTANCE DE LA BASE", fmtNum(arcDist(g.player.LocalUp(), baseUp)) + " m"},
+		{"DISTANCE DE LA BASE", fmtNum(planet.ArcDist(g.player.LocalUp(), planet.BaseUp)) + " m"},
 	}
 	for i, r := range rows {
 		y := p.Y + 74*u + float32(i)*42*u

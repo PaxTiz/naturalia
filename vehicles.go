@@ -2,6 +2,7 @@ package main
 
 import (
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -90,7 +91,7 @@ func (g *Game) updateVehicle(dt float64) {
 	t1, t2 := mathx.TangentBasis(e.Dir)
 	e.Yaw = math.Atan2(g.player.Heading.Dot(t2), g.player.Heading.Dot(t1))
 
-	if v.Sweep <= 0 || g.mode != modePlay || arcDist(e.Dir, baseUp) < baseReach {
+	if v.Sweep <= 0 || g.mode != modePlay || planet.ArcDist(e.Dir, planet.BaseUp) < baseReach {
 		return
 	}
 	at := g.terrain.Surface(e.Dir)

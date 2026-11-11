@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 	"slices"
 )
@@ -117,6 +118,10 @@ func (bp *Blueprint) addDoor(a float64) {
 	}
 	bp.Doors = append(bp.Doors, Door{a})
 }
+
+// basePos is the base's origin on the ground, set once the relief is known
+// (NewGame).
+var basePos = planet.BaseUp.Scale(planet.Radius)
 
 func toWorld(local vec3) vec3 { return basePos.Add(local) }
 

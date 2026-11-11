@@ -2,6 +2,7 @@ package main
 
 import (
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -40,9 +41,9 @@ func moveDevils(g *Game, e *Event) {
 		// Drift with a slow wander, staying along the ground.
 		t1, t2 := mathx.TangentBasis(d.dir)
 		d.vel = d.vel.Add(t1.Scale((g.rng.Float64() - 0.5) * dt)).Add(t2.Scale((g.rng.Float64() - 0.5) * dt))
-		d.dir = d.dir.Add(d.vel.Scale(dt / marsRadius)).Norm()
-		d.vel = tangentAt(d.dir, d.vel).Scale(d.vel.Length())
-		if d.age < d.life && arcDist(d.dir, up) < devilGone {
+		d.dir = d.dir.Add(d.vel.Scale(dt / planet.Radius)).Norm()
+		d.vel = planet.TangentAt(d.dir, d.vel).Scale(d.vel.Length())
+		if d.age < d.life && planet.ArcDist(d.dir, up) < devilGone {
 			kept = append(kept, d)
 		}
 	}
@@ -60,8 +61,8 @@ func spawnDevil(g *Game) {
 	up := g.player.LocalUp()
 	t1, t2 := mathx.TangentBasis(up)
 	a := g.rng.Float64() * 2 * math.Pi
-	at := toward2(up, t1.Scale(math.Cos(a)).Add(t2.Scale(math.Sin(a))), devilMinDist+g.rng.Float64()*(devilMaxDist-devilMinDist))
-	if g.terrain.Ice(at) > 0.05 || arcDist(at, baseUp) < 80 {
+	at := planet.Toward2(up, t1.Scale(math.Cos(a)).Add(t2.Scale(math.Sin(a))), devilMinDist+g.rng.Float64()*(devilMaxDist-devilMinDist))
+	if g.terrain.Ice(at) > 0.05 || planet.ArcDist(at, planet.BaseUp) < 80 {
 		return // they need warm bare ground
 	}
 	b := g.rng.Float64() * 2 * math.Pi

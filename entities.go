@@ -2,6 +2,7 @@ package main
 
 import (
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -63,7 +64,7 @@ func (g *Game) spawn(kind string, at vec3) bool {
 	}
 	up := at.Norm()
 	t1, t2 := mathx.TangentBasis(up)
-	toward := tangentAt(up, g.player.Pos.Sub(at))
+	toward := planet.TangentAt(up, g.player.Pos.Sub(at))
 	yaw := math.Atan2(toward.Dot(t2), toward.Dot(t1))
 	g.st.Entities = append(g.st.Entities, Placed{Kind: def.ID, Dir: up, Yaw: yaw})
 	return true
@@ -118,7 +119,7 @@ func (g *Game) entitiesNear(dist float64) []int {
 	var out []int
 	up := g.player.Pos.Norm()
 	for i, e := range g.st.Entities {
-		if arcDist(up, e.Dir) < dist {
+		if planet.ArcDist(up, e.Dir) < dist {
 			out = append(out, i)
 		}
 	}

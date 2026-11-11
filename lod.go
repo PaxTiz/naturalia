@@ -2,6 +2,7 @@ package main
 
 import (
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 	"runtime"
 	"slices"
@@ -49,7 +50,7 @@ type nodeData struct {
 // fine near them, coarse far away. Meshes are computed by background
 // workers and uploaded on the main thread.
 type Terrain struct {
-	Relief
+	planet.Relief
 	roots   [6]*lodNode
 	jobs    chan *lodNode
 	results chan nodeData
@@ -61,9 +62,9 @@ type Terrain struct {
 	frame uint64
 }
 
-func NewTerrain(seed uint64) *Terrain {
+func NewTerrain(relief planet.Relief) *Terrain {
 	t := &Terrain{
-		Relief:  newRelief(seed),
+		Relief:  relief,
 		jobs:    make(chan *lodNode, 8192),
 		results: make(chan nodeData, 8192),
 	}
@@ -86,7 +87,7 @@ func (t *Terrain) newNode(face, level int, a0, b0, size float64) *lodNode {
 	n.center = mathx.FaceDir(face, a0+size/2, b0+size/2)
 	n.centerPos = t.Surface(n.center)
 	ang := size * math.Pi / 4 // equiangular faces: coordinates are angles
-	n.arc = ang * marsRadius
+	n.arc = ang * planet.Radius
 	n.angulRad = ang * 0.75
 	return n
 }
@@ -183,7 +184,7 @@ func (t *Terrain) light(p vec3) (sun, ao float64) {
 		start := p.Add(up.Scale(0.3))
 		for s := 1.5; s < 4000; s *= 1.45 {
 			q := start.Add(sunDir.Scale(s))
-			if q.Length()-marsRadius > maxMountain {
+			if q.Length()-planet.Radius > planet.MaxMountain {
 				break // above every peak
 			}
 			h := q.Length() - t.SurfaceRadius(q.Norm())
@@ -245,7 +246,7 @@ func (t *Terrain) Visible(eye vec3) []*lodNode {
 	t.frame++
 	t.upload(uploadsPerTick)
 	// Beyond this angle around Mars, even mountain tops are below the horizon.
-	horizon := math.Acos(math.Min(1, marsRadius/eye.Length())) + math.Acos(marsRadius/(marsRadius+maxMountain))
+	horizon := math.Acos(math.Min(1, planet.Radius/eye.Length())) + math.Acos(planet.Radius/(planet.Radius+planet.MaxMountain))
 	var draw []*lodNode
 	for _, r := range t.roots {
 		t.visit(r, eye, eye.Norm(), horizon, &draw)
@@ -321,7 +322,7 @@ func (t *Terrain) Warm(eye vec3, timeout time.Duration) {
 	}
 }
 
-func (t *Terrain) SurfaceRadius(d vec3) float64 { return marsRadius + t.Height(d) }
+func (t *Terrain) SurfaceRadius(d vec3) float64 { return planet.Radius + t.Height(d) }
 
 // Surface returns the ground point in direction d (any length).
 func (t *Terrain) Surface(d vec3) vec3 {

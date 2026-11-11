@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -26,15 +27,15 @@ type pebble struct {
 
 // pebblesIn places the pebbles of a dust tile, mostly a few centimeters
 // wide. None on the base's pad nor on the polar ice.
-func (g *Game) pebblesIn(k tileKey) []pebble {
-	f, tx, ty := k.split()
+func (g *Game) pebblesIn(k planet.TileKey) []pebble {
+	f, tx, ty := k.Split()
 	var out []pebble
 	for i := range pebblesPerTile {
 		s := g.world.Seed + 900 + uint64(i)*5
-		a := (float64(tx*tileCells) + mathx.Hash3(f, tx, ty, s)*tileCells) / faceCells * 2
-		b := (float64(ty*tileCells) + mathx.Hash3(f, tx, ty, s+1)*tileCells) / faceCells * 2
+		a := (float64(tx*planet.TileCells) + mathx.Hash3(f, tx, ty, s)*planet.TileCells) / planet.FaceCells * 2
+		b := (float64(ty*planet.TileCells) + mathx.Hash3(f, tx, ty, s+1)*planet.TileCells) / planet.FaceCells * 2
 		d := mathx.FaceDir(f, a-1, b-1)
-		if arcDist(d, baseUp) < baseReach+2 || g.terrain.Ice(d) > 0.3 {
+		if planet.ArcDist(d, planet.BaseUp) < baseReach+2 || g.terrain.Ice(d) > 0.3 {
 			continue
 		}
 		t1, t2 := mathx.TangentBasis(d)
@@ -57,11 +58,11 @@ func (g *Game) pebblesIn(k tileKey) []pebble {
 func (g *Game) drawPebbles() {
 	gfx := g.gfx
 	if g.pebbles == nil {
-		g.pebbles = map[tileKey][]pebble{}
+		g.pebbles = map[planet.TileKey][]pebble{}
 	}
-	near := map[tileKey]bool{}
+	near := map[planet.TileKey]bool{}
 	var mats [pebbleShapes][]rl.Matrix
-	tilesNear(g.player.Pos, pebbleDist, func(k tileKey) {
+	planet.TilesNear(g.player.Pos, pebbleDist, func(k planet.TileKey) {
 		near[k] = true
 		ps, ok := g.pebbles[k]
 		if !ok {

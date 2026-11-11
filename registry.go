@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"mars_sweeper/internal/planet"
 	"slices"
 	"strings"
 )
@@ -28,7 +29,7 @@ type Content struct {
 	Vehicles  Registry[Vehicle]
 	// Debug adds lines to the debug overlay (F3).
 	Debug   []func(g *Game) string
-	Terrain TerrainSettings // one for the whole game, patched by packs
+	Terrain planet.Settings // one for the whole game, patched by packs
 
 	handlers map[string][]Handler // by event name (On)
 }
@@ -142,7 +143,7 @@ func loadContent() {
 	c.Entities.init("entity")
 	c.Items.init("item")
 	c.Vehicles.init("vehicle")
-	c.Terrain = defaultTerrain()
+	c.Terrain = planet.DefaultSettings()
 
 	byID := map[string]Pack{}
 	for _, p := range packs {
@@ -201,7 +202,7 @@ func (c *Content) setPack(id string) {
 
 // finish checks the content once every pack is loaded.
 func (c *Content) finish() {
-	c.Terrain.prepare()
+	c.Terrain.Prepare()
 	if c.Tools.Len() == 0 {
 		panic("no tool registered: is the core pack missing?")
 	}

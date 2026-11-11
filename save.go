@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mars_sweeper/internal/planet"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,13 +14,13 @@ import (
 )
 
 type saveFile struct {
-	Version   int                `json:"version"`
-	SavedAt   int64              `json:"saved_at"`
-	State     State              `json:"state"`
-	Player    Player             `json:"player"`
-	Seed      uint64             `json:"seed"`
-	Tiles     map[tileKey][]byte `json:"tiles"`     // cleaned tiles only, uint16 little-endian
-	Collected []tileKey          `json:"collected"` // tiles whose crystal was picked up
+	Version   int                       `json:"version"`
+	SavedAt   int64                     `json:"saved_at"`
+	State     State                     `json:"state"`
+	Player    Player                    `json:"player"`
+	Seed      uint64                    `json:"seed"`
+	Tiles     map[planet.TileKey][]byte `json:"tiles"`     // cleaned tiles only, uint16 little-endian
+	Collected []planet.TileKey          `json:"collected"` // tiles whose crystal was picked up
 }
 
 // Bumped when the world format changes: older saves keep the progress
@@ -104,7 +105,7 @@ func (g *Game) load() {
 		return
 	}
 	g.player = sf.Player
-	g.world = NewWorld(sf.Seed)
+	g.world = planet.NewWorld(sf.Seed, &content.Terrain)
 	g.world.SetTileBytes(sf.Tiles)
 	g.world.SetCollected(sf.Collected)
 }

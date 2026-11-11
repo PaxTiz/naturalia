@@ -128,7 +128,7 @@ func (g *Game) drawGlobe(cam rl.Camera3D) {
 	facing := toViewer.Add(vec3{0, 0.2, 0}).Norm()
 	rl.SetShaderValueMatrix(gfx.holoSh, gfx.hLoc.globeRot, rotationBetween(facing, g.player.LocalUp()))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.playerDir, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
-	rl.SetMaterialTexture(&gfx.holo.GetMaterials()[0], rl.MapDiffuse, g.world.Coverage())
+	rl.SetMaterialTexture(&gfx.holo.GetMaterials()[0], rl.MapDiffuse, gfx.dust.Coverage())
 
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthMask()

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"mars_sweeper/internal/planet"
 	"math"
 	"os"
 	"path/filepath"
@@ -137,7 +138,7 @@ func (s *script) api(c *Content) map[string]any {
 		"inside": func() string { return s.game().inside },
 		"clock":  func() float64 { return s.game().clock },
 		// distanceToBase: in meters along the ground.
-		"distanceToBase": func() float64 { return arcDist(s.game().player.LocalUp(), baseUp) },
+		"distanceToBase": func() float64 { return planet.ArcDist(s.game().player.LocalUp(), planet.BaseUp) },
 		"player": func() jsVec {
 			return jsVec(s.game().player.Pos)
 		},

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/planet"
 	"testing"
 )
 
@@ -101,8 +102,8 @@ func TestExampleMod(t *testing.T) {
 	if tr := content.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {
 		t.Errorf("terrain: %+v", tr)
 	}
-	mesa := content.Terrain.Features[0].center.Norm()
-	if h := content.Terrain.features(mesa); h != 45 {
+	mesa := planet.Toward(vec3{1, 0, 1}, 320)
+	if h := content.Terrain.FeatureHeight(mesa); h != 45 {
 		t.Errorf("on the mesa: %f", h)
 	}
 	if it, _ := content.Items.Get("serre:pousse"); it == nil || it.Places != "serre:pousse" {

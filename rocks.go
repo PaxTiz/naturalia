@@ -3,16 +3,14 @@ package main
 import (
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-const (
-	rockShapes   = 5
-	rockDrawDist = 150.0 // far enough to dot the plains at mid distance
-)
+const rockDrawDist = 150.0 // far enough to dot the plains at mid distance
 
 // rockModels sculpts count rock shapes with the given sphere resolution.
 func rockModels(sh rl.Shader, maps []rl.Texture2D, count int, seed uint64, rings, slices int) []rl.Model {
@@ -71,66 +69,19 @@ func sculptRock(seed uint64, rings, slices int) rl.Mesh {
 	return mesh
 }
 
-// rock is a boulder lying on the ground.
-type rock struct {
-	dir   vec3 // from Mars' center
-	size  float64
-	shape int
-	yaw   float64
-	tone  float64
-}
-
-// rocksIn lists the rocks of a dust tile: placed procedurally, mostly small
-// stones, now and then a big boulder. None around the base
-// nor on the polar ice.
-func (w *World) rocksIn(k tileKey) []rock {
-	f, tx, ty := k.split()
-	count := int(mathx.Hash3(f, tx, ty, w.Seed+201) * 8 * terrain().Rocks)
-	var rocks []rock
-	for i := range count {
-		s := w.Seed + 210 + uint64(i)*7
-		ci := tx*tileCells + int(mathx.Hash3(f, tx, ty, s)*tileCells)
-		cj := ty*tileCells + int(mathx.Hash3(f, tx, ty, s+1)*tileCells)
-		size := 0.2 + 0.7*math.Pow(mathx.Hash3(f, tx, ty, s+2), 3)
-		if mathx.Hash3(f, tx, ty, s+3) < 0.1 {
-			size = 1.4 + 1.3*mathx.Hash3(f, tx, ty, s+4) // a big boulder
-		}
-		d := cellDir(f, ci, cj)
-		if arcDist(d, baseUp) < baseReach+size+4 || (Relief{seed: w.Seed}).Ice(d) > 0.3 {
-			continue
-		}
-		rocks = append(rocks, rock{d, size, int(mathx.Hash3(f, tx, ty, s+5) * rockShapes), mathx.Hash3(f, tx, ty, s+6) * 2 * math.Pi, mathx.Hash3(f, tx, ty, s+7)})
-	}
-	return rocks
-}
-
-// RocksNear lists the rocks within dist meters of c.
-func (w *World) RocksNear(c vec3, dist float64) []rock {
-	c = c.Norm()
-	var out []rock
-	tilesNear(c, dist, func(k tileKey) {
-		for _, r := range w.rocksIn(k) {
-			if r.dir.Sub(c).Length()*marsRadius <= dist {
-				out = append(out, r)
-			}
-		}
-	})
-	return out
-}
-
 // drawRocks draws the rocks around the player, one instanced call per shape.
 // They shrink away at the edge of the drawing distance rather than pop.
 func (g *Game) drawRocks() {
 	gfx := g.gfx
-	var mats [rockShapes][]rl.Matrix
+	var mats [planet.RockShapes][]rl.Matrix
 	for _, r := range g.nearRocks {
-		up := r.dir
+		up := r.Dir
 		t1, t2 := mathx.TangentBasis(up)
-		ax := t1.Scale(math.Cos(r.yaw)).Add(t2.Scale(math.Sin(r.yaw)))
+		ax := t1.Scale(math.Cos(r.Yaw)).Add(t2.Scale(math.Sin(r.Yaw)))
 		az := ax.Cross(up)
-		ground := g.terrain.Surface(r.dir)
-		size := r.size * (1 - mathx.Smoothstep(rockDrawDist*0.8, rockDrawDist, ground.Sub(g.player.Pos).Length()))
-		mats[r.shape] = append(mats[r.shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
+		ground := g.terrain.Surface(r.Dir)
+		size := r.Size * (1 - mathx.Smoothstep(rockDrawDist*0.8, rockDrawDist, ground.Sub(g.player.Pos).Length()))
+		mats[r.Shape] = append(mats[r.Shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
 	}
 	gfx.drawInstanced(gfx.rocks, mats[:], func(k int) color.RGBA {
 		v := 140 + 15*float64(k)
@@ -141,9 +92,9 @@ func (g *Game) drawRocks() {
 // collideRocks keeps the player out of the bigger rocks.
 func (g *Game) collideRocks() {
 	for _, r := range g.nearRocks {
-		if r.size < 0.6 {
+		if r.Size < 0.6 {
 			continue
 		}
-		g.player.pushOut(g.terrain.Surface(r.dir), r.size*0.85)
+		g.player.pushOut(g.terrain.Surface(r.Dir), r.Size*0.85)
 	}
 }

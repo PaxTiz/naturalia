@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -61,6 +62,7 @@ type Graphics struct {
 	post                                              *postFX
 	shadow                                            *shadowMap
 	lampShadow                                        *lampShadow
+	dust                                              dustGPU // the dust tiles near the player, on the GPU
 	base                                              *building
 	doorPanel                                         rl.Model
 	screens                                           []rl.Texture2D
@@ -145,8 +147,8 @@ func NewGraphics() *Graphics {
 		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(sunDir), rl.ShaderUniformVec3)
 	}
 	for name, v := range map[string]float32{
-		"faceCells": faceCells, "tileCells": tileCells, "tilesPerFace": tilesPerFace,
-		"atlasTiles": atlasTiles, "marsRadius": marsRadius,
+		"faceCells": planet.FaceCells, "tileCells": planet.TileCells, "tilesPerFace": planet.TilesPerFace,
+		"atlasTiles": atlasTiles, "marsRadius": planet.Radius,
 	} {
 		rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, name), []float32{v}, rl.ShaderUniformFloat)
 	}
@@ -187,7 +189,7 @@ func NewGraphics() *Graphics {
 	for _, m := range []rl.Model{gfx.sphere, gfx.hemi, gfx.cyl, gfx.cone, gfx.cube, gfx.crystal} {
 		gfx.bindMaps(m)
 	}
-	gfx.rocks = rockModels(gfx.objectSh, objectMaps, rockShapes, 1300, 14, 18)
+	gfx.rocks = rockModels(gfx.objectSh, objectMaps, planet.RockShapes, 1300, 14, 18)
 	gfx.pebbles = rockModels(gfx.objectSh, objectMaps, pebbleShapes, 1700, 5, 7)
 
 	// Mars is big: see mountains far away, but keep the held tool, very
@@ -205,7 +207,7 @@ func NewGraphics() *Graphics {
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampGrid"), []float32{float32(gfx.lampShadow.grid)}, rl.ShaderUniformFloat)
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
-	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "tilesPerFace"), []float32{tilesPerFace}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "tilesPerFace"), []float32{planet.TilesPerFace}, rl.ShaderUniformFloat)
 	return gfx
 }
 
@@ -358,7 +360,7 @@ func (g *Game) Draw() {
 	gfx := g.gfx
 	cam := g.camera()
 
-	atlas, lookup := g.world.Upload(g.player.Pos)
+	atlas, lookup := gfx.dust.Upload(g.world, g.player.Pos)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapSpecular, lookup)
 	patches := g.terrain.Visible(g.player.Eye())
@@ -470,11 +472,11 @@ func (g *Game) drawDrones() {
 const gemDrawDist = 80.0
 
 // gemVisibility is how much of a crystal pokes out of the dust (0..1).
-func (g *Game) gemVisibility(gem Gem) float64 {
+func (g *Game) gemVisibility(gem planet.Gem) float64 {
 	return mathx.Clamp01(1 - g.world.DustAt(gem.Dir)*2.5)
 }
 
-func (g *Game) gemPos(gem Gem, s float64) vec3 {
+func (g *Game) gemPos(gem planet.Gem, s float64) vec3 {
 	lift := s*1.4 + math.Sin(g.clock*2+float64(gem.Key))*0.05
 	return g.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(lift))
 }

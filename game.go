@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 	"math/rand/v2"
 	"time"
@@ -77,16 +78,16 @@ type Floater struct {
 type Game struct {
 	st        State
 	player    Player
-	world     *World
+	world     *planet.World
 	terrain   *Terrain
 	gfx       *Graphics
 	rng       *rand.Rand
 	drones    []*Drone
 	particles []Particle
 	floaters  []Floater
-	nearGems  []Gem                // crystals around the player, refreshed every frame
-	nearRocks []rock               // boulders around the player
-	pebbles   map[tileKey][]pebble // per tile, around the player
+	nearGems  []planet.Gem                // crystals around the player, refreshed every frame
+	nearRocks []planet.Rock               // boulders around the player
+	pebbles   map[planet.TileKey][]pebble // per tile, around the player
 	dbg       debugInfo
 	sfx       *synth
 	fov       float64 // degrees, eased by updateFov
@@ -139,9 +140,10 @@ func NewGame() *Game {
 	}
 	fresh := g.world == nil
 	if fresh {
-		g.world = NewWorld(g.rng.Uint64())
+		g.world = planet.NewWorld(g.rng.Uint64(), &content.Terrain)
 	}
-	g.terrain = NewTerrain(g.world.Seed) // also sets basePos on the ground
+	basePos = planet.BaseUp.Scale(planet.Radius + g.world.Relief.BaseHeight())
+	g.terrain = NewTerrain(g.world.Relief)
 	if fresh {
 		g.player = Player{Pos: toWorld(spawnSpot), Heading: vec3{0, 0, -1}}
 		g.wakeUp = true
@@ -238,7 +240,7 @@ func (g *Game) updateAim() {
 	p := &g.player
 	eye, fwd := p.Eye(), p.Forward()
 	g.aim, g.aimOK = g.terrain.Raycast(eye, fwd, g.tool().Reach)
-	if g.aimOK && arcDist(g.aim.Norm(), baseUp) < baseReach {
+	if g.aimOK && planet.ArcDist(g.aim.Norm(), planet.BaseUp) < baseReach {
 		g.aimOK = false // the ground under the base isn't swept
 	}
 
@@ -304,7 +306,7 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	}
 }
 
-func (g *Game) collectGem(gem Gem) {
+func (g *Game) collectGem(gem planet.Gem) {
 	v := g.gemValue()
 	g.st.Credits += v
 	g.st.TotalEarned += v
@@ -350,7 +352,7 @@ const (
 func (g *Game) updateDrones(dt float64) {
 	radius := 0.8 + float64(g.toolTier())*0.5
 	amount := 0.6 * g.powerMult() * dt
-	docked := arcDist(g.player.LocalUp(), baseUp) < baseReach+15
+	docked := planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < baseReach+15
 	for i, d := range g.drones {
 		d.phase += dt
 		up := d.Pos.Norm()
@@ -364,8 +366,8 @@ func (g *Game) updateDrones(dt float64) {
 			hover += 0.5 // tank full: drones hover in place, waiting
 		default:
 			d.retarget -= dt
-			arrived := up.Sub(d.Target.Norm()).Length()*marsRadius < 0.3
-			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || arcDist(d.Target.Norm(), baseUp) < baseReach {
+			arrived := up.Sub(d.Target.Norm()).Length()*planet.Radius < 0.3
+			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || planet.ArcDist(d.Target.Norm(), planet.BaseUp) < baseReach {
 				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
 				d.retarget = 8 + g.rng.Float64()*5
 			}
@@ -379,13 +381,13 @@ func (g *Game) updateDrones(dt float64) {
 			d.Pos = d.Pos.Add(delta.Norm().Scale(math.Min(delta.Length(), droneSpeed*dt)))
 			up = d.Pos.Norm()
 		}
-		if arcDist(up, baseUp) < baseReach+6 {
+		if planet.ArcDist(up, planet.BaseUp) < baseReach+6 {
 			hover = math.Max(hover, dockAltitude) // fly over the domes, not through them
 		}
 		r := d.Pos.Length()
 		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
 		d.Pos = up.Scale(r)
-		if docked || g.tankFull() || arcDist(up, baseUp) < baseReach {
+		if docked || g.tankFull() || planet.ArcDist(up, planet.BaseUp) < baseReach {
 			continue
 		}
 		g.collect(g.world.Clean(up, radius, amount, g.space()), g.terrain.Surface(up), radius, d.Pos)
