@@ -17,6 +17,8 @@ const (
 	evEnter = "enter_building" // ID of the building
 	evLeave = "leave_building" // ID of the building
 	evWake  = "wake"           // the player gets up after sleeping
+	evPlace = "place"          // ID of the entity placed with an item, At
+	evDrive = "drive"          // ID of the vehicle the player gets in; empty when getting out
 )
 
 type Event struct {

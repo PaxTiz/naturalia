@@ -23,7 +23,12 @@ type Content struct {
 	Kits      Registry[kitProp]   // furniture and other kit pieces
 	Buildings Registry[Blueprint] // the first one is the hub
 	Events    Registry[RandomEvent]
-	Terrain   TerrainSettings // one for the whole game, patched by packs
+	Entities  Registry[EntityDef] // things standing in the world
+	Items     Registry[Item]      // carried, placed as entities
+	Vehicles  Registry[Vehicle]
+	// Debug adds lines to the debug overlay (F3).
+	Debug   []func(g *Game) string
+	Terrain TerrainSettings // one for the whole game, patched by packs
 
 	handlers map[string][]Handler // by event name (On)
 }
@@ -134,6 +139,9 @@ func loadContent() {
 	c.Kits.init("kit")
 	c.Buildings.init("building")
 	c.Events.init("event")
+	c.Entities.init("entity")
+	c.Items.init("item")
+	c.Vehicles.init("vehicle")
 	c.Terrain = defaultTerrain()
 
 	byID := map[string]Pack{}
@@ -186,6 +194,9 @@ func (c *Content) setPack(id string) {
 	c.Kits.pack = id
 	c.Buildings.pack = id
 	c.Events.pack = id
+	c.Entities.pack = id
+	c.Items.pack = id
+	c.Vehicles.pack = id
 }
 
 // finish checks the content once every pack is loaded.
@@ -216,6 +227,20 @@ func (c *Content) finish() {
 	}
 	for _, id := range c.Events.ids {
 		c.Events.items[id].ID = id
+	}
+	for _, id := range c.Entities.ids {
+		c.Entities.items[id].ID = id
+	}
+	for _, id := range c.Vehicles.ids {
+		c.Vehicles.items[id].ID = id
+	}
+	c.vehicleEntities()
+	for _, id := range c.Items.ids {
+		it := c.Items.items[id]
+		it.ID, it.Places = id, qualify(it.Places)
+		if e, ok := c.Entities.Get(it.Places); ok && e.Item == "" {
+			e.Item = id // picked up, it comes back as this item
+		}
 	}
 }
 

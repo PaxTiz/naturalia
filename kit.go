@@ -126,6 +126,7 @@ type building struct {
 	keys   []partKey
 	models []rl.Model
 	toks   []token // of each model, looked up once
+	local  bool    // in its own frame rather than the base's (entities)
 }
 
 type partKey struct {
@@ -137,7 +138,7 @@ type partKey struct {
 func (b *building) part(tok string, lit float32, at vec3) *meshBuilder {
 	k := partKey{tok, lit, at}
 	if b.parts[k] == nil {
-		b.parts[k] = &meshBuilder{}
+		b.parts[k] = &meshBuilder{local: b.local}
 		b.keys = append(b.keys, k)
 	}
 	return b.parts[k]

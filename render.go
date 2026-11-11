@@ -365,6 +365,7 @@ func (g *Game) Draw() {
 		g.drawRocks()
 		g.drawBase()
 		g.drawDrones()
+		g.drawEntities()
 	})
 	// The rooms' lamps cast shadows too, drawn once.
 	g.setUniforms(cam)
@@ -396,6 +397,7 @@ func (g *Game) Draw() {
 	// its costly shader runs (most of the screen, indoors).
 	g.drawBase()
 	g.drawDrones()
+	g.drawEntities()
 	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
 	for _, n := range patches {

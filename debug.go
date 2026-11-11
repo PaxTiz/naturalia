@@ -59,6 +59,10 @@ func (g *Game) drawDebug() {
 		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.dot(sunDir))*180/math.Pi, d.sun, d.ao),
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.world.DustAt(up), len(g.world.tiles)),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
+		fmt.Sprintf("packs %s   entités %d", packList(), len(g.st.Entities)),
+	}
+	for _, line := range content.Debug { // added by packs
+		lines = append(lines, line(g))
 	}
 	size, step := 15*u, 20*u
 	x, y := 40*u, 180*u

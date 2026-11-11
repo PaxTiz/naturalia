@@ -103,6 +103,18 @@ func TestExampleMod(t *testing.T) {
 	if h := content.Terrain.features(mesa); h != 45 {
 		t.Errorf("on the mesa: %f", h)
 	}
+	if it, _ := content.Items.Get("serre:pousse"); it == nil || it.Places != "serre:pousse" {
+		t.Errorf("item: %+v", it)
+	}
+	if e, _ := content.Entities.Get("serre:pousse"); e == nil || e.Item != "serre:pousse" {
+		t.Errorf("entity: %+v", e)
+	}
+	if e, _ := content.Entities.Get("serre:brouette"); e == nil || e.Parts[1].Token != "serre:leaf" {
+		t.Errorf("vehicle's entity: %+v", e)
+	}
+	if len(content.Debug) != 1 {
+		t.Errorf("%d debug lines", len(content.Debug))
+	}
 	if got := buildingAt(vec3{-10, 1, 10}); got != "serre:serre" {
 		t.Errorf("in the greenhouse: %q", got)
 	}

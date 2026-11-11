@@ -7,7 +7,9 @@
 //         inside(), clock(), distanceToBase(), player()
 // agir  : say(texte), giveCredits(n), burst(n, "#rrggbb"), beep(Hz),
 //         dustDevil(), random()
+//         spawn(entité), entities(entité), giveItem(objet, n), driving()
 // garder dans la sauvegarde : get(clé), set(clé, valeur)
+// mode debug (F3) : debugLine(() => "texte")
 
 game.on("enter_building", e => {
   if (e.id === "serre:serre") {
@@ -42,3 +44,13 @@ game.randomEvent({
 game.on("sell", e => {
   if (e.amount > 5000 && game.random() < 0.3) game.dustDevil();
 });
+
+// Chaque cristal ramassé a une chance de laisser une pousse derrière lui.
+game.on("gem_collected", () => {
+  if (game.random() < 0.2) {
+    game.spawn("pousse");
+    game.say("Une pousse a germé là où dormait le cristal");
+  }
+});
+
+game.debugLine(() => "serre : " + game.entities("pousse") + " pousses, " + (game.get("visits") || 0) + " visites");

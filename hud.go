@@ -227,6 +227,20 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 		rl.DrawRing(v(0, 0.55), 0.7*s, 0.95*s, 0, 360, 32, c)
 		rect(-0.18, -1, 0.18, 0.4, c)
 		tri(v(-0.5, -0.45), v(0.5, -0.45), v(0, -1.05), c)
+	case "vehicle": // a rover from the side: body, cab, two wheels
+		rect(-0.95, -0.1, 0.95, 0.35, c)
+		rect(-0.3, -0.6, 0.45, -0.1, c)
+		rect(-0.15, -0.48, 0.3, -0.2, uiInk)
+		for _, x := range []float32{-0.55, 0.55} {
+			rl.DrawCircleV(v(x, 0.5), 0.38*s, uiInk)
+			rl.DrawCircleV(v(x, 0.5), 0.28*s, c)
+		}
+	case "flag": // a pole and a pennant
+		rect(-0.55, -1, -0.4, 1, c)
+		tri(v(-0.4, -1), v(-0.4, 0.05), v(0.85, -0.47), c)
+	default: // anything else: a crate
+		rl.DrawRectangleLinesEx(rl.NewRectangle(cx-0.75*s, cy-0.75*s, 1.5*s, 1.5*s), 2.2*u, c)
+		rl.DrawLineEx(v(-0.75, -0.75), v(0.75, 0.75), 2*u, c)
 	}
 }
 
@@ -236,6 +250,9 @@ func shopPanel() rl.Rectangle {
 	w, h := screenSize()
 	return rl.NewRectangle((w-700*u)/2, (h-470*u)/2, 700*u, 470*u)
 }
+
+// shopRows is how many rows the shop shows at once; the wheel scrolls.
+const shopRows = 6
 
 func shopItemRect(i int) rl.Rectangle {
 	p, u := shopPanel(), uiScale()
@@ -263,7 +280,11 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 		g.drawBaseMarker(cam)
 		g.drawCompass()
 		g.drawReticle()
+		g.drawHeldItem()
 		switch {
+		case g.driving >= 0:
+			v, _ := g.driven()
+			gfx.prompt("E", "Descendre du "+strings.ToLower(v.Name), h*0.64, visorCyan)
 		case g.st.TotalDust < 5:
 			gfx.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
 		case g.hasUse():
@@ -305,6 +326,27 @@ func (g *Game) drawVisor() {
 }
 
 // drawHints lists the controls along the bottom of the visor, as keys.
+// drawHeldItem: what F places, under the status panel.
+func (g *Game) drawHeldItem() {
+	it, n := g.heldItem()
+	if it == nil {
+		return
+	}
+	gfx, u := g.gfx, uiScale()
+	x, y := 40*u, 158*u
+	label := fmt.Sprintf("%s ×%d", it.Name, n)
+	w := gfx.width(label, 16*u) + 150*u
+	visorPanel(rl.NewRectangle(x, y, w, 34*u), visorCyan)
+	icon(orDefault(it.Icon, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
+	gfx.text(label, x+36*u, y+8*u, 16*u, uiWhite)
+	kx := x + 44*u + gfx.width(label, 16*u)
+	kx += gfx.keycap("F", kx, y+9*u, 11*u) + 4*u
+	gfx.caps("poser", kx, y+11*u, 12*u, visorDim)
+	kx += gfx.capsWidth("poser", 12*u) + 10*u
+	kx += gfx.keycap("R", kx, y+9*u, 11*u) + 4*u
+	gfx.caps("changer", kx, y+11*u, 12*u, visorDim)
+}
+
 func (g *Game) drawHints() {
 	gfx, u := g.gfx, uiScale()
 	w, h := screenSize()
@@ -565,8 +607,12 @@ func (g *Game) drawShop() {
 	rl.DrawRing(coin, 3.5*u, 5.5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
 	gfx.monoRight(fmtNum(g.st.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
 
-	for i, it := range g.shopItems() {
-		r := shopItemRect(i)
+	items := g.shopItems()
+	for i, it := range items {
+		if i < g.shopScroll || i >= g.shopScroll+shopRows {
+			continue
+		}
+		r := shopItemRect(i - g.shopScroll)
 		bg := uiRow
 		if i == g.hover {
 			bg = uiRowLit
@@ -596,6 +642,15 @@ func (g *Game) drawShop() {
 			gfx.monoRight(fmtNum(it.cost)+" cr", right, r.Y+8*u, 20*u, costCol)
 		}
 		gfx.capsRight(strings.ToUpper(it.info), right, r.Y+35*u, 12*u, visorDim)
+	}
+	// A scroll bar when everything doesn't fit.
+	if len(items) > shopRows {
+		top, bottom := shopItemRect(0), shopItemRect(shopRows-1)
+		track := rl.NewRectangle(p.X+p.Width-12*u, top.Y, 4*u, bottom.Y+bottom.Height-top.Y)
+		rl.DrawRectangleRec(track, uiTrack)
+		h := track.Height * shopRows / float32(len(items))
+		y := track.Y + (track.Height-h)*float32(g.shopScroll)/float32(len(items)-shopRows)
+		rl.DrawRectangleRec(rl.NewRectangle(track.X, y, track.Width, h), visorCyan)
 	}
 	g.closeHint(p.X+p.Width/2, p.Y+p.Height+16*u, true)
 }

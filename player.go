@@ -25,10 +25,12 @@ type Player struct {
 	onGround   bool
 	walkPhase  float64
 	moveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
+	speed      float64 // driving: the vehicle's speed, no sprint nor jump
+	eyeH       float64 // driving: the seat's height
 }
 
 func (p *Player) LocalUp() vec3 { return p.Pos.norm() }
-func (p *Player) Eye() vec3     { return p.Pos.add(p.LocalUp().scale(eyeHeight)) }
+func (p *Player) Eye() vec3     { return p.Pos.add(p.LocalUp().scale(orZero(p.eyeH, eyeHeight))) }
 
 func (p *Player) Forward() vec3 {
 	return p.Heading.scale(math.Cos(p.Pitch)).add(p.LocalUp().scale(math.Sin(p.Pitch)))
@@ -72,11 +74,11 @@ func (p *Player) Update(dt float64, t *Terrain, control bool) {
 		if rl.IsKeyDown(rl.KeyA) {
 			move = move.sub(right)
 		}
-		move = move.norm().scale(walkSpeed)
-		if rl.IsKeyDown(rl.KeyLeftShift) {
+		move = move.norm().scale(orZero(p.speed, walkSpeed))
+		if rl.IsKeyDown(rl.KeyLeftShift) && p.speed == 0 {
 			move = move.scale(sprintFactor)
 		}
-		if p.onGround && rl.IsKeyPressed(rl.KeySpace) {
+		if p.onGround && rl.IsKeyPressed(rl.KeySpace) && p.speed == 0 {
 			p.vr = jumpSpeed
 			p.onGround = false
 		}

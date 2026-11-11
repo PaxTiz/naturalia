@@ -329,6 +329,9 @@ type interactable struct {
 // nearbyUse returns what the player can use right now: the closest
 // interactable within reach that they roughly face.
 func (g *Game) nearbyUse() (interactable, bool) {
+	if i, _ := g.nearbyEntity(); i >= 0 {
+		return g.entityUse(i), true
+	}
 	local := toLocal(g.player.Pos)
 	flat := vec3{local.X, 0, local.Z}
 	best, found := interactable{}, false

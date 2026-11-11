@@ -49,6 +49,37 @@
     }
   ],
 
+  "entities": {
+    "pousse": {
+      "name": "Jeune pousse",
+      "radius": 0.3,
+      "pickup": true,
+      "parts": [
+        {"shape": "prism", "token": "soil", "r0": 0.3, "h": 0.12, "sides": 8, "lit": "outdoor"},
+        {"shape": "prism", "token": "bark", "at": [0, 0.1, 0], "r0": 0.03, "h": 0.5, "sides": 5, "lit": "outdoor"},
+        {"shape": "prism", "token": "leaf", "at": [0, 0.45, 0], "r0": 0.25, "r1": 0.05, "h": 0.45, "sides": 6, "lit": "outdoor"}
+      ]
+    }
+  },
+
+  "items": [
+    {"id": "pousse", "name": "Jeune pousse", "desc": "Un peu de vert sur Mars (F pour la planter)", "icon": "flag", "cost": 120}
+  ],
+
+  "vehicles": [
+    {
+      "id": "brouette", "name": "Brouette à moteur", "desc": "Lente, mais elle balaie large",
+      "cost": 6000, "speed": 7, "sweep": 3.2, "rate": 1.6, "seat": 2.0, "radius": 1.0,
+      "parts": [
+        {"shape": "prism", "token": "rubber", "at": [0.9, 0.35, -0.12], "axis": [0, 0, 1], "r0": 0.35, "h": 0.24, "sides": 12, "lit": "outdoor"},
+        {"shape": "box", "token": "leaf", "at": [0, 0.75, 0], "size": [1.5, 0.5, 1.0], "bevel": 0.06, "lit": "outdoor"},
+        {"shape": "box", "token": "steel", "at": [-0.9, 0.7, 0.35], "size": [0.8, 0.05, 0.05], "yaw": 0, "lit": "outdoor"},
+        {"shape": "box", "token": "steel", "at": [-0.9, 0.7, -0.35], "size": [0.8, 0.05, 0.05], "lit": "outdoor"},
+        {"shape": "box", "token": "steel.dark", "at": [-0.35, 0.25, 0], "size": [0.1, 0.5, 0.8], "lit": "outdoor"}
+      ]
+    }
+  ],
+
   "tools": [
     {
       "id": "rateau", "name": "Râteau", "radius": 3, "reach": 7, "rate": 1.8, "cost": 1500,

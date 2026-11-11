@@ -16,6 +16,8 @@ type State struct {
 	Tool        string                    `json:"tool"`                // ID of the held tool
 	Levels      map[string]int            `json:"levels"`              // by upgrade ID; a removed mod's stay
 	Mods        map[string]map[string]any `json:"mods,omitempty"`      // what each mod's scripts keep
+	Items       map[string]int            `json:"items,omitempty"`     // carried, by item ID
+	Entities    []Placed                  `json:"entities,omitempty"`  // standing in the world
 	OldTier     int                       `json:"tool_tier,omitempty"` // before IDs: index of the tool
 	TotalDust   float64                   `json:"total_dust"`
 	TotalEarned float64                   `json:"total_earned"`
@@ -101,6 +103,9 @@ type Game struct {
 	message     string  // said by a mod (say), shown on the visor...
 	messageT    float64 // ...for this long still
 	hover       int
+	shopScroll  int // first row shown in the shop
+	itemSel     int // which carried item F places (R cycles)
+	driving     int // index in st.Entities of the vehicle driven, -1 on foot
 
 	walls    []segment2 // the base's walls, for collisions
 	doorOpen float64    // airlock doors: 0 closed, 1 open
@@ -119,9 +124,10 @@ type Game struct {
 
 func NewGame() *Game {
 	g := &Game{
-		rng:   rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
-		hover: -1,
-		sfx:   newSynth(),
+		rng:     rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
+		hover:   -1,
+		driving: -1,
+		sfx:     newSynth(),
 	}
 	g.load()
 	if g.st.Levels == nil {
@@ -177,7 +183,7 @@ func (g *Game) Update(dt float64) {
 		switch {
 		case rl.IsKeyPressed(rl.KeyEscape) || !rl.IsWindowFocused():
 			g.setMode(modePaused)
-		case rl.IsKeyPressed(rl.KeyE):
+		case rl.IsKeyPressed(rl.KeyE) && g.driving < 0:
 			if it, ok := g.nearbyUse(); ok {
 				g.use(it)
 			}
@@ -207,6 +213,9 @@ func (g *Game) Update(dt float64) {
 	g.updateFov(dt)
 	collideBase(&g.player, g.walls)
 	g.collideRocks()
+	g.updateVehicle(dt)
+	g.collideEntities()
+	g.updateItems()
 	g.updateBase(dt)
 	g.updateAim()
 	g.updateSweeping(dt)
@@ -489,10 +498,17 @@ func (g *Game) updateEffects(dt float64) {
 
 func (g *Game) updateShop() {
 	items := g.shopItems()
+	wheel := rl.GetMouseWheelMove()
+	if wheel < 0 || rl.IsKeyPressed(rl.KeyDown) {
+		g.shopScroll++
+	} else if wheel > 0 || rl.IsKeyPressed(rl.KeyUp) {
+		g.shopScroll--
+	}
+	g.shopScroll = max(0, min(g.shopScroll, len(items)-shopRows))
 	mouse := rl.GetMousePosition()
 	g.hover = -1
-	for i := range items {
-		if rl.CheckCollisionPointRec(mouse, shopItemRect(i)) {
+	for i := g.shopScroll; i < min(len(items), g.shopScroll+shopRows); i++ {
+		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-g.shopScroll)) {
 			g.hover = i
 		}
 	}

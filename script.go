@@ -131,11 +131,7 @@ func (s *script) api(c *Content) map[string]any {
 		"capacity": func() float64 { return s.game().capacity() },
 		"tool":     func() string { return s.game().tool().ID },
 		"level": func(id string) int {
-			own := qualifyIn(s.mod, id)
-			if _, ok := content.Upgrades.Get(own); !ok {
-				own = qualify(id) // not the mod's: the core's
-			}
-			return s.game().st.Levels[own]
+			return s.game().st.Levels[refIn(s.mod, id, func(id string) bool { _, ok := content.Upgrades.Get(id); return ok })]
 		},
 		"isDay":  func() bool { return sunDir.dot(s.game().player.LocalUp()) > 0.05 },
 		"inside": func() string { return s.game().inside },
@@ -175,6 +171,39 @@ func (s *script) api(c *Content) map[string]any {
 		"beep":      func(freq float64) { s.game().sfx.beep(0.05, 0.25, 0.14, freq) },
 		"dustDevil": func() { spawnDevil(s.game()) },
 		"random":    func() float64 { return s.game().rng.Float64() },
+		// spawn sets an entity where the player aims (or right ahead).
+		"spawn": func(kind string) bool {
+			g := s.game()
+			return g.spawn(refIn(s.mod, kind, isEntity), g.placeAt())
+		},
+		// entities counts the placed entities of a kind, all of them for "".
+		"entities": func(kind string) int {
+			n := 0
+			for _, e := range s.game().st.Entities {
+				if kind == "" || e.Kind == refIn(s.mod, kind, isEntity) {
+					n++
+				}
+			}
+			return n
+		},
+		"giveItem": func(id string, n int) {
+			g := s.game()
+			if g.st.Items == nil {
+				g.st.Items = map[string]int{}
+			}
+			id = refIn(s.mod, id, func(id string) bool { _, ok := content.Items.Get(id); return ok })
+			g.st.Items[id] = max(0, g.st.Items[id]+n)
+		},
+		"driving": func() string {
+			if v, ok := s.game().driven(); ok {
+				return v.ID
+			}
+			return ""
+		},
+		// debugLine adds a line to the debug overlay (F3): fn returns it.
+		"debugLine": func(fn goja.Callable) {
+			c.Debug = append(c.Debug, func(g *Game) string { return s.call(g, fn).String() })
+		},
 
 		// Remembering, in the save: numbers, strings, lists, objects.
 		"get": func(key string) any { return s.game().st.Mods[s.mod][key] },
@@ -189,6 +218,20 @@ func (s *script) api(c *Content) map[string]any {
 			g.st.Mods[s.mod][key] = v
 		},
 	}
+}
+
+func isEntity(id string) bool { _, ok := content.Entities.Get(id); return ok }
+
+// refIn resolves a name used by a mod's script: its own entry first, then
+// the core's.
+func refIn(mod, id string, exists func(string) bool) string {
+	if validID(id) {
+		return id
+	}
+	if own := mod + ":" + id; exists(own) {
+		return own
+	}
+	return qualify(id)
 }
 
 // qualifyIn puts a bare name in the mod's namespace.

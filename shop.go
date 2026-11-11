@@ -156,6 +156,33 @@ func (g *Game) shopItems() []shopItem {
 		}
 		items = append(items, it)
 	}
+
+	for _, v := range content.Vehicles.All() {
+		it := shopItem{
+			id: v.ID, name: "Véhicule : " + v.Name, desc: v.Desc, icon: "vehicle",
+			info: fmt.Sprintf("%.0f km/h", v.Speed*3.6), cost: v.Cost,
+			buy: func() { g.buyVehicle(v) },
+		}
+		if g.st.Levels[v.ID] > 0 {
+			it.maxed, it.info = true, "Sur l'aire d'atterrissage"
+		}
+		items = append(items, it)
+	}
+	for _, o := range content.Items.All() {
+		if o.Cost <= 0 {
+			continue
+		}
+		items = append(items, shopItem{
+			id: o.ID, name: o.Name, desc: o.Desc, icon: orDefault(o.Icon, "flag"),
+			info: fmt.Sprintf("Objet · %d sur toi", g.st.Items[o.ID]), cost: o.Cost,
+			buy: func() {
+				if g.st.Items == nil {
+					g.st.Items = map[string]int{}
+				}
+				g.st.Items[o.ID]++
+			},
+		})
+	}
 	return items
 }
 

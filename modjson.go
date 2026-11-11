@@ -26,12 +26,15 @@ type modFile struct {
 	Version  string   `json:"version"`
 	Requires []string `json:"requires"`
 
-	Tools     []Tool             `json:"tools"`
-	Upgrades  []Upgrade          `json:"upgrades"`
-	Tokens    map[string]token   `json:"tokens"`
-	Kits      map[string]kitJSON `json:"kits"`
-	Buildings []Blueprint        `json:"buildings"`
-	Scripts   []string           `json:"scripts"` // JavaScript files, run in order (script.go)
+	Tools     []Tool               `json:"tools"`
+	Upgrades  []Upgrade            `json:"upgrades"`
+	Tokens    map[string]token     `json:"tokens"`
+	Kits      map[string]kitJSON   `json:"kits"`
+	Buildings []Blueprint          `json:"buildings"`
+	Entities  map[string]EntityDef `json:"entities"` // things standing in the world (entities.go)
+	Items     []Item               `json:"items"`    // carried, placed as entities with F
+	Vehicles  []Vehicle            `json:"vehicles"` // driven (vehicles.go)
+	Scripts   []string             `json:"scripts"`  // JavaScript files, run in order (script.go)
 	// Terrain changes the generation: only the settings given, features
 	// added to those of other packs (terrain_mod.go).
 	Terrain json.RawMessage `json:"terrain"`
@@ -43,12 +46,17 @@ type modFile struct {
 		Upgrades  map[string]json.RawMessage `json:"upgrades"`
 		Tokens    map[string]json.RawMessage `json:"tokens"`
 		Buildings map[string]json.RawMessage `json:"buildings"`
+		Vehicles  map[string]json.RawMessage `json:"vehicles"`
+		Items     map[string]json.RawMessage `json:"items"`
 	} `json:"patch"`
 	Remove struct {
 		Tools     []string `json:"tools"`
 		Upgrades  []string `json:"upgrades"`
 		Buildings []string `json:"buildings"`
 		Events    []string `json:"events"`
+		Entities  []string `json:"entities"`
+		Items     []string `json:"items"`
+		Vehicles  []string `json:"vehicles"`
 	} `json:"remove"`
 
 	dir string
@@ -176,6 +184,15 @@ func (m *modFile) register(c *Content) {
 	for _, id := range m.Remove.Events {
 		c.Events.Remove(id)
 	}
+	for _, id := range m.Remove.Entities {
+		c.Entities.Remove(id)
+	}
+	for _, id := range m.Remove.Items {
+		c.Items.Remove(id)
+	}
+	for _, id := range m.Remove.Vehicles {
+		c.Vehicles.Remove(id)
+	}
 
 	for name, t := range m.Tokens {
 		c.Tokens.Add(m.own(name), t)
@@ -185,6 +202,27 @@ func (m *modFile) register(c *Content) {
 			k.Parts[i].Token = m.ref(k.Parts[i].Token, isTok)
 		}
 		c.Kits.Add(m.own(name), k.kit())
+	}
+	refParts := func(parts []partJSON) {
+		for i := range parts {
+			parts[i].Token = m.ref(parts[i].Token, isTok)
+		}
+	}
+	isEnt := func(id string) bool { _, ok := c.Entities.Get(id); return ok }
+	for name, e := range m.Entities {
+		refParts(e.Parts)
+		e.Item = ""
+		c.Entities.Add(m.own(name), e)
+	}
+	for _, v := range m.Vehicles {
+		v.ID = m.own(v.ID)
+		refParts(v.Parts)
+		c.Vehicles.Add(v.ID, v)
+	}
+	for _, it := range m.Items {
+		it.ID = m.own(it.ID)
+		it.Places = m.ref(orDefault(it.Places, it.ID), isEnt)
+		c.Items.Add(it.ID, it)
 	}
 	for _, t := range m.Tools {
 		t.ID = m.own(t.ID)
@@ -242,6 +280,12 @@ func (m *modFile) register(c *Content) {
 	})
 	patch("building", m.Patch.Buildings, func(id string, raw json.RawMessage) bool {
 		return c.Buildings.Patch(id, func(b *Blueprint) { unmarshal(raw, b) })
+	})
+	patch("vehicle", m.Patch.Vehicles, func(id string, raw json.RawMessage) bool {
+		return c.Vehicles.Patch(id, func(v *Vehicle) { unmarshal(raw, v) })
+	})
+	patch("item", m.Patch.Items, func(id string, raw json.RawMessage) bool {
+		return c.Items.Patch(id, func(it *Item) { unmarshal(raw, it) })
 	})
 
 	if len(m.Terrain) > 0 {

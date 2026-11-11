@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"maps"
+	"math"
 	"slices"
 )
 
@@ -58,6 +59,40 @@ func registerCore(c *Content) {
 	for _, bp := range coreBuildings {
 		c.Buildings.Add(bp.ID, bp)
 	}
+
+	c.Entities.Add("core:flag", EntityDef{Name: "Drapeau", Pickup: true, Radius: 0.15, Parts: []partJSON{
+		{Shape: "prism", Token: "steel.dark", R0: 0.16, R1: 0.12, H: 0.08, Sides: 8, Lit: "outdoor"},
+		{Shape: "prism", Token: "steel", R0: 0.025, H: 2.3, Sides: 6, Lit: "outdoor"},
+		{Shape: "prism", Token: "steel", At: vec3{0, 2.3, 0}, R0: 0.045, H: 0.05, Sides: 8, Lit: "outdoor"},
+		{Shape: "box", Token: "hazard", At: vec3{0.42, 2.0, 0}, Size: vec3{0.8, 0.5, 0.015}, Lit: "outdoor"},
+		{Shape: "box", Token: "neon.cyan", At: vec3{0.42, 1.73, 0}, Size: vec3{0.8, 0.04, 0.02}, Lit: "outdoor"},
+	}})
+	c.Items.Add("core:flag", Item{Name: "Drapeau", Desc: "À planter où tu veux : un repère visible de loin (F)",
+		Icon: "flag", Cost: 40, Places: "core:flag"})
+
+	wheels := []partJSON{}
+	for _, x := range []float64{-0.85, 0.85} {
+		for _, z := range []float64{-0.8, 0.8} {
+			wheels = append(wheels,
+				partJSON{Shape: "prism", Token: "rubber", At: vec3{x, 0.4, z - 0.15}, Axis: vec3{0, 0, 1}, R0: 0.4, H: 0.3, Sides: 12, Bevel: 0.04, Lit: "outdoor"},
+				partJSON{Shape: "prism", Token: "steel", At: vec3{x, 0.4, z + 0.16*math.Copysign(1, z) - 0.01}, Axis: vec3{0, 0, 1}, R0: 0.18, H: 0.02, Sides: 8, Lit: "outdoor"})
+		}
+	}
+	c.Vehicles.Add("core:rover", Vehicle{
+		Name: "Rover balayeur", Desc: "Roule à 45 km/h et aspire la poussière sous ses roues",
+		Cost: 15_000, Speed: 12.5, Sweep: 2.2, Rate: 2.5, Seat: 2.3, Radius: 1.5,
+		Parts: append(wheels,
+			partJSON{Shape: "box", Token: "steel.dark", At: vec3{0, 0.55, 0}, Size: vec3{2.3, 0.25, 1.3}, Bevel: 0.04, Lit: "outdoor"},
+			partJSON{Shape: "box", Token: "habitat.white", At: vec3{-0.25, 0.9, 0}, Size: vec3{1.7, 0.5, 1.4}, Bevel: 0.08, Lit: "outdoor"},
+			partJSON{Shape: "box", Token: "hazard", At: vec3{-0.25, 0.72, 0}, Size: vec3{1.72, 0.12, 1.42}, Lit: "outdoor"},
+			partJSON{Shape: "box", Token: "habitat.white2", At: vec3{0.75, 1.15, 0}, Size: vec3{0.7, 0.75, 1.2}, Bevel: 0.08, Lit: "outdoor"},
+			partJSON{Shape: "box", Token: "glass.dark", At: vec3{1.1, 1.3, 0}, Size: vec3{0.04, 0.4, 1.0}, Lit: "outdoor"},
+			partJSON{Shape: "box", Token: "steel", At: vec3{1.3, 0.3, 0}, Size: vec3{0.35, 0.2, 1.6}, Bevel: 0.04, Lit: "outdoor"},
+			partJSON{Shape: "box", Token: "neon.cyan", At: vec3{1.45, 0.28, 0}, Size: vec3{0.03, 0.05, 1.4}, Lit: "outdoor"},
+			partJSON{Shape: "prism", Token: "steel", At: vec3{-0.8, 1.15, 0.45}, R0: 0.02, H: 1.1, Sides: 5, Lit: "outdoor"},
+			partJSON{Shape: "prism", Token: "led.green", At: vec3{-0.8, 2.25, 0.45}, R0: 0.04, H: 0.06, Sides: 6, Lit: "outdoor"},
+		),
+	})
 
 	c.Events.Add("core:dust-devil", RandomEvent{Every: 15, When: devilWeather, Run: spawnDevil})
 	c.On(evTick, moveDevils)
