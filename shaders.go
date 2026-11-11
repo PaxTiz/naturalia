@@ -46,17 +46,19 @@ float fbm3(vec3 p) {
 // daylight: 1 when the sun is well above the local horizon, 0 at night.
 float daylight(vec3 up) { return smoothstep(-0.12, 0.18, dot(sunDir, up)); }
 
-// skyColor is the color of the sky seen along d: a clean gradient from a
-// peach horizon to a deep dusty rose overhead, bluish around the sun, a
-// blue glow at sunset.
+// skyColor is the color of the sky seen along d: three flat bands softly
+// blended (peach horizon, dusty rose, deep wine overhead), a small bluish
+// halo around the sun, a blue glow at sunset. At night the horizon keeps a
+// faint violet glow so the relief stands out as a silhouette.
 vec3 skyColor(vec3 d, vec3 up) {
     float h = dot(d, up);
     float s = max(dot(d, sunDir), 0.0);
     float day = daylight(up);
-    vec3 col = mix(vec3(1.00, 0.52, 0.32), vec3(0.36, 0.16, 0.18), smoothstep(-0.02, 0.55, h));
-    col = mix(col, vec3(0.89, 1.03, 1.27), pow(s, 16.0) * 0.6);
-    col += vec3(1.0, 0.8, 0.6) * pow(s, 4.0) * 0.18;
-    vec3 night = mix(vec3(0.05, 0.035, 0.04), vec3(0.008, 0.009, 0.02), smoothstep(-0.05, 0.5, h));
+    vec3 col = mix(vec3(1.00, 0.58, 0.36), vec3(0.78, 0.36, 0.28), smoothstep(-0.02, 0.16, h));
+    col = mix(col, vec3(0.34, 0.13, 0.16), smoothstep(0.12, 0.75, h));
+    col = mix(col, vec3(0.78, 0.86, 1.05), pow(s, 48.0) * 0.5);
+    col += vec3(1.0, 0.72, 0.48) * pow(s, 10.0) * 0.07;
+    vec3 night = mix(vec3(0.075, 0.07, 0.14), vec3(0.010, 0.012, 0.035), smoothstep(-0.05, 0.4, h));
     col = mix(night, col, day);
     float dusk = smoothstep(-0.35, -0.05, dot(sunDir, up)) * (1.0 - day * 0.7);
     col += vec3(0.25, 0.45, 0.95) * pow(s, 6.0) * dusk * 1.4;
@@ -75,6 +77,10 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
     fill *= mix(vec3(1.0), vec3(0.85, 0.9, 1.3), (1.0 - wrap * shadow) * day);
     vec3 col = albedo * (sunCol * wrap * 1.3 * shadow + fill * (0.55 + 0.3 * dot(n, up)) * ao);
     col += albedo * bounceCol * clamp(0.5 - 0.5 * dot(n, up), 0.0, 1.0) * day * ao;
+    // At night a cold, faint key light, as if from Phobos: the faces turned
+    // to it catch a blue sheen, the others sink into the dark.
+    vec3 mk = normalize(up + 0.9 * normalize(phobosDir - up * dot(phobosDir, up) + vec3(1e-4)));
+    col += albedo * vec3(0.10, 0.13, 0.26) * smoothstep(-0.05, 0.4, dot(n, mk)) * (1.0 - day);
     col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12 * (0.2 + 0.8 * day);
     vec3 h = normalize(sunDir + v);
     col += sunCol * pow(max(dot(n, h), 0.0), 48.0) * spec * shadow;
@@ -254,16 +260,17 @@ void main() {
     rock = mix(rock, rock * 0.85, rg.g * 0.5);
     rock *= 1.0 - rg.b * 0.2;
     // Polar ice: bluish white with faint layers.
-    vec3 iceCol = mix(vec3(0.70, 0.78, 0.88), vec3(0.92, 0.95, 1.0), smoothstep(0.3, 0.7, fract(alt / 2.5 + big)));
+    vec3 iceCol = mix(vec3(0.60, 0.70, 0.84), vec3(0.84, 0.89, 0.97), smoothstep(0.3, 0.7, fract(alt / 2.5 + big)));
     rock = mix(rock, iceCol * (0.85 + 0.25 * rg.r), ice);
 
     // Dust settles in the hollows first; pebbles poke through thin layers.
     float edge = (fbm3(fragPos * 1.7) - 0.5) * 0.3;
     float cover = smoothstep(0.08, 0.36, dust + edge + (0.45 - rg.a) * 0.45 * (1.0 - dust));
-    vec3 dustCol = mix(vec3(0.74, 0.43, 0.24), vec3(0.88, 0.58, 0.36), fbm3(fragPos * 0.12 + 5.0));
+    vec3 dustCol = mix(vec3(0.70, 0.37, 0.19), vec3(0.84, 0.50, 0.29), smoothstep(0.3, 0.7, fbm3(fragPos * 0.05 + 5.0)));
     dustCol = mix(dustCol, vec3(0.42, 0.27, 0.19), basalt * 0.7);
-    dustCol = mix(dustCol, strata * 1.15, steep * 0.45 * (1.0 - basalt));
-    dustCol = mix(dustCol, vec3(0.97, 0.93, 0.92), ice * 0.95); // dust mixed with frost
+    float cliff = smoothstep(0.7, 0.5, dot(normalize(fragNormal), up)); // dunes are never this steep
+    dustCol = mix(dustCol, strata * 1.15, cliff * 0.45 * (1.0 - basalt));
+    dustCol = mix(dustCol, vec3(0.80, 0.82, 0.90), ice * 0.95); // dust mixed with frost
     dustCol *= 0.88 + 0.2 * ds.r;
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
