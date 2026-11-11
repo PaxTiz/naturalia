@@ -383,6 +383,9 @@ uniform float lighting;   // 0 sun, 1 lamps, 2 lamps on back faces, 3 lamps on f
 uniform vec3 room;
 uniform vec4 lights[12];  // ceiling lamps: xyz position, w intensity
 uniform float lightCount;
+uniform sampler2D lampShadowMap; // depth seen from one lamp (shadow.go)
+uniform vec4 lampVP[4];          // that lamp's camera, by columns
+uniform float lampShadowIdx;     // which of the lights it is, -1 for none
 uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
 uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
@@ -404,8 +407,23 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
         // so the room has a lit heart and cool, deep edges.
         float att = lights[i].w / (1.0 + 0.22 * d * d);
         float wrap = smoothstep(-0.2, 0.45, dot(n, l));
-        col += albedo * lampCol * wrap * att * 2.1;
-        col += lampCol * pow(max(dot(n, normalize(l + v)), 0.0), 40.0) * spec * att * 0.6;
+        float lit = 1.0;
+        if (abs(float(i) - lampShadowIdx) < 0.5) {
+            // Pushed a little off the surface, then looked up in the map,
+            // softened over 3×3 texels.
+            vec4 lp = mat4(lampVP[0], lampVP[1], lampVP[2], lampVP[3]) * vec4(origin + fragRel + n * 0.04, 1.0);
+            vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
+            if (lp.w > 0.0 && all(greaterThan(sc.xy, vec2(0.0))) && all(lessThan(sc.xy, vec2(1.0)))) {
+                vec2 t = 1.5 / vec2(textureSize(lampShadowMap, 0));
+                float sum = 0.0;
+                for (int y = -1; y <= 1; y++)
+                    for (int x = -1; x <= 1; x++)
+                        sum += step(sc.z - 0.00002, texture(lampShadowMap, sc.xy + vec2(x, y) * t).r);
+                lit = mix(0.25, 1.0, sum / 9.0);
+            }
+        }
+        col += albedo * lampCol * wrap * att * 2.1 * lit;
+        col += lampCol * pow(max(dot(n, normalize(l + v)), 0.0), 40.0) * spec * att * 0.6 * lit;
     }
     return col;
 }

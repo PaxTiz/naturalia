@@ -68,8 +68,29 @@ func (b *building) greebleRoom(bp *Blueprint, r room, seed int) {
 	// The dome: ribs outside, a hatch and a vent on top.
 	top := r.center.add(vec3{0, r.wallH, 0})
 	a, bh := r.radius+0.12, r.radius*0.55
-	for k := range 8 {
-		domeRib(b.part("steel", litSun, vec3{}), top, a+0.03, bh+0.03, (float64(k)+0.5)*math.Pi/4, 0.1, 0.06)
+	// A raised seam along every gore, wider steel ribs on every other one,
+	// and two bands around.
+	for k := range domeGores {
+		th := float64(k) * 2 * math.Pi / domeGores
+		if k%2 == 1 {
+			domeRib(b.part("steel", litSun, vec3{}), top, a+0.03, bh+0.03, th, 0.1, 0.06)
+		} else {
+			domeRib(b.part("habitat.white2", litSun, vec3{}), top, a+0.015, bh+0.015, th, 0.05, 0.03)
+		}
+	}
+	for _, phi := range []float64{0.42, 0.85} {
+		r, y := a*math.Cos(phi)+0.01, bh*math.Sin(phi)
+		ring := b.part("habitat.white2", litSun, vec3{})
+		for k := range domeGores {
+			t0, t1 := float64(k)*2*math.Pi/domeGores, float64(k+1)*2*math.Pi/domeGores
+			p0 := top.add(vec3{math.Cos(t0) * r, y, math.Sin(t0) * r})
+			p1 := top.add(vec3{math.Cos(t1) * r, y, math.Sin(t1) * r})
+			along := p1.sub(p0)
+			out := vec3{math.Cos((t0 + t1) / 2), 0, math.Sin((t0 + t1) / 2)}
+			nrm := out.scale(math.Cos(phi) / a).add(vec3{0, math.Sin(phi) / bh, 0}).norm()
+			ax := along.norm()
+			ring.boxBasis(p0.lerp(p1, 0.5), [3]vec3{ax, nrm.cross(ax), nrm}, vec3{along.length() + 0.04, 0.06, 0.03}, 0.01)
+		}
 	}
 	apex := top.add(vec3{0, bh - 0.04, 0})
 	b.part("steel", litSun, vec3{}).prism(apex, yUp, 0.75, 0.62, 0.16, 16, 0.03)
@@ -478,4 +499,98 @@ func buildDesk(b *building, at vec3, seed int) {
 	}
 	b.part("steel", litIndoor, vec3{}).prism(at.add(sd.scale(-0.5)).sub(f.scale(0.15)).add(vec3{0, 0.765, 0}), yUp, 0.02, 0.02, 0.35, 6, 0)
 	b.part("lamp.warm", litIndoor, vec3{}).prism(at.add(sd.scale(-0.5)).sub(f.scale(0.05)).add(vec3{0, 1.05, 0}), vec3{0, -1, 0}, 0.12, 0.06, 0.1, 10, 0)
+}
+
+// Clutter: small things left around by the crew, laid on surfaces.
+
+// mug puts a mug with its handle at p (on a surface).
+func (b *building) mug(p vec3, tok string, a float64) {
+	b.part(tok, litIndoor, vec3{}).prism(p, yUp, 0.045, 0.05, 0.1, 14, 0.008)
+	b.part("steel.dark", litIndoor, vec3{}).prism(p.add(vec3{0, 0.085, 0}), yUp, 0.04, 0.04, 0.016, 14, 0)
+	h := vec3{math.Cos(a), 0, math.Sin(a)}
+	b.part(tok, litIndoor, vec3{}).box(p.add(h.scale(0.06)).add(vec3{0, 0.05, 0}), vec3{0.02, 0.06, 0.012}, vec3{-h.Z, 0, h.X}, 0.004)
+}
+
+// papers lays a small fanned stack of sheets at p.
+func (b *building) papers(p vec3, a float64, n int) {
+	for k := range n {
+		t := a + float64(k)*0.25 - 0.3
+		b.part("paper", litIndoor, vec3{}).box(p.add(vec3{0, 0.003 + float64(k)*0.003, 0}).add(vec3{math.Cos(t*3) * 0.02, 0, math.Sin(t*3) * 0.02}), vec3{0.21, 0.002, 0.29}, vec3{math.Cos(t), 0, math.Sin(t)}, 0)
+	}
+}
+
+// tablet lays a data pad, its screen glowing.
+func (b *building) tablet(p vec3, a float64) {
+	d := vec3{math.Cos(a), 0, math.Sin(a)}
+	b.part("steel.dark", litIndoor, vec3{}).box(p.add(vec3{0, 0.008, 0}), vec3{0.24, 0.016, 0.17}, d, 0.006)
+	b.part("screen.dim", litIndoor, vec3{}).box(p.add(vec3{0, 0.017, 0}), vec3{0.21, 0.002, 0.14}, d, 0)
+}
+
+// toolbox puts a closed red toolbox with a handle at p.
+func (b *building) toolbox(p vec3, a float64) {
+	d := vec3{math.Cos(a), 0, math.Sin(a)}
+	b.part("pipe.red", litIndoor, vec3{}).box(p.add(vec3{0, 0.1, 0}), vec3{0.5, 0.2, 0.24}, d, 0.02)
+	b.part("steel.dark", litIndoor, vec3{}).box(p.add(vec3{0, 0.205, 0}), vec3{0.5, 0.012, 0.25}, d, 0.004)
+	for _, s := range []float64{-0.12, 0.12} {
+		b.part("steel", litIndoor, vec3{}).box(p.add(d.scale(s)).add(vec3{0, 0.25, 0}), vec3{0.02, 0.08, 0.02}, d, 0.004)
+	}
+	b.part("steel", litIndoor, vec3{}).box(p.add(vec3{0, 0.29, 0}), vec3{0.26, 0.02, 0.025}, d, 0.006)
+	b.part("steel", litIndoor, vec3{}).box(p.add(d.scale(0.2)).add(vec3{0, 0.14, 0}), vec3{0.04, 0.04, 0.25}, d, 0.006)
+}
+
+// coil lays a coiled cable on the floor at p.
+func (b *building) coil(p vec3, r float64, tok string) {
+	m := b.part(tok, litIndoor, vec3{})
+	for loop := range 3 {
+		rr := r - float64(loop)*0.035
+		const n = 14
+		for k := range n {
+			t0, t1 := float64(k)*2*math.Pi/n, float64(k+1)*2*math.Pi/n
+			p0 := p.add(vec3{math.Cos(t0) * rr, 0.018 + float64(loop)*0.02, math.Sin(t0) * rr})
+			p1 := p.add(vec3{math.Cos(t1) * rr, 0.018 + float64(loop)*0.02, math.Sin(t1) * rr})
+			m.prism(p0, p1.sub(p0), 0.016, 0.016, p1.sub(p0).length()+0.01, 6, 0)
+		}
+	}
+}
+
+// helmet sets a spare helmet down at p, visor toward a.
+func (b *building) helmet(p vec3, a float64) {
+	d := vec3{math.Cos(a), 0, math.Sin(a)}
+	b.part("habitat.white", litIndoor, vec3{}).dome(p.add(vec3{0, 0.06, 0}), 0.16, 0.2)
+	b.part("steel", litIndoor, vec3{}).prism(p, yUp, 0.165, 0.165, 0.07, 20, 0.01)
+	b.part("visor.gold", litIndoor, vec3{}).boxBasis(p.add(d.scale(0.13)).add(vec3{0, 0.14, 0}), [3]vec3{{-d.Z, 0, d.X}, vec3{0, 1, 0}, d}, vec3{0.2, 0.12, 0.06}, 0.03)
+}
+
+// clutter dresses a room according to what it is.
+func (b *building) clutter(bp *Blueprint) {
+	at := func(v vec3) vec3 { return bp.At.add(v) }
+	switch bp.ID {
+	case "core:hub":
+		b.coil(at(vec3{-4.3, floorTop, 2.6}), 0.26, "pipe.yellow")
+		b.toolbox(at(vec3{2.5, floorTop, 4.6}), 0.4)
+		b.helmet(at(polar(5.4, 0.8)).add(vec3{0, 1.24, 0}), 3.9)
+		b.tablet(at(vec3{0.6, 0.94, 0.6}), 0.7)
+		b.mug(at(vec3{-0.75, 0.93, -0.45}), "pipe.blue", 1)
+	case "core:sale":
+		b.coil(at(vec3{-2.8, floorTop, 1.6}), 0.3, "rubber")
+		b.toolbox(at(vec3{0.4, floorTop, 1.3}), 2.1)
+		b.papers(at(vec3{0.6, 0, -2.7}).add(vec3{0, 1.35, 0}), 0.4, 3)
+	case "core:research":
+		c := at(vec3{2.3, 0, 0})
+		b.mug(c.add(vec3{-0.4, 0.81, 0.85}), "habitat.white", 2.5)
+		b.papers(c.add(vec3{-0.35, 0.81, -0.75}), 0.2, 4)
+		b.tablet(c.add(vec3{-0.45, 0.81, 0.35}), 1.4)
+		wb := at(vec3{-0.6, 0, 3.0})
+		b.mug(wb.add(vec3{0.65, 0.93, 0.1}), "barrel.ochre", 0.3)
+		b.papers(wb.add(vec3{0.2, 0.93, 0.15}), 1.2, 2)
+		b.coil(at(vec3{-2.4, floorTop, 0.4}), 0.28, "pipe.blue")
+		b.helmet(at(vec3{3.0, floorTop, -2.9}), 3.5)
+	case "core:sleep":
+		b.mug(at(vec3{1.4, 0.63, 2.0}), "fabric.purple", 4)
+		desk := at(vec3{2.75, 0, 0.6})
+		b.papers(desk.add(vec3{0.05, 0.77, 0.3}), 2.0, 3)
+		b.tablet(desk.add(vec3{0.1, 0.77, -0.05}), 1.8)
+		b.mug(desk.add(vec3{-0.05, 0.77, -0.45}), "pipe.red", 2)
+		b.helmet(at(vec3{-1.4, floorTop, 2.9}), 5.2)
+	}
 }

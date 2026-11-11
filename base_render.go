@@ -52,9 +52,7 @@ func (g *Game) drawBase() {
 		gfx.base = buildBase(gfx.objectSh)
 		gfx.doorPanel = doorPanelModel(gfx.objectSh)
 		for _, m := range append(gfx.base.models, gfx.doorPanel) {
-			for i, t := range gfx.objectMaps {
-				rl.SetMaterialTexture(&m.GetMaterials()[0], int32(i), t)
-			}
+			gfx.bindMaps(m)
 		}
 	}
 

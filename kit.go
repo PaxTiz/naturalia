@@ -64,6 +64,8 @@ var tokens = map[string]token{
 	"planter.green": {color.RGBA{72, 150, 76, 255}, mtPlain, 1, 0.2, 0},
 	"planter.lime":  {color.RGBA{138, 186, 70, 255}, mtPlain, 1, 0.2, 0},
 	"lamp.grow":     {color.RGBA{230, 120, 220, 255}, mtPlain, 1, 0, 1},
+	"paper":         {color.RGBA{236, 234, 226, 255}, mtPlain, 1, 0, 0},
+	"visor.gold":    {color.RGBA{200, 150, 60, 255}, mtPlain, 1, 1.2, 0},
 }
 
 // Blueprint is a building as data.
@@ -252,6 +254,7 @@ func buildBase(sh rl.Shader) *building {
 	for i, bp := range plans {
 		b.room(bp)
 		b.greebleRoom(bp, bp.room(), i*97+3)
+		b.clutter(bp)
 	}
 	for i, c := range corridors {
 		b.corridor(c)
@@ -779,34 +782,47 @@ func (m *meshBuilder) prism(base, axis vec3, r0, r1, h float64, sides int, bevel
 	m.uvf = nil
 }
 
-// dome adds a smooth half ellipsoid on c: radius a, height bh, no floor.
+// domeGores is the number of flat gores of a dome.
+const domeGores = 16
+
+// dome adds a half ellipsoid on c (radius a, height bh, no floor) made of
+// flat gores, like a geodesic shell: each gore is flat across and smooth
+// from bottom to top, its corners on the ellipsoid.
 func (m *meshBuilder) dome(c vec3, a, bh float64) {
-	const rings, segs = 12, 40
-	pt := func(i, j int) (vec3, vec3) {
+	const rings, per = 12, 3 // per: rows of vertices across a gore
+	pt := func(i int, g, f float64) (vec3, vec3) {
 		phi := float64(i) / rings * math.Pi / 2
-		th := float64(j) / segs * 2 * math.Pi
 		cp, sp := math.Cos(phi), math.Sin(phi)
-		p := c.add(vec3{a * cp * math.Cos(th), bh * sp, a * cp * math.Sin(th)})
-		return p, vec3{cp * math.Cos(th) / a, sp / bh, cp * math.Sin(th) / a}.norm()
+		t0 := g * 2 * math.Pi / domeGores
+		t1 := (g + 1) * 2 * math.Pi / domeGores
+		e0 := vec3{math.Cos(t0), 0, math.Sin(t0)}
+		e1 := vec3{math.Cos(t1), 0, math.Sin(t1)}
+		dir := e0.lerp(e1, f) // straight across the gore
+		p := c.add(dir.scale(a * cp)).add(vec3{0, bh * sp, 0})
+		mid := e0.add(e1).norm()
+		return p, vec3{cp * mid.X / a, sp / bh, cp * mid.Z / a}.norm()
 	}
-	// Plates in rows of four down from the top, about 1.6 m wide.
-	n := math.Max(4, math.Round(2*math.Pi*a/1.6))
-	for i := range rings {
-		for j := range segs {
-			thc := (float64(j) + 0.5) / segs * 2 * math.Pi
-			m.uvf = func(p vec3) [2]float64 {
-				d := p.sub(c)
-				th := unwrap(math.Atan2(d.Z, d.X), thc)
-				phi := math.Asin(math.Max(-1, math.Min(1, d.Y/bh)))
-				return [2]float64{th / (2 * math.Pi) * n, (1 - phi/(math.Pi/2)) * 4}
-			}
-			p00, n00 := pt(i, j)
-			p01, n01 := pt(i, j+1)
-			p10, n10 := pt(i+1, j)
-			p11, n11 := pt(i+1, j+1)
-			m.smooth(p00, p01, p11, n00, n01, n11)
-			if i+1 < rings {
-				m.smooth(p00, p11, p10, n00, n11, n10)
+	for g := range domeGores {
+		gf := float64(g)
+		// One plate per gore and band of three rings.
+		m.uvf = func(p vec3) [2]float64 {
+			d := p.sub(c)
+			phi := math.Asin(math.Max(-1, math.Min(1, d.Y/bh)))
+			t0 := gf * 2 * math.Pi / domeGores
+			th := unwrap(math.Atan2(d.Z, d.X), t0+math.Pi/domeGores)
+			return [2]float64{(th - t0) / (2 * math.Pi / domeGores), (1 - phi/(math.Pi/2)) * 4}
+		}
+		for i := range rings {
+			for j := range per {
+				f0, f1 := float64(j)/per, float64(j+1)/per
+				p00, n00 := pt(i, gf, f0)
+				p01, n01 := pt(i, gf, f1)
+				p10, n10 := pt(i+1, gf, f0)
+				p11, n11 := pt(i+1, gf, f1)
+				m.smooth(p00, p01, p11, n00, n01, n11)
+				if i+1 < rings {
+					m.smooth(p00, p11, p10, n00, n11, n10)
+				}
 			}
 		}
 	}

@@ -91,3 +91,65 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 	rl.SetClipPlanes(0.05, 9000)
 	rl.EndTextureMode()
 }
+
+// lampShadow is the shadow map of the ceiling lamp of the room the player
+// is in: a wide perspective view straight down from the lamp. The base
+// never moves, so it is drawn again only when the player changes rooms.
+type lampShadow struct {
+	shadowMap
+	room int // index in rooms of the map drawn, -1 for none
+}
+
+const lampShadowRes = 1024
+
+func newLampShadow() *lampShadow {
+	img := rl.GenImageColor(lampShadowRes, lampShadowRes, rl.White)
+	rl.ImageFormat(img, rl.UncompressedR32)
+	s := &lampShadow{room: -1}
+	s.target.Texture = rl.LoadTextureFromImage(img)
+	rl.UnloadImage(img)
+	rl.SetTextureFilter(s.target.Texture, rl.FilterPoint)
+	rl.SetTextureWrap(s.target.Texture, rl.WrapClamp)
+	s.target.ID = rl.LoadFramebuffer()
+	rl.FramebufferAttach(s.target.ID, s.target.Texture.ID, rl.AttachmentColorChannel0, rl.AttachmentTexture2d, 0)
+	if !rl.FramebufferComplete(s.target.ID) {
+		panic("lamp shadow framebuffer incomplete")
+	}
+	rl.DisableFramebuffer()
+	return s
+}
+
+const lampFov = 150.0 // degrees: the lamp sees the whole room below it
+
+// update draws the map for room (an index in rooms) if it isn't already.
+func (s *lampShadow) update(gfx *Graphics, room int, lamp vec3, draw func()) {
+	if room == s.room {
+		return
+	}
+	s.room = room
+	if room < 0 {
+		return
+	}
+	rl.BeginTextureMode(s.target)
+	rl.ClearBackground(rl.White)
+	rl.SetClipPlanes(0.1, 30)
+	cam := rl.Camera3D{
+		Position: lamp.rl(), Target: lamp.sub(vec3{0, 1, 0}).rl(), Up: rl.Vector3{X: 1},
+		Fovy: lampFov, Projection: rl.CameraPerspective,
+	}
+	rl.BeginMode3D(cam)
+	view := rl.MatrixLookAt(cam.Position, cam.Target, cam.Up)
+	proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
+	s.lightVP = rl.MatrixMultiply(view, proj)
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
+	rl.SetBlendFactors(glOne, glOne, glMin)
+	rl.BeginBlendMode(rl.BlendCustom)
+	rl.DisableBackfaceCulling()
+	draw()
+	rl.EnableBackfaceCulling()
+	rl.EndBlendMode()
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
+	rl.EndMode3D()
+	rl.SetClipPlanes(0.05, 9000)
+	rl.EndTextureMode()
+}
