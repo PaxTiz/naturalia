@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"math"
@@ -130,7 +131,7 @@ func newShotRun(g *Game) *shotRun {
 	if v := os.Getenv("MS_SHOT_AT"); s.file != "" && v != "" {
 		var x, z, yaw float64
 		fmt.Sscanf(v, "%f,%f,%f", &x, &z, &yaw)
-		g.player.Pos = toWorld(vec3{x, floorTop, z})
+		g.player.Pos = base.ToWorld(vec3{x, base.FloorTop, z})
 		g.player.Heading = vec3{math.Cos(yaw), 0, math.Sin(yaw)}
 		g.player.Pitch = 0.05
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)

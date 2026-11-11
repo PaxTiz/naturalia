@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/planet"
 	"mars_sweeper/internal/script"
@@ -31,11 +32,11 @@ func TestEventsAndBuildings(t *testing.T) {
 	if got := buildingAt(vec3{0, 1, -9}); got != "" {
 		t.Errorf("in the airlock corridor: %q", got)
 	}
-	if n := len(yardObstacles()); n != 15 {
+	if n := len(base.YardObstacles()); n != 15 {
 		t.Errorf("the core base leaves out yard objects: %d obstacles", n)
 	}
-	if len(corridors) != 4 || len(rooms) != 4 || len(interactables) != 4 {
-		t.Errorf("%d corridors, %d rooms, %d interactables", len(corridors), len(rooms), len(interactables))
+	if len(base.Corridors) != 4 || len(base.Rooms) != 4 || len(base.Interactables) != 4 {
+		t.Errorf("%d corridors, %d rooms, %d interactables", len(base.Corridors), len(base.Rooms), len(base.Interactables))
 	}
 	var sold float64
 	reg.On(content.EvSell, func(g content.Game, e *content.Event) { sold += e.Amount })
@@ -62,20 +63,20 @@ func TestExampleMod(t *testing.T) {
 	if r, _ := reg.Tools.Get("serre:rateau"); r.Look.HeadCol.G != 0x8c || r.Look.HandleLen != 0.6 {
 		t.Errorf("rake look: %+v", r.Look)
 	}
-	if len(rooms) != 5 || len(corridors) != 5 {
-		t.Fatalf("%d rooms, %d corridors", len(rooms), len(corridors))
+	if len(base.Rooms) != 5 || len(base.Corridors) != 5 {
+		t.Fatalf("%d rooms, %d corridors", len(base.Rooms), len(base.Corridors))
 	}
-	bp := plans[4]
+	bp := base.Plans[4]
 	if bp.ID != "serre:serre" || bp.Props[0].Kit != "serre:arbre" || bp.Props[1].Kit != "core:planter" || len(bp.Doors) != 1 {
 		t.Errorf("greenhouse: %+v", bp)
 	}
-	if len(plans[0].Doors) != 5 {
-		t.Errorf("hub doors: %v", plans[0].Doors)
+	if len(base.Plans[0].Doors) != 5 {
+		t.Errorf("hub doors: %v", base.Plans[0].Doors)
 	}
 	if tk, _ := reg.Tokens.Get("serre:leaf"); tk.Col.G != 0xa0 || tk.Scale != 1 {
 		t.Errorf("leaf token: %+v", tk)
 	}
-	if n := len(yardObstacles()); n != 14 {
+	if n := len(base.YardObstacles()); n != 14 {
 		t.Errorf("the greenhouse should push the barrels away: %d yard obstacles", n)
 	}
 	if tr := reg.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {

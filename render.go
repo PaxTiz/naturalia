@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
@@ -65,7 +66,7 @@ type Graphics struct {
 	shadow                                            *shadowMap
 	lampShadow                                        *lampShadow
 	dust                                              dustGPU // the dust tiles near the player, on the GPU
-	base                                              *building
+	base                                              *baseModels
 	doorPanel                                         rl.Model
 	entities                                          map[string][]entityModel // by entity ID, built on first draw
 	screens                                           []rl.Texture2D
@@ -169,7 +170,7 @@ func NewGraphics() *Graphics {
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 	gfx.shadow = newShadowMap()
-	gfx.lampShadow = newLampShadow(len(rooms))
+	gfx.lampShadow = newLampShadow(len(base.Rooms))
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(gfx.terrainSh, "shadowMap"))
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
 
@@ -201,12 +202,12 @@ func NewGraphics() *Graphics {
 
 	// The base's ceiling lamps never move.
 	var lights []float32
-	for _, l := range baseLights() {
-		p := toWorld(l)
+	for _, l := range base.Lights() {
+		p := base.ToWorld(l)
 		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), 1)
 	}
 	lights[3] = 1.4 // the hub is bigger
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(len(rooms))}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(len(base.Rooms))}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampGrid"), []float32{float32(gfx.lampShadow.grid)}, rl.ShaderUniformFloat)
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
@@ -309,21 +310,21 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	}
 	// The base's shapes, for its ambient occlusion (baseAO).
 	var rms, crs, csz []float32
-	for _, r := range rooms {
-		rms = append(rms, float32(r.center.X), float32(r.center.Z), float32(r.radius), float32(r.wallH))
+	for _, r := range base.Rooms {
+		rms = append(rms, float32(r.Center.X), float32(r.Center.Z), float32(r.Radius), float32(r.WallH))
 	}
-	for _, c := range corridors {
-		crs = append(crs, float32(c.from.X), float32(c.from.Z), float32(c.to.X), float32(c.to.Z))
-		csz = append(csz, float32(c.width), float32(c.height), 0, 0)
+	for _, c := range base.Corridors {
+		crs = append(crs, float32(c.From.X), float32(c.From.Z), float32(c.To.X), float32(c.To.Z))
+		csz = append(csz, float32(c.Width), float32(c.Height), 0, 0)
 	}
 	var blobs []float32
-	for _, ob := range baseObstacles[:min(len(baseObstacles), 48)] {
+	for _, ob := range base.Obstacles[:min(len(base.Obstacles), 48)] {
 		blobs = append(blobs, float32(ob.At.X), float32(ob.At.Z), float32(ob.Radius), 0)
 	}
 	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "blobCount"), []float32{float32(len(blobs) / 4)}, rl.ShaderUniformFloat)
-		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(basePos.Sub(o)), rl.ShaderUniformVec3)
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(base.Origin.Sub(o)), rl.ShaderUniformVec3)
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseRooms"), rms, rl.ShaderUniformVec4, int32(len(rms)/4))
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrs"), crs, rl.ShaderUniformVec4, int32(len(crs)/4))
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrSize"), csz, rl.ShaderUniformVec4, int32(len(csz)/4))
@@ -347,9 +348,9 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	// Soft round shadows of the base's domes, for when the base is beyond
 	// the shadow map.
 	var casters []float32
-	for _, r := range rooms {
-		c := toWorld(r.center.Add(vec3{0, r.wallH * 0.7, 0}))
-		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(r.radius*1.05))
+	for _, r := range base.Rooms {
+		c := base.ToWorld(r.Center.Add(vec3{0, r.WallH * 0.7, 0}))
+		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(r.Radius*1.05))
 	}
 	n := min(len(casters)/4, maxCasters)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
@@ -380,8 +381,8 @@ func (g *Game) Draw() {
 	g.setUniforms(cam)
 	if gfx.base != nil {
 		var lamps []vec3
-		for _, l := range baseLights()[:len(rooms)] {
-			lamps = append(lamps, toWorld(l).Sub(vec3{0, 0.12, 0}))
+		for _, l := range base.Lights()[:len(base.Rooms)] {
+			lamps = append(lamps, base.ToWorld(l).Sub(vec3{0, 0.12, 0}))
 		}
 		gfx.lampShadow.render(gfx, lamps, func() { g.drawBase() })
 		vp := gfx.lampShadow.cols(g.origin)
@@ -389,7 +390,7 @@ func (g *Game) Draw() {
 	}
 
 	sunUp := g.player.Pos.Norm().Dot(sunDir)
-	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors(toLocal(g.player.Eye())))
+	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, base.Indoors(base.ToLocal(g.player.Eye())))
 	gfx.post.resize()
 	rl.BeginTextureMode(gfx.post.scene)
 	rl.ClearBackground(rl.Black)
@@ -417,7 +418,7 @@ func (g *Game) Draw() {
 	g.drawPebbles()
 	g.drawGems()
 	g.drawDevils()
-	if indoors(toLocal(g.player.Eye())) {
+	if base.Indoors(base.ToLocal(g.player.Eye())) {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
 	g.drawTool()

@@ -1,4 +1,4 @@
-package main
+package base
 
 import (
 	"mars_sweeper/internal/content"
@@ -23,7 +23,7 @@ func grnd(seed, k int) float64 {
 var yUp = vec3{0, 1, 0}
 
 // greebleRoom dresses one room, outside and inside.
-func (b *building) greebleRoom(bp *content.Blueprint, r room, seed int) {
+func (b *building) greebleRoom(bp *content.Blueprint, r Room, seed int) {
 	panels := r.panels()
 	ladder := false
 	for i, p := range panels {
@@ -32,11 +32,11 @@ func (b *building) greebleRoom(bp *content.Blueprint, r room, seed int) {
 		}
 		out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
 		along := vec3{-out.Z, 0, out.X}
-		outer := p.mid.Add(out.Scale(wallThick / 2))
-		inner := p.mid.Sub(out.Scale(wallThick/2 + 0.04)) // in front of the wainscot
+		outer := p.mid.Add(out.Scale(WallThick / 2))
+		inner := p.mid.Sub(out.Scale(WallThick/2 + 0.04)) // in front of the wainscot
 		nextToDoor := false
 		for _, o := range r.openings {
-			if angleDist(p.angle, o) < (doorWidth/2+1.3)/r.radius {
+			if angleDist(p.angle, o) < (DoorWidth/2+1.3)/r.Radius {
 				nextToDoor = true
 			}
 		}
@@ -61,7 +61,7 @@ func (b *building) greebleRoom(bp *content.Blueprint, r room, seed int) {
 		b.outsidePiece(kind, outer, out, along, p.width, seed+i)
 
 		// Inside: conduits under the dome, then the panel's piece.
-		ceil := r.wallH - 0.28
+		ceil := r.WallH - 0.28
 		pipeRun(b.Part("steel", mesh.LitIndoor, vec3{}), inner.Sub(out.Scale(0.1)).Add(vec3{0, ceil, 0}), along, p.width, 0.05)
 		pipeRun(b.Part("pipe.blue", mesh.LitIndoor, vec3{}), inner.Sub(out.Scale(0.22)).Add(vec3{0, ceil + 0.1, 0}), along, p.width, 0.04)
 		b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(inner.Sub(out.Scale(0.14)).Add(vec3{0, ceil + 0.05, 0}), vec3{0.08, 0.1, 0.32}, along, 0.015)
@@ -71,8 +71,8 @@ func (b *building) greebleRoom(bp *content.Blueprint, r room, seed int) {
 	}
 
 	// The dome: ribs outside, a hatch and a vent on top.
-	top := r.center.Add(vec3{0, r.wallH, 0})
-	a, bh := r.radius+0.12, r.radius*0.55
+	top := r.Center.Add(vec3{0, r.WallH, 0})
+	a, bh := r.Radius+0.12, r.Radius*0.55
 	// A raised seam along every gore, wider steel ribs on every other one,
 	// and two bands around. Each stands off the shell: sharing its surface,
 	// they would fight it for the depth and flicker, and poking through it
@@ -255,28 +255,28 @@ func (b *building) insidePiece(kind int, inner, out, along vec3, seed int, accen
 }
 
 // greebleCorridor: conduits outside, pipes and vents along the ceiling.
-func (b *building) greebleCorridor(c corridor, seed int) {
-	mid := c.from.Lerp(c.to, 0.5)
-	dir := c.to.Sub(c.from)
+func (b *building) greebleCorridor(c Corridor, seed int) {
+	mid := c.From.Lerp(c.To, 0.5)
+	dir := c.To.Sub(c.From)
 	length := dir.Length()
 	dir = dir.Scale(1 / length)
 	side := c.side()
 	for _, s := range []float64{-1, 1} {
-		wall := mid.Add(side.Scale(s * (c.width/2 + wallThick)))
+		wall := mid.Add(side.Scale(s * (c.Width/2 + WallThick)))
 		pipeRun(b.Part("pipe.yellow", mesh.LitSun, vec3{}), wall.Add(side.Scale(s*0.1)).Add(vec3{0, 1.95, 0}), dir, length, 0.045)
 		pipeRun(b.Part("pipe.blue", mesh.LitSun, vec3{}), wall.Add(side.Scale(s*0.09)).Add(vec3{0, 1.8, 0}), dir, length, 0.035)
-		in := mid.Add(side.Scale(s * (c.width/2 - 0.12)))
-		pipeRun(b.Part("steel", mesh.LitIndoor, vec3{}), in.Add(vec3{0, c.height - 0.18, 0}), dir, length*0.98, 0.05)
-		pipeRun(b.Part("pipe.blue", mesh.LitIndoor, vec3{}), in.Add(side.Scale(-s*0.13)).Add(vec3{0, c.height - 0.12, 0}), dir, length*0.98, 0.04)
+		in := mid.Add(side.Scale(s * (c.Width/2 - 0.12)))
+		pipeRun(b.Part("steel", mesh.LitIndoor, vec3{}), in.Add(vec3{0, c.Height - 0.18, 0}), dir, length*0.98, 0.05)
+		pipeRun(b.Part("pipe.blue", mesh.LitIndoor, vec3{}), in.Add(side.Scale(-s*0.13)).Add(vec3{0, c.Height - 0.12, 0}), dir, length*0.98, 0.04)
 	}
 	n := int(length / 1.6)
 	for i := range n {
-		at := c.from.Add(dir.Scale((float64(i) + 0.5) * length / float64(n)))
+		at := c.From.Add(dir.Scale((float64(i) + 0.5) * length / float64(n)))
 		s := 1.0
 		if grnd(seed, i) < 0.5 {
 			s = -1
 		}
-		face := at.Add(side.Scale(s * (c.width/2 - 0.04)))
+		face := at.Add(side.Scale(s * (c.Width/2 - 0.04)))
 		switch int(grnd(seed, i+50) * 3) {
 		case 0:
 			b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(face.Add(vec3{0, 1.6, 0}), vec3{0.5, 0.32, 0.06}, dir, 0.015)
@@ -420,23 +420,23 @@ var (
 func yardFree(p vec3, r float64) bool {
 	const margin = 0.6
 	flat := vec3{p.X, 0, p.Z}
-	for _, rm := range rooms {
-		if flat.Sub(rm.center).Length() < rm.radius+r+margin {
+	for _, rm := range Rooms {
+		if flat.Sub(rm.Center).Length() < rm.Radius+r+margin {
 			return false
 		}
 	}
-	for _, c := range corridors {
-		d := c.to.Sub(c.from)
-		t := mathx.Clamp01(flat.Sub(c.from).Dot(d) / d.Dot(d))
-		if flat.Sub(c.from.Add(d.Scale(t))).Length() < c.width/2+r+margin {
+	for _, c := range Corridors {
+		d := c.To.Sub(c.From)
+		t := mathx.Clamp01(flat.Sub(c.From).Dot(d) / d.Dot(d))
+		if flat.Sub(c.From.Add(d.Scale(t))).Length() < c.Width/2+r+margin {
 			return false
 		}
 	}
 	return true
 }
 
-// yardObstacles: what the player bumps into in the yard.
-func yardObstacles() []content.Obstacle {
+// YardObstacles: what the player bumps into in the yard.
+func YardObstacles() []content.Obstacle {
 	var out []content.Obstacle
 	for _, cl := range yardBarrels {
 		if yardFree(cl, 1.2) {
@@ -466,9 +466,9 @@ func yardObstacles() []content.Obstacle {
 // More furniture, as kit pieces (content.Kit): a chair, a workbench, a
 // hydroponic planter and a desk.
 
-// buildChair: a swivel chair facing toward -X (rotate with the seed: the
+// BuildChair: a swivel chair facing toward -X (rotate with the seed: the
 // angle is seed × 45°).
-func buildChair(b *building, at vec3, seed int) {
+func BuildChair(b *building, at vec3, seed int) {
 	a := float64(seed) * math.Pi / 4
 	f := vec3{math.Cos(a), 0, math.Sin(a)}
 	sd := vec3{-f.Z, 0, f.X}
@@ -484,8 +484,8 @@ func buildChair(b *building, at vec3, seed int) {
 	dark.Box(at.Sub(f.Scale(0.22)).Add(vec3{0, 0.6, 0}), vec3{0.06, 0.2, 0.04}, sd, 0.01)
 }
 
-// buildWorkbench: a steel bench with a pegboard, tools and a specimen jar.
-func buildWorkbench(b *building, at vec3, seed int) {
+// BuildWorkbench: a steel bench with a pegboard, tools and a specimen jar.
+func BuildWorkbench(b *building, at vec3, seed int) {
 	a := float64(seed) * math.Pi / 4
 	f := vec3{math.Cos(a), 0, math.Sin(a)} // toward the user
 	sd := vec3{-f.Z, 0, f.X}
@@ -510,9 +510,9 @@ func buildWorkbench(b *building, at vec3, seed int) {
 	steel.Prism(at.Add(sd.Scale(-0.1)).Add(vec3{0, 1.17, 0}), yUp, 0.11, 0.11, 0.03, 12, 0.01)
 }
 
-// buildPlanter: a hydroponic trough on legs with rows of faceted plants
+// BuildPlanter: a hydroponic trough on legs with rows of faceted plants
 // and a grow lamp above.
-func buildPlanter(b *building, at vec3, seed int) {
+func BuildPlanter(b *building, at vec3, seed int) {
 	a := float64(seed%8) * math.Pi / 4
 	f := vec3{math.Cos(a), 0, math.Sin(a)}
 	sd := vec3{-f.Z, 0, f.X}
@@ -553,8 +553,8 @@ func buildPlanter(b *building, at vec3, seed int) {
 	}
 }
 
-// buildDesk: a small desk with a lamp, a terminal and a stack of books.
-func buildDesk(b *building, at vec3, seed int) {
+// BuildDesk: a small desk with a lamp, a terminal and a stack of books.
+func BuildDesk(b *building, at vec3, seed int) {
 	a := float64(seed) * math.Pi / 4
 	f := vec3{math.Cos(a), 0, math.Sin(a)}
 	sd := vec3{-f.Z, 0, f.X}
@@ -637,14 +637,14 @@ func (b *building) clutter(bp *content.Blueprint) {
 	at := func(v vec3) vec3 { return bp.At.Add(v) }
 	switch bp.ID {
 	case "core:hub":
-		b.coil(at(vec3{-4.3, floorTop, 2.6}), 0.26, "pipe.yellow")
-		b.toolbox(at(vec3{2.5, floorTop, 4.6}), 0.4)
+		b.coil(at(vec3{-4.3, FloorTop, 2.6}), 0.26, "pipe.yellow")
+		b.toolbox(at(vec3{2.5, FloorTop, 4.6}), 0.4)
 		b.helmet(at(content.Polar(5.4, 0.8)).Add(vec3{0, 1.24, 0}), 3.9)
 		b.tablet(at(vec3{0.6, 0.94, 0.6}), 0.7)
 		b.mug(at(vec3{-0.75, 0.93, -0.45}), "pipe.blue", 1)
 	case "core:sale":
-		b.coil(at(vec3{-2.8, floorTop, 1.6}), 0.3, "rubber")
-		b.toolbox(at(vec3{0.4, floorTop, 1.3}), 2.1)
+		b.coil(at(vec3{-2.8, FloorTop, 1.6}), 0.3, "rubber")
+		b.toolbox(at(vec3{0.4, FloorTop, 1.3}), 2.1)
 		b.papers(at(vec3{0.6, 0, -2.7}).Add(vec3{0, 1.35, 0}), 0.4, 3)
 	case "core:research":
 		c := at(vec3{2.3, 0, 0})
@@ -654,14 +654,14 @@ func (b *building) clutter(bp *content.Blueprint) {
 		wb := at(vec3{-0.6, 0, 3.0})
 		b.mug(wb.Add(vec3{0.65, 0.93, 0.1}), "barrel.ochre", 0.3)
 		b.papers(wb.Add(vec3{0.2, 0.93, 0.15}), 1.2, 2)
-		b.coil(at(vec3{-2.4, floorTop, 0.4}), 0.28, "pipe.blue")
-		b.helmet(at(vec3{3.0, floorTop, -2.9}), 3.5)
+		b.coil(at(vec3{-2.4, FloorTop, 0.4}), 0.28, "pipe.blue")
+		b.helmet(at(vec3{3.0, FloorTop, -2.9}), 3.5)
 	case "core:sleep":
 		b.mug(at(vec3{1.4, 0.63, 2.0}), "fabric.purple", 4)
 		desk := at(vec3{2.75, 0, 0.6})
 		b.papers(desk.Add(vec3{0.05, 0.77, 0.3}), 2.0, 3)
 		b.tablet(desk.Add(vec3{0.1, 0.77, -0.05}), 1.8)
 		b.mug(desk.Add(vec3{-0.05, 0.77, -0.45}), "pipe.red", 2)
-		b.helmet(at(vec3{-1.4, floorTop, 2.9}), 5.2)
+		b.helmet(at(vec3{-1.4, FloorTop, 2.9}), 5.2)
 	}
 }

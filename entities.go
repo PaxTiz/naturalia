@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
@@ -140,7 +141,7 @@ func (g *Game) nearbyEntity() (int, float64) {
 }
 
 // entityUse turns an entity into something E can use.
-func (g *Game) entityUse(i int) interactable {
+func (g *Game) entityUse(i int) base.Interactable {
 	e := g.st.Entities[i]
 	def, _ := reg.Entities.Get(e.Kind)
 	prompt := def.Prompt
@@ -148,14 +149,14 @@ func (g *Game) entityUse(i int) interactable {
 		prompt = "Ramasser : " + def.Name
 	}
 	if _, ok := reg.Vehicles.Get(e.Kind); ok {
-		return interactable{kit: def.ID, at: toLocal(g.terrain.Surface(e.Dir)), prompt: prompt,
-			use: func(g *Game, _ vec3) { g.getIn(i) }}
+		return base.Interactable{Kit: def.ID, At: base.ToLocal(g.terrain.Surface(e.Dir)), Prompt: prompt,
+			Use: func(content.Game, vec3) { g.getIn(i) }}
 	}
-	return interactable{
-		kit:    def.ID,
-		at:     toLocal(g.terrain.Surface(e.Dir)),
-		prompt: prompt,
-		use: func(g *Game, _ vec3) {
+	return base.Interactable{
+		Kit:    def.ID,
+		At:     base.ToLocal(g.terrain.Surface(e.Dir)),
+		Prompt: prompt,
+		Use: func(content.Game, vec3) {
 			if def.Pickup {
 				g.st.Entities = append(g.st.Entities[:i], g.st.Entities[i+1:]...)
 				if def.Item != "" {
@@ -191,7 +192,7 @@ func (g *Game) drawEntities() {
 		ax := t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw)))
 		az := ax.Cross(up)
 		lit := float32(mesh.LitSun)
-		if indoors(toLocal(pos)) {
+		if base.Indoors(base.ToLocal(pos)) {
 			lit = mesh.LitIndoor
 		}
 		gfx.setLighting(lit, vec3{})
@@ -220,4 +221,29 @@ func buildEntity(def *content.EntityDef, gfx *Graphics) []entityModel {
 		out = append(out, entityModel{model, tok(k.Tok)})
 	}
 	return out
+}
+
+// nearbyUse returns what the player can use right now: the closest
+// interactable within reach that they roughly face.
+func (g *Game) nearbyUse() (base.Interactable, bool) {
+	if i, _ := g.nearbyEntity(); i >= 0 {
+		return g.entityUse(i), true
+	}
+	local := base.ToLocal(g.player.Pos)
+	flat := vec3{local.X, 0, local.Z}
+	best, found := base.Interactable{}, false
+	bestDist := math.Inf(1)
+	for _, it := range base.Interactables {
+		to := vec3{it.At.X, 0, it.At.Z}.Sub(flat)
+		d := to.Length()
+		if d > it.Reach || d >= bestDist {
+			continue
+		}
+		heading := base.ToLocal(g.player.Pos.Add(g.player.Heading)).Sub(local)
+		if d > 0.8 && heading.Dot(to.Norm()) < 0.3 {
+			continue // standing next to it but looking away
+		}
+		best, found, bestDist = it, true, d
+	}
+	return best, found
 }

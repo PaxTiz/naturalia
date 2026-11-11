@@ -1,13 +1,9 @@
-package main
+package base
 
 import (
-	"image/color"
 	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"math"
-
-	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // The buildings' design system (docs/MODS.md): tokens say what a surface
@@ -15,33 +11,25 @@ import (
 // data that put pieces together. A blueprint is described once: drawing,
 // collisions and interactions are deduced from it.
 
-// tok is a material by ID; an unknown one shows up magenta.
-func tok(id string) content.Token {
-	if t, ok := reg.Tokens.Get(id); ok {
-		return *t
-	}
-	return content.Token{color.RGBA{255, 0, 255, 255}, content.MtPlain, 1, 0, 0.5}
-}
-
 // roomOf is the room a blueprint lays out.
-func roomOf(bp *content.Blueprint) room {
+func roomOf(bp *content.Blueprint) Room {
 	var openings []float64
 	for _, d := range bp.Doors {
 		openings = append(openings, d.Facing)
 	}
-	return room{bp.At, bp.Shape.Radius, bp.Shape.WallH, openings, bp}
+	return Room{bp.At, bp.Shape.Radius, bp.Shape.WallH, openings, bp}
 }
 
-// kitBuild lets a kit piece use the base's building helpers.
-func kitBuild(f func(b *building, at vec3, seed int)) func(*mesh.Parts, vec3, int) {
+// KitBuild lets a kit piece use the base's building helpers.
+func KitBuild(f func(b *building, at vec3, seed int)) func(*mesh.Parts, vec3, int) {
 	return func(p *mesh.Parts, at vec3, seed int) { f(&building{Parts: p}, at, seed) }
 }
 
-func planObstacles() (out []content.Obstacle) {
-	out = yardObstacles()
-	for _, bp := range plans {
+func planObstacles(kits *content.Registry[content.Kit]) (out []content.Obstacle) {
+	out = YardObstacles()
+	for _, bp := range Plans {
 		for _, p := range bp.Props {
-			k, _ := reg.Kits.Get(p.Kit)
+			k, _ := kits.Get(p.Kit)
 			if k == nil {
 				continue
 			}
@@ -53,55 +41,58 @@ func planObstacles() (out []content.Obstacle) {
 	return out
 }
 
-func planInteractables() (out []interactable) {
-	for _, bp := range plans {
+func planInteractables(kits *content.Registry[content.Kit]) (out []Interactable) {
+	for _, bp := range Plans {
 		for _, p := range bp.Props {
-			if k, _ := reg.Kits.Get(p.Kit); k != nil && k.Use != nil {
-				use := k.Use
-				out = append(out, interactable{content.Qualify(p.Kit), bp.At.Add(p.At), k.Reach, func(g *Game, at vec3) { use(g, at) }, k.Prompt})
+			if k, _ := kits.Get(p.Kit); k != nil && k.Use != nil {
+				out = append(out, Interactable{content.Qualify(p.Kit), bp.At.Add(p.At), k.Reach, k.Use, k.Prompt})
 			}
 		}
 	}
 	return out
 }
 
-// building holds the base's merged meshes, uploaded: one model per piece.
+// building builds the base's meshes, with its helpers for walls, greebles
+// and furniture.
 type building struct {
 	*mesh.Parts
-	models []rl.Model
-	toks   []content.Token // of each model, looked up once
+	kits *content.Registry[content.Kit] // furniture of the blueprints
 }
 
-// buildBase builds every static piece of the base.
-func buildBase(sh rl.Shader) *building {
-	b := &building{Parts: mesh.NewParts(basePos)}
-	for i, bp := range plans {
+// Build builds every static piece of the base, furniture from kits.
+func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
+	b := &building{Parts: mesh.NewParts(Origin), kits: kits}
+	for i, bp := range Plans {
 		b.room(bp)
 		b.greebleRoom(bp, roomOf(bp), i*97+3)
 		b.clutter(bp)
 	}
-	for i, c := range corridors {
+	for i, c := range Corridors {
 		b.corridor(c)
 		b.greebleCorridor(c, i*31+5)
 	}
 	b.yard()
 	for _, p := range junctionPlates() {
-		room := toWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
+		room := ToWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
 		across := vec3{-p.normal.Z, 0, p.normal.X}
-		b.Part("habitat.white2", mesh.LitTowards, room).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, wallThick * 1.5}, across, 0.04)
+		b.Part("habitat.white2", mesh.LitTowards, room).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, WallThick * 1.5}, across, 0.04)
 	}
 	b.airlock()
 	b.outside()
-	for _, k := range b.Keys {
-		b.models = append(b.models, upload(b.Mesh(k), sh))
-		b.toks = append(b.toks, tok(k.Tok))
-	}
-	return b
+	return b.Parts
+}
+
+// DoorPanel is one sliding leaf of the airlock, built around its center so
+// it can move.
+func DoorPanel() *mesh.Builder {
+	m := &mesh.Builder{}
+	m.Box(vec3{}, vec3{(DoorWidth + 0.2) / 2, DoorHeight, 0.08}, vec3{1, 0, 0}, 0.03)
+	return m
 }
 
 func (b *building) room(bp *content.Blueprint) {
 	r := roomOf(bp)
-	in := toWorld(r.center.Add(vec3{0, 1.2, 0}))
+	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
 	// Walls: bevelled panels, a dark plinth, a steel collar under the dome.
 	for i, p := range r.panels() {
 		tok := bp.Style
@@ -110,30 +101,30 @@ func (b *building) room(bp *content.Blueprint) {
 		}
 		out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
 		tangent := vec3{-out.Z, 0, out.X}
-		b.Part(tok, mesh.LitTowards, in).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, wallThick}, tangent, 0.04)
-		b.Part("steel", mesh.LitTowards, in).Box(p.mid.Add(vec3{0, p.y1 - 0.1, 0}).Add(out.Scale(0.03)), vec3{p.width, 0.2, wallThick + 0.08}, tangent, 0.035)
+		b.Part(tok, mesh.LitTowards, in).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, WallThick}, tangent, 0.04)
+		b.Part("steel", mesh.LitTowards, in).Box(p.mid.Add(vec3{0, p.y1 - 0.1, 0}).Add(out.Scale(0.03)), vec3{p.width, 0.2, WallThick + 0.08}, tangent, 0.035)
 		if p.y0 == 0 {
-			b.Part("steel.dark", mesh.LitTowards, in).Box(p.mid.Add(vec3{0, 0.15, 0}).Add(out.Scale(0.03)), vec3{p.width, 0.3, wallThick + 0.08}, tangent, 0.035)
+			b.Part("steel.dark", mesh.LitTowards, in).Box(p.mid.Add(vec3{0, 0.15, 0}).Add(out.Scale(0.03)), vec3{p.width, 0.3, WallThick + 0.08}, tangent, 0.035)
 		}
 	}
 	// The dome stays a smooth shell: dust settles on its top.
-	b.Part(bp.Style, mesh.LitBack, in).Dome(r.center.Add(vec3{0, r.wallH, 0}), r.radius+0.12, r.radius*0.55)
+	b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
 	// Door frames: steel jambs and a hazard header. They stand a little
 	// into the opening: flush with the corridor's walls and ceiling, they
 	// would fight them for the depth and flicker.
 	for _, d := range bp.Doors {
 		out := vec3{math.Cos(d.Facing), 0, math.Sin(d.Facing)}
 		tangent := vec3{-out.Z, 0, out.X}
-		w := r.center.Add(out.Scale(r.radius))
+		w := r.Center.Add(out.Scale(r.Radius))
 		for _, s := range []float64{-1, 1} {
-			b.Part("steel", mesh.LitTowards, in).Box(w.Add(tangent.Scale(s*(doorWidth/2+0.08))).Add(vec3{0, (doorHeight + 0.1) / 2, 0}), vec3{0.26, doorHeight + 0.1, 0.42}, tangent, 0.05)
+			b.Part("steel", mesh.LitTowards, in).Box(w.Add(tangent.Scale(s*(DoorWidth/2+0.08))).Add(vec3{0, (DoorHeight + 0.1) / 2, 0}), vec3{0.26, DoorHeight + 0.1, 0.42}, tangent, 0.05)
 		}
-		b.Part("hazard", mesh.LitTowards, in).Box(w.Add(vec3{0, doorHeight + 0.12, 0}), vec3{doorWidth + 0.42, 0.22, 0.42}, tangent, 0.05)
-		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(w.Add(vec3{0, doorHeight + 0.12, 0}).Sub(out.Scale(0.22)), vec3{doorWidth * 0.6, 0.05, 0.02}, tangent, 0)
+		b.Part("hazard", mesh.LitTowards, in).Box(w.Add(vec3{0, DoorHeight + 0.12, 0}), vec3{DoorWidth + 0.42, 0.22, 0.42}, tangent, 0.05)
+		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(w.Add(vec3{0, DoorHeight + 0.12, 0}).Sub(out.Scale(0.22)), vec3{DoorWidth * 0.6, 0.05, 0.02}, tangent, 0)
 	}
 	b.interior(bp, r)
 	for _, p := range bp.Props {
-		if k, _ := reg.Kits.Get(p.Kit); k != nil && k.Build != nil {
+		if k, _ := b.kits.Get(p.Kit); k != nil && k.Build != nil {
 			k.Build(b.Parts, bp.At.Add(p.At), p.Seed)
 		}
 	}
@@ -141,12 +132,12 @@ func (b *building) room(bp *content.Blueprint) {
 
 // interior: a flat floor with a steel-ringed inlay, a glowing stripe along
 // the walls, steel ribs under the dome and a ceiling lamp.
-func (b *building) interior(bp *content.Blueprint, r room) {
+func (b *building) interior(bp *content.Blueprint, r Room) {
 	up := vec3{0, 1, 0}
-	floor := r.center.Add(vec3{0, floorTop - 0.1, 0})
-	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Prism(floor, up, r.radius, r.radius, 0.1, 48, 0)
-	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(floor, up, r.radius*0.47, r.radius*0.47, 0.104, 40, 0)
-	b.Part("floor.inlay", mesh.LitIndoor, vec3{}).Prism(floor, up, r.radius*0.44, r.radius*0.44, 0.106, 40, 0)
+	floor := r.Center.Add(vec3{0, FloorTop - 0.1, 0})
+	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius, r.Radius, 0.1, 48, 0)
+	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius*0.47, r.Radius*0.47, 0.104, 40, 0)
+	b.Part("floor.inlay", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius*0.44, r.Radius*0.44, 0.106, 40, 0)
 	for _, p := range r.panels() {
 		if p.y0 > 0 {
 			continue
@@ -155,15 +146,15 @@ func (b *building) interior(bp *content.Blueprint, r room) {
 		along := vec3{-out.Z, 0, out.X}
 		// Two-tone walls: a steel-blue wainscot capped by the accent strip,
 		// so the light upper walls stand out over a darker base.
-		inner := p.mid.Sub(out.Scale(wallThick/2 + 0.02))
+		inner := p.mid.Sub(out.Scale(WallThick/2 + 0.02))
 		b.Part("wall.lower", mesh.LitIndoor, vec3{}).Box(inner.Add(vec3{0, 0.5, 0}), vec3{p.width * 0.99, 0.96, 0.04}, along, 0.012)
 		b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(inner.Add(vec3{0, 0.07, 0}).Sub(out.Scale(0.02)), vec3{p.width * 0.99, 0.14, 0.04}, along, 0.01)
-		strip := p.mid.Sub(out.Scale(wallThick/2 + 0.045)).Add(vec3{0, 1.0, 0})
+		strip := p.mid.Sub(out.Scale(WallThick/2 + 0.045)).Add(vec3{0, 1.0, 0})
 		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(strip, vec3{p.width * 0.94, 0.07, 0.03}, along, 0.008)
 	}
 	// Ribs follow the inside of the dome up to the lamp's collar.
-	a, bh := r.radius+0.02, r.radius*0.55-0.06
-	top := r.center.Add(vec3{0, r.wallH, 0})
+	a, bh := r.Radius+0.02, r.Radius*0.55-0.06
+	top := r.Center.Add(vec3{0, r.WallH, 0})
 	const ribs, steps = 8, 7
 	for k := range ribs {
 		th := (float64(k) + 0.5) * 2 * math.Pi / ribs
@@ -181,63 +172,63 @@ func (b *building) interior(bp *content.Blueprint, r room) {
 			b.Part("steel", mesh.LitIndoor, vec3{}).BoxBasis(p0.Lerp(p1, 0.5).Sub(along.Cross(side).Scale(0.05)), [3]vec3{side, along, side.Cross(along)}, vec3{0.12, l + 0.02, 0.1}, 0.02)
 		}
 	}
-	lamp := r.center.Add(vec3{0, r.wallH + r.radius*0.5, 0})
+	lamp := r.Center.Add(vec3{0, r.WallH + r.Radius*0.5, 0})
 	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(lamp.Add(vec3{0, -0.02, 0}), up, 0.62, 0.55, 0.12, 24, 0.02)
 	b.Part("lamp.warm", mesh.LitIndoor, vec3{}).Prism(lamp.Add(vec3{0, -0.06, 0}), up, 0.48, 0.48, 0.05, 24, 0)
 }
 
 // corridor: panels with joints, a dark plinth outside, a roof slab and
 // steel ribs at the joints.
-func (b *building) corridor(c corridor) {
-	mid := c.from.Lerp(c.to, 0.5)
-	dir := c.to.Sub(c.from)
+func (b *building) corridor(c Corridor) {
+	mid := c.From.Lerp(c.To, 0.5)
+	dir := c.To.Sub(c.From)
 	length := dir.Length()
 	dir = dir.Scale(1 / length)
 	side := c.side()
-	in := toWorld(mid.Add(vec3{0, 1.2, 0}))
+	in := ToWorld(mid.Add(vec3{0, 1.2, 0}))
 	n := int(math.Ceil(length / 1.6))
 	seg := length / float64(n)
 	for i := range n {
-		at := c.from.Add(dir.Scale((float64(i) + 0.5) * seg))
+		at := c.From.Add(dir.Scale((float64(i) + 0.5) * seg))
 		tok := "habitat.white"
 		if i%2 == 1 {
 			tok += "2"
 		}
 		for _, s := range []float64{-1, 1} {
-			wall := at.Add(side.Scale(s * (c.width/2 + wallThick/2)))
-			b.Part(tok, mesh.LitTowards, in).Box(wall.Add(vec3{0, c.height / 2, 0}), vec3{seg * 1.01, c.height, wallThick}, dir, 0.04)
-			b.Part("steel.dark", mesh.LitTowards, in).Box(wall.Add(side.Scale(s*0.03)).Add(vec3{0, 0.15, 0}), vec3{seg * 1.01, 0.3, wallThick + 0.08}, dir, 0.035)
+			wall := at.Add(side.Scale(s * (c.Width/2 + WallThick/2)))
+			b.Part(tok, mesh.LitTowards, in).Box(wall.Add(vec3{0, c.Height / 2, 0}), vec3{seg * 1.01, c.Height, WallThick}, dir, 0.04)
+			b.Part("steel.dark", mesh.LitTowards, in).Box(wall.Add(side.Scale(s*0.03)).Add(vec3{0, 0.15, 0}), vec3{seg * 1.01, 0.3, WallThick + 0.08}, dir, 0.035)
 		}
 	}
-	b.Part("habitat.white2", mesh.LitTowards, in).Box(mid.Add(vec3{0, c.height + 0.06, 0}), vec3{length, 0.12, c.width + 2*wallThick}, dir, 0.04)
+	b.Part("habitat.white2", mesh.LitTowards, in).Box(mid.Add(vec3{0, c.Height + 0.06, 0}), vec3{length, 0.12, c.Width + 2*WallThick}, dir, 0.04)
 	for i := 1; i < n; i++ {
-		at := c.from.Add(dir.Scale(float64(i) * seg))
+		at := c.From.Add(dir.Scale(float64(i) * seg))
 		for _, s := range []float64{-1, 1} {
-			post := at.Add(side.Scale(s * (c.width/2 + wallThick/2 + 0.04))).Add(vec3{0, (c.height + 0.12) / 2, 0})
-			b.Part("steel", mesh.LitTowards, in).Box(post, vec3{0.14, c.height + 0.12, wallThick + 0.08}, dir, 0.03)
+			post := at.Add(side.Scale(s * (c.Width/2 + WallThick/2 + 0.04))).Add(vec3{0, (c.Height + 0.12) / 2, 0})
+			b.Part("steel", mesh.LitTowards, in).Box(post, vec3{0.14, c.Height + 0.12, WallThick + 0.08}, dir, 0.03)
 		}
-		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.height + 0.14, 0}), vec3{0.14, 0.1, c.width + 2*wallThick + 0.16}, dir, 0.03)
+		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.Height + 0.14, 0}), vec3{0.14, 0.1, c.Width + 2*WallThick + 0.16}, dir, 0.03)
 	}
 	// Inside: two-tone walls like the rooms, a flat floor edged with steel,
 	// a lamp strip under the roof.
 	for _, s := range []float64{-1, 1} {
-		inner := mid.Add(side.Scale(s * (c.width/2 - 0.02)))
+		inner := mid.Add(side.Scale(s * (c.Width/2 - 0.02)))
 		b.Part("wall.lower", mesh.LitIndoor, vec3{}).Box(inner.Add(vec3{0, 0.5, 0}), vec3{length, 0.96, 0.04}, dir, 0.012)
 		b.Part("neon.cyan", mesh.LitIndoor, vec3{}).Box(inner.Add(vec3{0, 1.0, 0}).Sub(side.Scale(s*0.015)), vec3{length * 0.98, 0.06, 0.03}, dir, 0.008)
 	}
-	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Box(mid.Add(vec3{0, floorTop - 0.05, 0}), vec3{length, 0.1, c.width}, dir, 0)
+	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Box(mid.Add(vec3{0, FloorTop - 0.05, 0}), vec3{length, 0.1, c.Width}, dir, 0)
 	for _, s := range []float64{-1, 1} {
-		b.Part("steel", mesh.LitIndoor, vec3{}).Box(mid.Add(side.Scale(s*(c.width/2-0.1))).Add(vec3{0, floorTop - 0.045, 0}), vec3{length, 0.1, 0.2}, dir, 0.01)
+		b.Part("steel", mesh.LitIndoor, vec3{}).Box(mid.Add(side.Scale(s*(c.Width/2-0.1))).Add(vec3{0, FloorTop - 0.045, 0}), vec3{length, 0.1, 0.2}, dir, 0.01)
 	}
-	b.Part("steel", mesh.LitIndoor, vec3{}).Box(mid.Add(vec3{0, c.height - 0.03, 0}), vec3{length * 0.72, 0.06, 0.34}, dir, 0.015)
-	b.Part("lamp.warm", mesh.LitIndoor, vec3{}).Box(mid.Add(vec3{0, c.height - 0.07, 0}), vec3{length * 0.7, 0.03, 0.25}, dir, 0)
+	b.Part("steel", mesh.LitIndoor, vec3{}).Box(mid.Add(vec3{0, c.Height - 0.03, 0}), vec3{length * 0.72, 0.06, 0.34}, dir, 0.015)
+	b.Part("lamp.warm", mesh.LitIndoor, vec3{}).Box(mid.Add(vec3{0, c.Height - 0.07, 0}), vec3{length * 0.7, 0.03, 0.25}, dir, 0)
 }
 
 // airlock: the outer frame. The sliding doors move: see drawAirlock.
 func (b *building) airlock() {
-	end := airlockEnd
+	end := AirlockEnd
 	across := vec3{1, 0, 0}
-	half := (doorWidth+0.2)/2 + wallThick
+	half := (DoorWidth+0.2)/2 + WallThick
 	for _, s := range []float64{-1, 1} {
 		b.Part("hazard", mesh.LitSun, vec3{}).Box(end.Add(vec3{s * half, 1.35, 0}), vec3{0.3, 2.7, 0.35}, across, 0.04)
 	}
@@ -246,7 +237,7 @@ func (b *building) airlock() {
 
 // outside: an antenna and a dish on the hub, solar panels nearby.
 func (b *building) outside() {
-	top := hubRoom.wallH + hubRoom.radius*0.55
+	top := HubRoom.WallH + HubRoom.Radius*0.55
 	up := vec3{0, 1, 0}
 	steel := b.Part("steel", mesh.LitSun, vec3{})
 	steel.Prism(vec3{1.5, top - 0.8, 1.5}, up, 0.05, 0.05, 3.0, 6, 0)
@@ -270,18 +261,8 @@ func (b *building) outside() {
 	}
 }
 
-func (b *building) draw(gfx *Graphics) {
-	for i, k := range b.Keys {
-		t := b.toks[i]
-		gfx.setMat(t.Mat, t.Scale, false)
-		gfx.setLighting(k.Lit, k.At)
-		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
-		rl.DrawModel(b.models[i], rl.Vector3{}, 1, t.Col)
-	}
-}
-
-// buildCrates stacks two or three bevelled crates, chosen by the seed.
-func buildCrates(b *building, at vec3, seed int) {
+// BuildCrates stacks two or three bevelled crates, chosen by the seed.
+func BuildCrates(b *building, at vec3, seed int) {
 	cols := []string{"crate.ochre", "crate.slate", "crate.sand"}
 	rnd := func(k int) float64 { return math.Mod(math.Abs(math.Sin(float64(seed*7+k)*12.9898))*43758.5453, 1) }
 	y := 0.0
@@ -314,16 +295,16 @@ func buildCrates(b *building, at vec3, seed int) {
 	}
 }
 
-// buildMapTable: a faceted pedestal, a steel top and a glowing disc under
+// BuildMapTable: a faceted pedestal, a steel top and a glowing disc under
 // the hologram (drawGlobe).
-func buildMapTable(b *building, t vec3, _ int) {
+func BuildMapTable(b *building, t vec3, _ int) {
 	up := vec3{0, 1, 0}
 	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Prism(t, up, 0.85, 0.85, 0.85, 20, 0.03)
 	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(t.Add(vec3{0, 0.85, 0}), up, 1.2, 1.2, 0.08, 24, 0.02)
 	b.Part("neon.cyan", mesh.LitIndoor, vec3{}).Prism(t.Add(vec3{0, 0.93, 0}), up, 1.0, 1.0, 0.02, 24, 0)
 }
 
-func buildIncinerator(b *building, in vec3, _ int) {
+func BuildIncinerator(b *building, in vec3, _ int) {
 	up := vec3{0, 1, 0}
 	steel, dark := b.Part("steel", mesh.LitIndoor, vec3{}), b.Part("steel.dark", mesh.LitIndoor, vec3{})
 	steel.Prism(in, up, 1.1, 1.1, 1.9, 20, 0.04)
@@ -345,18 +326,8 @@ func buildIncinerator(b *building, in vec3, _ int) {
 	b.Part("habitat.white", mesh.LitIndoor, vec3{}).Prism(in.Add(vec3{0.77, 1.3, -0.77}), vec3{1, 0, -1}, 0.09, 0.09, 0.05, 14, 0)
 }
 
-// drawIncinerator: the window glows harder while it burns dust.
-func drawIncinerator(g *Game, in vec3) {
-	gfx := g.gfx
-	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(content.MtPlain, 1, false)
-	glow := float32(0.55 + 0.45*mathx.Clamp01(g.burn))
-	gfx.box(in.Add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, accentOrange, 0, glow)
-	gfx.drawScreen(in.Add(vec3{1.16, 1.1, 1.25}), vec3{1, 0, 0}, 0.38, 0.28, gfx.screens[3], 0.8)
-}
-
-// buildConsole: a desk between two server racks.
-func buildConsole(b *building, c vec3, _ int) {
+// BuildConsole: a desk between two server racks.
+func BuildConsole(b *building, c vec3, _ int) {
 	b.Part("steel", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.2, 0.78, 0}), vec3{0.9, 0.06, 2.2}, vec3{1, 0, 0}, 0.02)
 	for _, z := range []float64{-0.95, 0.95} {
 		b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.2, 0.38, z}), vec3{0.8, 0.76, 0.08}, vec3{1, 0, 0}, 0.02)
@@ -366,30 +337,8 @@ func buildConsole(b *building, c vec3, _ int) {
 	}
 }
 
-// drawConsole: three screens and the blinking lights of the racks.
-func drawConsole(g *Game, c vec3) {
-	gfx := g.gfx
-	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(content.MtPlain, 1, false)
-	for i, z := range []float64{-0.75, 0, 0.75} {
-		facing := vec3{-1, 0, z * 0.4}.Norm()
-		gfx.drawScreen(c.Add(vec3{0.1, 1.28, z}), facing, 0.66, 0.42, gfx.screens[i], 0.8)
-	}
-	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(content.MtPlain, 1, false)
-	for _, z := range []float64{-2.3, 2.3} {
-		for k := range 5 {
-			on := float32(0.3)
-			if math.Sin(g.clock*3+float64(k)*1.7+z) > 0 {
-				on = 1
-			}
-			gfx.box(c.Add(vec3{-0.36, 0.4 + float64(k)*0.3, z}), vec3{0.5, 0.04, 0.02}, vec3{0, 0, 1}, colGreen, 0, on)
-		}
-	}
-}
-
-// buildBed: a bed against the far wall, a bedside table and a rug.
-func buildBed(b *building, at vec3, _ int) {
+// BuildBed: a bed against the far wall, a bedside table and a rug.
+func BuildBed(b *building, at vec3, _ int) {
 	x := vec3{1, 0, 0}
 	wood := b.Part("wood.brown", mesh.LitIndoor, vec3{})
 	wood.Box(at.Add(vec3{0, 0.2, 0}), vec3{2.1, 0.4, 1.05}, x, 0.04)
@@ -398,7 +347,7 @@ func buildBed(b *building, at vec3, _ int) {
 	white.Box(at.Add(vec3{0, 0.48, 0}), vec3{2.0, 0.16, 0.98}, x, 0.05)
 	white.Box(at.Add(vec3{-0.72, 0.62, 0}), vec3{0.42, 0.12, 0.7}, x, 0.05)
 	b.Part("fabric.purple", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0.32, 0.58, 0}), vec3{1.36, 0.06, 1.0}, x, 0.02)
-	b.Part("fabric.rug", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0, floorTop + 0.005, -1.3}), vec3{1.8, 0.01, 1.1}, x, 0)
+	b.Part("fabric.rug", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0, FloorTop + 0.005, -1.3}), vec3{1.8, 0.01, 1.1}, x, 0)
 	// A padded headboard with a reading light, the blanket folded back.
 	wood.Box(at.Add(vec3{-1.08, 0.55, 0}), vec3{0.08, 1.1, 1.1}, x, 0.02)
 	b.Part("fabric.seat", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{-1.02, 0.78, 0}), vec3{0.06, 0.5, 0.95}, x, 0.03)
@@ -406,33 +355,3 @@ func buildBed(b *building, at vec3, _ int) {
 	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{1.45, 0.62, 0.2}), vec3{0.3, 0.03, 0.3}, x, 0)
 	b.Part("pipe.blue", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{1.4, 0.65, 0.03}), vec3{0.2, 0.04, 0.14}, x, 0.005)
 }
-
-func drawBed(g *Game, at vec3) {
-	gfx := g.gfx
-	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(content.MtPlain, 1, false)
-	gfx.put(gfx.sphere, toWorld(at.Add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, lampWarm, 0, 1)
-}
-
-// upload sends the triangles to the GPU. The slices stay referenced by the builder:
-// the mesh is never unloaded.
-func upload(m *mesh.Builder, sh rl.Shader) rl.Model {
-	mesh := rl.Mesh{VertexCount: int32(len(m.V) / 3), TriangleCount: int32(len(m.V) / 9)}
-	mesh.Vertices, mesh.Normals, mesh.Texcoords = &m.V[0], &m.N[0], &m.UV[0]
-	rl.UploadMesh(&mesh, false)
-	mod := rl.LoadModelFromMesh(mesh)
-	mod.GetMaterials()[0].Shader = sh
-	return mod
-}
-
-// doorPanelModel is one sliding leaf of the airlock, built around its
-// center so it can move.
-func doorPanelModel(sh rl.Shader) rl.Model {
-	m := &mesh.Builder{}
-	m.Box(vec3{}, vec3{(doorWidth + 0.2) / 2, doorHeight, 0.08}, vec3{1, 0, 0}, 0.03)
-	keep = append(keep, m)
-	return upload(m, sh)
-}
-
-// keep holds builders whose slices back GPU meshes.
-var keep []*mesh.Builder

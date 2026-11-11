@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
@@ -110,11 +111,11 @@ type Game struct {
 	itemSel     int // which carried item F places (R cycles)
 	driving     int // index in st.Entities of the vehicle driven, -1 on foot
 
-	walls    []segment2 // the base's walls, for collisions
-	doorOpen float64    // airlock doors: 0 closed, 1 open
-	burn     float64    // incinerator glow after a deposit
-	sleepT   float64    // time into the sleep sequence
-	wakeUp   bool       // a new game starts by waking up in bed
+	walls    []base.Segment // the base's walls, for collisions
+	doorOpen float64        // airlock doors: 0 closed, 1 open
+	burn     float64        // incinerator glow after a deposit
+	sleepT   float64        // time into the sleep sequence
+	wakeUp   bool           // a new game starts by waking up in bed
 
 	aim       vec3 // where the tool points on the ground
 	aimOK     bool
@@ -143,14 +144,14 @@ func NewGame() *Game {
 	if fresh {
 		g.world = planet.NewWorld(g.rng.Uint64(), &reg.Terrain)
 	}
-	basePos = planet.BaseUp.Scale(planet.Radius + g.world.Relief.BaseHeight())
+	base.Origin = planet.BaseUp.Scale(planet.Radius + g.world.Relief.BaseHeight())
 	g.terrain = NewTerrain(g.world.Relief)
 	if fresh {
-		g.player = Player{Pos: toWorld(spawnSpot), Heading: vec3{0, 0, -1}}
+		g.player = Player{Pos: base.ToWorld(base.SpawnSpot), Heading: vec3{0, 0, -1}}
 		g.wakeUp = true
 	}
 	g.player.Pos = g.terrain.Surface(g.player.Pos)
-	g.walls = baseWalls()
+	g.walls = base.Walls()
 	g.gfx = NewGraphics()
 	g.terrain.Warm(g.player.Eye(), 5*time.Second)
 	g.syncDrones()
@@ -210,12 +211,12 @@ func (g *Game) Update(dt float64) {
 	if g.steps.update(&g.player) {
 		g.sfx.step()
 	}
-	g.sfx.outside = !indoors(toLocal(g.player.Eye()))
+	g.sfx.outside = !base.Indoors(base.ToLocal(g.player.Eye()))
 	g.sfx.sweeping = g.sweeping
 	g.sfx.power = math.Min(1, (g.powerMult()-1)/3)
 	g.sfx.update()
 	g.updateFov(dt)
-	collideBase(&g.player, g.walls)
+	g.player.Pos = base.Collide(g.player.Pos, g.walls)
 	g.collideRocks()
 	g.updateVehicle(dt)
 	g.collideEntities()
@@ -241,7 +242,7 @@ func (g *Game) updateAim() {
 	p := &g.player
 	eye, fwd := p.Eye(), p.Forward()
 	g.aim, g.aimOK = g.terrain.Raycast(eye, fwd, g.tool().Reach)
-	if g.aimOK && planet.ArcDist(g.aim.Norm(), planet.BaseUp) < baseReach {
+	if g.aimOK && planet.ArcDist(g.aim.Norm(), planet.BaseUp) < base.Reach {
 		g.aimOK = false // the ground under the base isn't swept
 	}
 
@@ -336,8 +337,8 @@ func (g *Game) sell() {
 
 func (g *Game) syncDrones() {
 	for len(g.drones) < int(g.stat("drones")) {
-		p := toWorld(vec3{0, 8, 0})
-		g.drones = append(g.drones, &Drone{Pos: p, Target: basePos, phase: g.rng.Float64() * 10})
+		p := base.ToWorld(vec3{0, 8, 0})
+		g.drones = append(g.drones, &Drone{Pos: p, Target: base.Origin, phase: g.rng.Float64() * 10})
 	}
 }
 
@@ -353,7 +354,7 @@ const (
 func (g *Game) updateDrones(dt float64) {
 	radius := 0.8 + float64(g.toolTier())*0.5
 	amount := 0.6 * g.powerMult() * dt
-	docked := planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < baseReach+15
+	docked := planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < base.Reach+15
 	for i, d := range g.drones {
 		d.phase += dt
 		up := d.Pos.Norm()
@@ -361,14 +362,14 @@ func (g *Game) updateDrones(dt float64) {
 		switch {
 		case docked:
 			a := float64(i)/float64(len(g.drones))*2*math.Pi + g.clock*0.2
-			d.Target = toWorld(vec3{math.Cos(a) * dockRadius, 0, math.Sin(a) * dockRadius})
+			d.Target = base.ToWorld(vec3{math.Cos(a) * dockRadius, 0, math.Sin(a) * dockRadius})
 			hover = dockAltitude
 		case g.tankFull():
 			hover += 0.5 // tank full: drones hover in place, waiting
 		default:
 			d.retarget -= dt
 			arrived := up.Sub(d.Target.Norm()).Length()*planet.Radius < 0.3
-			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || planet.ArcDist(d.Target.Norm(), planet.BaseUp) < baseReach {
+			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || planet.ArcDist(d.Target.Norm(), planet.BaseUp) < base.Reach {
 				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
 				d.retarget = 8 + g.rng.Float64()*5
 			}
@@ -382,13 +383,13 @@ func (g *Game) updateDrones(dt float64) {
 			d.Pos = d.Pos.Add(delta.Norm().Scale(math.Min(delta.Length(), droneSpeed*dt)))
 			up = d.Pos.Norm()
 		}
-		if planet.ArcDist(up, planet.BaseUp) < baseReach+6 {
+		if planet.ArcDist(up, planet.BaseUp) < base.Reach+6 {
 			hover = math.Max(hover, dockAltitude) // fly over the domes, not through them
 		}
 		r := d.Pos.Length()
 		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
 		d.Pos = up.Scale(r)
-		if docked || g.tankFull() || planet.ArcDist(up, planet.BaseUp) < baseReach {
+		if docked || g.tankFull() || planet.ArcDist(up, planet.BaseUp) < base.Reach {
 			continue
 		}
 		g.collect(g.world.Clean(up, radius, amount, g.space()), g.terrain.Surface(up), radius, d.Pos)
@@ -401,7 +402,7 @@ func (g *Game) updateDrones(dt float64) {
 // updateBase animates the airlock doors and the incinerator glow.
 func (g *Game) updateBase(dt float64) {
 	open := 0.0
-	if toLocal(g.player.Pos).Sub(airlockEnd).Length() < 4 {
+	if base.ToLocal(g.player.Pos).Sub(base.AirlockEnd).Length() < 4 {
 		open = 1
 	}
 	g.doorOpen += (open - g.doorOpen) * math.Min(1, dt*4)
@@ -409,15 +410,15 @@ func (g *Game) updateBase(dt float64) {
 }
 
 // use runs what the player activates with E.
-func (g *Game) use(it interactable) {
-	it.use(g, it.at)
-	g.emit(content.Event{Name: content.EvUse, ID: it.kit, At: it.at})
+func (g *Game) use(it base.Interactable) {
+	it.Use(g, it.At)
+	g.emit(content.Event{Name: content.EvUse, ID: it.Kit, At: it.At})
 }
 
 // Deposit feeds the tank's dust to the incinerator at the local point in,
 // which turns it into credits.
 func (g *Game) Deposit(in vec3) {
-	hopper := toWorld(in.Add(vec3{0, 2.6, 0}))
+	hopper := base.ToWorld(in.Add(vec3{0, 2.6, 0}))
 	if g.st.Tank < 1 {
 		g.floaters = append(g.floaters, Floater{Pos: hopper.Add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
 		g.sfx.beep(0, 0.25, 0.12, 220)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/script"
 	"os"
@@ -44,7 +45,7 @@ func main() {
 // lays out the base.
 func loadContent(extra ...content.Pack) {
 	reg = content.Build(extra...)
-	setupBase()
+	base.Setup(reg)
 }
 
 // reg is the game's content once every pack is loaded (loadContent).

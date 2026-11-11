@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"maps"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"math"
 	"slices"
@@ -156,7 +157,7 @@ var coreBuildings = []content.Blueprint{
 		Accent: "neon.cyan",
 		Shape:  content.Dome{Radius: 6.5, WallH: 2.8},
 		Style:  "habitat.white",
-		Doors:  []content.Door{{east}, {west}, {north}, {south}},
+		Doors:  []content.Door{{base.East}, {base.West}, {base.North}, {base.South}},
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "crate.stack", At: content.Polar(5.4, 0.8), Seed: 1},
@@ -173,7 +174,7 @@ var coreBuildings = []content.Blueprint{
 		At:     vec3{-13, 0, 0},
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
-		Doors:  []content.Door{{east}},
+		Doors:  []content.Door{{base.East}},
 		Props: []content.Prop{
 			{Kit: "incinerator", At: vec3{-1.6, 0, 0}},
 			{Kit: "crate.stack", At: vec3{1.2, 0, 2.4}, Seed: 3},
@@ -188,7 +189,7 @@ var coreBuildings = []content.Blueprint{
 		At:     vec3{13, 0, 0},
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
-		Doors:  []content.Door{{west}},
+		Doors:  []content.Door{{base.West}},
 		Props: []content.Prop{
 			{Kit: "console", At: vec3{2.3, 0, 0}},
 			{Kit: "chair", At: vec3{1.2, 0, 0.5}, Seed: 0},
@@ -204,7 +205,7 @@ var coreBuildings = []content.Blueprint{
 		At:     vec3{0, 0, 13},
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
-		Doors:  []content.Door{{south}},
+		Doors:  []content.Door{{base.South}},
 		Props: []content.Prop{
 			{Kit: "bed", At: vec3{0, 0, 2.1}},
 			{Kit: "desk", At: vec3{2.75, 0, 0.6}, Seed: 4},
@@ -215,18 +216,18 @@ var coreBuildings = []content.Blueprint{
 }
 
 var coreKits = map[string]content.Kit{
-	"maptable": {Build: kitBuild(buildMapTable), Obstacles: []content.Obstacle{{vec3{}, 1.25}},
+	"maptable": {Build: base.KitBuild(base.BuildMapTable), Obstacles: []content.Obstacle{{vec3{}, 1.25}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.OpenMap() }, Prompt: "[E] Consulter l'état de Mars"},
-	"incinerator": {Build: kitBuild(buildIncinerator), Obstacles: []content.Obstacle{{vec3{}, 1.4}},
+	"incinerator": {Build: base.KitBuild(base.BuildIncinerator), Obstacles: []content.Obstacle{{vec3{}, 1.4}},
 		Reach: 2.8, Use: content.Game.Deposit, Prompt: "[E] Déposer la poussière dans l'incinérateur"},
-	"console": {Build: kitBuild(buildConsole),
+	"console": {Build: base.KitBuild(base.BuildConsole),
 		Obstacles: []content.Obstacle{{vec3{-0.3, 0, 0}, 1.0}, {vec3{0, 0, 2.3}, 0.6}, {vec3{0, 0, -2.3}, 0.6}},
 		Reach:     2.8, Use: func(g content.Game, _ vec3) { g.OpenShop() }, Prompt: "[E] Ouvrir le laboratoire de recherche"},
-	"bed": {Build: kitBuild(buildBed), Obstacles: []content.Obstacle{{vec3{-0.55, 0, 0}, 0.6}, {vec3{0.55, 0, 0}, 0.6}},
+	"bed": {Build: base.KitBuild(base.BuildBed), Obstacles: []content.Obstacle{{vec3{-0.55, 0, 0}, 0.6}, {vec3{0.55, 0, 0}, 0.6}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.Sleep() }, Prompt: "[E] Dormir"},
-	"crate.stack": {Build: kitBuild(buildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
-	"chair":       {Build: kitBuild(buildChair), Obstacles: []content.Obstacle{{vec3{}, 0.35}}},
-	"workbench":   {Build: kitBuild(buildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
-	"planter":     {Build: kitBuild(buildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
-	"desk":        {Build: kitBuild(buildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
+	"crate.stack": {Build: base.KitBuild(base.BuildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
+	"chair":       {Build: base.KitBuild(base.BuildChair), Obstacles: []content.Obstacle{{vec3{}, 0.35}}},
+	"workbench":   {Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
+	"planter":     {Build: base.KitBuild(base.BuildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
+	"desk":        {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
 }

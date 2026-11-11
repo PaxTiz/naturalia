@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"math"
 )
@@ -28,7 +29,7 @@ func (g *Game) updateEvents(dt float64) {
 			ev.Run(g)
 		}
 	}
-	in := buildingAt(toLocal(g.player.Pos))
+	in := buildingAt(base.ToLocal(g.player.Pos))
 	if in != g.inside {
 		if g.inside != "" {
 			g.emit(content.Event{Name: content.EvLeave, ID: g.inside})
@@ -45,9 +46,9 @@ func buildingAt(local vec3) string {
 	if local.Y > 3.5 {
 		return ""
 	}
-	for i, r := range rooms {
-		if math.Hypot(local.X-r.center.X, local.Z-r.center.Z) < r.radius {
-			return plans[i].ID
+	for i, r := range base.Rooms {
+		if math.Hypot(local.X-r.Center.X, local.Z-r.Center.Z) < r.Radius {
+			return base.Plans[i].ID
 		}
 	}
 	return ""

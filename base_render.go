@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
@@ -36,7 +37,7 @@ func yawFor(dir vec3) float64 { return math.Atan2(-dir.Z, dir.X) }
 // box draws a cube centered at the local point c, turned so its width (X)
 // runs along the horizontal direction across.
 func (gfx *Graphics) box(c, size, across vec3, col color.RGBA, spec, emissive float32) {
-	gfx.put(gfx.cube, toWorld(c), size, vec3{0, 1, 0}, yawFor(across)*180/math.Pi, col, spec, emissive)
+	gfx.put(gfx.cube, base.ToWorld(c), size, vec3{0, 1, 0}, yawFor(across)*180/math.Pi, col, spec, emissive)
 }
 
 // kitDraws draw the moving and glowing parts of kit pieces, each frame.
@@ -51,7 +52,7 @@ func (g *Game) drawBase() {
 	rl.DisableBackfaceCulling()
 	defer rl.EnableBackfaceCulling()
 	if gfx.base == nil {
-		gfx.base = buildBase(gfx.objectSh)
+		gfx.base = uploadBase(base.Build(&reg.Kits), gfx.objectSh)
 		gfx.doorPanel = doorPanelModel(gfx.objectSh)
 		for _, m := range append(gfx.base.models, gfx.doorPanel) {
 			gfx.bindMaps(m)
@@ -59,9 +60,9 @@ func (g *Game) drawBase() {
 	}
 
 	// Red dust settles on the faces turned up and at the foot of the walls.
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(basePos.Y)}, rl.ShaderUniformVec2)
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(base.Origin.Y)}, rl.ShaderUniformVec2)
 	gfx.base.draw(gfx)
-	for _, bp := range plans {
+	for _, bp := range base.Plans {
 		for _, p := range bp.Props {
 			if draw := kitDraws[content.Qualify(p.Kit)]; draw != nil {
 				draw(g, bp.At.Add(p.At))
@@ -81,14 +82,14 @@ func (g *Game) drawBase() {
 // apart when the player comes close, and the status light.
 func (g *Game) drawAirlock() {
 	gfx := g.gfx
-	end := airlockEnd
+	end := base.AirlockEnd
 	gfx.setLighting(mesh.LitSun, vec3{})
 	steel := tok("steel")
 	gfx.setMat(steel.Mat, steel.Scale, false)
-	w := (doorWidth + 0.2) / 2
+	w := (base.DoorWidth + 0.2) / 2
 	for _, s := range []float64{-1, 1} {
-		at := end.Add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0})
-		gfx.put(gfx.doorPanel, toWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, 0, steel.Col, steel.Spec, 0)
+		at := end.Add(vec3{s * (w/2 + g.doorOpen*w), base.DoorHeight / 2, 0})
+		gfx.put(gfx.doorPanel, base.ToWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, 0, steel.Col, steel.Spec, 0)
 	}
 	gfx.setMat(content.MtPlain, 1, false)
 	lamp := colGreen
@@ -109,13 +110,13 @@ func (g *Game) drawBeacon() {
 
 // beaconTop is where the blinking light sits, for its glow.
 func beaconTop() vec3 {
-	return toWorld(vec3{1.5, hubRoom.wallH + hubRoom.radius*0.55 + 2.25, 1.5})
+	return base.ToWorld(vec3{1.5, base.HubRoom.WallH + base.HubRoom.Radius*0.55 + 2.25, 1.5})
 }
 
 // drawGlobe draws the hologram of Mars above the map table.
 func (g *Game) drawGlobe(cam rl.Camera3D) {
 	gfx := g.gfx
-	center := toWorld(tableSpot.Add(vec3{0, globeHeight, 0}))
+	center := base.ToWorld(base.TableSpot.Add(vec3{0, globeHeight, 0}))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
 	// Turn the player's spot on Mars toward the viewer, a bit raised,
 	// with a slow sway so the hologram feels alive.
@@ -138,7 +139,7 @@ func (g *Game) drawGlobe(cam rl.Camera3D) {
 	// Soft light rising from the table to the globe.
 	for i := range 6 {
 		f := float64(i) / 5
-		p := toWorld(tableSpot.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
+		p := base.ToWorld(base.TableSpot.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
 		rl.DrawBillboard(cam, gfx.glow, toRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
 	}
 	rl.EndBlendMode()
@@ -184,3 +185,97 @@ func (gfx *Graphics) setMat(kind int, scale float32, objSpace bool) {
 	}
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.mat, []float32{float32(kind), scale, o}, rl.ShaderUniformVec3)
 }
+
+// tok is a material by ID; an unknown one shows up magenta.
+func tok(id string) content.Token {
+	if t, ok := reg.Tokens.Get(id); ok {
+		return *t
+	}
+	return content.Token{color.RGBA{255, 0, 255, 255}, content.MtPlain, 1, 0, 0.5}
+}
+
+// baseModels are the base's merged meshes, uploaded: one model per piece.
+type baseModels struct {
+	*mesh.Parts
+	models []rl.Model
+	toks   []content.Token // of each model, looked up once
+}
+
+func uploadBase(parts *mesh.Parts, sh rl.Shader) *baseModels {
+	b := &baseModels{Parts: parts}
+	for _, k := range b.Keys {
+		b.models = append(b.models, upload(b.Mesh(k), sh))
+		b.toks = append(b.toks, tok(k.Tok))
+	}
+	return b
+}
+
+func (b *baseModels) draw(gfx *Graphics) {
+	for i, k := range b.Keys {
+		t := b.toks[i]
+		gfx.setMat(t.Mat, t.Scale, false)
+		gfx.setLighting(k.Lit, k.At)
+		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
+		rl.DrawModel(b.models[i], rl.Vector3{}, 1, t.Col)
+	}
+}
+
+// drawIncinerator: the window glows harder while it burns dust.
+func drawIncinerator(g *Game, in vec3) {
+	gfx := g.gfx
+	gfx.setLighting(mesh.LitIndoor, vec3{})
+	gfx.setMat(content.MtPlain, 1, false)
+	glow := float32(0.55 + 0.45*mathx.Clamp01(g.burn))
+	gfx.box(in.Add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, accentOrange, 0, glow)
+	gfx.drawScreen(in.Add(vec3{1.16, 1.1, 1.25}), vec3{1, 0, 0}, 0.38, 0.28, gfx.screens[3], 0.8)
+}
+
+// drawConsole: three screens and the blinking lights of the racks.
+func drawConsole(g *Game, c vec3) {
+	gfx := g.gfx
+	gfx.setLighting(mesh.LitIndoor, vec3{})
+	gfx.setMat(content.MtPlain, 1, false)
+	for i, z := range []float64{-0.75, 0, 0.75} {
+		facing := vec3{-1, 0, z * 0.4}.Norm()
+		gfx.drawScreen(c.Add(vec3{0.1, 1.28, z}), facing, 0.66, 0.42, gfx.screens[i], 0.8)
+	}
+	gfx.setLighting(mesh.LitIndoor, vec3{})
+	gfx.setMat(content.MtPlain, 1, false)
+	for _, z := range []float64{-2.3, 2.3} {
+		for k := range 5 {
+			on := float32(0.3)
+			if math.Sin(g.clock*3+float64(k)*1.7+z) > 0 {
+				on = 1
+			}
+			gfx.box(c.Add(vec3{-0.36, 0.4 + float64(k)*0.3, z}), vec3{0.5, 0.04, 0.02}, vec3{0, 0, 1}, colGreen, 0, on)
+		}
+	}
+}
+
+func drawBed(g *Game, at vec3) {
+	gfx := g.gfx
+	gfx.setLighting(mesh.LitIndoor, vec3{})
+	gfx.setMat(content.MtPlain, 1, false)
+	gfx.put(gfx.sphere, base.ToWorld(at.Add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, lampWarm, 0, 1)
+}
+
+// upload sends the triangles to the GPU. The slices stay referenced by the builder:
+// the mesh is never unloaded.
+func upload(m *mesh.Builder, sh rl.Shader) rl.Model {
+	mesh := rl.Mesh{VertexCount: int32(len(m.V) / 3), TriangleCount: int32(len(m.V) / 9)}
+	mesh.Vertices, mesh.Normals, mesh.Texcoords = &m.V[0], &m.N[0], &m.UV[0]
+	rl.UploadMesh(&mesh, false)
+	mod := rl.LoadModelFromMesh(mesh)
+	mod.GetMaterials()[0].Shader = sh
+	return mod
+}
+
+// doorPanelModel is one sliding leaf of the airlock.
+func doorPanelModel(sh rl.Shader) rl.Model {
+	m := base.DoorPanel()
+	keep = append(keep, m)
+	return upload(m, sh)
+}
+
+// keep holds builders whose slices back GPU meshes.
+var keep []*mesh.Builder

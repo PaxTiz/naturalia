@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
@@ -292,7 +293,7 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 			gfx.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
 		case g.hasUse():
 			it, _ := g.nearbyUse()
-			gfx.prompt("E", strings.TrimPrefix(it.prompt, "[E] "), h*0.64, visorCyan)
+			gfx.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
 		case g.tankFull() && !g.autoSell() && math.Mod(g.clock, 1) < 0.7:
 			gfx.prompt("", "RÉSERVOIR PLEIN · rapporte la poussière à l'incinérateur", h*0.64, visorAmber)
 		case !g.aimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
@@ -503,7 +504,7 @@ func (g *Game) drawBaseMarker(cam rl.Camera3D) {
 	if planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < 25 {
 		return
 	}
-	target := basePos.Add(vec3{0, 9, 0})
+	target := base.Origin.Add(vec3{0, 9, 0})
 	if target.Sub(g.player.Eye()).Dot(g.player.Forward()) <= 0 {
 		return
 	}

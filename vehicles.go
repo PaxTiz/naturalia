@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
@@ -16,7 +17,7 @@ var padSpot = vec3{11, 0, -12.5}
 func (g *Game) buyVehicle(v *content.Vehicle) {
 	g.st.Levels[v.ID] = 1
 	off := float64(len(g.st.Entities)%4) * 0.8
-	g.spawn(v.ID, g.terrain.Surface(toWorld(padSpot.Add(vec3{off - 1.2, 0, off - 1.2}))))
+	g.spawn(v.ID, g.terrain.Surface(base.ToWorld(padSpot.Add(vec3{off - 1.2, 0, off - 1.2}))))
 }
 
 // driven is the vehicle the player drives, if any.
@@ -65,7 +66,7 @@ func (g *Game) updateVehicle(dt float64) {
 	t1, t2 := mathx.TangentBasis(e.Dir)
 	e.Yaw = math.Atan2(g.player.Heading.Dot(t2), g.player.Heading.Dot(t1))
 
-	if v.Sweep <= 0 || g.mode != modePlay || planet.ArcDist(e.Dir, planet.BaseUp) < baseReach {
+	if v.Sweep <= 0 || g.mode != modePlay || planet.ArcDist(e.Dir, planet.BaseUp) < base.Reach {
 		return
 	}
 	at := g.terrain.Surface(e.Dir)
