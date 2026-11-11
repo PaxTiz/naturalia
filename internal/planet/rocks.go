@@ -1,8 +1,8 @@
 package planet
 
 import (
-	"mars_sweeper/internal/mathx"
 	"math"
+	"naturalia/internal/mathx"
 )
 
 // RockShapes is how many rock models there are to pick from.

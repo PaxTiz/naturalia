@@ -2,8 +2,8 @@ package content
 
 import (
 	"image/color"
-	"mars_sweeper/internal/mesh"
 	"math"
+	"naturalia/internal/mesh"
 )
 
 // Token is a material of the base: color, painted material, shine, glow.

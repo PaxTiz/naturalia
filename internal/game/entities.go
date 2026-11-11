@@ -1,11 +1,11 @@
 package game
 
 import (
-	"mars_sweeper/internal/base"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/planet"
 	"math"
+	"naturalia/internal/base"
+	"naturalia/internal/content"
+	"naturalia/internal/mathx"
+	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

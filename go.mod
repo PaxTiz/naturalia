@@ -1,4 +1,4 @@
-module mars_sweeper
+module naturalia
 
 go 1.27.3
 

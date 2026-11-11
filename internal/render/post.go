@@ -1,9 +1,9 @@
 package render
 
 import (
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/planet"
 	"math"
+	"naturalia/internal/mathx"
+	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

@@ -1,9 +1,9 @@
 package game
 
 import (
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/planet"
 	"math"
+	"naturalia/internal/mathx"
+	"naturalia/internal/planet"
 )
 
 // Dust devils: whirlwinds of dust wandering across the plains in daytime.

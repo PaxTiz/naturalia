@@ -2,10 +2,10 @@ package render
 
 import (
 	"image/color"
-	"mars_sweeper/internal/game"
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/planet"
 	"math"
+	"naturalia/internal/game"
+	"naturalia/internal/mathx"
+	"naturalia/internal/planet"
 	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

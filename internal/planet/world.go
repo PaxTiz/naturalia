@@ -2,9 +2,9 @@ package planet
 
 import (
 	"encoding/binary"
-	"mars_sweeper/internal/mathx"
 	"math"
 	"math/rand/v2"
+	"naturalia/internal/mathx"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"log"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/planet"
+	"naturalia/internal/content"
+	"naturalia/internal/planet"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,12 +28,20 @@ type saveFile struct {
 // (credits, upgrades) but start on a fresh Mars.
 const saveVersion = 5
 
+// saveDir is the game's settings folder: the save, mods.json, mods/. The
+// folder of the game's former name, Mars Sweeper, is renamed on first use.
 func saveDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "mars_sweeper"), nil
+	path := filepath.Join(dir, "naturalia")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.Rename(filepath.Join(dir, "mars_sweeper"), path); err == nil {
+			log.Println("settings moved from mars_sweeper to naturalia")
+		}
+	}
+	return path, nil
 }
 
 func (g *Game) Save() {

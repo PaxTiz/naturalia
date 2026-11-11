@@ -2,14 +2,14 @@ package game
 
 import (
 	"image/color"
-	"mars_sweeper/internal/audio"
-	"mars_sweeper/internal/base"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/palette"
-	"mars_sweeper/internal/planet"
 	"math"
 	"math/rand/v2"
+	"naturalia/internal/audio"
+	"naturalia/internal/base"
+	"naturalia/internal/content"
+	"naturalia/internal/mathx"
+	"naturalia/internal/palette"
+	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

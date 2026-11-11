@@ -1,11 +1,11 @@
 package game
 
 import (
-	"mars_sweeper/internal/base"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/planet"
-	"mars_sweeper/internal/script"
-	_ "mars_sweeper/packs/core"
+	"naturalia/internal/base"
+	"naturalia/internal/content"
+	"naturalia/internal/planet"
+	"naturalia/internal/script"
+	_ "naturalia/packs/core"
 	"testing"
 )
 

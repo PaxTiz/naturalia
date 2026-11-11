@@ -1,8 +1,8 @@
 package render
 
 import (
-	"mars_sweeper/internal/planet"
 	"math"
+	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

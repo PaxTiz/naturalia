@@ -1,9 +1,9 @@
 package base
 
 import (
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/mesh"
 	"math"
+	"naturalia/internal/content"
+	"naturalia/internal/mesh"
 )
 
 // The buildings' design system (docs/MODS.md): tokens say what a surface

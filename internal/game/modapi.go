@@ -2,9 +2,9 @@ package game
 
 import (
 	"image/color"
-	"mars_sweeper/internal/palette"
-	"mars_sweeper/internal/planet"
 	"math"
+	"naturalia/internal/palette"
+	"naturalia/internal/planet"
 )
 
 func (g *Game) Credits() float64       { return g.State.Credits }

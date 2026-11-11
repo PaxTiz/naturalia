@@ -1,8 +1,8 @@
 package render
 
 import (
-	"mars_sweeper/internal/mathx"
 	"math"
+	"naturalia/internal/mathx"
 	"runtime"
 	"sync"
 

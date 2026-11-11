@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/game"
-	"mars_sweeper/internal/render"
-	"mars_sweeper/internal/script"
-	"mars_sweeper/internal/ui"
-	_ "mars_sweeper/packs/core" // the base game, registered as a pack
+	"naturalia/internal/content"
+	"naturalia/internal/game"
+	"naturalia/internal/render"
+	"naturalia/internal/script"
+	"naturalia/internal/ui"
+	_ "naturalia/packs/core" // the base game, registered as a pack
 	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -16,13 +16,13 @@ import (
 
 func main() {
 	flags := uint32(rl.FlagWindowResizable | rl.FlagMsaa4xHint | rl.FlagVsyncHint)
-	if os.Getenv("MS_SHOT_PERF") != "" { // measuring: no wait for the screen (shot.go)
+	if os.Getenv("NA_SHOT_PERF") != "" { // measuring: no wait for the screen (shot.go)
 		flags &^= rl.FlagVsyncHint
 	}
 	rl.SetConfigFlags(flags)
 	w, h := int32(1280), int32(720)
-	fmt.Sscanf(os.Getenv("MS_SHOT_SIZE"), "%dx%d", &w, &h)
-	rl.InitWindow(w, h, "Mars Sweeper")
+	fmt.Sscanf(os.Getenv("NA_SHOT_SIZE"), "%dx%d", &w, &h)
+	rl.InitWindow(w, h, "Naturalia")
 	defer rl.CloseWindow()
 	rl.SetWindowMinSize(800, 450)
 	// Escape pauses the game instead of quitting it.

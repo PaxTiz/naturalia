@@ -2,11 +2,11 @@ package ui
 
 import (
 	"fmt"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/game"
-	"mars_sweeper/internal/planet"
-	"mars_sweeper/internal/render"
 	"math"
+	"naturalia/internal/content"
+	"naturalia/internal/game"
+	"naturalia/internal/planet"
+	"naturalia/internal/render"
 	"runtime"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

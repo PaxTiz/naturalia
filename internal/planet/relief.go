@@ -3,8 +3,8 @@
 package planet
 
 import (
-	"mars_sweeper/internal/mathx"
 	"math"
+	"naturalia/internal/mathx"
 )
 
 const (

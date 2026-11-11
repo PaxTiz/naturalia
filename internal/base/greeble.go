@@ -1,10 +1,10 @@
 package base
 
 import (
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/mesh"
 	"math"
+	"naturalia/internal/content"
+	"naturalia/internal/mathx"
+	"naturalia/internal/mesh"
 )
 
 // Greebles: the small machinery that makes the base look built and lived

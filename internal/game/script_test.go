@@ -1,9 +1,9 @@
 package game
 
 import (
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/script"
-	_ "mars_sweeper/packs/core"
+	"naturalia/internal/content"
+	"naturalia/internal/script"
+	_ "naturalia/packs/core"
 	"os"
 	"path/filepath"
 	"testing"

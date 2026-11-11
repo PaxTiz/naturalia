@@ -3,7 +3,7 @@ package content
 import (
 	"fmt"
 	"log"
-	"mars_sweeper/internal/planet"
+	"naturalia/internal/planet"
 	"slices"
 	"strings"
 )

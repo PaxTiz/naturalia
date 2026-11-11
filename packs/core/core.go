@@ -5,17 +5,17 @@ package core
 import (
 	"image/color"
 	"maps"
-	"mars_sweeper/internal/base"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/palette"
 	"math"
+	"naturalia/internal/base"
+	"naturalia/internal/content"
+	"naturalia/internal/palette"
 	"slices"
 )
 
 func init() {
 	content.RegisterPack(content.Pack{
 		ID:       "core",
-		Name:     "Mars Sweeper",
+		Name:     "Naturalia",
 		Version:  "1.0",
 		Register: registerCore,
 	})

@@ -1,4 +1,4 @@
-APP     := mars_sweeper
+APP     := naturalia
 OUT     := build
 LDFLAGS := -s -w
 

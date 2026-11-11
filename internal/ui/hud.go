@@ -3,14 +3,14 @@ package ui
 import (
 	"fmt"
 	"image/color"
-	"mars_sweeper/internal/base"
-	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/game"
-	"mars_sweeper/internal/mathx"
-	"mars_sweeper/internal/palette"
-	"mars_sweeper/internal/planet"
-	"mars_sweeper/internal/render"
 	"math"
+	"naturalia/internal/base"
+	"naturalia/internal/content"
+	"naturalia/internal/game"
+	"naturalia/internal/mathx"
+	"naturalia/internal/palette"
+	"naturalia/internal/planet"
+	"naturalia/internal/render"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -559,7 +559,7 @@ func (hud *HUD) drawPause(g *game.Game) {
 	hud.drawVisor(g)
 
 	// Emblem and title, centered as one block.
-	title := "MARS SWEEPER"
+	title := "NATURALIA"
 	size := 76 * u
 	tw := hud.titleWidth(title, size)
 	er := 46 * u

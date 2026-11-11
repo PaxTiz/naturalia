@@ -1,9 +1,9 @@
 package game
 
 import (
-	"mars_sweeper/internal/base"
-	"mars_sweeper/internal/content"
 	"math"
+	"naturalia/internal/base"
+	"naturalia/internal/content"
 )
 
 // emit runs the handlers of an event, in the order packs registered them.

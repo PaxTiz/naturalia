@@ -1,8 +1,8 @@
 package mesh
 
 import (
-	"mars_sweeper/internal/mathx"
 	"math"
+	"naturalia/internal/mathx"
 )
 
 // Meshes are built on the CPU, triangle by triangle, then merged: one

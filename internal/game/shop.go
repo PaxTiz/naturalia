@@ -2,8 +2,8 @@ package game
 
 import (
 	"fmt"
-	"mars_sweeper/internal/content"
 	"math"
+	"naturalia/internal/content"
 	"slices"
 )
 

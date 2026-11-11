@@ -1,8 +1,8 @@
 package planet
 
 import (
-	"mars_sweeper/internal/mathx"
 	"math"
+	"naturalia/internal/mathx"
 )
 
 // Settings is how Mars is generated, open to packs: each layer of
