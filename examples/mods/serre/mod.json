@@ -1,0 +1,70 @@
+{
+  "id": "serre",
+  "name": "La serre",
+  "version": "1.0",
+
+  "tokens": {
+    "leaf": {"color": "#5aa04c", "material": "plain", "spec": 0.2},
+    "bark": {"color": "#6e4a32", "material": "plain", "spec": 0.1}
+  },
+
+  "kits": {
+    "arbre": {
+      "parts": [
+        {"shape": "prism", "token": "soil", "at": [0, 0, 0], "r0": 0.75, "h": 0.45, "sides": 10},
+        {"shape": "prism", "token": "steel", "at": [0, 0.42, 0], "r0": 0.8, "h": 0.06, "sides": 10, "bevel": 0.01},
+        {"shape": "prism", "token": "bark", "at": [0, 0.45, 0], "r0": 0.09, "r1": 0.06, "h": 1.2, "sides": 6},
+        {"shape": "prism", "token": "leaf", "at": [0, 1.3, 0], "r0": 0.65, "r1": 0.15, "h": 0.9, "sides": 7, "bevel": 0.05},
+        {"shape": "prism", "token": "leaf", "at": [0, 1.0, 0], "r0": 0.45, "r1": 0.7, "h": 0.35, "sides": 7}
+      ],
+      "obstacles": [{"at": [0, 0, 0], "radius": 0.85}],
+      "use": "observe",
+      "prompt": "[E] Respirer un peu"
+    },
+    "etabli": {
+      "parts": [
+        {"shape": "box", "token": "steel", "at": [0, 0.85, 0], "size": [1.6, 0.06, 0.7], "bevel": 0.02},
+        {"shape": "box", "token": "steel.dark", "at": [-0.7, 0.42, 0], "size": [0.08, 0.84, 0.6]},
+        {"shape": "box", "token": "steel.dark", "at": [0.7, 0.42, 0], "size": [0.08, 0.84, 0.6]},
+        {"shape": "box", "token": "crate.ochre", "at": [0.3, 1.0, 0.05], "size": [0.4, 0.25, 0.3], "yaw": 20, "bevel": 0.02}
+      ],
+      "obstacles": [{"at": [0, 0, 0], "radius": 0.75}]
+    }
+  },
+
+  "buildings": [
+    {
+      "id": "serre",
+      "at": [-10, 0, 10],
+      "link": "core:hub",
+      "sign": "SERRE",
+      "shape": {"radius": 3.5, "wall_height": 2.6},
+      "accent": "neon.cyan",
+      "props": [
+        {"kit": "arbre", "at": [-1.2, 0, 1.2]},
+        {"kit": "planter", "at": [1.6, 0, 1.4], "seed": 3},
+        {"kit": "etabli", "at": [-1.4, 0, -1.6]}
+      ]
+    }
+  ],
+
+  "tools": [
+    {
+      "id": "rateau", "name": "Râteau", "radius": 3, "reach": 7, "rate": 1.8, "cost": 1500,
+      "look": {"handle_len": 0.6, "handle_r": 0.02, "handle_color": "#8a6a48",
+               "head_len": 0.1, "head_r": 0.14, "head_color": "#4c8c4a", "head": "flare"}
+    }
+  ],
+
+  "upgrades": [
+    {
+      "id": "engrais", "name": "Engrais", "desc": "Les cristaux et la poussière se vendent 10% plus cher",
+      "icon": "price", "base": 800, "growth": 2.5, "max": 5,
+      "effects": [{"stat": "price", "mult": 1.1}]
+    }
+  ],
+
+  "patch": {
+    "tools": {"core:broom": {"cost": 400}}
+  }
+}

@@ -18,6 +18,11 @@ const (
 
 // ToolLook describes the model held in first person: a handle, a metal
 // collar, then the head.
+// In mods it reads (modjson.go):
+//
+//	{"handle_len": 0.5, "handle_r": 0.02, "handle_color": "#a57346",
+//	 "head_len": 0.24, "head_r": 0.12, "head_color": "#f0cd5f",
+//	 "head": "block|taper|flare|nozzle", "glow": 0}
 type ToolLook struct {
 	HandleLen, HandleR float64
 	HandleCol          color.RGBA
@@ -28,29 +33,33 @@ type ToolLook struct {
 }
 
 type Tool struct {
-	ID     string
-	Name   string
-	Radius float64 // brush radius in meters
-	Reach  float64 // max aiming distance in meters
-	Rate   float64 // grams per second removed from a cell at the brush center
-	Cost   float64
-	Look   ToolLook
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Radius float64  `json:"radius"` // brush radius in meters
+	Reach  float64  `json:"reach"`  // max aiming distance in meters
+	Rate   float64  `json:"rate"`   // grams per second removed from a cell at the brush center
+	Cost   float64  `json:"cost"`
+	Look   ToolLook `json:"look"`
 }
 
 // Upgrade is bought level after level; each level applies its effects to
 // the game's stats.
 type Upgrade struct {
-	ID, Name, Desc string
-	Icon           string // pictogram drawn by the shop (icon)
-	Base, Growth   float64
-	Max            int // 0 means unlimited
-	Effects        []Effect
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+	Desc    string   `json:"desc"`
+	Icon    string   `json:"icon"`   // pictogram drawn by the shop (icon)
+	Base    float64  `json:"base"`   // price of the first level...
+	Growth  float64  `json:"growth"` // ...times this for each level bought
+	Max     int      `json:"max"`    // 0 means unlimited
+	Effects []Effect `json:"effects"`
 }
 
 // Effect changes a stat for each level: (base + Add×level) × Mult^level.
 type Effect struct {
-	Stat      string
-	Mult, Add float64
+	Stat string  `json:"stat"`
+	Mult float64 `json:"mult"`
+	Add  float64 `json:"add"`
 }
 
 // stats are what upgrades act on, with their value before any upgrade.

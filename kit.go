@@ -31,27 +31,32 @@ func tok(id string) token {
 
 // Blueprint is a building as data.
 type Blueprint struct {
-	ID     string
-	At     vec3   // local, center of the floor
-	Link   string // building a corridor leads to; doors are added at both ends
-	Sign   string // painted over the door that leads here from the hub
-	Shape  Dome
-	Style  string // token of the walls and roof
-	Accent string // token of the glowing stripes inside
-	Doors  []Door
-	Props  []Prop
+	ID     string `json:"id"`
+	At     vec3   `json:"at"`   // local, center of the floor
+	Link   string `json:"link"` // building a corridor leads to; doors are added at both ends
+	Sign   string `json:"sign"` // painted over the door that leads here from the hub
+	Shape  Dome   `json:"shape"`
+	Style  string `json:"style"`  // token of the walls and roof
+	Accent string `json:"accent"` // token of the glowing stripes inside
+	Doors  []Door `json:"doors"`
+	Props  []Prop `json:"props"`
 }
 
-type Dome struct{ Radius, WallH float64 }
+type Dome struct {
+	Radius float64 `json:"radius"`
+	WallH  float64 `json:"wall_height"`
+}
 
-type Door struct{ Facing float64 } // angle, atan2(z, x)
+type Door struct {
+	Facing float64 `json:"facing"` // angle, atan2(z, x)
+}
 
 // Prop is a kit piece placed in a building, relative to its center; Seed
 // varies pieces that are built by rules.
 type Prop struct {
-	Kit  string
-	At   vec3
-	Seed int
+	Kit  string `json:"kit"`
+	At   vec3   `json:"at"`
+	Seed int    `json:"seed"`
 }
 
 // polar is the point at distance r from the center, at angle a.

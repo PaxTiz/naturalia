@@ -288,40 +288,24 @@ func (b *building) yard() {
 
 	// A landing pad: concrete plates, a hazard rim, a white ring and lights.
 	pad := vec3{11, 0, -12.5}
-	sun("hazard").prism(pad, yUp, 3.6, 3.5, 0.06, 6, 0.02)
-	sun("pad.concrete").prism(pad, yUp, 3.3, 3.3, 0.09, 6, 0.01)
-	sun("habitat.white").prism(pad, yUp, 1.3, 1.3, 0.095, 24, 0)
-	sun("pad.concrete").prism(pad, yUp, 1.05, 1.05, 0.1, 24, 0)
-	for k := range 6 {
-		a := float64(k) * math.Pi / 3
-		p := pad.add(vec3{math.Cos(a) * 3.45, 0, math.Sin(a) * 3.45})
-		sun("steel.dark").prism(p, yUp, 0.12, 0.1, 0.12, 8, 0.02)
-		sun("lamp.warm").prism(p.add(vec3{0, 0.12, 0}), yUp, 0.07, 0.07, 0.03, 8, 0)
+	if yardFree(pad, 3.6) {
+		b.landingPad(pad)
 	}
 
 	// Water tanks on cradles, banded, with a pipe to the airlock.
-	for j, z := range []float64{-14.2, -12.4} {
-		start := vec3{-6.8, 0.95, z}
-		x := vec3{1, 0, 0}
-		sun("habitat.white").prism(start, x, 0.78, 0.78, 3.6, 18, 0.06)
-		for _, t := range []float64{0.3, 1.8, 3.3} {
-			sun("steel").prism(start.add(x.scale(t-0.06)), x, 0.81, 0.81, 0.12, 18, 0)
-			if t != 1.8 {
-				sun("steel.dark").box(start.add(x.scale(t)).add(vec3{0, -0.6, 0}), vec3{0.2, 0.7, 1.3}, x, 0.03)
-			}
-		}
-		sun("hazard").prism(start.add(x.scale(3.6)), x, 0.5, 0.45, 0.04, 18, 0)
-		sun("pipe.blue").prism(vec3{-3.2, 0.5, z}, x, 0.06, 0.06, 1.6-float64(j)*0.2, 8, 0)
-		sun("pipe.blue").prism(vec3{-1.6 - float64(j)*0.2, 0, z}, yUp, 0.06, 0.06, 0.56, 8, 0)
+	if yardFree(yardTanks, 2.6) {
+		b.waterTanks()
 	}
-	sun("rubber").box(vec3{-1.7, 0.03, -11.5}, vec3{0.08, 0.06, 4}, vec3{1, 0, 0}, 0.02)
 
 	// Barrels, standing and one fallen.
-	for c, cl := range [][2]float64{{5.4, -9.4}, {-9.4, 8.6}} {
+	for c, cl := range yardBarrels {
+		if !yardFree(cl, 1.2) {
+			continue
+		}
 		for k := range 5 {
 			a := float64(k)*1.3 + float64(c)
 			r := 0.35 + 0.35*grnd(c, k)
-			p := vec3{cl[0] + math.Cos(a)*r, 0, cl[1] + math.Sin(a)*r}
+			p := vec3{cl.X + math.Cos(a)*r, 0, cl.Z + math.Sin(a)*r}
 			tok := []string{"barrel.blue", "barrel.ochre", "pipe.red"}[(k+c)%3]
 			if k == 4 {
 				axis := vec3{math.Cos(a + 1), 0, math.Sin(a + 1)}
@@ -337,8 +321,8 @@ func (b *building) yard() {
 	}
 
 	// A cargo container: corrugated sides, corner posts, hazard doors.
-	{
-		c := vec3{9.6, 0, 9.4}
+	if yardFree(yardContainer, 2.5) {
+		c := yardContainer
 		ang := 0.55
 		ax := vec3{math.Cos(ang), 0, math.Sin(ang)}
 		sd := vec3{-ax.Z, 0, ax.X}
@@ -362,6 +346,9 @@ func (b *building) yard() {
 
 	// Floodlight masts.
 	for _, m := range yardMasts {
+		if !yardFree(m, 0.5) {
+			continue
+		}
 		sun("steel.dark").box(m.add(vec3{0, 0.2, 0}), vec3{0.5, 0.4, 0.5}, vec3{1, 0, 0}, 0.04)
 		sun("steel").prism(m, yUp, 0.08, 0.06, 4.6, 8, 0)
 		in := vec3{-m.X, 0, -m.Z}.norm()
@@ -377,24 +364,92 @@ func (b *building) yard() {
 	}
 }
 
-var yardMasts = []vec3{{-17.5, 0, 6}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
+func (b *building) landingPad(pad vec3) {
+	sun := func(tok string) *meshBuilder { return b.part(tok, litSun, vec3{}) }
+	sun("hazard").prism(pad, yUp, 3.6, 3.5, 0.06, 6, 0.02)
+	sun("pad.concrete").prism(pad, yUp, 3.3, 3.3, 0.09, 6, 0.01)
+	sun("habitat.white").prism(pad, yUp, 1.3, 1.3, 0.095, 24, 0)
+	sun("pad.concrete").prism(pad, yUp, 1.05, 1.05, 0.1, 24, 0)
+	for k := range 6 {
+		a := float64(k) * math.Pi / 3
+		p := pad.add(vec3{math.Cos(a) * 3.45, 0, math.Sin(a) * 3.45})
+		sun("steel.dark").prism(p, yUp, 0.12, 0.1, 0.12, 8, 0.02)
+		sun("lamp.warm").prism(p.add(vec3{0, 0.12, 0}), yUp, 0.07, 0.07, 0.03, 8, 0)
+	}
+
+}
+
+func (b *building) waterTanks() {
+	sun := func(tok string) *meshBuilder { return b.part(tok, litSun, vec3{}) }
+	for j, z := range []float64{-14.2, -12.4} {
+		start := vec3{-6.8, 0.95, z}
+		x := vec3{1, 0, 0}
+		sun("habitat.white").prism(start, x, 0.78, 0.78, 3.6, 18, 0.06)
+		for _, t := range []float64{0.3, 1.8, 3.3} {
+			sun("steel").prism(start.add(x.scale(t-0.06)), x, 0.81, 0.81, 0.12, 18, 0)
+			if t != 1.8 {
+				sun("steel.dark").box(start.add(x.scale(t)).add(vec3{0, -0.6, 0}), vec3{0.2, 0.7, 1.3}, x, 0.03)
+			}
+		}
+		sun("hazard").prism(start.add(x.scale(3.6)), x, 0.5, 0.45, 0.04, 18, 0)
+		sun("pipe.blue").prism(vec3{-3.2, 0.5, z}, x, 0.06, 0.06, 1.6-float64(j)*0.2, 8, 0)
+		sun("pipe.blue").prism(vec3{-1.6 - float64(j)*0.2, 0, z}, yUp, 0.06, 0.06, 0.56, 8, 0)
+	}
+	sun("rubber").box(vec3{-1.7, 0.03, -11.5}, vec3{0.08, 0.06, 4}, vec3{1, 0, 0}, 0.02)
+}
+
+var (
+	yardMasts     = []vec3{{-17.5, 0, 6}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
+	yardBarrels   = []vec3{{5.4, 0, -9.4}, {-9.4, 0, 8.6}}
+	yardTanks     = vec3{-5, 0, -13.3}
+	yardContainer = vec3{9.6, 0, 9.4}
+)
+
+// yardFree tells whether a yard object of radius r at p stays clear of the
+// buildings and corridors: a mod's building takes the place of what was
+// standing there.
+func yardFree(p vec3, r float64) bool {
+	const margin = 0.6
+	flat := vec3{p.X, 0, p.Z}
+	for _, rm := range rooms {
+		if flat.sub(rm.center).length() < rm.radius+r+margin {
+			return false
+		}
+	}
+	for _, c := range corridors {
+		d := c.to.sub(c.from)
+		t := clamp01(flat.sub(c.from).dot(d) / d.dot(d))
+		if flat.sub(c.from.add(d.scale(t))).length() < c.width/2+r+margin {
+			return false
+		}
+	}
+	return true
+}
 
 // yardObstacles: what the player bumps into in the yard.
 func yardObstacles() []obstacle {
-	out := []obstacle{
-		{vec3{5.4, 0, -9.4}, 0.95}, {vec3{-9.4, 0, 8.6}, 0.95},
-	}
-	for _, z := range []float64{-14.2, -12.4} {
-		for _, x := range []float64{-6.3, -5.0, -3.7} {
-			out = append(out, obstacle{vec3{x, 0, z}, 0.8})
+	var out []obstacle
+	for _, cl := range yardBarrels {
+		if yardFree(cl, 1.2) {
+			out = append(out, obstacle{cl, 0.95})
 		}
 	}
-	c, ax := vec3{9.6, 0, 9.4}, vec3{math.Cos(0.55), 0, math.Sin(0.55)}
-	for _, t := range []float64{-1.4, 0, 1.4} {
-		out = append(out, obstacle{c.add(ax.scale(t)), 1.15})
+	if yardFree(yardTanks, 2.6) {
+		for _, z := range []float64{-14.2, -12.4} {
+			for _, x := range []float64{-6.3, -5.0, -3.7} {
+				out = append(out, obstacle{vec3{x, 0, z}, 0.8})
+			}
+		}
+	}
+	if c, ax := yardContainer, (vec3{math.Cos(0.55), 0, math.Sin(0.55)}); yardFree(c, 2.5) {
+		for _, t := range []float64{-1.4, 0, 1.4} {
+			out = append(out, obstacle{c.add(ax.scale(t)), 1.15})
+		}
 	}
 	for _, m := range yardMasts {
-		out = append(out, obstacle{m, 0.35})
+		if yardFree(m, 0.5) {
+			out = append(out, obstacle{m, 0.35})
+		}
 	}
 	return out
 }

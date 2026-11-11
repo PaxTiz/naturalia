@@ -22,6 +22,7 @@ func main() {
 	// Escape pauses the game instead of quitting it.
 	rl.SetExitKey(0)
 
+	loadMods()
 	loadContent()
 	log.Println("packs:", packList())
 	g := NewGame()
