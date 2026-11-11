@@ -390,22 +390,12 @@ func (g *Game) updateBase(dt float64) {
 }
 
 // use runs what the player activates with E.
-func (g *Game) use(it interactable) {
-	switch it.use {
-	case useMap:
-		g.setMode(modeMap)
-	case useResearch:
-		g.setMode(modeShop)
-	case useBed:
-		g.mode, g.sleepT = modeSleep, 0
-	case useIncinerator:
-		g.deposit()
-	}
-}
+func (g *Game) use(it interactable) { it.use(g, it.at) }
 
-// deposit feeds the tank's dust to the incinerator, which turns it into credits.
-func (g *Game) deposit() {
-	hopper := toWorld(incineratorSpot.add(vec3{0, 2.6, 0}))
+// deposit feeds the tank's dust to the incinerator at the local point in,
+// which turns it into credits.
+func (g *Game) deposit(in vec3) {
+	hopper := toWorld(in.add(vec3{0, 2.6, 0}))
 	if g.st.Tank < 1 {
 		g.floaters = append(g.floaters, Floater{Pos: hopper.add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
 		g.sfx.beep(0, 0.25, 0.12, 220)

@@ -106,25 +106,26 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 }
 
 // lampShadow holds the shadows of the rooms' ceiling lamps: one wide
-// perspective view straight down from each lamp, in the four quarters of
-// one texture. The base never moves: they are drawn once. Every room keeps
+// perspective view straight down from each lamp, in the cells of a grid
+// on one texture (2×2 for the core base). The base never moves: they are drawn once. Every room keeps
 // its shadows, so nothing pops in when the player walks in.
 type lampShadow struct {
 	target rl.RenderTexture2D
 	lamps  []vec3 // where the cameras stand, looking down
+	grid   int    // cells per side
 	done   bool
 }
 
 const (
-	lampShadowRes = 2048 // the whole atlas; each lamp gets a quarter
-	lampShadows   = 4    // the rooms' lamps: the first lights of baseLights
-	lampFov       = 150.0
+	lampShadowCell = 1024 // each lamp's view; the rooms' lamps are the first lights of baseLights
+	lampFov        = 150.0
 )
 
-func newLampShadow() *lampShadow {
-	img := rl.GenImageColor(lampShadowRes, lampShadowRes, rl.White)
+func newLampShadow(lamps int) *lampShadow {
+	s := &lampShadow{grid: int(math.Ceil(math.Sqrt(float64(max(1, lamps)))))}
+	res := s.grid * lampShadowCell
+	img := rl.GenImageColor(res, res, rl.White)
 	rl.ImageFormat(img, rl.UncompressedR32)
-	s := &lampShadow{}
 	s.target.Texture = rl.LoadTextureFromImage(img)
 	rl.UnloadImage(img)
 	rl.SetTextureFilter(s.target.Texture, rl.FilterPoint)
@@ -155,18 +156,19 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 		return
 	}
 	s.done = true
-	half := int32(lampShadowRes / 2)
+	cell := int32(lampShadowCell)
+	grid := int32(s.grid)
 	rl.BeginTextureMode(s.target)
 	rl.ClearBackground(rl.White)
 	rl.SetClipPlanes(0.1, 30)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
-	for i, lamp := range lamps[:lampShadows] {
+	for i, lamp := range lamps[:min(len(lamps), s.grid*s.grid)] {
 		cam := rl.Camera3D{
 			Position: lamp.rl(), Target: lamp.sub(vec3{0, 1, 0}).rl(), Up: rl.Vector3{X: 1},
 			Fovy: lampFov, Projection: rl.CameraPerspective,
 		}
 		rl.BeginMode3D(cam)
-		rl.Viewport(int32(i%2)*half, int32(i/2)*half, half, half)
+		rl.Viewport(int32(i)%grid*cell, int32(i)/grid*cell, cell, cell)
 		s.lamps = append(s.lamps, lamp)
 		rl.SetBlendFactors(glOne, glOne, glMin)
 		rl.BeginBlendMode(rl.BlendCustom)

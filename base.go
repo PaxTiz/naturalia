@@ -1,7 +1,9 @@
 package main
 
 import (
+	"log"
 	"math"
+	"slices"
 )
 
 // The Mars base sits on the north pole, where up is +Y and the ground is
@@ -42,29 +44,78 @@ const (
 var (
 	east, west, north, south = 0.0, math.Pi, math.Pi / 2, -math.Pi / 2
 
-	hubRoom      = hubPlan.room()
-	saleRoom     = salePlan.room()
-	researchRoom = researchPlan.room()
-	sleepRoom    = sleepPlan.room()
-	rooms        = []room{hubRoom, saleRoom, researchRoom, sleepRoom}
-
-	airlockEnd = vec3{0, 0, -10.5}
-	corridors  = []corridor{
-		{vec3{-6.3, 0, 0}, vec3{-9.2, 0, 0}, doorWidth, 2.4},
-		{vec3{6.3, 0, 0}, vec3{9.2, 0, 0}, doorWidth, 2.4},
-		{vec3{0, 0, 6.3}, vec3{0, 0, 9.2}, doorWidth, 2.4},
-		{vec3{0, 0, -6.3}, airlockEnd, doorWidth + 0.2, 2.6},
-	}
+	airlockEnd = vec3{0, 0, -10.5} // the hub's south door leads there
+	spawnSpot  = vec3{0, 0, 11.6}  // wake up next to the bed
 )
 
-// Furniture spots, local.
+// The base as laid out from the buildings in the content (setupBase).
 var (
-	tableSpot       = hubPlan.spot("maptable")
-	incineratorSpot = salePlan.spot("incinerator")
-	consoleSpot     = researchPlan.spot("console")
-	bedSpot         = sleepPlan.spot("bed")
-	spawnSpot       = vec3{0, 0, 11.6} // wake up next to the bed
+	plans         []*Blueprint // the hub first
+	rooms         []room       // in the order of plans
+	hubRoom       room
+	corridors     []corridor // one per linked building, then the airlock's
+	tableSpot     vec3       // the map table, under the hologram
+	baseObstacles []obstacle
+	interactables []interactable
 )
+
+// The shaders hold this many rooms, and as many corridors (baseAO, lamps):
+// more buildings are left out.
+const maxRooms = 8
+
+// setupBase lays the base out from the buildings: rooms, doors and
+// corridors along the links, what blocks the player, what they can use.
+func setupBase() {
+	plans = content.Buildings.All()
+	if len(plans) > maxRooms {
+		log.Printf("base: %d buildings, only the first %d are built", len(plans), maxRooms)
+		plans = plans[:maxRooms]
+	}
+	corridors = nil
+	for _, bp := range plans {
+		if bp.Link == "" {
+			continue
+		}
+		to, ok := content.Buildings.Get(bp.Link)
+		if !ok || !slices.Contains(plans, to) {
+			log.Printf("base: %s links to %s, which isn't built", bp.ID, bp.Link)
+			continue
+		}
+		d := to.At.sub(bp.At)
+		d = vec3{d.X, 0, d.Z}.norm()
+		bp.addDoor(math.Atan2(d.Z, d.X))
+		to.addDoor(math.Atan2(-d.Z, -d.X))
+		corridors = append(corridors, corridor{
+			to.At.sub(d.scale(to.Shape.Radius - 0.2)), bp.At.add(d.scale(bp.Shape.Radius - 0.2)), doorWidth, 2.4,
+		})
+	}
+	corridors = append(corridors, corridor{vec3{0, 0, -(plans[0].Shape.Radius - 0.2)}, airlockEnd, doorWidth + 0.2, 2.6})
+	rooms = nil
+	for _, bp := range plans {
+		rooms = append(rooms, bp.room())
+	}
+	hubRoom = rooms[0]
+	tableSpot = vec3{0, 0, 0}
+	for _, bp := range plans {
+		for _, p := range bp.Props {
+			if qualify(p.Kit) == "core:maptable" {
+				tableSpot = bp.At.add(p.At)
+			}
+		}
+	}
+	baseObstacles = planObstacles()
+	interactables = planInteractables()
+}
+
+// addDoor opens a door facing angle a, unless there is one already.
+func (bp *Blueprint) addDoor(a float64) {
+	for _, d := range bp.Doors {
+		if angleDist(d.Facing, a) < 0.05 {
+			return
+		}
+	}
+	bp.Doors = append(bp.Doors, Door{a})
+}
 
 func toWorld(local vec3) vec3 { return basePos.add(local) }
 
@@ -207,7 +258,6 @@ type obstacle struct {
 	radius float64
 }
 
-var baseObstacles = planObstacles()
 
 // collide keeps a player of the given radius out of walls and furniture.
 func collideBase(p *Player, walls []segment2) {
@@ -268,25 +318,13 @@ func baseLights() []vec3 {
 	return lights
 }
 
-// interaction is something the player can use with E.
-type interaction int
-
-const (
-	useNone interaction = iota
-	useMap
-	useIncinerator
-	useResearch
-	useBed
-)
-
+// interactable is something the player can use with E.
 type interactable struct {
 	at     vec3 // local
 	reach  float64
-	use    interaction
+	use    func(g *Game, at vec3)
 	prompt string
 }
-
-var interactables = planInteractables()
 
 // nearbyUse returns what the player can use right now: the closest
 // interactable within reach that they roughly face.

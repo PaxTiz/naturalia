@@ -148,9 +148,10 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
 // it is and the more the surface faces it: corners darken, the foot of
 // the walls and of the objects standing on the ground too.
 uniform vec3 baseRel;          // the base's origin, from origin
-uniform vec4 baseRooms[4];     // local center x and z, radius, wall height
-uniform vec4 baseCorrs[4];     // local ends: from x, z, to x, z
-uniform vec4 baseCorrSize[4];  // width, height
+uniform vec4 baseRooms[8];     // local center x and z, radius, wall height
+uniform vec4 baseCorrs[8];     // local ends: from x, z, to x, z
+uniform vec4 baseCorrSize[8];  // width, height
+uniform float roomCount, corrCount;
 uniform vec4 baseBlobs[48];    // furniture and yard objects: local x, z, radius
 uniform float blobCount;
 
@@ -164,7 +165,8 @@ float baseAO(vec3 n) {
     if (dot(p.xz, p.xz) > 1600.0) return 1.0;
     float ao = 1.0 - 0.7 * occ(p.y - 0.02, 0.8, n, vec3(0, 1, 0));
     bool inCorr = false;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
+        if (float(i) >= corrCount) break;
         vec2 a = baseCorrs[i].xy;
         vec2 ax = baseCorrs[i].zw - a;
         float len = length(ax);
@@ -190,7 +192,8 @@ float baseAO(vec3 n) {
             ao *= 1.0 - 0.4 * (1.0 - smoothstep(0.5, 1.35, d));
         }
     }
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 8; i++) {
+        if (float(i) >= roomCount) break;
         vec2 q = p.xz - baseRooms[i].xy;
         float r = max(length(q), 1e-3);
         vec3 rn = vec3(q.x, 0.0, q.y) / r;
@@ -484,10 +487,12 @@ uniform vec4 colDiffuse;
 uniform vec2 surface;     // x: specular strength, y: emissive (0..1)
 uniform float lighting;   // 0 sun, 1 lamps, 2 lamps on back faces, 3 lamps on faces turned toward room
 uniform vec3 room;
-uniform vec4 lights[12];  // ceiling lamps: xyz position, w intensity
+uniform vec4 lights[16];  // ceiling lamps: xyz position, w intensity
 uniform float lightCount;
-uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a quarter each (shadow.go)
-uniform vec4 lampVP[16];         // their cameras about origin, four columns each
+uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a cell of a grid each (shadow.go)
+uniform vec4 lampVP[32];         // their cameras about origin, four columns each
+uniform float lampCount;         // the first lights, one per room
+uniform float lampGrid;          // cells per side of the map
 uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
 uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
@@ -509,7 +514,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
     vec3 diff = albedo * (1.0 - metal);
     vec3 col = vec3(0.0);
     float bounce = 0.0;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 16; i++) {
         if (float(i) >= lightCount) break;
         vec3 l = (lights[i].xyz - origin) - fragRel;
         float d = length(l);
@@ -520,16 +525,17 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
         float att = lights[i].w * win * win / (d * d + 1.2);
         bounce += lights[i].w * win * win / (d * d * 0.3 + 5.0);
         float lit = 1.0;
-        if (i < 4 && att > 0.01) {
+        if (float(i) < lampCount && att > 0.01) {
             // Pushed a little off the surface, then looked up in the lamp's
-            // quarter of the map: the four texels around, compared, then
+            // cell of the map: the four texels around, compared, then
             // blended by where the point falls between them (a soft edge
             // for four reads).
             vec4 lp = mat4(lampVP[i * 4], lampVP[i * 4 + 1], lampVP[i * 4 + 2], lampVP[i * 4 + 3]) * vec4(fragRel + n * 0.04, 1.0);
             vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
             if (lp.w > 0.0 && all(greaterThan(sc.xy, vec2(0.01))) && all(lessThan(sc.xy, vec2(0.99)))) {
                 vec2 size = vec2(textureSize(lampShadowMap, 0));
-                vec2 tc = (vec2(i % 2, i / 2) * 0.5 + sc.xy * 0.5) * size - 0.5;
+                int grid = int(lampGrid);
+                vec2 tc = (vec2(i % grid, i / grid) + sc.xy) / lampGrid * size - 0.5;
                 vec2 f = fract(tc);
                 ivec2 c = ivec2(floor(tc));
                 float z = sc.z - 0.00002;

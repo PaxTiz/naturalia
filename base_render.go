@@ -61,7 +61,7 @@ func (g *Game) drawBase() {
 	gfx.base.draw(gfx)
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if k := kitProps[p.Kit]; k.draw != nil {
+			if k, _ := content.Kits.Get(p.Kit); k != nil && k.draw != nil {
 				k.draw(g, bp.At.add(p.At))
 			}
 		}
@@ -81,7 +81,7 @@ func (g *Game) drawAirlock() {
 	gfx := g.gfx
 	end := airlockEnd
 	gfx.setLighting(litSun, vec3{})
-	steel := tokens["steel"]
+	steel := tok("steel")
 	gfx.setMat(steel.mat, steel.scale, false)
 	w := (doorWidth + 0.2) / 2
 	for _, s := range []float64{-1, 1} {

@@ -25,13 +25,18 @@ func baseSigns() []sign {
 		at := dir.scale(hubRoom.radius - wallThick/2 - 0.03).add(vec3{0, 2.6, 0})
 		return sign{at: at, facing: dir.scale(-1), width: 1.9, text: text, accent: accent}
 	}
-	return []sign{
-		inHub(west, "VENTE", accentOrange),
-		inHub(east, "RECHERCHE", accentBlue),
-		inHub(north, "QUARTIERS", accentPurple),
-		inHub(south, "SAS 01 - SORTIE", colGold),
-		{at: airlockEnd.add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: colGold},
+	// Over each door of the hub, the name of the building it leads to.
+	var signs []sign
+	for _, bp := range plans[1:] {
+		if bp.Sign != "" && bp.Link == plans[0].ID {
+			d := bp.At.sub(plans[0].At)
+			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, tok(bp.Accent).col))
+		}
 	}
+	return append(signs,
+		inHub(south, "SAS 01 - SORTIE", colGold),
+		sign{at: airlockEnd.add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: colGold},
+	)
 }
 
 // paintSign draws a sign's texture in flat colors: a dark steel plate, an
