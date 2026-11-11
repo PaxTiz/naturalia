@@ -21,11 +21,10 @@ type postFX struct {
 	w, h          int32
 	scene         rl.RenderTexture2D
 	bloom         [bloomLevels]rl.RenderTexture2D
-	ao            rl.RenderTexture2D // ambient occlusion, half size
-	depth         rl.Texture2D       // the scene's second target: distance along the view (depthOut)
+	ldr           rl.RenderTexture2D // the graded image, luma in alpha, before FXAA
 	down, up, img rl.Shader
-	aoSh          rl.Shader
-	locs          struct{ texel, first, exposure, sunUp, time, sunScreen, aoProj int32 }
+	fxaa          rl.Shader
+	locs          struct{ texel, first, exposure, sunUp, time, sunScreen int32 }
 	exposure      float64 // adapts over time, like an eye
 }
 
@@ -41,9 +40,8 @@ func hdrTarget(w, h int32, depth bool) rl.RenderTexture2D {
 	rt.ID = rl.LoadFramebuffer()
 	rl.FramebufferAttach(rt.ID, rt.Texture.ID, rl.AttachmentColorChannel0, rl.AttachmentTexture2d, 0)
 	if depth {
-		// A depth texture, not a renderbuffer: the ambient occlusion reads it.
-		rt.Depth = rl.Texture2D{ID: rl.LoadTextureDepth(w, h, false), Width: w, Height: h}
-		rl.FramebufferAttach(rt.ID, rt.Depth.ID, rl.AttachmentDepth, rl.AttachmentTexture2d, 0)
+		rt.Depth = rl.Texture2D{ID: rl.LoadTextureDepth(w, h, true), Width: w, Height: h}
+		rl.FramebufferAttach(rt.ID, rt.Depth.ID, rl.AttachmentDepth, rl.AttachmentRenderbuffer, 0)
 	}
 	if !rl.FramebufferComplete(rt.ID) {
 		panic("HDR framebuffer incomplete")
@@ -57,8 +55,7 @@ func newPostFX() *postFX {
 	p.down = rl.LoadShaderFromMemory(postVS, bloomDownFS)
 	p.up = rl.LoadShaderFromMemory(postVS, bloomUpFS)
 	p.img = rl.LoadShaderFromMemory(postVS, imageFS)
-	p.aoSh = rl.LoadShaderFromMemory(postVS, aoFS)
-	p.locs.aoProj = rl.GetShaderLocation(p.aoSh, "proj")
+	p.fxaa = rl.LoadShaderFromMemory(postVS, fxaaFS)
 	p.locs.texel = rl.GetShaderLocation(p.down, "texel")
 	p.locs.first = rl.GetShaderLocation(p.down, "first")
 	p.locs.exposure = rl.GetShaderLocation(p.img, "exposure")
@@ -79,22 +76,13 @@ func (p *postFX) resize() {
 		for _, b := range p.bloom {
 			rl.UnloadRenderTexture(b)
 		}
-		rl.UnloadRenderTexture(p.ao)
-		rl.UnloadTexture(p.depth)
+		rl.UnloadRenderTexture(p.ldr)
 	}
 	p.w, p.h = w, h
 	p.scene = hdrTarget(w, h, true)
-	img := rl.GenImageColor(int(w), int(h), rl.Black)
-	rl.ImageFormat(img, pixelRGBA16F)
-	p.depth = rl.LoadTextureFromImage(img)
-	rl.UnloadImage(img)
-	rl.SetTextureFilter(p.depth, rl.FilterPoint)
-	rl.SetTextureWrap(p.depth, rl.WrapClamp)
-	rl.FramebufferAttach(p.scene.ID, p.depth.ID, rl.AttachmentColorChannel1, rl.AttachmentTexture2d, 0)
-	rl.EnableFramebuffer(p.scene.ID)
-	rl.ActiveDrawBuffers(2)
-	rl.DisableFramebuffer()
-	p.ao = hdrTarget(max(1, w/2), max(1, h/2), false)
+	p.ldr = rl.LoadRenderTexture(w, h)
+	rl.SetTextureFilter(p.ldr.Texture, rl.FilterBilinear)
+	rl.SetTextureWrap(p.ldr.Texture, rl.WrapClamp)
 	for i := range p.bloom {
 		w, h = max(1, w/2), max(1, h/2)
 		p.bloom[i] = hdrTarget(w, h, false)
@@ -125,15 +113,6 @@ func blit(src rl.Texture2D, w, h int32) {
 
 // finish turns the HDR scene into the final image on the screen.
 func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
-	// Ambient occlusion from the depth: corners, contacts and creases darken.
-	tanY := float32(math.Tan(float64(cam.Fovy) * math.Pi / 360))
-	rl.SetShaderValue(p.aoSh, p.locs.aoProj, []float32{tanY * float32(p.w) / float32(p.h), tanY, float32(math.Mod(clock, 100)), 0}, rl.ShaderUniformVec4)
-	rl.BeginShaderMode(p.aoSh)
-	rl.BeginTextureMode(p.ao)
-	blit(p.depth, p.ao.Texture.Width, p.ao.Texture.Height)
-	rl.EndTextureMode()
-	rl.EndShaderMode()
-
 	// Bloom: halve again and again, then add each level back into the one
 	// above, blurring as it grows.
 	rl.BeginShaderMode(p.down)
@@ -168,10 +147,16 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	sp := rl.GetWorldToScreen(eye.add(sunDir.scale(1000)).rl(), cam)
 	sw, sh := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
 	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
+	rl.BeginTextureMode(p.ldr)
 	rl.BeginShaderMode(p.img)
 	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "bloom"), p.bloom[0].Texture)
-	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "aoMap"), p.ao.Texture)
-	blit(p.scene.Texture, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()))
+	blit(p.scene.Texture, p.ldr.Texture.Width, p.ldr.Texture.Height)
+	rl.EndShaderMode()
+	rl.EndTextureMode()
+	// Then the edges are smoothed, straight to the screen.
+	rl.SetShaderValue(p.fxaa, rl.GetShaderLocation(p.fxaa, "time"), []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
+	rl.BeginShaderMode(p.fxaa)
+	blit(p.ldr.Texture, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()))
 	rl.EndShaderMode()
 }
 
@@ -237,7 +222,6 @@ var imageFS = `#version 330
 in vec2 fragTexCoord;
 uniform sampler2D texture0; // HDR scene
 uniform sampler2D bloom;
-uniform sampler2D aoMap;    // ambient occlusion, half size
 uniform float exposure;
 uniform float sunUp;        // sun height where the player stands
 uniform float time;
@@ -261,20 +245,8 @@ vec3 shafts(vec2 uv) {
 
 vec3 rays; // light shafts, computed once per pixel in main
 
-// occlusion blurs the half-size ambient occlusion with a 3×3 tent, which
-// cancels out its 2×2 rotation pattern exactly.
-float occlusion(vec2 uv) {
-    vec2 t = 1.0 / vec2(textureSize(aoMap, 0));
-    // Four bilinear taps half a texel away make the tent.
-    t *= 0.5;
-    return 0.25 * (texture(aoMap, uv + vec2(-1, -1) * t).r + texture(aoMap, uv + vec2(1, -1) * t).r
-                 + texture(aoMap, uv + vec2(-1, 1) * t).r + texture(aoMap, uv + vec2(1, 1) * t).r);
-}
-
-float occ; // computed once per pixel in main
-
 vec3 image(vec2 uv) {
-    vec3 c = texture(texture0, uv).rgb * occ + texture(bloom, uv).rgb * ` + ftoa(bloomStrength) + ` + rays;
+    vec3 c = texture(texture0, uv).rgb + texture(bloom, uv).rgb * ` + ftoa(bloomStrength) + ` + rays;
     // Filmic curve (ACES, Narkowicz's fit): deeper shadows and a soft
     // shoulder. The 0.53 keeps the mid-tones where the old curve had them.
     c *= exposure * 0.53;
@@ -299,88 +271,81 @@ vec3 image(vec2 uv) {
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
 void main() {
-    vec2 t = 1.0 / vec2(textureSize(texture0, 0));
     vec2 uv = fragTexCoord;
     rays = shafts(uv) * vec3(1.0, 0.75, 0.5);
-    occ = occlusion(uv);
     vec3 c = image(uv);
-
-    // FXAA, simplified: find the edge direction from the neighbors' luma
-    // and blur along it.
-    float lm = luma(c);
-    float ln = luma(image(uv + vec2(-t.x, -t.y))), lne = luma(image(uv + vec2(t.x, -t.y)));
-    float lsw = luma(image(uv + vec2(-t.x, t.y))), lse = luma(image(uv + vec2(t.x, t.y)));
-    float lo = min(lm, min(min(ln, lne), min(lsw, lse)));
-    float hi = max(lm, max(max(ln, lne), max(lsw, lse)));
-    if (hi - lo > max(0.04, hi * 0.12)) {
-        vec2 dir = vec2(-((ln + lne) - (lsw + lse)), (ln + lsw) - (lne + lse));
-        float reduce = max((ln + lne + lsw + lse) * 0.03125, 1.0 / 128.0);
-        dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + reduce), -8.0, 8.0) * t;
-        vec3 a = 0.5 * (image(uv - dir / 6.0) + image(uv + dir / 6.0));
-        vec3 b = a * 0.5 + 0.25 * (image(uv - dir * 0.5) + image(uv + dir * 0.5));
-        float lb = luma(b);
-        c = (lb < lo || lb > hi) ? a : b;
-    }
-
-    // Vignette and a fine film grain.
     vec2 q = uv - 0.5;
-    c *= 1.0 - dot(q, q) * 0.45;
-    float n = fract(sin(dot(uv * 1000.0 + time, vec2(12.9898, 78.233))) * 43758.5453);
-    c += (n - 0.5) * 0.025;
-    finalColor = vec4(c, 1.0);
+    c *= 1.0 - dot(q, q) * 0.45; // vignette
+    finalColor = vec4(c, sqrt(luma(c))); // perceptual luma for FXAA
 }`
 
-// aoFS: scalable ambient obscurance from the depth alone. Each pixel finds
-// its view-space position and normal, then looks at a dozen neighbors on a
-// spiral half a meter wide: those rising above its surface hide the sky.
-var aoFS = `#version 330
+// fxaaFS smooths the jagged edges of the graded image (FXAA 3.11, quality
+// preset 12): it finds where the contrast is, which way the edge runs,
+// walks along it to both ends, and blends across it by how far the pixel
+// is from the nearer end. Then a fine film grain.
+const fxaaFS = `#version 330
 in vec2 fragTexCoord;
-uniform sampler2D texture0; // distance along the view, split in two (depthOut)
-uniform vec4 proj;          // x, y: tangent of the half field of view; z: time
+uniform sampler2D texture0; // rgb: image, a: luma
+uniform float time;
 out vec4 finalColor;
-const float radius = 0.8;
 
-vec3 viewPos(vec2 uv) {
-    // On a texel's center: half-size pixels fall between four of them.
-    vec2 size = vec2(textureSize(texture0, 0));
-    uv = (floor(uv * size) + 0.5) / size;
-    vec2 d = texture(texture0, uv).rg;
-    float z = d.x + d.y / 64.0;
-    if (z <= 0.0) z = 1000.0; // the sky
-    return vec3((uv * 2.0 - 1.0) * proj.xy * z, z);
-}
+float L(vec2 p) { return texture(texture0, p).a; }
 
 void main() {
-    vec2 size = vec2(textureSize(texture0, 0));
-    vec2 uv = (floor(fragTexCoord * size) + 0.5) / size;
-    vec3 P = viewPos(uv);
-    if (P.z > 30.0) { finalColor = vec4(1.0); return; }
-    // Normal from the closer neighbor on each axis, so edges stay clean.
-    vec2 t = 1.0 / vec2(textureSize(texture0, 0));
-    vec3 px = viewPos(uv + vec2(t.x, 0)), nx = viewPos(uv - vec2(t.x, 0));
-    vec3 py = viewPos(uv + vec2(0, t.y)), ny = viewPos(uv - vec2(0, t.y));
-    vec3 dx = abs(px.z - P.z) < abs(nx.z - P.z) ? px - P : P - nx;
-    vec3 dy = abs(py.z - P.z) < abs(ny.z - P.z) ? py - P : P - ny;
-    vec3 N = normalize(cross(dx, dy));
-    if (dot(N, P) > 0.0) N = -N;
-
-    const int N_SAMPLES = 8;
-    // The spiral turns from pixel to pixel over a 2×2 block; the blur in
-    // imageFS averages the block.
-    ivec2 b = ivec2(gl_FragCoord.xy) & 1;
-    float spin = (float(b.x * 2 + (b.x ^ b.y)) + 0.5) / 4.0 * 6.2832 / float(N_SAMPLES) * 2.0;
-    vec2 rs = radius / (P.z * 2.0 * proj.xy); // the radius on screen, in uv
-    float sum = 0.0;
-    for (int i = 0; i < N_SAMPLES; i++) {
-        float a = 0.3 + 0.7 * (float(i) + 0.5) / float(N_SAMPLES);
-        float ang = a * 6.2832 * 2.0 + spin;
-        vec2 o = vec2(cos(ang), sin(ang)) * a * rs;
-        vec3 v = viewPos(uv + o) - P;
-        float vv = dot(v, v);
-        float f = max(radius * radius - vv, 0.0);
-        sum += f * f * f * max((dot(v, N) - 0.03 - 0.002 * P.z) / (vv + 0.003), 0.0);
+    vec2 uv = fragTexCoord;
+    vec2 rcp = 1.0 / vec2(textureSize(texture0, 0));
+    vec4 rgbyM = texture(texture0, uv);
+    float lumaM = rgbyM.a;
+    float lumaS = L(uv + vec2(0, 1) * rcp), lumaE = L(uv + vec2(1, 0) * rcp);
+    float lumaN = L(uv + vec2(0, -1) * rcp), lumaW = L(uv + vec2(-1, 0) * rcp);
+    float rangeMax = max(max(max(lumaS, lumaE), max(lumaN, lumaW)), lumaM);
+    float rangeMin = min(min(min(lumaS, lumaE), min(lumaN, lumaW)), lumaM);
+    float range = rangeMax - rangeMin;
+    vec3 col = rgbyM.rgb;
+    if (range >= max(0.0312, rangeMax * 0.125)) {
+        float lumaNW = L(uv + vec2(-1, -1) * rcp), lumaSE = L(uv + vec2(1, 1) * rcp);
+        float lumaNE = L(uv + vec2(1, -1) * rcp), lumaSW = L(uv + vec2(-1, 1) * rcp);
+        float lumaNS = lumaN + lumaS, lumaWE = lumaW + lumaE;
+        float subpix = (2.0 * (lumaNS + lumaWE) + lumaNW + lumaSE + lumaNE + lumaSW) / 12.0;
+        subpix = clamp(abs(subpix - lumaM) / range, 0.0, 1.0);
+        subpix = smoothstep(0.0, 1.0, subpix);
+        subpix = subpix * subpix * 0.75;
+        float edgeH = abs(lumaNW + lumaNE - 2.0 * lumaN) + 2.0 * abs(lumaWE - 2.0 * lumaM) + abs(lumaSW + lumaSE - 2.0 * lumaS);
+        float edgeV = abs(lumaNW + lumaSW - 2.0 * lumaW) + 2.0 * abs(lumaNS - 2.0 * lumaM) + abs(lumaNE + lumaSE - 2.0 * lumaE);
+        bool horz = edgeH >= edgeV;
+        float step = horz ? rcp.y : rcp.x;
+        float luma1 = horz ? lumaN : lumaW, luma2 = horz ? lumaS : lumaE;
+        float grad1 = abs(luma1 - lumaM), grad2 = abs(luma2 - lumaM);
+        bool steep1 = grad1 >= grad2;
+        float gradScaled = 0.25 * max(grad1, grad2);
+        float lumaLocal;
+        if (steep1) { step = -step; lumaLocal = 0.5 * (luma1 + lumaM); }
+        else lumaLocal = 0.5 * (luma2 + lumaM);
+        vec2 cur = uv;
+        if (horz) cur.y += step * 0.5; else cur.x += step * 0.5;
+        vec2 off = horz ? vec2(rcp.x, 0.0) : vec2(0.0, rcp.y);
+        const float steps[10] = float[10](1.0, 1.5, 2.0, 2.0, 2.0, 2.0, 4.0, 4.0, 8.0, 8.0);
+        vec2 p1 = cur - off, p2 = cur + off;
+        float e1 = L(p1) - lumaLocal, e2 = L(p2) - lumaLocal;
+        bool done1 = abs(e1) >= gradScaled, done2 = abs(e2) >= gradScaled;
+        for (int i = 1; i < 10 && !(done1 && done2); i++) {
+            if (!done1) { p1 -= off * steps[i]; e1 = L(p1) - lumaLocal; done1 = abs(e1) >= gradScaled; }
+            if (!done2) { p2 += off * steps[i]; e2 = L(p2) - lumaLocal; done2 = abs(e2) >= gradScaled; }
+        }
+        float d1 = horz ? uv.x - p1.x : uv.y - p1.y;
+        float d2 = horz ? p2.x - uv.x : p2.y - uv.y;
+        bool near1 = d1 < d2;
+        float dist = min(d1, d2);
+        float span = d1 + d2;
+        bool centerSmaller = lumaM - lumaLocal < 0.0;
+        bool good = ((near1 ? e1 : e2) < 0.0) != centerSmaller;
+        float edgeOff = good ? 0.5 - dist / span : 0.0;
+        float o = max(edgeOff, subpix);
+        vec2 fuv = uv;
+        if (horz) fuv.y += o * step; else fuv.x += o * step;
+        col = texture(texture0, fuv).rgb;
     }
-    float ao = max(0.0, 1.0 - sum * 5.5 / (pow(radius, 6.0) * float(N_SAMPLES)));
-    ao = mix(1.0, ao, 1.0 - smoothstep(18.0, 30.0, P.z));
-    finalColor = vec4(vec3(ao), 1.0);
+    float n = fract(sin(dot(uv * 1000.0 + time, vec2(12.9898, 78.233))) * 43758.5453);
+    col += (n - 0.5) * 0.02;
+    finalColor = vec4(col, 1.0);
 }`

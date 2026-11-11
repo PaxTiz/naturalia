@@ -132,8 +132,8 @@ in vec3 fragNormal;
 in vec2 tube;
 uniform float time;
 uniform vec4 devil;
-layout(location = 0) out vec4 finalColor;
-` + shaderCommon + depthOut + `
+out vec4 finalColor;
+` + shaderCommon + `
 void main() {
     vec3 v = normalize(viewRel - fragRel);
     vec3 n = normalize(fragNormal);
@@ -149,5 +149,4 @@ void main() {
     float lit = 0.55 + 0.45 * clamp(dot(n, sunDir) * 0.5 + 0.5, 0.0, 1.0);
     vec3 col = vec3(0.62, 0.40, 0.26) * (0.75 + 0.5 * streak) * (sunCol * 1.1 * lit * daylight(up) + skyFill * 0.8);
     finalColor = vec4(finish(col, length(viewRel - fragRel)), alpha);
-    writeDepth(0.0);
 }`

@@ -143,8 +143,26 @@ func (s *shotRun) tick(g *Game) {
 	if s.placed {
 		g.player.Heading, g.player.Pitch = s.heading, s.pitch
 	}
-	if s.frames++; s.frames == 240 {
+	s.frames++
+	// MS_SHOT_JITTER=radians takes a second shot after turning that much,
+	// to find what flickers as the camera moves (compare the two).
+	var jit float64
+	fmt.Sscanf(os.Getenv("MS_SHOT_JITTER"), "%f", &jit)
+	if jit != 0 && s.frames == 241 {
+		if os.Getenv("MS_SHOT_STEP") != "" { // a step forward instead of a turn
+			g.player.Pos = g.player.Pos.add(g.player.Heading.scale(jit))
+		} else {
+			s.heading = s.heading.scale(math.Cos(jit)).add(g.player.Right().scale(math.Sin(jit)))
+		}
+	}
+	if jit != 0 && s.frames == 244 {
+		rl.TakeScreenshot("b_" + s.file)
+		os.Exit(0)
+	}
+	if s.frames == 240 {
 		rl.TakeScreenshot(s.file)
-		os.Exit(0) // no save: the player was moved
+		if jit == 0 {
+			os.Exit(0) // no save: the player was moved
+		}
 	}
 }

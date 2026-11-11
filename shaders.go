@@ -220,8 +220,8 @@ uniform vec4 stepDirs[48];  // xyz heading, w strength
 uniform float stepCount;
 uniform sampler2D texture2; // painted regolith: R tone, G pebbles, B hollows, A height
 uniform sampler2D texture3; // painted dust: R tone, G clumps, A height
-layout(location = 0) out vec4 finalColor;
-` + shaderCommon + textureCommon + depthOut + `
+out vec4 finalColor;
+` + shaderCommon + textureCommon + `
 const float regolithTile = ` + ftoa(regolithTile) + `;
 const float dustTile = ` + ftoa(dustTile) + `;
 // Same cube projection as the game code (cubeFaces in mathx.go).
@@ -368,7 +368,6 @@ void main() {
     }
 
     finalColor = vec4(finish(col, dist), 1.0);
-    writeDepth(1.0);
 }`
 
 const objectFS = `#version 330
@@ -390,9 +389,10 @@ uniform vec2 ground;      // relief shadow and occlusion where the player stands
 uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
 uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: height of their floor
-uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
-layout(location = 0) out vec4 finalColor;
-` + shaderCommon + textureCommon + depthOut + `
+uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6; // texture3: the sun's shadow map
+uniform vec4 lightVP[4]; // the sun's shadow camera, by columns
+out vec4 finalColor;
+` + shaderCommon + textureCommon + `
 // Indoor lighting, same rule as outside: warm lamps, cool violet shade,
 // a crisp but soft turn from one to the other.
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
@@ -414,18 +414,34 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
             vec4 lp = mat4(lampVP[0], lampVP[1], lampVP[2], lampVP[3]) * vec4(origin + fragRel + n * 0.04, 1.0);
             vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
             if (lp.w > 0.0 && all(greaterThan(sc.xy, vec2(0.0))) && all(lessThan(sc.xy, vec2(1.0)))) {
-                vec2 t = 1.5 / vec2(textureSize(lampShadowMap, 0));
+                vec2 t = 1.0 / vec2(textureSize(lampShadowMap, 0));
                 float sum = 0.0;
-                for (int y = -1; y <= 1; y++)
-                    for (int x = -1; x <= 1; x++)
-                        sum += step(sc.z - 0.00002, texture(lampShadowMap, sc.xy + vec2(x, y) * t).r);
-                lit = mix(0.25, 1.0, sum / 9.0);
+                for (int y = 0; y < 4; y++)
+                    for (int x = 0; x < 4; x++)
+                        sum += step(sc.z - 0.00002, texture(lampShadowMap, sc.xy + (vec2(x, y) - 1.5) * t * 1.6).r);
+                lit = mix(0.3, 1.0, sum / 16.0);
             }
         }
         col += albedo * lampCol * wrap * att * 2.1 * lit;
         col += lampCol * pow(max(dot(n, normalize(l + v)), 0.0), 40.0) * spec * att * 0.6 * lit;
     }
     return col;
+}
+
+// sunShadow is how much sun reaches the fragment past the base and the
+// rocks (the shadow map), softened over 3×3 texels and faded at its edge.
+float sunShadow(vec3 n) {
+    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(origin + fragRel + n * 0.16, 1.0);
+    vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
+    vec2 border = abs(sc.xy - 0.5) * 2.0;
+    float mapped = 1.0 - smoothstep(0.85, 1.0, max(border.x, border.y));
+    if (mapped <= 0.0) return 1.0;
+    vec2 t = 1.0 / vec2(textureSize(texture3, 0));
+    float lit = 0.0;
+    for (int y = -1; y <= 1; y++)
+        for (int x = -1; x <= 1; x++)
+            lit += step(sc.z - 0.0002, texture(texture3, sc.xy + vec2(x, y) * t * 1.3).r);
+    return mix(1.0, mix(0.3, 1.0, lit / 9.0), mapped);
 }
 
 // paint applies one of the painted materials to the base color; it returns
@@ -441,45 +457,28 @@ vec3 paint(vec3 base, vec3 n, out float h) {
     vec3 w = triWeights(obj ? normalize(localNormal) : n);
     float s = matInfo.y;
     vec3 shift = obj ? vec3(0.0) : fract(origin * s);
-    if (matInfo.x < 1.5) { // painted object: brush strokes, chipped edges showing metal
+    if (matInfo.x < 1.5) { // factory paint: a smooth, even coat
         vec4 t = triO(texture0, p, shift, w, s);
-        h = t.a * 0.004;
-        return mix(base * t.r, vec3(0.42, 0.42, 0.46) * t.r, t.b * 0.8);
+        return base * (0.95 + 0.06 * t.r);
     }
-    if (matInfo.x < 2.5) { // hull plates laid by the mesh's UVs: clean, crisp seams
-        vec2 cell = floor(fragTexCoord);
-        vec2 q = fract(fragTexCoord);
-        float id = hash13(vec3(cell, floor((fragRel.y + origin.y) * 0.37) + 7.0));
+    if (matInfo.x < 2.5) { // hull plates laid by the mesh's UVs: clean, soft joints
         vec4 t = texture(texture1, fragTexCoord);
-        h = t.a * 0.02;
-        // Factory-made plates: each a hair lighter or darker, one in five
-        // with a service hatch, a faint sheen of grime at the very foot.
-        vec3 c = base * (0.95 + 0.07 * id + 0.03 * t.r);
-        c = mix(c, c * vec3(0.8, 0.76, 0.72), t.g * 0.25 * (1.0 - abs(n.y)));
-        if (id < 0.2) {
-            vec2 e = abs(q - vec2(0.5, 0.42)) - vec2(0.22, 0.17);
-            float edge = max(e.x, e.y);
-            float groove = 1.0 - smoothstep(0.0, 0.006, abs(edge));
-            c *= mix(1.0, 0.94, step(edge, 0.0));
-            c *= 1.0 - 0.4 * groove;
-            h -= groove * 0.008;
-        }
-        return c * (1.0 - 0.55 * t.b);
-    }
-    if (matInfo.x < 3.5) { // brushed metal with scratches
-        vec4 t = triO(texture2, p, shift, w, s);
-        h = t.a * 0.003;
-        return base * (0.55 + 0.7 * t.r) + t.g * 0.15;
-    }
-    if (matInfo.x < 4.5) { // tread plate floor
-        vec4 t = triO(texture3, p, shift, w, s);
         h = t.a * 0.008;
-        return base * (0.45 + 0.9 * t.r) * (1.0 - 0.4 * t.g);
+        vec2 cell = floor(fragTexCoord);
+        float id = hash13(vec3(cell, floor((fragRel.y + origin.y) * 0.37) + 7.0));
+        vec3 c = base * (0.97 + 0.04 * id);
+        c = mix(c, c * vec3(0.86, 0.84, 0.82), t.g * (1.0 - abs(n.y)));
+        return c * (1.0 - 0.4 * t.b);
     }
+    if (matInfo.x < 3.5) { // satin metal: the faintest brushing, no scratches
+        vec4 t = triO(texture2, p, shift, w, s);
+        return base * (0.9 + 0.14 * t.r);
+    }
+    if (matInfo.x < 4.5) return base; // the tread plate is gone: its slot holds the sun's shadows
     if (matInfo.x < 5.5) { // fabric
         vec4 t = triO(texture4, p, shift, w, s);
-        h = t.a * 0.003;
-        return base * (0.55 + 0.55 * t.r);
+        h = t.a * 0.001;
+        return base * (0.85 + 0.2 * t.r);
     }
     if (matInfo.x < 6.5) { // rock: the regolith texture, tinted
         vec4 t = triO(texture5, p, shift, w, s);
@@ -494,7 +493,6 @@ vec3 paint(vec3 base, vec3 n, out float h) {
 
 void main() {
     if (shadowPass > 0.5) { finalColor = vec4(gl_FragCoord.z); return; }
-    writeDepth(colDiffuse.a > 0.99 ? 1.0 : 0.0);
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewRel - fragRel);
     bool inside = lighting > 0.5 && lighting < 1.5;
@@ -504,9 +502,9 @@ void main() {
     vec3 albedo = paint(colDiffuse.rgb, n, h);
     if (wear.x > 0.0 && !inside) { // big flat shapes of dust, no grain
         float patch = 0.75 + 0.25 * sin(fragPos.x * 0.7 + 1.3) * sin(fragPos.z * 0.9);
-        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, n.y) * 0.35 * patch * wear.x);
+        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, n.y) * 0.18 * patch * wear.x);
         float foot = 1.0 - smoothstep(0.05, 0.55, fragPos.y - wear.y);
-        albedo = mix(albedo, albedo * vec3(0.72, 0.52, 0.42), foot * wear.x * 0.7);
+        albedo = mix(albedo, albedo * vec3(0.72, 0.52, 0.42), foot * wear.x * 0.4);
     }
     float dist = length(viewRel - fragRel);
     n = bump(n, fragRel, h, 1.0 - smoothstep(10.0, 40.0, dist));
@@ -514,7 +512,7 @@ void main() {
         vec3 face = normalize(cross(dFdx(fragRel), dFdy(fragRel)));
         n = face * sign(dot(face, n));
     }
-    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x, mix(0.35, 1.0, ground.y), surface.x);
+    vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x * sunShadow(normalize(fragNormal)), mix(0.35, 1.0, ground.y), surface.x);
     // Shiny surfaces mirror their surroundings at grazing angles: the sky
     // outside, the warm room inside.
     float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0) * surface.x;
@@ -539,8 +537,7 @@ uniform mat4 globeRot; // world → Mars frame: turns the player's spot toward t
 uniform vec3 playerDir;
 uniform float tilesPerFace;
 uniform float time;
-layout(location = 0) out vec4 finalColor;
-` + depthOut + `
+out vec4 finalColor;
 
 float coverage(vec3 d) {
     vec3 a = abs(d);
@@ -582,7 +579,6 @@ void main() {
     col += vec3(1.0, 0.35, 0.25) * smoothstep(0.997, 0.9993, dot(d, playerDir)) * 2.0 * pulse;
     col *= 0.85 + 0.15 * sin(fragPos.y * 90.0 + time * 3.0);
     finalColor = vec4(col, 1.0);
-    writeDepth(0.0);
 }`
 
 const skyFS = `#version 330
@@ -590,8 +586,8 @@ in vec3 fragPos;
 in vec3 fragNormal;
 uniform vec3 up; // the viewer's local up: the horizon follows them around Mars
 uniform float time;
-layout(location = 0) out vec4 finalColor;
-` + shaderCommon + depthOut + `
+out vec4 finalColor;
+` + shaderCommon + `
 // moon draws one of the two small moons: a lumpy gray rock, lit by the
 // sun. It returns its color and sets cover where it hides the sky.
 vec3 moon(vec3 d, vec3 dir, float radius, float seed, inout float cover) {
@@ -646,22 +642,6 @@ void main() {
 
     finalColor = vec4(col, 1.0);
 }`
-
-// depthOut is the scene's second target: each pixel's distance along the
-// view, for the ambient occlusion (post.go). The depth buffer is too coarse
-// for it. Split in two half floats, whole 64ths and the rest, so it keeps
-// a tenth of a millimeter up to 32 m. Its alpha is the blend weight: 1
-// replaces what is behind, 0 (see-through things) keeps it.
-const depthOut = `
-layout(location = 1) out vec4 viewDepth;
-uniform vec3 camFwd;
-void writeDepth(float keep) {
-    float z = dot(fragRel - viewRel, camFwd);
-    z = min(z, 31.9);
-    float hi = floor(z * 64.0) / 64.0;
-    viewDepth = vec4(hi, (z - hi) * 64.0, 0.0, keep);
-}
-`
 
 // textureCommon samples the painted textures: triplanar projection (no UVs
 // needed, works on any shape) and bump mapping from their height channel.

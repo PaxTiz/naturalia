@@ -144,7 +144,9 @@ func bake(size int, fn func(u, v float64) texel) rl.Texture2D {
 	rl.UnloadImage(img)
 	rl.UpdateTexture(tex, pix)
 	rl.GenTextureMipmaps(&tex)
-	rl.SetTextureFilter(tex, rl.FilterTrilinear)
+	// Anisotropic: floors and walls seen at a grazing angle stay sharp
+	// without shimmering.
+	rl.SetTextureFilter(tex, rl.FilterAnisotropic16x)
 	rl.SetTextureWrap(tex, rl.WrapRepeat)
 	return tex
 }
@@ -230,24 +232,17 @@ func genDust() rl.Texture2D {
 }
 
 // Panel: one hull plate per tile, laid by the meshes' UVs so its edges
-// follow the walls: a recessed seam all around, a soft raised rim, rivets,
-// and a faint shade of grime along the foot.
-// R tone, G grime, B seams and rivets (dark), A height.
+// follow the walls: a soft, shallow joint all around and a faint shade
+// along the foot. Factory-clean: no rivets, no streaks.
+// R tone, G grime, B joint (dark), A height.
 func genPanel() rl.Texture2D {
 	return bake(512, func(u, v float64) texel {
 		e := math.Min(math.Min(u, 1-u), math.Min(v, 1-v)) // distance to the edge
-		seam := 1 - smoothstep(0.005, 0.012, e)
-		h := 0.45 + 0.3*smoothstep(0.008, 0.04, e)
-		rivet := 0.0
-		for _, p := range [][2]float64{{0.035, 0.035}, {0.965, 0.035}, {0.035, 0.965}, {0.965, 0.965}, {0.5, 0.035}, {0.5, 0.965}} {
-			if d := math.Hypot(u-p[0], v-p[1]); d < 0.011 {
-				rivet = math.Max(rivet, math.Sqrt(1-(d/0.011)*(d/0.011)))
-			}
-		}
-		h += rivet * 0.25
-		grime := smoothstep(0.8, 1, v) * (0.6 + 0.4*tfbm(u, v, 4, 2, 710))
-		tone := 0.5 + 0.2*(tfbm(u, v, 2, 2, 740)-0.5)
-		return texel{tone, grime, seam*0.8 + rivet*0.25, h}
+		joint := 1 - smoothstep(0.004, 0.02, e)
+		h := 0.5 + 0.2*smoothstep(0.004, 0.03, e)
+		grime := smoothstep(0.85, 1, v) * 0.5
+		tone := 0.5 + 0.1*(tfbm(u, v, 2, 2, 740)-0.5)
+		return texel{tone, grime, joint * 0.6, h}
 	})
 }
 
@@ -313,8 +308,7 @@ func genFabric() rl.Texture2D {
 func genHazard() rl.Texture2D {
 	return bake(256, func(u, v float64) texel {
 		stripe := smoothstep(0.47, 0.53, math.Abs(math.Mod(u*4+v*4, 1)-0.5)*2)
-		dirt := tfbm(u, v, 4, 3, 1201)
-		return texel{stripe, 1 - stripe, dirt, 1}
+		return texel{stripe, 1 - stripe, 0.6, 1}
 	})
 }
 

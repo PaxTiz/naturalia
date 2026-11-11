@@ -177,7 +177,7 @@ func NewGraphics() *Graphics {
 	}
 
 	// Every object model gets the painted textures; the shader picks one.
-	gfx.objectMaps = []rl.Texture2D{gfx.tex.paint, gfx.tex.panel, gfx.tex.metal, gfx.tex.floor, gfx.tex.fabric, gfx.tex.regolith, gfx.tex.hazard}
+	gfx.objectMaps = []rl.Texture2D{gfx.tex.paint, gfx.tex.panel, gfx.tex.metal, gfx.shadow.target.Texture, gfx.tex.fabric, gfx.tex.regolith, gfx.tex.hazard}
 	objectMaps := gfx.objectMaps
 	for i := range objectMaps {
 		gfx.objectSh.UpdateLocation(rl.ShaderLocMapAlbedo+int32(i), rl.GetShaderLocation(gfx.objectSh, fmt.Sprintf("texture%d", i)))
@@ -286,14 +286,12 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
 	}
-	fwd := []float32{cam.Target.X - cam.Position.X, cam.Target.Y - cam.Position.Y, cam.Target.Z - cam.Position.Z}
 	// The shaders' origin (shaderCommon): the eye snapped to a 32 m grid,
 	// so the tile offsets they derive from it stay put between snaps.
 	e := g.camEye
 	snap := func(v float64) float64 { return float64(float32(math.Floor(v/32) * 32)) }
 	o := vec3{snap(e.X), snap(e.Y), snap(e.Z)}
 	for _, s := range gfx.shaders() {
-		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "camFwd"), fwd, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.sub(o)), rl.ShaderUniformVec3)
 	}
@@ -325,6 +323,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	m := gfx.shadow.lightVP
 	cols := []float32{m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15}
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
+	rl.SetShaderValueV(gfx.objectSh, gfx.oLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
 
 func (g *Game) Draw() {
@@ -394,13 +393,8 @@ func (g *Game) Draw() {
 	}
 	g.drawTool()
 	gfx.setLighting(litSun, vec3{})
-	// Glows and the hologram add light: they must not touch the depth target.
-	rl.DrawRenderBatchActive()
-	rl.ActiveDrawBuffers(1)
 	g.drawGlows(cam)
 	g.drawGlobe(cam)
-	rl.DrawRenderBatchActive()
-	rl.ActiveDrawBuffers(2)
 	rl.EndMode3D()
 	rl.EndTextureMode()
 
