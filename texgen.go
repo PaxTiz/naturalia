@@ -218,8 +218,13 @@ func genDust() rl.Texture2D {
 	return bake(1024, func(u, v float64) texel {
 		clumps := warped(u, v, 6, 4, 601)
 		stroke := strokes(u, v, 4, 610)
-		tone := painterly(0.5+0.5*(clumps-0.5)+0.3*(stroke-0.5), 4)
-		h := clumps*0.5 + stroke*0.25 + tfbm(u, v, 24, 2, 620)*0.12
+		// Wind ripples: soft, wavy crests a few per tile, with a lit side
+		// and a shaded side, fading in and out in patches.
+		wave := v*5 + 0.35*(tfbm(u, v, 3, 3, 630)-0.5) + 0.08*math.Sin(u*2*math.Pi*2)
+		ripple := math.Sin(wave * 2 * math.Pi)
+		patch := smoothstep(0.35, 0.65, tfbm(u, v, 2, 2, 640))
+		tone := painterly(0.5+0.4*(clumps-0.5)+0.25*(stroke-0.5)+0.07*ripple*patch, 4)
+		h := clumps*0.35 + stroke*0.2 + tfbm(u, v, 24, 2, 620)*0.08 + (0.5+0.5*ripple)*0.35*patch
 		return texel{tone, clumps, 0, h}
 	})
 }

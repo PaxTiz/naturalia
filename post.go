@@ -243,11 +243,13 @@ vec3 image(vec2 uv) {
     float day = smoothstep(-0.1, 0.25, sunUp);
     float dusk = smoothstep(-0.3, -0.02, sunUp) * (1.0 - smoothstep(0.02, 0.3, sunUp));
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    float sat = mix(0.8, 1.08, day);
+    float sat = mix(0.8, 1.12, day);
     c = mix(vec3(l), c, sat);
     c *= mix(vec3(0.92, 0.96, 1.08), vec3(1.03, 1.0, 0.96), day);
-    vec3 shadows = mix(vec3(1.0), vec3(0.9, 0.95, 1.12), dusk);
-    vec3 lights = mix(vec3(1.0), vec3(1.08, 1.0, 0.9), dusk);
+    // Split toning, the style's warm light and cool shade: violet in the
+    // shadows all day, stronger and bluer at dusk.
+    vec3 shadows = mix(mix(vec3(1.0), vec3(0.95, 0.93, 1.07), day), vec3(0.9, 0.95, 1.12), dusk);
+    vec3 lights = mix(mix(vec3(1.0), vec3(1.03, 1.0, 0.95), day), vec3(1.08, 1.0, 0.9), dusk);
     c *= mix(shadows, lights, smoothstep(0.1, 0.7, l));
     return clamp(c, 0.0, 1.0);
 }
