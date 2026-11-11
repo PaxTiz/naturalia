@@ -3,17 +3,10 @@ package main
 import (
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/mesh"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
-)
-
-// Lighting modes of the object shader.
-const (
-	litSun     = 0 // outdoors
-	litIndoor  = 1 // ceiling lamps
-	litBack    = 2 // shells: sun outside, lamps on the back faces seen from inside
-	litTowards = 3 // walls: lamps on the faces turned toward the room's center
 )
 
 var (
@@ -72,7 +65,7 @@ func (g *Game) drawBase() {
 	g.drawBeacon()
 	g.drawSigns()
 	gfx.setMat(mtPlain, 1, false)
-	gfx.setLighting(litSun, vec3{})
+	gfx.setLighting(mesh.LitSun, vec3{})
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
 }
 
@@ -81,7 +74,7 @@ func (g *Game) drawBase() {
 func (g *Game) drawAirlock() {
 	gfx := g.gfx
 	end := airlockEnd
-	gfx.setLighting(litSun, vec3{})
+	gfx.setLighting(mesh.LitSun, vec3{})
 	steel := tok("steel")
 	gfx.setMat(steel.mat, steel.scale, false)
 	w := (doorWidth + 0.2) / 2
@@ -100,7 +93,7 @@ func (g *Game) drawAirlock() {
 // drawBeacon blinks the red light on top of the hub's antenna.
 func (g *Game) drawBeacon() {
 	if math.Mod(g.clock, 1.2) < 0.3 {
-		g.gfx.setLighting(litSun, vec3{})
+		g.gfx.setLighting(mesh.LitSun, vec3{})
 		g.gfx.setMat(mtPlain, 1, false)
 		g.gfx.put(g.gfx.sphere, beaconTop(), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
 	}

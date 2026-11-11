@@ -2,6 +2,7 @@ package main
 
 import (
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
 	"math"
 
@@ -210,9 +211,9 @@ func (g *Game) drawEntities() {
 		t1, t2 := mathx.TangentBasis(up)
 		ax := t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw)))
 		az := ax.Cross(up)
-		lit := float32(litSun)
+		lit := float32(mesh.LitSun)
 		if indoors(toLocal(pos)) {
-			lit = litIndoor
+			lit = mesh.LitIndoor
 		}
 		gfx.setLighting(lit, vec3{})
 		for _, m := range def.models {
@@ -221,23 +222,23 @@ func (g *Game) drawEntities() {
 		}
 	}
 	gfx.setMat(mtPlain, 1, false)
-	gfx.setLighting(litSun, vec3{})
+	gfx.setLighting(mesh.LitSun, vec3{})
 }
 
 // buildEntity merges an entity's parts into one model per material, in
 // its own frame.
 func buildEntity(def *EntityDef, gfx *Graphics) []entityModel {
-	b := &building{parts: map[partKey]*meshBuilder{}, local: true}
+	b := &building{Parts: mesh.NewParts(vec3{})}
 	kitJSON{Parts: def.Parts}.kit().build(b, vec3{}, 0)
 	var out []entityModel
-	for _, k := range b.keys {
-		m := b.parts[k]
-		if len(m.v) == 0 {
+	for _, k := range b.Keys {
+		m := b.Mesh(k)
+		if len(m.V) == 0 {
 			continue
 		}
-		model := m.model(gfx.objectSh)
+		model := upload(m, gfx.objectSh)
 		gfx.bindMaps(model)
-		out = append(out, entityModel{model, tok(k.tok)})
+		out = append(out, entityModel{model, tok(k.Tok)})
 	}
 	if out == nil {
 		out = []entityModel{} // nothing to draw, but built

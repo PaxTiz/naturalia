@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
 	"math"
 
@@ -415,10 +416,10 @@ func (g *Game) Draw() {
 	g.drawGems()
 	g.drawDevils()
 	if indoors(toLocal(g.player.Eye())) {
-		gfx.setLighting(litIndoor, vec3{})
+		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
 	g.drawTool()
-	gfx.setLighting(litSun, vec3{})
+	gfx.setLighting(mesh.LitSun, vec3{})
 	g.drawGlows(cam)
 	g.drawGlobe(cam)
 	rl.EndMode3D()

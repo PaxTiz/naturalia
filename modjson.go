@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/color"
 	"log"
+	"mars_sweeper/internal/mesh"
 	"math"
 	"os"
 	"path/filepath"
@@ -345,21 +346,21 @@ func (k kitJSON) kit() kitProp {
 	parts := k.Parts
 	kp.build = func(b *building, at vec3, _ int) {
 		for _, p := range parts {
-			lit := float32(litIndoor)
+			lit := float32(mesh.LitIndoor)
 			if p.Lit == "outdoor" {
-				lit = litSun
+				lit = mesh.LitSun
 			}
-			m := b.part(p.Token, lit, vec3{})
+			m := b.Part(p.Token, lit, vec3{})
 			switch p.Shape {
 			case "prism":
 				axis := p.Axis
 				if axis == (vec3{}) {
 					axis = vec3{0, 1, 0}
 				}
-				m.prism(at.Add(p.At), axis.Norm(), p.R0, orZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
+				m.Prism(at.Add(p.At), axis.Norm(), p.R0, orZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
 			default:
 				a := p.Yaw * math.Pi / 180
-				m.box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
+				m.Box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/mesh"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -72,9 +73,9 @@ func (g *Game) drawSigns() {
 	for _, s := range gfx.signs {
 		rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, s.tex)
 		if indoors(s.at.Sub(s.facing.Scale(0.3))) {
-			gfx.setLighting(litIndoor, vec3{})
+			gfx.setLighting(mesh.LitIndoor, vec3{})
 		} else {
-			gfx.setLighting(litSun, vec3{})
+			gfx.setLighting(mesh.LitSun, vec3{})
 		}
 		yaw := math.Atan2(s.facing.X, s.facing.Z) * 180 / math.Pi
 		gfx.put(gfx.signBox, toWorld(s.at), vec3{s.width, signHeight, 0.03}, vec3{0, 1, 0}, yaw, color.RGBA{255, 255, 255, 255}, 0.2, 0.25)

@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
 	"math"
 
@@ -99,7 +100,7 @@ func (g *Game) drawPebbles() {
 // drawInstanced draws rock models, each at all of its transforms in one
 // call, tinted by tone(shape).
 func (gfx *Graphics) drawInstanced(models []rl.Model, mats [][]rl.Matrix, tone func(k int) color.RGBA) {
-	gfx.setLighting(litSun, vec3{})
+	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.setMat(mtRock, float32(1/regolithTile), false)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{0.1, 0}, rl.ShaderUniformVec2)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.instanced, []float32{1}, rl.ShaderUniformFloat)
