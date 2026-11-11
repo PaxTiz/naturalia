@@ -80,7 +80,9 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
     // At night a cold, faint key light, as if from Phobos: the faces turned
     // to it catch a blue sheen, the others sink into the dark.
     vec3 mk = normalize(up + 0.9 * normalize(phobosDir - up * dot(phobosDir, up) + vec3(1e-4)));
-    col += albedo * vec3(0.10, 0.13, 0.26) * smoothstep(-0.05, 0.4, dot(n, mk)) * (1.0 - day);
+    col += albedo * vec3(0.07, 0.10, 0.30) * smoothstep(-0.05, 0.4, dot(n, mk)) * (1.0 - day);
+    // ...and glossy surfaces, the polar ice first, catch its broad sheen.
+    col += vec3(0.16, 0.22, 0.42) * pow(max(dot(n, normalize(mk + v)), 0.0), 18.0) * spec * (1.0 - day);
     col += rimCol * pow(1.0 - max(dot(n, v), 0.0), 4.0) * 0.12 * (0.2 + 0.8 * day);
     vec3 h = normalize(sunDir + v);
     col += sunCol * pow(max(dot(n, h), 0.0), 48.0) * spec * shadow;
@@ -270,7 +272,9 @@ void main() {
     dustCol = mix(dustCol, vec3(0.42, 0.27, 0.19), basalt * 0.7);
     float cliff = smoothstep(0.7, 0.5, dot(normalize(fragNormal), up)); // dunes are never this steep
     dustCol = mix(dustCol, strata * 1.15, cliff * 0.45 * (1.0 - basalt));
-    dustCol = mix(dustCol, vec3(0.80, 0.82, 0.90), ice * 0.95); // dust mixed with frost
+    // Dust mixed with frost, in big flat patches of bluer, older ice.
+    vec3 frost = mix(vec3(0.84, 0.86, 0.93), vec3(0.60, 0.68, 0.84), smoothstep(0.46, 0.52, fbm3(fragPos * 0.045 + 11.0)));
+    dustCol = mix(dustCol, frost, ice * 0.95);
     dustCol *= 0.88 + 0.2 * ds.r;
     vec3 albedo = mix(rock, dustCol, cover);
     // A darker rim where dust meets bare ground reads like a thin crust.
@@ -332,7 +336,7 @@ void main() {
     // The relief's own shadow and occlusion, baked in the vertices.
     shadow *= fragSun;
     float ao = mix(0.35, 1.0, fragAO);
-    vec3 col = shade(albedo, n, v, up, shadow, ao, mix(0.04 * cover, 0.6, ice * (1.0 - cover)));
+    vec3 col = shade(albedo, n, v, up, shadow, ao, mix(0.04 * cover, 0.5, ice));
 
     if (brush.w > 0.0) {
         float d = length(up - normalize(brush.xyz)) * marsRadius;

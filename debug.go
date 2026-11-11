@@ -93,6 +93,11 @@ func newShotRun(g *Game) *shotRun {
 	case "pause":
 		s.mode = modePaused
 	}
+	// MS_SHOT_TOOL=n holds tool n (0 is the toothbrush) for the shot.
+	var tool int
+	if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TOOL"), "%d", &tool); err == nil && s.file != "" {
+		g.st.ToolTier = max(0, min(len(tools)-1, tool))
+	}
 	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
 		var d vec3
 		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)

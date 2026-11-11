@@ -456,29 +456,62 @@ func (g *Game) drawTool() {
 
 	gfx.setMat(mtPaint, 8, true)
 	gfx.segment(gfx.cyl, base, neck, hr, look.HandleCol, 0.5, 0)
+	// A dark rubber grip where the hand holds it, with a cyan ring.
+	grip := base.add(dir.scale(look.HandleLen * 0.35 * k))
+	gfx.setMat(mtPlain, 1, false)
+	gfx.segment(gfx.cyl, base.sub(dir.scale(0.01*k)), grip, hr*1.3, matDark, 0.2, 0)
+	gfx.segment(gfx.cyl, grip, grip.add(dir.scale(0.012*k)), hr*1.32, accentCyan, 0.3, 0)
 	gfx.setMat(mtMetal, 6, true)
 	collar := math.Max(hr, r) * 1.15
-	if look.Head == headFlare {
-		collar = hr * 1.5 // the broom head is wide but flat
+	if look.Head == headFlare || look.Head == headBlock {
+		collar = hr * 1.5 // flat heads: a slim collar
 	}
-	gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), neck.add(dir.scale(0.02*k)), collar, matSteel, 0.8, 0)
+	if look.Head != headNozzle {
+		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), neck.add(dir.scale(0.02*k)), collar, matSteel, 0.8, 0)
+	}
+	right := g.player.Right()
+	across := right.sub(dir.scale(right.dot(dir))).norm()
+	top := dir.cross(across)
+	if top.dot(g.player.LocalUp()) < 0 {
+		top = top.scale(-1)
+	}
 	switch look.Head {
 	case headBlock:
-		gfx.setMat(mtFabric, 12, true)
-		gfx.segment(gfx.cyl, neck, tip, r, look.HeadCol, 0.2, 0)
-	case headTaper:
-		gfx.setMat(mtFabric, 12, true)
-		gfx.segment(gfx.cone, neck, tip, r, look.HeadCol, 0.2, 0)
-	case headFlare:
-		// A push broom: a wide wooden head across the handle, bristles below.
-		right := g.player.Right()
-		across := right.sub(dir.scale(right.dot(dir))).norm()
-		depth := across.cross(dir)
-		width := look.HeadR * 3.2 * k
+		// A toothbrush: a flat plastic head, a white tuft of bristles
+		// standing under it.
+		at := neck.add(dir.scale(look.HeadLen * 0.5 * k))
 		gfx.setMat(mtPaint, 8, true)
-		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.03*k)), across.scale(width), dir.scale(0.06*k), depth.scale(0.09*k), look.HandleCol, 0.3, 0)
+		gfx.putBasis(gfx.cube, at, across.scale(r*2.2), dir.scale(look.HeadLen*k), top.scale(r*0.9), look.HandleCol, 0.5, 0)
+		gfx.setMat(mtFabric, 12, true)
+		gfx.putBasis(gfx.cube, at.sub(top.scale(r*0.9)), across.scale(r*1.9), dir.scale(look.HeadLen*0.85*k), top.scale(r*1.2), look.HeadCol, 0.1, 0)
+		gfx.setMat(mtPlain, 1, false)
+		gfx.putBasis(gfx.cube, at.add(top.scale(r*0.46)), across.scale(r*0.5), dir.scale(look.HeadLen*0.6*k), top.scale(0.004*k), accentCyan, 0, 0.3)
+	case headTaper:
+		// A paintbrush: a steel ferrule, then a tuft of bristles narrowing
+		// to a tip dipped in paint.
+		ferrule := neck.add(dir.scale(look.HeadLen * 0.3 * k))
+		body := ferrule.add(dir.scale(look.HeadLen * 0.35 * k))
+		gfx.segment(gfx.cyl, neck, ferrule, r*0.85, matSteel, 0.9, 0)
+		gfx.setMat(mtFabric, 12, true)
+		gfx.segment(gfx.cyl, ferrule, body, r, look.HeadCol, 0.2, 0)
+		gfx.segment(gfx.cone, body, tip, r, look.HeadCol, 0.2, 0)
+		gfx.setMat(mtPlain, 1, false)
+		gfx.segment(gfx.cone, body.lerp(tip, 0.55), tip.add(dir.scale(0.002*k)), r*0.45, accentOrange, 0.4, 0)
+	case headFlare:
+		// A push broom: a painted head across the handle with steel end
+		// brackets and a hazard band, a thick row of bristles below.
+		width := look.HeadR * 3.2 * k
+		at := neck.add(dir.scale(0.03 * k))
+		gfx.setMat(mtPaint, 8, true)
+		gfx.putBasis(gfx.cube, at, across.scale(width), dir.scale(0.06*k), depth(across, dir).scale(0.09*k), look.HandleCol, 0.3, 0)
+		gfx.setMat(mtHazard, 12, false)
+		gfx.putBasis(gfx.cube, at.add(top.scale(0.046*k)), across.scale(width*0.6), dir.scale(0.05*k), depth(across, dir).scale(0.004*k), colWhite, 0.3, 0)
+		gfx.setMat(mtMetal, 6, true)
+		for _, sd := range []float64{-1, 1} {
+			gfx.putBasis(gfx.cube, at.add(across.scale(sd*width*0.5)), across.scale(0.02*k), dir.scale(0.08*k), depth(across, dir).scale(0.1*k), matSteel, 0.8, 0)
+		}
 		gfx.setMat(mtFabric, 10, true)
-		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.12*k)), across.scale(width*0.96), dir.scale(0.13*k), depth.scale(0.07*k), look.HeadCol, 0.1, 0)
+		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.12*k)), across.scale(width*0.96), dir.scale(0.13*k), depth(across, dir).scale(0.07*k), look.HeadCol, 0.1, 0)
 	case headNozzle:
 		// A blower in the kit's language: a painted body with a dark rear
 		// cap and a hazard band, a steel nozzle in two steps, a glowing ring
@@ -486,7 +519,7 @@ func (g *Game) drawTool() {
 		body := neck.add(dir.scale(look.HeadLen * 0.5 * k))
 		mid := body.add(dir.scale(look.HeadLen * 0.28 * k))
 		gfx.setMat(mtPlain, 1, false)
-		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.06*k)), neck.sub(dir.scale(0.02*k)), r*1.1, matDark, 0.3, 0)
+		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.04*k)), neck.sub(dir.scale(0.02*k)), r*0.9, matDark, 0.3, 0)
 		gfx.setMat(mtPaint, 6, true)
 		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), body, r, look.HeadCol, 0.6, 0)
 		gfx.setMat(mtHazard, 3, true)
@@ -497,12 +530,6 @@ func (g *Game) drawTool() {
 		gfx.setMat(mtPlain, 1, false)
 		gfx.segment(gfx.cyl, mid.sub(dir.scale(0.008*k)), mid, r*0.8, matDark, 0.3, 0)
 		gfx.segment(gfx.cyl, tip.sub(dir.scale(0.012*k)), tip.add(dir.scale(0.002*k)), r*0.58, colCyan, 0, look.Glow)
-		right := g.player.Right()
-		across := right.sub(dir.scale(right.dot(dir))).norm()
-		top := dir.cross(across)
-		if top.dot(g.player.LocalUp()) < 0 {
-			top = top.scale(-1)
-		}
 		light := colGreen
 		if g.tankFull() {
 			light = colRed
@@ -511,6 +538,9 @@ func (g *Game) drawTool() {
 	}
 	gfx.setMat(mtPlain, 1, false)
 }
+
+// depth is the third axis of a flat head lying across the handle.
+func depth(across, dir vec3) vec3 { return across.cross(dir) }
 
 // drawGlows draws the soft sprites: dust particles and crystal glows.
 // softness fades a particle as it reaches the ground, so its sprite

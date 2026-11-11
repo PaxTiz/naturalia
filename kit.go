@@ -352,7 +352,13 @@ func (b *building) corridor(c corridor) {
 		}
 		b.part("steel", litTowards, in).box(at.add(vec3{0, c.height + 0.14, 0}), vec3{0.14, 0.1, c.width + 2*wallThick + 0.16}, dir, 0.03)
 	}
-	// Inside: a flat floor edged with steel, a lamp strip under the roof.
+	// Inside: two-tone walls like the rooms, a flat floor edged with steel,
+	// a lamp strip under the roof.
+	for _, s := range []float64{-1, 1} {
+		inner := mid.add(side.scale(s * (c.width/2 - 0.02)))
+		b.part("wall.lower", litIndoor, vec3{}).box(inner.add(vec3{0, 0.5, 0}), vec3{length, 0.96, 0.04}, dir, 0.012)
+		b.part("neon.cyan", litIndoor, vec3{}).box(inner.add(vec3{0, 1.0, 0}).sub(side.scale(s*0.015)), vec3{length * 0.98, 0.06, 0.03}, dir, 0.008)
+	}
 	b.part("floor.slate", litIndoor, vec3{}).box(mid.add(vec3{0, floorTop - 0.05, 0}), vec3{length, 0.1, c.width}, dir, 0)
 	for _, s := range []float64{-1, 1} {
 		b.part("steel", litIndoor, vec3{}).box(mid.add(side.scale(s*(c.width/2-0.1))).add(vec3{0, floorTop - 0.045, 0}), vec3{length, 0.1, 0.2}, dir, 0.01)

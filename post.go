@@ -245,7 +245,7 @@ vec3 image(vec2 uv) {
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
     float sat = mix(0.8, 1.12, day);
     c = mix(vec3(l), c, sat);
-    c *= mix(vec3(0.92, 0.96, 1.08), vec3(1.03, 1.0, 0.96), day);
+    c *= mix(vec3(0.84, 0.94, 1.16), vec3(1.03, 1.0, 0.96), day);
     // Split toning, the style's warm light and cool shade: violet in the
     // shadows all day, stronger and bluer at dusk.
     vec3 shadows = mix(mix(vec3(1.0), vec3(0.95, 0.93, 1.07), day), vec3(0.9, 0.95, 1.12), dusk);
