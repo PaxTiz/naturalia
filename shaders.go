@@ -141,6 +141,66 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
     return shadeM(albedo, n, v, up, shadow, ao, spec, 0.0);
 }
 
+// baseAO is the ambient occlusion of the base, worked out from its known
+// shapes rather than from the screen: it holds still as the camera moves.
+// Each plane nearby (floors and ground, walls, corridor ceilings) hides
+// part of the sky or of the bounce from a surface, the more so the closer
+// it is and the more the surface faces it: corners darken, the foot of
+// the walls and of the objects standing on the ground too.
+uniform vec3 baseRel;          // the base's origin, from origin
+uniform vec4 baseRooms[4];     // local center x and z, radius, wall height
+uniform vec4 baseCorrs[4];     // local ends: from x, z, to x, z
+uniform vec4 baseCorrSize[4];  // width, height
+uniform vec4 baseBlobs[48];    // furniture and yard objects: local x, z, radius
+uniform float blobCount;
+
+float occ(float d, float r, vec3 n, vec3 pn) {
+    d = max(d, 0.0);
+    return (1.0 - d / sqrt(d * d + r * r)) * (0.5 - 0.5 * dot(n, pn));
+}
+
+float baseAO(vec3 n) {
+    vec3 p = fragRel - baseRel;
+    if (dot(p.xz, p.xz) > 1600.0) return 1.0;
+    float ao = 1.0 - 0.7 * occ(p.y - 0.02, 0.8, n, vec3(0, 1, 0));
+    bool inCorr = false;
+    for (int i = 0; i < 4; i++) {
+        vec2 a = baseCorrs[i].xy;
+        vec2 ax = baseCorrs[i].zw - a;
+        float len = length(ax);
+        ax /= len;
+        vec2 side = vec2(-ax.y, ax.x);
+        float t = dot(p.xz - a, ax), across = dot(p.xz - a, side);
+        float hw = baseCorrSize[i].x * 0.5, h = baseCorrSize[i].y;
+        if (t < -0.2 || t > len + 0.2) continue;
+        vec3 sn = vec3(side.x, 0.0, side.y) * sign(across);
+        if (abs(across) < hw + 0.05 && p.y < h + 0.1) {
+            inCorr = true;
+            ao *= 1.0 - 0.7 * occ(hw - abs(across), 0.8, n, -sn);
+            ao *= 1.0 - 0.7 * occ(h - p.y, 0.8, n, vec3(0, -1, 0));
+        } else if (abs(across) > hw + 0.1) {
+            ao *= 1.0 - 0.65 * occ(abs(across) - hw - 0.17, 1.4, n, sn) * (1.0 - smoothstep(h, h + 0.8, p.y));
+        }
+    }
+    // Under and around what stands on the floor, the floor darkens.
+    if (p.y < 0.4 && n.y > 0.5) {
+        for (int i = 0; i < 48; i++) {
+            if (float(i) >= blobCount) break;
+            float d = length(p.xz - baseBlobs[i].xy) / baseBlobs[i].z;
+            ao *= 1.0 - 0.4 * (1.0 - smoothstep(0.5, 1.35, d));
+        }
+    }
+    for (int i = 0; i < 4; i++) {
+        vec2 q = p.xz - baseRooms[i].xy;
+        float r = max(length(q), 1e-3);
+        vec3 rn = vec3(q.x, 0.0, q.y) / r;
+        float R = baseRooms[i].z, H = baseRooms[i].w;
+        if (r < R) ao *= 1.0 - 0.7 * occ(R - 0.1 - r, 0.8, n, -rn);
+        else if (!inCorr) ao *= 1.0 - 0.65 * occ(r - R - 0.14, 1.4, n, rn) * (1.0 - smoothstep(H, H + 1.5, p.y));
+    }
+    return ao;
+}
+
 // finish fades distant surfaces into the dusty air: first a violet veil,
 // then the sky's own color along the view, so relief stacks up in flat
 // layers. The result is HDR: the exposure and the tone curve come later,
@@ -400,7 +460,7 @@ void main() {
 
     // The relief's own shadow and occlusion, baked in the vertices.
     shadow *= fragSun;
-    float ao = mix(0.35, 1.0, fragAO);
+    float ao = mix(0.35, 1.0, fragAO) * baseAO(normalize(fragNormal));
     vec3 col = shade(albedo, n, v, up, shadow, ao, mix(0.04 * cover, 0.5, ice));
 
     if (brush.w > 0.0) {
@@ -568,8 +628,9 @@ void main() {
         n = face * sign(dot(face, n));
     }
     float metal = matInfo.x > 2.5 && matInfo.x < 3.5 ? 0.55 : 0.0;
-    vec3 lit = inside ? indoor(albedo, n, v, surface.x, metal, 1.0)
-                      : shadeM(albedo, n, v, normalize(fragPos), ground.x * sunShadow(normalize(fragNormal)), mix(0.35, 1.0, ground.y), surface.x, metal);
+    float ao = baseAO(n);
+    vec3 lit = inside ? indoor(albedo, n, v, surface.x, metal, ao)
+                      : shadeM(albedo, n, v, normalize(fragPos), ground.x * sunShadow(normalize(fragNormal)), mix(0.35, 1.0, ground.y) * ao, surface.x, metal);
     vec3 col = mix(lit, albedo * 2.6, surface.y); // emissive goes past white: it blooms
     finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`

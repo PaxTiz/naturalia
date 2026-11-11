@@ -296,6 +296,27 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.sub(o)), rl.ShaderUniformVec3)
 	}
+	// The base's shapes, for its ambient occlusion (baseAO).
+	var rms, crs, csz []float32
+	for _, r := range rooms {
+		rms = append(rms, float32(r.center.X), float32(r.center.Z), float32(r.radius), float32(r.wallH))
+	}
+	for _, c := range corridors {
+		crs = append(crs, float32(c.from.X), float32(c.from.Z), float32(c.to.X), float32(c.to.Z))
+		csz = append(csz, float32(c.width), float32(c.height), 0, 0)
+	}
+	var blobs []float32
+	for _, ob := range baseObstacles[:min(len(baseObstacles), 48)] {
+		blobs = append(blobs, float32(ob.at.X), float32(ob.at.Z), float32(ob.radius), 0)
+	}
+	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
+		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "blobCount"), []float32{float32(len(blobs) / 4)}, rl.ShaderUniformFloat)
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(basePos.sub(o)), rl.ShaderUniformVec3)
+		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseRooms"), rms, rl.ShaderUniformVec4, int32(len(rms)/4))
+		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrs"), crs, rl.ShaderUniformVec4, int32(len(crs)/4))
+		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrSize"), csz, rl.ShaderUniformVec4, int32(len(csz)/4))
+	}
 	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
 	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
