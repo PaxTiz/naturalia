@@ -147,6 +147,6 @@ void main() {
 
     vec3 up = normalize(fragPos);
     float lit = 0.55 + 0.45 * clamp(dot(n, sunDir) * 0.5 + 0.5, 0.0, 1.0);
-    vec3 col = vec3(0.62, 0.40, 0.26) * (0.75 + 0.5 * streak) * (sunCol * 1.1 * lit * daylight(up) + skyFill * 0.8);
+    vec3 col = vec3(0.62, 0.40, 0.26) * (0.75 + 0.5 * streak) * (sunCol * 0.8 * lit * daylight(up) + skyLight(up, up));
     finalColor = vec4(finish(col, length(viewRel - fragRel)), alpha);
 }`
