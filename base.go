@@ -122,14 +122,48 @@ func junctionPlates() []plate {
 				}
 				wall := r.center.add(end.sub(r.center).norm().scale(r.radius))
 				half := c.width/2 + wallThick
+				// Each side plate runs from the corridor's wall to the edge of
+				// the first round panel left standing: the round wall curves
+				// back from the doorway, a plate along its tangent would leave
+				// a slit open to the outside.
+				reach := half
 				for _, s := range []float64{-1, 1} {
-					out = append(out, plate{wall.add(side.scale(s * (half + 0.4))), axis, 0.8, 0, r.wallH})
+					a := wall.add(side.scale(s * half))
+					e := nearestPanelEdge(r, a)
+					d := e.sub(a)
+					l := d.length()
+					d = d.scale(1 / l)
+					mid := a.add(e).scale(0.5)
+					nrm := vec3{d.Z, 0, -d.X}
+					if nrm.dot(mid.sub(r.center)) < 0 {
+						nrm = nrm.scale(-1) // facing out of the room, like the others
+					}
+					out = append(out, plate{mid, nrm, l + 0.12, 0, r.wallH})
+					reach = math.Max(reach, math.Abs(e.sub(wall).dot(side))+0.1)
 				}
-				out = append(out, plate{wall, axis, 2*half + 1.6, c.height, r.wallH})
+				out = append(out, plate{wall, axis, 2 * reach, c.height, r.wallH})
 			}
 		}
 	}
 	return out
+}
+
+// nearestPanelEdge is the end of a full-height panel of r closest to p, at
+// floor level.
+func nearestPanelEdge(r room, p vec3) vec3 {
+	best, bestD := p, math.Inf(1)
+	for _, q := range r.panels() {
+		if q.y0 > 0 {
+			continue
+		}
+		t := vec3{-math.Sin(q.angle), 0, math.Cos(q.angle)}.scale(q.width / 2)
+		for _, e := range []vec3{q.mid.sub(t), q.mid.add(t)} {
+			if d := e.sub(p).length(); d < bestD {
+				best, bestD = e, d
+			}
+		}
+	}
+	return best
 }
 
 // segment2 is a wall seen from above, for collisions (x, z of local coords).
