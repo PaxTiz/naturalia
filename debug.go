@@ -97,7 +97,7 @@ func newShotRun(g *Game) *shotRun {
 	// MS_SHOT_TOOL=n holds tool n (0 is the toothbrush) for the shot.
 	var tool int
 	if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TOOL"), "%d", &tool); err == nil && s.file != "" {
-		g.st.ToolTier = max(0, min(len(tools)-1, tool))
+		g.st.Tool = content.Tools.IDs()[max(0, min(content.Tools.Len()-1, tool))]
 	}
 	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
 		var d vec3

@@ -13,8 +13,9 @@ import (
 type State struct {
 	Credits     float64        `json:"credits"`
 	Tank        float64        `json:"tank"`
-	ToolTier    int            `json:"tool_tier"`
-	Levels      map[string]int `json:"levels"`
+	Tool        string         `json:"tool"`                // ID of the held tool
+	Levels      map[string]int `json:"levels"`              // by upgrade ID; a removed mod's stay
+	OldTier     int            `json:"tool_tier,omitempty"` // before IDs: index of the tool
 	TotalDust   float64        `json:"total_dust"`
 	TotalEarned float64        `json:"total_earned"`
 }
@@ -122,6 +123,9 @@ func NewGame() *Game {
 	g.load()
 	if g.st.Levels == nil {
 		g.st.Levels = map[string]int{}
+	}
+	if g.st.Tool == "" {
+		g.st.Tool = content.Tools.IDs()[0]
 	}
 	fresh := g.world == nil
 	if fresh {
@@ -312,7 +316,7 @@ func (g *Game) sell() {
 }
 
 func (g *Game) syncDrones() {
-	for len(g.drones) < g.st.Levels["drone"] {
+	for len(g.drones) < int(g.stat("drones")) {
 		p := toWorld(vec3{0, 8, 0})
 		g.drones = append(g.drones, &Drone{Pos: p, Target: basePos, phase: g.rng.Float64() * 10})
 	}
@@ -328,7 +332,7 @@ const (
 )
 
 func (g *Game) updateDrones(dt float64) {
-	radius := 0.8 + float64(g.st.ToolTier)*0.5
+	radius := 0.8 + float64(g.toolTier())*0.5
 	amount := 0.6 * g.powerMult() * dt
 	docked := arcDist(g.player.LocalUp(), baseUp) < baseReach+15
 	for i, d := range g.drones {

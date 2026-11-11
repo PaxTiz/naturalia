@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -97,7 +98,7 @@ func (g *Game) load() {
 	}
 
 	g.st = sf.State
-	g.st.ToolTier = max(0, min(g.st.ToolTier, len(tools)-1))
+	migrateState(&g.st)
 	if sf.Version != saveVersion {
 		log.Println("load: save from an older version, keeping progress on a new Mars")
 		return
@@ -119,4 +120,25 @@ func readGzip(path string) ([]byte, error) {
 		return nil, err
 	}
 	return io.ReadAll(zr)
+}
+
+// coreTools are the tools in their order before IDs, when saves stored an
+// index (tool_tier).
+var coreTools = []string{"core:toothbrush", "core:paintbrush", "core:broom", "core:vacuum", "core:blower", "core:vacuum-cannon"}
+
+// migrateState turns indexes and bare names from older saves into IDs.
+func migrateState(st *State) {
+	if st.Tool == "" {
+		st.Tool = coreTools[max(0, min(st.OldTier, len(coreTools)-1))]
+	}
+	st.OldTier = 0
+	for k, v := range st.Levels {
+		if !strings.Contains(k, ":") {
+			delete(st.Levels, k)
+			st.Levels["core:"+k] = v
+		}
+	}
+	if _, ok := content.Tools.Get(st.Tool); !ok {
+		log.Printf("load: tool %s no longer exists (mod removed?), back to the first one", st.Tool)
+	}
 }

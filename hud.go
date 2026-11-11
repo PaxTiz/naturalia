@@ -361,12 +361,13 @@ func (g *Game) drawStatus() {
 	// Tool, with its tier as pips.
 	gfx.capsRight("OUTIL", right, y+12*u, 13*u, visorDim)
 	gfx.textRight(g.tool().Name, right, y+29*u, 17*u, uiWhite)
-	for i := range len(tools) {
+	n := content.Tools.Len()
+	for i := range n {
 		c := uiTrack
-		if i <= g.st.ToolTier {
+		if i <= g.toolTier() {
 			c = visorCyan
 		}
-		x := right - float32(len(tools)-i)*10*u + 2*u
+		x := right - float32(n-i)*10*u + 2*u
 		fillCut(rl.NewRectangle(x, y+53*u, 8*u, 4*u), 1.5*u, c)
 	}
 

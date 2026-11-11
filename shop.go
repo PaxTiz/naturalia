@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"slices"
 )
 
 type headShape int
@@ -27,6 +28,7 @@ type ToolLook struct {
 }
 
 type Tool struct {
+	ID     string
 	Name   string
 	Radius float64 // brush radius in meters
 	Reach  float64 // max aiming distance in meters
@@ -35,40 +37,65 @@ type Tool struct {
 	Look   ToolLook
 }
 
-var tools = []Tool{
-	{"Brosse à dents", 0.75, 3.5, 0.8, 0, ToolLook{0.30, 0.014, color.RGBA{80, 150, 240, 255}, 0.06, 0.022, color.RGBA{245, 245, 250, 255}, headBlock, 0}},
-	{"Pinceau", 1.25, 4.5, 1.0, 60, ToolLook{0.35, 0.016, color.RGBA{190, 70, 60, 255}, 0.10, 0.03, color.RGBA{215, 175, 115, 255}, headTaper, 0}},
-	{"Balai", 2.25, 6, 1.4, 500, ToolLook{0.55, 0.02, color.RGBA{165, 115, 70, 255}, 0.24, 0.12, color.RGBA{240, 205, 95, 255}, headFlare, 0}},
-	{"Aspirateur", 3.75, 9, 2.2, 4_000, ToolLook{0.40, 0.025, color.RGBA{170, 175, 190, 255}, 0.22, 0.07, color.RGBA{225, 75, 80, 255}, headNozzle, 0.6}},
-	{"Souffleur indus.", 6, 13, 3.5, 35_000, ToolLook{0.30, 0.05, color.RGBA{60, 64, 80, 255}, 0.30, 0.09, color.RGBA{240, 150, 55, 255}, headNozzle, 0.8}},
-	{"Canon à vide", 10, 22, 6, 400_000, ToolLook{0.35, 0.06, color.RGBA{230, 232, 240, 255}, 0.26, 0.12, color.RGBA{80, 130, 235, 255}, headNozzle, 1}},
+// Upgrade is bought level after level; each level applies its effects to
+// the game's stats.
+type Upgrade struct {
+	ID, Name, Desc string
+	Icon           string // pictogram drawn by the shop (icon)
+	Base, Growth   float64
+	Max            int // 0 means unlimited
+	Effects        []Effect
 }
 
-type upgradeDef struct {
-	id, name, desc string
-	base, growth   float64
-	max            int // 0 means unlimited
+// Effect changes a stat for each level: (base + Add×level) × Mult^level.
+type Effect struct {
+	Stat      string
+	Mult, Add float64
 }
 
-var upgrades = []upgradeDef{
-	{"tank", "Réservoir", "Stocke 60% de poussière en plus avant de devoir rentrer vendre", 25, 1.75, 0},
-	{"power", "Turbo", "Outils et drones aspirent 30% plus vite", 40, 1.85, 0},
-	{"price", "Négociation", "La poussière et les cristaux se vendent 20% plus cher", 150, 2.1, 0},
-	{"drone", "Drone balayeur", "Un drone autonome qui nettoie à ta place", 300, 1.9, 0},
-	{"auto", "Téléporteur", "Vend à distance dès que le réservoir est plein", 1_500, 1, 1},
+// stats are what upgrades act on, with their value before any upgrade.
+var stats = map[string]float64{
+	"tank":     50, // grams the tank holds
+	"power":    1,  // multiplies how fast tools and drones sweep
+	"price":    1,  // multiplies what dust and crystals sell for
+	"drones":   0,  // sweeping drones
+	"autosell": 0,  // above 0, the tank sells itself when full
 }
 
-func (g *Game) level(id string) float64 { return float64(g.st.Levels[id]) }
+// stat is a stat with every upgrade applied.
+func (g *Game) stat(name string) float64 {
+	v, mult := stats[name], 1.0
+	for _, u := range content.Upgrades.All() {
+		lvl := float64(g.st.Levels[u.ID])
+		if lvl == 0 {
+			continue
+		}
+		for _, e := range u.Effects {
+			if e.Stat != name {
+				continue
+			}
+			v += e.Add * lvl
+			if e.Mult != 0 {
+				mult *= math.Pow(e.Mult, lvl)
+			}
+		}
+	}
+	return v * mult
+}
 
-func (g *Game) tool() Tool         { return tools[g.st.ToolTier] }
-func (g *Game) capacity() float64  { return 50 * math.Pow(1.6, g.level("tank")) }
-func (g *Game) powerMult() float64 { return math.Pow(1.3, g.level("power")) }
-func (g *Game) priceMult() float64 { return math.Pow(1.2, g.level("price")) }
-func (g *Game) autoSell() bool     { return g.level("auto") > 0 }
+// toolTier is the held tool's rank, 0 being the cheapest. A tool from a
+// removed mod falls back to the first one.
+func (g *Game) toolTier() int { return max(0, slices.Index(content.Tools.IDs(), g.st.Tool)) }
+
+func (g *Game) tool() *Tool        { return content.Tools.All()[g.toolTier()] }
+func (g *Game) capacity() float64  { return g.stat("tank") }
+func (g *Game) powerMult() float64 { return g.stat("power") }
+func (g *Game) priceMult() float64 { return g.stat("price") }
+func (g *Game) autoSell() bool     { return g.stat("autosell") > 0 }
 func (g *Game) space() float64     { return math.Max(0, g.capacity()-g.st.Tank) }
 func (g *Game) tankFull() bool     { return g.space() <= 1e-6 }
 func (g *Game) gemValue() float64 {
-	return 20 * g.priceMult() * math.Pow(2.5, float64(g.st.ToolTier))
+	return 20 * g.priceMult() * math.Pow(2.5, float64(g.toolTier()))
 }
 
 type shopItem struct {
@@ -82,9 +109,10 @@ type shopItem struct {
 func (it shopItem) affordable(credits float64) bool { return !it.maxed && credits >= it.cost }
 
 func (g *Game) shopItems() []shopItem {
-	items := make([]shopItem, 0, 1+len(upgrades))
+	tools := content.Tools.All()
+	items := make([]shopItem, 0, 1+content.Upgrades.Len())
 
-	if next := g.st.ToolTier + 1; next < len(tools) {
+	if next := g.toolTier() + 1; next < len(tools) {
 		t := tools[next]
 		items = append(items, shopItem{
 			name: "Outil : " + t.Name,
@@ -92,27 +120,26 @@ func (g *Game) shopItems() []shopItem {
 			info: fmt.Sprintf("Outil %d/%d", next+1, len(tools)),
 			icon: "tool",
 			cost: t.Cost,
-			buy:  func() { g.st.ToolTier = next },
+			buy:  func() { g.st.Tool = t.ID },
 		})
 	} else {
 		items = append(items, shopItem{name: "Outil : " + g.tool().Name, desc: "Le meilleur outil de la galaxie", info: "Outil max", icon: "tool", maxed: true})
 	}
 
-	for i := range upgrades {
-		u := &upgrades[i]
-		lvl := g.st.Levels[u.id]
+	for _, u := range content.Upgrades.All() {
+		lvl := g.st.Levels[u.ID]
 		it := shopItem{
-			name: u.name,
-			desc: u.desc,
-			icon: u.id,
+			name: u.Name,
+			desc: u.Desc,
+			icon: u.Icon,
 			info: fmt.Sprintf("Niv %d", lvl),
-			cost: u.base * math.Pow(u.growth, float64(lvl)),
+			cost: u.Base * math.Pow(u.Growth, float64(lvl)),
 			buy: func() {
-				g.st.Levels[u.id]++
+				g.st.Levels[u.ID]++
 				g.syncDrones()
 			},
 		}
-		if u.max > 0 && lvl >= u.max {
+		if u.Max > 0 && lvl >= u.Max {
 			it.maxed, it.info = true, "Acquis"
 		}
 		items = append(items, it)

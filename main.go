@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -21,6 +22,8 @@ func main() {
 	// Escape pauses the game instead of quitting it.
 	rl.SetExitKey(0)
 
+	loadContent()
+	log.Println("packs:", packList())
 	g := NewGame()
 	shot := newShotRun(g)
 	for !rl.WindowShouldClose() {
