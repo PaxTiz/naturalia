@@ -459,7 +459,27 @@ func buildCrates(b *building, at vec3, seed int) {
 		s := 0.75 - 0.15*float64(i) - 0.1*rnd(i)
 		a := rnd(i+10) * math.Pi
 		off := vec3{(rnd(i+20) - 0.5) * 0.15, 0, (rnd(i+30) - 0.5) * 0.15}
-		b.part(cols[(seed+i)%3], litIndoor, vec3{}).box(at.add(off).add(vec3{0, y + s/2, 0}), vec3{s, s, s}, vec3{math.Cos(a), 0, math.Sin(a)}, 0.05)
+		ax := vec3{math.Cos(a), 0, math.Sin(a)}
+		sd := vec3{-ax.Z, 0, ax.X}
+		c := at.add(off).add(vec3{0, y + s/2, 0})
+		b.part(cols[(seed+i)%3], litIndoor, vec3{}).box(c, vec3{s * 0.94, s * 0.94, s * 0.94}, ax, 0.03)
+		// Steel corner posts and rims, a strap around, a label.
+		dark := b.part("steel.dark", litIndoor, vec3{})
+		for _, sx := range []float64{-1, 1} {
+			for _, sz := range []float64{-1, 1} {
+				dark.box(c.add(ax.scale(sx*s*0.47)).add(sd.scale(sz*s*0.47)), vec3{0.07, s, 0.07}, ax, 0.015)
+			}
+		}
+		for _, sy := range []float64{-1, 1} {
+			for _, d := range []vec3{ax, sd} {
+				o := vec3{-d.Z, 0, d.X}
+				for _, sz := range []float64{-1, 1} {
+					dark.box(c.add(vec3{0, sy * s * 0.47, 0}).add(o.scale(sz*s*0.47)), vec3{s, 0.06, 0.06}, d, 0.012)
+				}
+			}
+		}
+		b.part("rubber", litIndoor, vec3{}).box(c, vec3{0.08, s * 0.95, s * 0.95}, ax, 0.01)
+		b.part("habitat.white", litIndoor, vec3{}).box(c.add(sd.scale(s*0.475)).add(ax.scale(s*0.2)).add(vec3{0, s * 0.1, 0}), vec3{s * 0.3, s * 0.2, 0.01}, ax, 0)
 		y += s
 	}
 }
@@ -704,6 +724,12 @@ func (m *meshBuilder) boxBasis(c vec3, ax [3]vec3, size vec3, bevel float64) {
 // prism adds a faceted cylinder or cone frustum standing on base along
 // axis: radius r0 at the bottom, r1 at the top, its top edge chamfered.
 func (m *meshBuilder) prism(base, axis vec3, r0, r1, h float64, sides int, bevel float64) {
+	// Round pieces are round: more sides and smooth normals around them
+	// (the chamfer still creases). Few sides stay faceted on purpose.
+	round := sides >= 8
+	if sides >= 10 {
+		sides = min(64, sides*2)
+	}
 	axis = axis.norm()
 	u, w := tangentBasis(axis)
 	center := base.add(axis.scale(h / 2))
@@ -712,13 +738,17 @@ func (m *meshBuilder) prism(base, axis vec3, r0, r1, h float64, sides int, bevel
 	if bevel > 0 {
 		levels = []level{{0, r0}, {h - bevel, r1}, {h, r1 - bevel}}
 	}
-	ring := func(l level, k int) vec3 {
+	radial := func(k int) vec3 {
 		a := 2 * math.Pi * float64(k) / float64(sides)
-		return base.add(axis.scale(l.y)).add(u.scale(l.r * math.Cos(a))).add(w.scale(l.r * math.Sin(a)))
+		return u.scale(math.Cos(a)).add(w.scale(math.Sin(a)))
+	}
+	ring := func(l level, k int) vec3 {
+		return base.add(axis.scale(l.y)).add(radial(k).scale(l.r))
 	}
 	// Plates around the sides, square tiles on the caps.
 	nu, nv := math.Max(1, math.Round(2*math.Pi*math.Max(r0, r1)/1.2)), math.Max(1, math.Round(h/1.0))
 	for i := 0; i+1 < len(levels); i++ {
+		lo, hi := levels[i], levels[i+1]
 		for k := range sides {
 			ac := 2 * math.Pi * (float64(k) + 0.5) / float64(sides)
 			m.uvf = func(p vec3) [2]float64 {
@@ -726,7 +756,15 @@ func (m *meshBuilder) prism(base, axis vec3, r0, r1, h float64, sides int, bevel
 				a := unwrap(math.Atan2(d.dot(w), d.dot(u)), ac)
 				return [2]float64{a / (2 * math.Pi) * nu, (h - d.dot(axis)) / h * nv}
 			}
-			m.quad(ring(levels[i], k), ring(levels[i], k+1), ring(levels[i+1], k+1), ring(levels[i+1], k), center)
+			if !round {
+				m.quad(ring(lo, k), ring(lo, k+1), ring(hi, k+1), ring(hi, k), center)
+				continue
+			}
+			// The side's normal leans with its slope.
+			nrm := func(k int) vec3 { return radial(k).scale(hi.y - lo.y).add(axis.scale(lo.r - hi.r)).norm() }
+			n0, n1 := nrm(k), nrm(k+1)
+			m.smooth(ring(lo, k), ring(lo, k+1), ring(hi, k+1), n0, n1, n1)
+			m.smooth(ring(lo, k), ring(hi, k+1), ring(hi, k), n0, n1, n0)
 		}
 	}
 	m.uvf = func(p vec3) [2]float64 {

@@ -245,7 +245,7 @@ func genPanel() rl.Texture2D {
 			}
 		}
 		h += rivet * 0.25
-		streak := stretched(v, u, 2, 10, 3, 710)
+		streak := stretched(v, u, 2, 10, 2, 710)
 		grime := clamp01((1-smoothstep(0, 0.55, v))*(streak-0.45)*1.8) + smoothstep(0.7, 1, v)*0.3
 		tone := 0.5 + 0.3*(tfbm(u, v, 2, 3, 740)-0.5)
 		return texel{tone, grime, seam*0.8 + rivet*0.25, h}

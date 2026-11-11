@@ -403,10 +403,24 @@ vec3 paint(vec3 base, vec3 n, out float h) {
         return mix(base * t.r, vec3(0.42, 0.42, 0.46) * t.r, t.b * 0.8);
     }
     if (matInfo.x < 2.5) { // hull plates laid by the mesh's UVs: seams, rivets, soft grime
+        vec2 cell = floor(fragTexCoord);
+        vec2 q = fract(fragTexCoord);
+        float id = hash13(vec3(cell, floor(fragPos.y * 0.37) + 7.0));
         vec4 t = texture(texture1, fragTexCoord);
-        h = t.a * 0.012;
-        vec3 c = base * (0.93 + 0.12 * t.r);
-        c = mix(c, c * vec3(0.64, 0.56, 0.5), t.g * 0.5);
+        h = t.a * 0.03;
+        // Every plate is a little different: its own tone, some a shade
+        // warmer or cooler, and one in five carries a service hatch.
+        vec3 c = base * (0.9 + 0.15 * id + 0.1 * t.r);
+        c *= mix(vec3(1.0), vec3(1.03, 1.0, 0.95), step(0.7, id));
+        c = mix(c, c * vec3(0.64, 0.56, 0.5), t.g * 0.55 * (1.0 - 0.85 * abs(n.y))); // streaks run down walls only
+        if (id < 0.2) {
+            vec2 e = abs(q - vec2(0.5, 0.42)) - vec2(0.22, 0.17);
+            float edge = max(e.x, e.y);
+            float groove = 1.0 - smoothstep(0.0, 0.008, abs(edge));
+            c *= mix(1.0, 0.88, step(edge, 0.0));
+            c *= 1.0 - 0.55 * groove;
+            h -= groove * 0.01;
+        }
         return c * (1.0 - 0.6 * t.b);
     }
     if (matInfo.x < 3.5) { // brushed metal with scratches
@@ -457,6 +471,11 @@ void main() {
         n = face * sign(dot(face, n));
     }
     vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x, mix(0.35, 1.0, ground.y), surface.x);
+    // Shiny surfaces mirror their surroundings at grazing angles: the sky
+    // outside, the warm room inside.
+    float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0) * surface.x;
+    vec3 env = inside ? vec3(0.30, 0.25, 0.22) : skyColor(reflect(-v, n), normalize(fragPos)) * 0.55;
+    lit += env * (0.06 + 0.5 * fres) * surface.x;
     vec3 col = mix(lit, albedo * 2.6, surface.y); // emissive goes past white: it blooms
     finalColor = vec4(finish(col, dist), colDiffuse.a);
 }`

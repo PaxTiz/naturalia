@@ -21,8 +21,10 @@ type postFX struct {
 	w, h          int32
 	scene         rl.RenderTexture2D
 	bloom         [bloomLevels]rl.RenderTexture2D
+	ao            rl.RenderTexture2D // ambient occlusion, half size
 	down, up, img rl.Shader
-	locs          struct{ texel, first, exposure, sunUp, time, sunScreen int32 }
+	aoSh          rl.Shader
+	locs          struct{ texel, first, exposure, sunUp, time, sunScreen, aoProj int32 }
 	exposure      float64 // adapts over time, like an eye
 }
 
@@ -38,8 +40,9 @@ func hdrTarget(w, h int32, depth bool) rl.RenderTexture2D {
 	rt.ID = rl.LoadFramebuffer()
 	rl.FramebufferAttach(rt.ID, rt.Texture.ID, rl.AttachmentColorChannel0, rl.AttachmentTexture2d, 0)
 	if depth {
-		rt.Depth = rl.Texture2D{ID: rl.LoadTextureDepth(w, h, true), Width: w, Height: h}
-		rl.FramebufferAttach(rt.ID, rt.Depth.ID, rl.AttachmentDepth, rl.AttachmentRenderbuffer, 0)
+		// A depth texture, not a renderbuffer: the ambient occlusion reads it.
+		rt.Depth = rl.Texture2D{ID: rl.LoadTextureDepth(w, h, false), Width: w, Height: h}
+		rl.FramebufferAttach(rt.ID, rt.Depth.ID, rl.AttachmentDepth, rl.AttachmentTexture2d, 0)
 	}
 	if !rl.FramebufferComplete(rt.ID) {
 		panic("HDR framebuffer incomplete")
@@ -53,6 +56,8 @@ func newPostFX() *postFX {
 	p.down = rl.LoadShaderFromMemory(postVS, bloomDownFS)
 	p.up = rl.LoadShaderFromMemory(postVS, bloomUpFS)
 	p.img = rl.LoadShaderFromMemory(postVS, imageFS)
+	p.aoSh = rl.LoadShaderFromMemory(postVS, aoFS)
+	p.locs.aoProj = rl.GetShaderLocation(p.aoSh, "proj")
 	p.locs.texel = rl.GetShaderLocation(p.down, "texel")
 	p.locs.first = rl.GetShaderLocation(p.down, "first")
 	p.locs.exposure = rl.GetShaderLocation(p.img, "exposure")
@@ -73,9 +78,11 @@ func (p *postFX) resize() {
 		for _, b := range p.bloom {
 			rl.UnloadRenderTexture(b)
 		}
+		rl.UnloadRenderTexture(p.ao)
 	}
 	p.w, p.h = w, h
 	p.scene = hdrTarget(w, h, true)
+	p.ao = hdrTarget(max(1, w/2), max(1, h/2), false)
 	for i := range p.bloom {
 		w, h = max(1, w/2), max(1, h/2)
 		p.bloom[i] = hdrTarget(w, h, false)
@@ -106,6 +113,15 @@ func blit(src rl.Texture2D, w, h int32) {
 
 // finish turns the HDR scene into the final image on the screen.
 func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
+	// Ambient occlusion from the depth: corners, contacts and creases darken.
+	tanY := float32(math.Tan(float64(cam.Fovy) * math.Pi / 360))
+	rl.SetShaderValue(p.aoSh, p.locs.aoProj, []float32{tanY * float32(p.w) / float32(p.h), tanY, float32(math.Mod(clock, 100)), 0}, rl.ShaderUniformVec4)
+	rl.BeginShaderMode(p.aoSh)
+	rl.BeginTextureMode(p.ao)
+	blit(p.scene.Depth, p.ao.Texture.Width, p.ao.Texture.Height)
+	rl.EndTextureMode()
+	rl.EndShaderMode()
+
 	// Bloom: halve again and again, then add each level back into the one
 	// above, blurring as it grows.
 	rl.BeginShaderMode(p.down)
@@ -142,6 +158,7 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
 	rl.BeginShaderMode(p.img)
 	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "bloom"), p.bloom[0].Texture)
+	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "aoMap"), p.ao.Texture)
 	blit(p.scene.Texture, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()))
 	rl.EndShaderMode()
 }
@@ -208,6 +225,7 @@ var imageFS = `#version 330
 in vec2 fragTexCoord;
 uniform sampler2D texture0; // HDR scene
 uniform sampler2D bloom;
+uniform sampler2D aoMap;    // ambient occlusion, half size
 uniform float exposure;
 uniform float sunUp;        // sun height where the player stands
 uniform float time;
@@ -231,8 +249,20 @@ vec3 shafts(vec2 uv) {
 
 vec3 rays; // light shafts, computed once per pixel in main
 
+// occlusion blurs the half-size ambient occlusion with a 3×3 tent, which
+// cancels out its 2×2 rotation pattern exactly.
+float occlusion(vec2 uv) {
+    vec2 t = 1.0 / vec2(textureSize(aoMap, 0));
+    // Four bilinear taps half a texel away make the tent.
+    t *= 0.5;
+    return 0.25 * (texture(aoMap, uv + vec2(-1, -1) * t).r + texture(aoMap, uv + vec2(1, -1) * t).r
+                 + texture(aoMap, uv + vec2(-1, 1) * t).r + texture(aoMap, uv + vec2(1, 1) * t).r);
+}
+
+float occ; // computed once per pixel in main
+
 vec3 image(vec2 uv) {
-    vec3 c = texture(texture0, uv).rgb + texture(bloom, uv).rgb * ` + ftoa(bloomStrength) + ` + rays;
+    vec3 c = texture(texture0, uv).rgb * occ + texture(bloom, uv).rgb * ` + ftoa(bloomStrength) + ` + rays;
     // Filmic curve (ACES, Narkowicz's fit): deeper shadows and a soft
     // shoulder. The 0.53 keeps the mid-tones where the old curve had them.
     c *= exposure * 0.53;
@@ -260,6 +290,7 @@ void main() {
     vec2 t = 1.0 / vec2(textureSize(texture0, 0));
     vec2 uv = fragTexCoord;
     rays = shafts(uv) * vec3(1.0, 0.75, 0.5);
+    occ = occlusion(uv);
     vec3 c = image(uv);
 
     // FXAA, simplified: find the edge direction from the neighbors' luma
@@ -285,4 +316,60 @@ void main() {
     float n = fract(sin(dot(uv * 1000.0 + time, vec2(12.9898, 78.233))) * 43758.5453);
     c += (n - 0.5) * 0.025;
     finalColor = vec4(c, 1.0);
+}`
+
+// aoFS: scalable ambient obscurance from the depth alone. Each pixel finds
+// its view-space position and normal, then looks at a dozen neighbors on a
+// spiral half a meter wide: those rising above its surface hide the sky.
+var aoFS = `#version 330
+in vec2 fragTexCoord;
+uniform sampler2D texture0; // the scene's depth
+uniform vec4 proj;          // x, y: tangent of the half field of view; z: time
+out vec4 finalColor;
+const float near = 0.05, far = 9000.0;
+const float radius = 0.8;
+
+vec3 viewPos(vec2 uv) {
+    float d = texture(texture0, uv).r * 2.0 - 1.0;
+    float z = 2.0 * near * far / (far + near - d * (far - near));
+    return vec3((uv * 2.0 - 1.0) * proj.xy * z, z);
+}
+
+void main() {
+    vec2 uv = fragTexCoord;
+    if (texture(texture0, uv).r >= 0.99999) { finalColor = vec4(1.0); return; } // sky
+    vec3 P = viewPos(uv);
+    if (P.z > 40.0) { finalColor = vec4(1.0); return; }
+    // Normal from the closer neighbor on each axis, so edges stay clean.
+    // The depth has few bits: neighbors a few texels away give a steadier
+    // slope than adjacent ones.
+    vec2 t = 3.0 / vec2(textureSize(texture0, 0));
+    vec3 px = viewPos(uv + vec2(t.x, 0)), nx = viewPos(uv - vec2(t.x, 0));
+    vec3 py = viewPos(uv + vec2(0, t.y)), ny = viewPos(uv - vec2(0, t.y));
+    vec3 dx = abs(px.z - P.z) < abs(nx.z - P.z) ? px - P : P - nx;
+    vec3 dy = abs(py.z - P.z) < abs(ny.z - P.z) ? py - P : P - ny;
+    vec3 N = normalize(cross(dx, dy));
+    if (dot(N, P) > 0.0) N = -N;
+
+    const int N_SAMPLES = 8;
+    // The spiral turns from pixel to pixel over a 2×2 block; the blur in
+    // imageFS averages the block.
+    ivec2 b = ivec2(gl_FragCoord.xy) & 1;
+    float spin = (float(b.x * 2 + (b.x ^ b.y)) + 0.5) / 4.0 * 6.2832 / float(N_SAMPLES) * 2.0;
+    vec2 rs = radius / (P.z * 2.0 * proj.xy); // the radius on screen, in uv
+    float sum = 0.0;
+    for (int i = 0; i < N_SAMPLES; i++) {
+        float a = 0.3 + 0.7 * (float(i) + 0.5) / float(N_SAMPLES);
+        float ang = a * 6.2832 * 2.0 + spin;
+        vec2 o = vec2(cos(ang), sin(ang)) * a * rs;
+        vec3 v = viewPos(uv + o) - P;
+        float vv = dot(v, v);
+        float f = max(radius * radius - vv, 0.0);
+        sum += f * f * f * max((dot(v, N) - 0.008 * P.z - 0.0008 * P.z * P.z) / (vv + 0.003), 0.0);
+    }
+    float ao = max(0.0, 1.0 - sum * 5.5 / (pow(radius, 6.0) * float(N_SAMPLES)));
+    // Surfaces seen edge-on have the least reliable depth: fade it there.
+    float facing = smoothstep(0.12, 0.4, abs(dot(N, normalize(P))));
+    ao = mix(1.0, ao, (1.0 - smoothstep(20.0, 40.0, P.z)) * facing);
+    finalColor = vec4(vec3(ao), 1.0);
 }`

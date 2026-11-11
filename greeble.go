@@ -444,8 +444,19 @@ func buildPlanter(b *building, at vec3, seed int) {
 			if (k+j)%3 == 0 {
 				tok = "planter.lime"
 			}
-			b.part(tok, litIndoor, vec3{}).prism(p, yUp, 0.1+0.05*r, 0.02, h, 5, 0)
-			b.part(tok, litIndoor, vec3{}).prism(p.add(vec3{0, h * 0.4, 0}), vec3{math.Cos(r * 6), 2, math.Sin(r * 6)}, 0.08, 0.01, h*0.6, 4, 0)
+			// A tuft of leaves arching out from the stem.
+			leaf := b.part(tok, litIndoor, vec3{})
+			leaf.prism(p, yUp, 0.025, 0.015, h*0.6, 8, 0)
+			for l := range 6 {
+				t := float64(l)*2.4 + r*6
+				out := vec3{math.Cos(t), 0, math.Sin(t)}
+				lift := 0.5 + 0.4*grnd(seed, k*20+j*7+l)
+				dirl := out.add(vec3{0, lift * 1.6, 0}).norm()
+				length := h * (0.55 + 0.35*grnd(seed, k*30+l))
+				c := p.add(vec3{0, h * (0.15 + 0.07*float64(l)), 0}).add(dirl.scale(length / 2))
+				across := vec3{-out.Z, 0, out.X}
+				leaf.boxBasis(c, [3]vec3{across, dirl, across.cross(dirl)}, vec3{0.06 + 0.03*lift, length, 0.008}, 0.004)
+			}
 		}
 	}
 }
