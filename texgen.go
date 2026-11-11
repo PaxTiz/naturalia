@@ -231,7 +231,7 @@ func genDust() rl.Texture2D {
 
 // Panel: one hull plate per tile, laid by the meshes' UVs so its edges
 // follow the walls: a recessed seam all around, a soft raised rim, rivets,
-// grime streaks running down from the top seam and a dirtier foot.
+// and a faint shade of grime along the foot.
 // R tone, G grime, B seams and rivets (dark), A height.
 func genPanel() rl.Texture2D {
 	return bake(512, func(u, v float64) texel {
@@ -245,9 +245,8 @@ func genPanel() rl.Texture2D {
 			}
 		}
 		h += rivet * 0.25
-		streak := stretched(v, u, 2, 10, 2, 710)
-		grime := clamp01((1-smoothstep(0, 0.55, v))*(streak-0.45)*1.8) + smoothstep(0.7, 1, v)*0.3
-		tone := 0.5 + 0.3*(tfbm(u, v, 2, 3, 740)-0.5)
+		grime := smoothstep(0.8, 1, v) * (0.6 + 0.4*tfbm(u, v, 4, 2, 710))
+		tone := 0.5 + 0.2*(tfbm(u, v, 2, 2, 740)-0.5)
 		return texel{tone, grime, seam*0.8 + rivet*0.25, h}
 	})
 }

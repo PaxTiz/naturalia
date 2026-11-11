@@ -22,6 +22,7 @@ type postFX struct {
 	scene         rl.RenderTexture2D
 	bloom         [bloomLevels]rl.RenderTexture2D
 	ao            rl.RenderTexture2D // ambient occlusion, half size
+	depth         rl.Texture2D       // the scene's second target: distance along the view (depthOut)
 	down, up, img rl.Shader
 	aoSh          rl.Shader
 	locs          struct{ texel, first, exposure, sunUp, time, sunScreen, aoProj int32 }
@@ -79,9 +80,20 @@ func (p *postFX) resize() {
 			rl.UnloadRenderTexture(b)
 		}
 		rl.UnloadRenderTexture(p.ao)
+		rl.UnloadTexture(p.depth)
 	}
 	p.w, p.h = w, h
 	p.scene = hdrTarget(w, h, true)
+	img := rl.GenImageColor(int(w), int(h), rl.Black)
+	rl.ImageFormat(img, pixelRGBA16F)
+	p.depth = rl.LoadTextureFromImage(img)
+	rl.UnloadImage(img)
+	rl.SetTextureFilter(p.depth, rl.FilterPoint)
+	rl.SetTextureWrap(p.depth, rl.WrapClamp)
+	rl.FramebufferAttach(p.scene.ID, p.depth.ID, rl.AttachmentColorChannel1, rl.AttachmentTexture2d, 0)
+	rl.EnableFramebuffer(p.scene.ID)
+	rl.ActiveDrawBuffers(2)
+	rl.DisableFramebuffer()
 	p.ao = hdrTarget(max(1, w/2), max(1, h/2), false)
 	for i := range p.bloom {
 		w, h = max(1, w/2), max(1, h/2)
@@ -118,7 +130,7 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	rl.SetShaderValue(p.aoSh, p.locs.aoProj, []float32{tanY * float32(p.w) / float32(p.h), tanY, float32(math.Mod(clock, 100)), 0}, rl.ShaderUniformVec4)
 	rl.BeginShaderMode(p.aoSh)
 	rl.BeginTextureMode(p.ao)
-	blit(p.scene.Depth, p.ao.Texture.Width, p.ao.Texture.Height)
+	blit(p.depth, p.ao.Texture.Width, p.ao.Texture.Height)
 	rl.EndTextureMode()
 	rl.EndShaderMode()
 
@@ -323,27 +335,28 @@ void main() {
 // spiral half a meter wide: those rising above its surface hide the sky.
 var aoFS = `#version 330
 in vec2 fragTexCoord;
-uniform sampler2D texture0; // the scene's depth
+uniform sampler2D texture0; // distance along the view, split in two (depthOut)
 uniform vec4 proj;          // x, y: tangent of the half field of view; z: time
 out vec4 finalColor;
-const float near = 0.05, far = 9000.0;
 const float radius = 0.8;
 
 vec3 viewPos(vec2 uv) {
-    float d = texture(texture0, uv).r * 2.0 - 1.0;
-    float z = 2.0 * near * far / (far + near - d * (far - near));
+    // On a texel's center: half-size pixels fall between four of them.
+    vec2 size = vec2(textureSize(texture0, 0));
+    uv = (floor(uv * size) + 0.5) / size;
+    vec2 d = texture(texture0, uv).rg;
+    float z = d.x + d.y / 64.0;
+    if (z <= 0.0) z = 1000.0; // the sky
     return vec3((uv * 2.0 - 1.0) * proj.xy * z, z);
 }
 
 void main() {
-    vec2 uv = fragTexCoord;
-    if (texture(texture0, uv).r >= 0.99999) { finalColor = vec4(1.0); return; } // sky
+    vec2 size = vec2(textureSize(texture0, 0));
+    vec2 uv = (floor(fragTexCoord * size) + 0.5) / size;
     vec3 P = viewPos(uv);
-    if (P.z > 40.0) { finalColor = vec4(1.0); return; }
+    if (P.z > 30.0) { finalColor = vec4(1.0); return; }
     // Normal from the closer neighbor on each axis, so edges stay clean.
-    // The depth has few bits: neighbors a few texels away give a steadier
-    // slope than adjacent ones.
-    vec2 t = 3.0 / vec2(textureSize(texture0, 0));
+    vec2 t = 1.0 / vec2(textureSize(texture0, 0));
     vec3 px = viewPos(uv + vec2(t.x, 0)), nx = viewPos(uv - vec2(t.x, 0));
     vec3 py = viewPos(uv + vec2(0, t.y)), ny = viewPos(uv - vec2(0, t.y));
     vec3 dx = abs(px.z - P.z) < abs(nx.z - P.z) ? px - P : P - nx;
@@ -365,11 +378,9 @@ void main() {
         vec3 v = viewPos(uv + o) - P;
         float vv = dot(v, v);
         float f = max(radius * radius - vv, 0.0);
-        sum += f * f * f * max((dot(v, N) - 0.008 * P.z - 0.0008 * P.z * P.z) / (vv + 0.003), 0.0);
+        sum += f * f * f * max((dot(v, N) - 0.03 - 0.002 * P.z) / (vv + 0.003), 0.0);
     }
     float ao = max(0.0, 1.0 - sum * 5.5 / (pow(radius, 6.0) * float(N_SAMPLES)));
-    // Surfaces seen edge-on have the least reliable depth: fade it there.
-    float facing = smoothstep(0.12, 0.4, abs(dot(N, normalize(P))));
-    ao = mix(1.0, ao, (1.0 - smoothstep(20.0, 40.0, P.z)) * facing);
+    ao = mix(1.0, ao, 1.0 - smoothstep(18.0, 30.0, P.z));
     finalColor = vec4(vec3(ao), 1.0);
 }`

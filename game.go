@@ -91,6 +91,7 @@ type Game struct {
 
 	mode        mode
 	clock       float64
+	camEye      vec3 // the camera's position in double precision (camera)
 	saveTimer   float64
 	sellPop     float64 // timer of the "+X cr" pop next to the credits
 	sellPopText string

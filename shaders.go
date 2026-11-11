@@ -12,6 +12,14 @@ import "strconv"
 const shaderCommon = `
 uniform vec3 viewPos;
 uniform vec3 sunDir;
+// Positions from Mars' center are about 3 400 m long: in 32-bit floats they
+// are only good to a quarter millimeter, which shakes everything computed
+// from small differences (slopes, bumps, facets, depth) as the camera moves.
+// So the vertex shaders also give fragRel, the position from origin (a
+// point near the camera), and the fine work uses it with viewRel.
+uniform vec3 origin;
+uniform vec3 viewRel; // viewPos - origin, computed in double precision
+in vec3 fragRel;
 
 // Flat, graphic look: a strong warm sun against cool violet shade.
 const vec3 sunCol    = vec3(1.05, 0.76, 0.54);
@@ -94,7 +102,7 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
 // layers. The result is HDR: the exposure and the tone curve come later,
 // on the whole image (post.go).
 vec3 finish(vec3 col, float dist) {
-    vec3 d = normalize(fragPos - viewPos);
+    vec3 d = normalize(fragRel - viewRel);
     vec3 haze = skyColor(d, normalize(viewPos));
     vec3 veil = haze * vec3(0.62, 0.52, 0.72);
     col = mix(col, veil, (1.0 - exp(-dist / 1300.0)) * 0.42);
@@ -114,11 +122,14 @@ out vec3 fragNormal;
 out vec3 localPos;
 out vec3 localNormal;
 out vec2 fragTexCoord;
+out vec3 fragRel;
+uniform vec3 origin;
 void main() {
     fragTexCoord = vertexTexCoord;
     localPos = vertexPosition;
     localNormal = vertexNormal;
     fragPos = vec3(matModel * vec4(vertexPosition, 1.0));
+    fragRel = fragPos - origin;
     fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 0.0)));
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }`
@@ -134,6 +145,8 @@ uniform mat4 mvp;
 uniform mat4 matModel;
 uniform mat4 matNormal;
 uniform float instanced;
+uniform vec3 origin;
+out vec3 fragRel;
 out vec3 fragPos;
 out vec3 fragNormal;
 out vec3 localPos;
@@ -146,11 +159,13 @@ void main() {
     if (instanced > 0.5) {
         vec4 p = instanceTransform * vec4(vertexPosition, 1.0);
         fragPos = p.xyz;
+        fragRel = fragPos - origin;
         fragNormal = normalize(transpose(inverse(mat3(instanceTransform))) * vertexNormal);
         gl_Position = mvp * p; // mvp is only view and projection here
         return;
     }
     fragPos = vec3(matModel * vec4(vertexPosition, 1.0));
+    fragRel = fragPos - origin;
     fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 0.0)));
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }`
@@ -162,7 +177,11 @@ in vec3 vertexPosition;
 in vec3 vertexNormal;
 in vec2 vertexTexCoord;
 uniform mat4 mvp;
+uniform vec3 origin;
+uniform vec4 lightVP[4]; // the shadow map's camera, by columns
 out vec3 fragPos;
+out vec3 fragRel;
+out vec3 shadowCoord; // where the vertex falls in the shadow map
 out vec3 fragNormal;
 out vec2 fragTexCoord;
 out float fragSun;
@@ -174,6 +193,9 @@ void main() {
     fragAO = occ / 31.0;
     fragTexCoord = vertexTexCoord;
     fragPos = vertexPosition; // terrain meshes are drawn with no transform
+    fragRel = vertexPosition - origin;
+    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(vertexPosition, 1.0);
+    shadowCoord = lp.xyz / lp.w * 0.5 + 0.5; // orthographic: linear, so exact per vertex
     fragNormal = normalize(vertexNormal);
     gl_Position = mvp * vec4(vertexPosition, 1.0);
 }`
@@ -183,6 +205,7 @@ in vec3 fragPos;
 in vec3 fragNormal;
 in float fragSun;
 in float fragAO;
+in vec3 shadowCoord;
 in vec2 fragTexCoord;       // ground kind: x polar ice, y volcanic basalt
 uniform sampler2D texture0; // cache of the touched dust tiles
 uniform sampler2D texture1; // lookup: where each tile sits in the cache (blue = cached)
@@ -190,7 +213,6 @@ uniform float faceCells, tileCells, tilesPerFace, atlasTiles;
 uniform float marsRadius;
 uniform vec4 brush;         // xyz: aimed point, w: radius (0 hides it)
 uniform vec4 casters[16];   // soft shadows of the domes, far away: xyz center, w radius
-uniform vec4 lightVP[4];    // the shadow map's camera (shadow.go), by columns
 uniform sampler2D shadowMap; // depth of the objects around the player, seen from the sun
 uniform float casterCount;
 uniform vec4 steps[48];     // footprints, newest first: xyz position
@@ -198,8 +220,8 @@ uniform vec4 stepDirs[48];  // xyz heading, w strength
 uniform float stepCount;
 uniform sampler2D texture2; // painted regolith: R tone, G pebbles, B hollows, A height
 uniform sampler2D texture3; // painted dust: R tone, G clumps, A height
-out vec4 finalColor;
-` + shaderCommon + textureCommon + `
+layout(location = 0) out vec4 finalColor;
+` + shaderCommon + textureCommon + depthOut + `
 const float regolithTile = ` + ftoa(regolithTile) + `;
 const float dustTile = ` + ftoa(dustTile) + `;
 // Same cube projection as the game code (cubeFaces in mathx.go).
@@ -231,17 +253,17 @@ float dustAt(vec3 d) {
 
 void main() {
     vec3 n = normalize(fragNormal);
-    vec3 v = normalize(viewPos - fragPos);
+    vec3 v = normalize(viewRel - fragRel);
     vec3 up = normalize(fragPos);
-    float dist = length(viewPos - fragPos);
+    float dist = length(viewRel - fragRel);
     float dust = dustAt(up);
 
     // Painted textures, projected along the three axes. A second, larger
     // scale fades in with distance to hide the tiling.
     vec3 w = triWeights(n);
     float far = smoothstep(12.0, 60.0, dist) * 0.65;
-    vec4 rg = mix(tri(texture2, fragPos, w, 1.0 / regolithTile), tri(texture2, fragPos, w, 1.0 / (regolithTile * 7.3)), far);
-    vec4 ds = mix(tri(texture3, fragPos, w, 1.0 / dustTile), tri(texture3, fragPos, w, 1.0 / (dustTile * 6.1)), far);
+    vec4 rg = mix(triW(texture2, w, 1.0 / regolithTile), triW(texture2, w, 1.0 / (regolithTile * 7.3)), far);
+    vec4 ds = mix(triW(texture3, w, 1.0 / dustTile), triW(texture3, w, 1.0 / (dustTile * 6.1)), far);
 
     float ice = fragTexCoord.x, basalt = fragTexCoord.y;
     float steep = smoothstep(0.88, 0.7, dot(normalize(fragNormal), up));
@@ -286,7 +308,7 @@ void main() {
         float print = 0.0, rim = 0.0, tread = 0.0;
         for (int i = 0; i < 48; i++) {
             if (float(i) >= stepCount) break;
-            vec3 rel = fragPos - steps[i].xyz;
+            vec3 rel = fragRel - (steps[i].xyz - origin);
             if (dot(rel, rel) > 0.09) continue;
             vec3 f = stepDirs[i].xyz;
             vec2 q = vec2(dot(rel, cross(f, up)), dot(rel, f));
@@ -302,16 +324,15 @@ void main() {
     // Relief of the textures, fading out with distance.
     float fade = 1.0 - smoothstep(25.0, 70.0, dist);
     float h = mix(rg.a * 0.03, ds.a * 0.018, cover);
-    n = bump(n, fragPos, h, fade);
+    n = bump(n, fragRel, h, fade);
     // Steep relief shows its facets; plains stay smooth.
-    vec3 face = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
+    vec3 face = normalize(cross(dFdx(fragRel), dFdy(fragRel)));
     face *= sign(dot(face, up));
     n = normalize(mix(n, face, smoothstep(0.25, 0.6, steep) * 0.85));
 
     // Shadows of the objects around the player, from the shadow map,
     // softened over 3x3 texels and faded out at its edge.
-    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragPos, 1.0);
-    vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
+    vec3 sc = shadowCoord;
     vec2 border = abs(sc.xy - 0.5) * 2.0;
     float mapped = 1.0 - smoothstep(0.85, 1.0, max(border.x, border.y));
     float shadow = 1.0;
@@ -326,7 +347,7 @@ void main() {
     // Beyond the map, the domes still cast a soft round shadow.
     for (int i = 0; i < 16; i++) {
         if (float(i) >= casterCount || mapped >= 1.0) break;
-        vec3 rel = fragPos - casters[i].xyz;
+        vec3 rel = fragRel - (casters[i].xyz - origin);
         float t = -dot(rel, sunDir);
         if (t <= 0.0) continue;
         float d = length(rel + sunDir * t) / casters[i].w;
@@ -347,6 +368,7 @@ void main() {
     }
 
     finalColor = vec4(finish(col, dist), 1.0);
+    writeDepth(1.0);
 }`
 
 const objectFS = `#version 330
@@ -366,8 +388,8 @@ uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
 uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: height of their floor
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6;
-out vec4 finalColor;
-` + shaderCommon + textureCommon + `
+layout(location = 0) out vec4 finalColor;
+` + shaderCommon + textureCommon + depthOut + `
 // Indoor lighting, same rule as outside: warm lamps, cool violet shade,
 // a crisp but soft turn from one to the other.
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
@@ -375,7 +397,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
     vec3 col = albedo * vec3(0.15, 0.13, 0.25);
     for (int i = 0; i < 12; i++) {
         if (float(i) >= lightCount) break;
-        vec3 l = lights[i].xyz - fragPos;
+        vec3 l = (lights[i].xyz - origin) - fragRel;
         float d = length(l);
         l /= d;
         // Pools of warm light: bright under the lamp, falling off quickly,
@@ -394,80 +416,84 @@ vec3 paint(vec3 base, vec3 n, out float h) {
     h = 0.0;
     if (matInfo.x < 0.5) return base;
     if (matInfo.x > 7.5) return base * texture(texture0, fragTexCoord).rgb; // decal, by UVs
-    vec3 p = matInfo.z > 0.5 ? localPos : fragPos;
-    vec3 w = triWeights(matInfo.z > 0.5 ? normalize(localNormal) : n);
+    // World-space textures are laid from origin, shifted back by where
+    // origin falls in the tile: the same pattern, without the jitter.
+    bool obj = matInfo.z > 0.5;
+    vec3 p = obj ? localPos : fragRel;
+    vec3 w = triWeights(obj ? normalize(localNormal) : n);
     float s = matInfo.y;
+    vec3 shift = obj ? vec3(0.0) : fract(origin * s);
     if (matInfo.x < 1.5) { // painted object: brush strokes, chipped edges showing metal
-        vec4 t = tri(texture0, p, w, s);
+        vec4 t = triO(texture0, p, shift, w, s);
         h = t.a * 0.004;
         return mix(base * t.r, vec3(0.42, 0.42, 0.46) * t.r, t.b * 0.8);
     }
-    if (matInfo.x < 2.5) { // hull plates laid by the mesh's UVs: seams, rivets, soft grime
+    if (matInfo.x < 2.5) { // hull plates laid by the mesh's UVs: clean, crisp seams
         vec2 cell = floor(fragTexCoord);
         vec2 q = fract(fragTexCoord);
-        float id = hash13(vec3(cell, floor(fragPos.y * 0.37) + 7.0));
+        float id = hash13(vec3(cell, floor((fragRel.y + origin.y) * 0.37) + 7.0));
         vec4 t = texture(texture1, fragTexCoord);
-        h = t.a * 0.03;
-        // Every plate is a little different: its own tone, some a shade
-        // warmer or cooler, and one in five carries a service hatch.
-        vec3 c = base * (0.9 + 0.15 * id + 0.1 * t.r);
-        c *= mix(vec3(1.0), vec3(1.03, 1.0, 0.95), step(0.7, id));
-        c = mix(c, c * vec3(0.64, 0.56, 0.5), t.g * 0.55 * (1.0 - 0.85 * abs(n.y))); // streaks run down walls only
+        h = t.a * 0.02;
+        // Factory-made plates: each a hair lighter or darker, one in five
+        // with a service hatch, a faint sheen of grime at the very foot.
+        vec3 c = base * (0.95 + 0.07 * id + 0.03 * t.r);
+        c = mix(c, c * vec3(0.8, 0.76, 0.72), t.g * 0.25 * (1.0 - abs(n.y)));
         if (id < 0.2) {
             vec2 e = abs(q - vec2(0.5, 0.42)) - vec2(0.22, 0.17);
             float edge = max(e.x, e.y);
-            float groove = 1.0 - smoothstep(0.0, 0.008, abs(edge));
-            c *= mix(1.0, 0.88, step(edge, 0.0));
-            c *= 1.0 - 0.55 * groove;
-            h -= groove * 0.01;
+            float groove = 1.0 - smoothstep(0.0, 0.006, abs(edge));
+            c *= mix(1.0, 0.94, step(edge, 0.0));
+            c *= 1.0 - 0.4 * groove;
+            h -= groove * 0.008;
         }
-        return c * (1.0 - 0.6 * t.b);
+        return c * (1.0 - 0.55 * t.b);
     }
     if (matInfo.x < 3.5) { // brushed metal with scratches
-        vec4 t = tri(texture2, p, w, s);
+        vec4 t = triO(texture2, p, shift, w, s);
         h = t.a * 0.003;
         return base * (0.55 + 0.7 * t.r) + t.g * 0.15;
     }
     if (matInfo.x < 4.5) { // tread plate floor
-        vec4 t = tri(texture3, p, w, s);
+        vec4 t = triO(texture3, p, shift, w, s);
         h = t.a * 0.008;
         return base * (0.45 + 0.9 * t.r) * (1.0 - 0.4 * t.g);
     }
     if (matInfo.x < 5.5) { // fabric
-        vec4 t = tri(texture4, p, w, s);
+        vec4 t = triO(texture4, p, shift, w, s);
         h = t.a * 0.003;
         return base * (0.55 + 0.55 * t.r);
     }
     if (matInfo.x < 6.5) { // rock: the regolith texture, tinted
-        vec4 t = tri(texture5, p, w, s);
+        vec4 t = triO(texture5, p, shift, w, s);
         h = t.a * 0.05;
         return base * (0.8 + 0.35 * t.r) * (1.0 - t.b * 0.15);
     }
     // hazard stripes
-    vec4 t = tri(texture6, p, w, s);
+    vec4 t = triO(texture6, p, shift, w, s);
     vec3 c = mix(vec3(0.08, 0.08, 0.09), vec3(0.95, 0.75, 0.15), t.r);
     return c * (0.75 + 0.35 * t.b);
 }
 
 void main() {
     if (shadowPass > 0.5) { finalColor = vec4(gl_FragCoord.z); return; }
+    writeDepth(colDiffuse.a > 0.99 ? 1.0 : 0.0);
     vec3 n = normalize(fragNormal);
-    vec3 v = normalize(viewPos - fragPos);
+    vec3 v = normalize(viewRel - fragRel);
     bool inside = lighting > 0.5 && lighting < 1.5;
     if (lighting > 1.5 && lighting < 2.5 && !gl_FrontFacing) { inside = true; n = -n; }
-    if (lighting > 2.5 && dot(n, room - fragPos) > 0.0) inside = true;
+    if (lighting > 2.5 && dot(n, (room - origin) - fragRel) > 0.0) inside = true;
     float h;
     vec3 albedo = paint(colDiffuse.rgb, n, h);
     if (wear.x > 0.0 && !inside) { // big flat shapes of dust, no grain
         float patch = 0.75 + 0.25 * sin(fragPos.x * 0.7 + 1.3) * sin(fragPos.z * 0.9);
-        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, n.y) * 0.6 * patch * wear.x);
+        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, n.y) * 0.35 * patch * wear.x);
         float foot = 1.0 - smoothstep(0.05, 0.55, fragPos.y - wear.y);
-        albedo = mix(albedo, albedo * vec3(0.62, 0.42, 0.32), foot * wear.x);
+        albedo = mix(albedo, albedo * vec3(0.72, 0.52, 0.42), foot * wear.x * 0.7);
     }
-    float dist = length(viewPos - fragPos);
-    n = bump(n, fragPos, h, 1.0 - smoothstep(10.0, 40.0, dist));
+    float dist = length(viewRel - fragRel);
+    n = bump(n, fragRel, h, 1.0 - smoothstep(10.0, 40.0, dist));
     if (matInfo.x > 5.5 && matInfo.x < 6.5) { // rocks show their facets
-        vec3 face = normalize(cross(dFdx(fragPos), dFdy(fragPos)));
+        vec3 face = normalize(cross(dFdx(fragRel), dFdy(fragRel)));
         n = face * sign(dot(face, n));
     }
     vec3 lit = inside ? indoor(albedo, n, v, surface.x) : shade(albedo, n, v, normalize(fragPos), ground.x, mix(0.35, 1.0, ground.y), surface.x);
@@ -487,12 +513,16 @@ in vec3 fragPos;
 in vec3 fragNormal;
 uniform sampler2D texture0; // cleaned fraction of each dust tile
 uniform vec3 viewPos;
+uniform vec3 origin;
+uniform vec3 viewRel;
+in vec3 fragRel;
 uniform vec3 globeCenter;
 uniform mat4 globeRot; // world → Mars frame: turns the player's spot toward the viewer
 uniform vec3 playerDir;
 uniform float tilesPerFace;
 uniform float time;
-out vec4 finalColor;
+layout(location = 0) out vec4 finalColor;
+` + depthOut + `
 
 float coverage(vec3 d) {
     vec3 a = abs(d);
@@ -518,7 +548,7 @@ void main() {
     vec3 w = normalize(fragPos - globeCenter);
     vec3 d = normalize((globeRot * vec4(w, 0.0)).xyz);
 
-    vec3 v = normalize(viewPos - fragPos);
+    vec3 v = normalize(viewRel - fragRel);
     float rim = pow(1.0 - abs(dot(normalize(fragNormal), v)), 2.0);
     vec3 col = vec3(0.10, 0.45, 0.65) * (0.22 + rim * 0.9);
 
@@ -534,6 +564,7 @@ void main() {
     col += vec3(1.0, 0.35, 0.25) * smoothstep(0.997, 0.9993, dot(d, playerDir)) * 2.0 * pulse;
     col *= 0.85 + 0.15 * sin(fragPos.y * 90.0 + time * 3.0);
     finalColor = vec4(col, 1.0);
+    writeDepth(0.0);
 }`
 
 const skyFS = `#version 330
@@ -541,8 +572,8 @@ in vec3 fragPos;
 in vec3 fragNormal;
 uniform vec3 up; // the viewer's local up: the horizon follows them around Mars
 uniform float time;
-out vec4 finalColor;
-` + shaderCommon + `
+layout(location = 0) out vec4 finalColor;
+` + shaderCommon + depthOut + `
 // moon draws one of the two small moons: a lumpy gray rock, lit by the
 // sun. It returns its color and sets cover where it hides the sky.
 vec3 moon(vec3 d, vec3 dir, float radius, float seed, inout float cover) {
@@ -567,7 +598,7 @@ vec3 moon(vec3 d, vec3 dir, float radius, float seed, inout float cover) {
 }
 
 void main() {
-    vec3 d = normalize(fragPos - viewPos);
+    vec3 d = normalize(fragRel - viewRel);
     float h = dot(d, up);
     vec3 col = skyColor(d, up);
     float day = daylight(up);
@@ -598,6 +629,22 @@ void main() {
     finalColor = vec4(col, 1.0);
 }`
 
+// depthOut is the scene's second target: each pixel's distance along the
+// view, for the ambient occlusion (post.go). The depth buffer is too coarse
+// for it. Split in two half floats, whole 64ths and the rest, so it keeps
+// a tenth of a millimeter up to 32 m. Its alpha is the blend weight: 1
+// replaces what is behind, 0 (see-through things) keeps it.
+const depthOut = `
+layout(location = 1) out vec4 viewDepth;
+uniform vec3 camFwd;
+void writeDepth(float keep) {
+    float z = dot(fragRel - viewRel, camFwd);
+    z = min(z, 31.9);
+    float hi = floor(z * 64.0) / 64.0;
+    viewDepth = vec4(hi, (z - hi) * 64.0, 0.0, keep);
+}
+`
+
 // textureCommon samples the painted textures: triplanar projection (no UVs
 // needed, works on any shape) and bump mapping from their height channel.
 const textureCommon = `
@@ -609,6 +656,15 @@ vec3 triWeights(vec3 n) {
 vec4 tri(sampler2D t, vec3 p, vec3 w, float scale) {
     return texture(t, p.zy * scale) * w.x + texture(t, p.xz * scale) * w.y + texture(t, p.xy * scale) * w.z;
 }
+
+// triO samples at p (from origin) plus shift, the tile offset of origin.
+vec4 triO(sampler2D t, vec3 p, vec3 shift, vec3 w, float scale) {
+    vec3 q = p * scale + shift;
+    return texture(t, q.zy) * w.x + texture(t, q.xz) * w.y + texture(t, q.xy) * w.z;
+}
+
+// triW samples a world-space texture at the fragment.
+vec4 triW(sampler2D t, vec3 w, float scale) { return triO(t, fragRel, fract(origin * scale), w, scale); }
 
 // bump tilts the normal along the slopes of height h (Mikkelsen's
 // derivative bump mapping); strength is the relief depth in meters. It

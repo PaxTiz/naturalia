@@ -251,6 +251,7 @@ func (g *Game) camera() rl.Camera3D {
 	if g.sweeping {
 		eye = eye.add(right.scale(math.Sin(g.clock*37) * 0.002)).add(up.scale(math.Sin(g.clock*23+1) * 0.002))
 	}
+	g.camEye = eye
 	return rl.Camera3D{
 		Position:   eye.rl(),
 		Target:     eye.add(p.Forward()).rl(),
@@ -283,6 +284,17 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
+	}
+	fwd := []float32{cam.Target.X - cam.Position.X, cam.Target.Y - cam.Position.Y, cam.Target.Z - cam.Position.Z}
+	// The shaders' origin (shaderCommon): the eye snapped to a 32 m grid,
+	// so the tile offsets they derive from it stay put between snaps.
+	e := g.camEye
+	snap := func(v float64) float64 { return float64(float32(math.Floor(v/32) * 32)) }
+	o := vec3{snap(e.X), snap(e.Y), snap(e.Z)}
+	for _, s := range gfx.shaders() {
+		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "camFwd"), fwd, rl.ShaderUniformVec3)
+		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
+		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.sub(o)), rl.ShaderUniformVec3)
 	}
 	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
 	// Objects take the relief's shadow from where the player stands: those
@@ -363,8 +375,13 @@ func (g *Game) Draw() {
 	}
 	g.drawTool()
 	gfx.setLighting(litSun, vec3{})
+	// Glows and the hologram add light: they must not touch the depth target.
+	rl.DrawRenderBatchActive()
+	rl.ActiveDrawBuffers(1)
 	g.drawGlows(cam)
 	g.drawGlobe(cam)
+	rl.DrawRenderBatchActive()
+	rl.ActiveDrawBuffers(2)
 	rl.EndMode3D()
 	rl.EndTextureMode()
 

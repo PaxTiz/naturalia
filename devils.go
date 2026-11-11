@@ -106,6 +106,8 @@ uniform mat4 mvp;
 uniform mat4 matModel;
 uniform float time;
 uniform vec4 devil; // x: seed, y: strength
+uniform vec3 origin;
+out vec3 fragRel;
 out vec3 fragPos;
 out vec3 fragNormal;
 out vec2 tube;
@@ -117,6 +119,7 @@ void main() {
     vec3 p = vec3(cos(a) * r + sway.x, t, sin(a) * r + sway.y);
     tube = vec2(a, t);
     fragPos = vec3(matModel * vec4(p, 1.0));
+    fragRel = fragPos - origin;
     fragNormal = normalize(mat3(matModel) * vec3(cos(a), 0.0, sin(a)));
     gl_Position = mvp * vec4(p, 1.0);
 }`
@@ -129,10 +132,10 @@ in vec3 fragNormal;
 in vec2 tube;
 uniform float time;
 uniform vec4 devil;
-out vec4 finalColor;
-` + shaderCommon + `
+layout(location = 0) out vec4 finalColor;
+` + shaderCommon + depthOut + `
 void main() {
-    vec3 v = normalize(viewPos - fragPos);
+    vec3 v = normalize(viewRel - fragRel);
     vec3 n = normalize(fragNormal);
     float t = tube.y;
     float a = tube.x - time * 3.0 - t * 5.0;
@@ -145,5 +148,6 @@ void main() {
     vec3 up = normalize(fragPos);
     float lit = 0.55 + 0.45 * clamp(dot(n, sunDir) * 0.5 + 0.5, 0.0, 1.0);
     vec3 col = vec3(0.62, 0.40, 0.26) * (0.75 + 0.5 * streak) * (sunCol * 1.1 * lit * daylight(up) + skyFill * 0.8);
-    finalColor = vec4(finish(col, length(viewPos - fragPos)), alpha);
+    finalColor = vec4(finish(col, length(viewRel - fragRel)), alpha);
+    writeDepth(0.0);
 }`

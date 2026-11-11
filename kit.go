@@ -24,8 +24,8 @@ type token struct {
 // Off-whites, steel greys, cyan and yellow/black accents: they stand out
 // against the orange ground.
 var tokens = map[string]token{
-	"habitat.white":  {color.RGBA{228, 225, 216, 255}, mtPanel, 1, 0.35, 0},
-	"habitat.white2": {color.RGBA{212, 210, 203, 255}, mtPanel, 1, 0.35, 0},
+	"habitat.white":  {color.RGBA{232, 230, 224, 255}, mtPanel, 1, 0.55, 0},
+	"habitat.white2": {color.RGBA{218, 217, 212, 255}, mtPanel, 1, 0.55, 0},
 	"steel":          {color.RGBA{140, 146, 158, 255}, mtMetal, 1.2, 0.6, 0},
 	"steel.dark":     {color.RGBA{50, 54, 66, 255}, mtPlain, 1, 0.4, 0},
 	"rack.slate":     {color.RGBA{58, 64, 80, 255}, mtPanel, 1, 0.4, 0},
