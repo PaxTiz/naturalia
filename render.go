@@ -67,6 +67,7 @@ type Graphics struct {
 	mono                                              rl.Font
 	visor                                             rl.Texture2D
 	tex                                               Textures
+	objectMaps                                        []rl.Texture2D // the painted textures, in the object shader's order
 	glow                                              rl.Texture2D
 	font, bold                                        rl.Font
 }
@@ -174,7 +175,8 @@ func NewGraphics() *Graphics {
 	}
 
 	// Every object model gets the painted textures; the shader picks one.
-	objectMaps := []rl.Texture2D{gfx.tex.paint, gfx.tex.panel, gfx.tex.metal, gfx.tex.floor, gfx.tex.fabric, gfx.tex.regolith, gfx.tex.hazard}
+	gfx.objectMaps = []rl.Texture2D{gfx.tex.paint, gfx.tex.panel, gfx.tex.metal, gfx.tex.floor, gfx.tex.fabric, gfx.tex.regolith, gfx.tex.hazard}
+	objectMaps := gfx.objectMaps
 	for i := range objectMaps {
 		gfx.objectSh.UpdateLocation(rl.ShaderLocMapAlbedo+int32(i), rl.GetShaderLocation(gfx.objectSh, fmt.Sprintf("texture%d", i)))
 	}

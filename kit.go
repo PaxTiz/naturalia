@@ -24,28 +24,41 @@ type token struct {
 // Off-whites, steel greys, cyan and yellow/black accents: they stand out
 // against the orange ground.
 var tokens = map[string]token{
-	"habitat.white":  {color.RGBA{228, 225, 216, 255}, mtPlain, 1, 0.35, 0},
-	"habitat.white2": {color.RGBA{212, 210, 203, 255}, mtPlain, 1, 0.35, 0},
+	"habitat.white":  {color.RGBA{228, 225, 216, 255}, mtPanel, 1, 0.35, 0},
+	"habitat.white2": {color.RGBA{212, 210, 203, 255}, mtPanel, 1, 0.35, 0},
 	"steel":          {color.RGBA{140, 146, 158, 255}, mtMetal, 1.2, 0.6, 0},
 	"steel.dark":     {color.RGBA{50, 54, 66, 255}, mtPlain, 1, 0.4, 0},
-	"rack.slate":     {color.RGBA{58, 64, 80, 255}, mtPlain, 1, 0.4, 0},
+	"rack.slate":     {color.RGBA{58, 64, 80, 255}, mtPanel, 1, 0.4, 0},
 	"hazard":         {colWhite, mtHazard, 2.5, 0.3, 0},
 	"neon.cyan":      {accentCyan, mtPlain, 1, 0, 0.8},
 	"neon.orange":    {accentOrange, mtPlain, 1, 0, 0.8},
 	"neon.blue":      {accentBlue, mtPlain, 1, 0, 0.8},
 	"neon.purple":    {accentPurple, mtPlain, 1, 0, 0.8},
 	"lamp.warm":      {lampWarm, mtPlain, 1, 0, 1},
-	"floor.slate":    {color.RGBA{50, 54, 66, 255}, mtPlain, 1, 0.25, 0},
-	"wall.lower":     {color.RGBA{86, 100, 118, 255}, mtPlain, 1, 0.3, 0},
+	"floor.slate":    {color.RGBA{50, 54, 66, 255}, mtPanel, 1, 0.25, 0},
+	"wall.lower":     {color.RGBA{86, 100, 118, 255}, mtPanel, 1, 0.3, 0},
 	"floor.inlay":    {color.RGBA{68, 74, 90, 255}, mtPlain, 1, 0.3, 0},
 	"solar.blue":     {color.RGBA{40, 62, 130, 255}, mtPlain, 1, 0.9, 0},
-	"crate.ochre":    {color.RGBA{196, 132, 60, 255}, mtPlain, 1, 0.2, 0},
-	"crate.slate":    {color.RGBA{88, 116, 146, 255}, mtPlain, 1, 0.2, 0},
-	"crate.sand":     {color.RGBA{158, 148, 118, 255}, mtPlain, 1, 0.2, 0},
+	"crate.ochre":    {color.RGBA{196, 132, 60, 255}, mtPanel, 1, 0.2, 0},
+	"crate.slate":    {color.RGBA{88, 116, 146, 255}, mtPanel, 1, 0.2, 0},
+	"crate.sand":     {color.RGBA{158, 148, 118, 255}, mtPanel, 1, 0.2, 0},
 	"wood.brown":     {color.RGBA{110, 80, 60, 255}, mtPlain, 1, 0.3, 0},
 	"fabric.white":   {matWhite, mtFabric, 1 / fabricTile, 0.1, 0},
 	"fabric.purple":  {accentPurple, mtFabric, 1 / fabricTile, 0.1, 0},
 	"fabric.rug":     {color.RGBA{150, 70, 60, 255}, mtFabric, 1 / fabricTile, 0, 0},
+	// Greebles and the yard (greeble.go).
+	"glass.dark":   {color.RGBA{26, 38, 54, 255}, mtPlain, 1, 1.0, 0},
+	"pipe.yellow":  {color.RGBA{214, 164, 52, 255}, mtPlain, 1, 0.5, 0},
+	"pipe.blue":    {color.RGBA{62, 112, 168, 255}, mtPlain, 1, 0.5, 0},
+	"pipe.red":     {color.RGBA{178, 58, 48, 255}, mtPlain, 1, 0.5, 0},
+	"barrel.blue":  {color.RGBA{54, 92, 150, 255}, mtPaint, 1 / paintTile, 0.4, 0},
+	"barrel.ochre": {color.RGBA{196, 132, 60, 255}, mtPaint, 1 / paintTile, 0.4, 0},
+	"rubber":       {color.RGBA{34, 34, 38, 255}, mtPlain, 1, 0.2, 0},
+	"locker":       {color.RGBA{72, 88, 108, 255}, mtPanel, 1, 0.4, 0},
+	"locker.ochre": {color.RGBA{176, 124, 60, 255}, mtPanel, 1, 0.4, 0},
+	"pad.concrete": {color.RGBA{130, 120, 110, 255}, mtPanel, 1, 0.2, 0},
+	"screen.dim":   {accentCyan, mtPlain, 1, 0, 0.4},
+	"led.green":    {colGreen, mtPlain, 1, 0, 1},
 }
 
 // Blueprint is a building as data.
@@ -169,6 +182,7 @@ func (bp *Blueprint) spot(kit string) vec3 {
 }
 
 func planObstacles() (out []obstacle) {
+	out = yardObstacles()
 	for _, bp := range plans {
 		for _, p := range bp.Props {
 			for _, o := range kitProps[p.Kit].obstacles {
@@ -216,12 +230,15 @@ func (b *building) part(tok string, lit float32, at vec3) *meshBuilder {
 // buildBase builds every static piece of the base.
 func buildBase(sh rl.Shader) *building {
 	b := &building{parts: map[partKey]*meshBuilder{}}
-	for _, bp := range plans {
+	for i, bp := range plans {
 		b.room(bp)
+		b.greebleRoom(bp, bp.room(), i*97+3)
 	}
-	for _, c := range corridors {
+	for i, c := range corridors {
 		b.corridor(c)
+		b.greebleCorridor(c, i*31+5)
 	}
+	b.yard()
 	for _, p := range junctionPlates() {
 		room := toWorld(p.mid.sub(p.normal.scale(2)).add(vec3{0, 1.2, 0}))
 		across := vec3{-p.normal.Z, 0, p.normal.X}
@@ -515,15 +532,33 @@ func drawBed(g *Game, at vec3) {
 type meshBuilder struct {
 	v, n, uv []float32
 	local    bool
+	// uvf lays the plate texture (mtPanel) on the surface being built: the
+	// texture coordinates of a local point. Without it, the middle of a plate.
+	uvf func(p vec3) [2]float64
 }
 
 func (m *meshBuilder) emit(p, nrm vec3) {
+	t := [2]float64{0.5, 0.5}
+	if m.uvf != nil {
+		t = m.uvf(p)
+	}
 	if !m.local {
 		p = toWorld(p)
 	}
 	m.v = append(m.v, float32(p.X), float32(p.Y), float32(p.Z))
 	m.n = append(m.n, float32(nrm.X), float32(nrm.Y), float32(nrm.Z))
-	m.uv = append(m.uv, 0, 0)
+	m.uv = append(m.uv, float32(t[0]), float32(t[1]))
+}
+
+// unwrap brings angle a within half a turn of ref.
+func unwrap(a, ref float64) float64 {
+	for a < ref-math.Pi {
+		a += 2 * math.Pi
+	}
+	for a > ref+math.Pi {
+		a -= 2 * math.Pi
+	}
+	return a
 }
 
 // tri adds a flat triangle facing away from center.
@@ -588,7 +623,23 @@ func (m *meshBuilder) boxBasis(c vec3, ax [3]vec3, size vec3, bevel float64) {
 				s[a], s[u], s[v] = sa, uv[0], uv[1]
 				q[i] = pt(a, s)
 			}
+			// Plates about 1.2 m wide and 1 m tall fill the face exactly, the
+			// texture going down its most vertical axis.
+			U, V := u, v
+			if math.Abs(ax[u].Y) > math.Abs(ax[v].Y) {
+				U, V = v, u
+			}
+			down := 1.0
+			if ax[V].Y < 0 {
+				down = -1
+			}
+			nu, nv := math.Max(1, math.Round(2*h[U]/1.2)), math.Max(1, math.Round(2*h[V]/1.0))
+			m.uvf = func(p vec3) [2]float64 {
+				d := p.sub(c)
+				return [2]float64{(d.dot(ax[U]) + h[U]) / (2 * h[U]) * nu, (h[V] - down*d.dot(ax[V])) / (2 * h[V]) * nv}
+			}
 			m.quad(q[0], q[1], q[2], q[3], c)
+			m.uvf = nil
 			if bevel == 0 {
 				continue
 			}
@@ -629,16 +680,29 @@ func (m *meshBuilder) prism(base, axis vec3, r0, r1, h float64, sides int, bevel
 		a := 2 * math.Pi * float64(k) / float64(sides)
 		return base.add(axis.scale(l.y)).add(u.scale(l.r * math.Cos(a))).add(w.scale(l.r * math.Sin(a)))
 	}
+	// Plates around the sides, square tiles on the caps.
+	nu, nv := math.Max(1, math.Round(2*math.Pi*math.Max(r0, r1)/1.2)), math.Max(1, math.Round(h/1.0))
 	for i := 0; i+1 < len(levels); i++ {
 		for k := range sides {
+			ac := 2 * math.Pi * (float64(k) + 0.5) / float64(sides)
+			m.uvf = func(p vec3) [2]float64 {
+				d := p.sub(base)
+				a := unwrap(math.Atan2(d.dot(w), d.dot(u)), ac)
+				return [2]float64{a / (2 * math.Pi) * nu, (h - d.dot(axis)) / h * nv}
+			}
 			m.quad(ring(levels[i], k), ring(levels[i], k+1), ring(levels[i+1], k+1), ring(levels[i+1], k), center)
 		}
+	}
+	m.uvf = func(p vec3) [2]float64 {
+		d := p.sub(base)
+		return [2]float64{d.dot(u)/1.2 + 0.5, d.dot(w)/1.2 + 0.5}
 	}
 	top := levels[len(levels)-1]
 	for k := range sides {
 		m.tri(base, ring(levels[0], k), ring(levels[0], k+1), center)
 		m.tri(base.add(axis.scale(h)), ring(top, k), ring(top, k+1), center)
 	}
+	m.uvf = nil
 }
 
 // dome adds a smooth half ellipsoid on c: radius a, height bh, no floor.
@@ -651,8 +715,17 @@ func (m *meshBuilder) dome(c vec3, a, bh float64) {
 		p := c.add(vec3{a * cp * math.Cos(th), bh * sp, a * cp * math.Sin(th)})
 		return p, vec3{cp * math.Cos(th) / a, sp / bh, cp * math.Sin(th) / a}.norm()
 	}
+	// Plates in rows of four down from the top, about 1.6 m wide.
+	n := math.Max(4, math.Round(2*math.Pi*a/1.6))
 	for i := range rings {
 		for j := range segs {
+			thc := (float64(j) + 0.5) / segs * 2 * math.Pi
+			m.uvf = func(p vec3) [2]float64 {
+				d := p.sub(c)
+				th := unwrap(math.Atan2(d.Z, d.X), thc)
+				phi := math.Asin(math.Max(-1, math.Min(1, d.Y/bh)))
+				return [2]float64{th / (2 * math.Pi) * n, (1 - phi/(math.Pi/2)) * 4}
+			}
 			p00, n00 := pt(i, j)
 			p01, n01 := pt(i, j+1)
 			p10, n10 := pt(i+1, j)
@@ -663,6 +736,7 @@ func (m *meshBuilder) dome(c vec3, a, bh float64) {
 			}
 		}
 	}
+	m.uvf = nil
 }
 
 // model uploads the triangles. The slices stay referenced by the builder:

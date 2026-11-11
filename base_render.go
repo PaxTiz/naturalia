@@ -51,6 +51,11 @@ func (g *Game) drawBase() {
 	if gfx.base == nil {
 		gfx.base = buildBase(gfx.objectSh)
 		gfx.doorPanel = doorPanelModel(gfx.objectSh)
+		for _, m := range append(gfx.base.models, gfx.doorPanel) {
+			for i, t := range gfx.objectMaps {
+				rl.SetMaterialTexture(&m.GetMaterials()[0], int32(i), t)
+			}
+		}
 	}
 
 	// Red dust settles on the faces turned up and at the foot of the walls.

@@ -229,36 +229,26 @@ func genDust() rl.Texture2D {
 	})
 }
 
-// Panel: hull plates in a 2×2 grid with recessed seams, rivets, grime
-// streaks running down from the seams, and worn edges.
-// R paint tone, G grime, B wear, A height. One tile covers panelTile meters.
-const panelTile = 2.0
-
+// Panel: one hull plate per tile, laid by the meshes' UVs so its edges
+// follow the walls: a recessed seam all around, a soft raised rim, rivets,
+// grime streaks running down from the top seam and a dirtier foot.
+// R tone, G grime, B seams and rivets (dark), A height.
 func genPanel() rl.Texture2D {
 	return bake(512, func(u, v float64) texel {
-		gu, gv := math.Mod(u*2, 1), math.Mod(v*2, 1)
-		seam := math.Min(math.Min(gu, 1-gu), math.Min(gv, 1-gv)) // distance to a seam
-		h := 0.6 + 0.04*tfbm(u, v, 4, 3, 701)
-		h -= 0.35 * (1 - smoothstep(0.004, 0.012, seam))
-		// Rivets along the seams.
-		for _, along := range []float64{gu, gv} {
-			k := along * 8
-			f := k - math.Floor(k) - 0.5
-			if seam > 0.015 && seam < 0.045 {
-				d := math.Hypot(f/8, (seam-0.03)/1)
-				if d < 0.012 {
-					h += 0.25 * math.Sqrt(1-(d/0.012)*(d/0.012))
-				}
+		e := math.Min(math.Min(u, 1-u), math.Min(v, 1-v)) // distance to the edge
+		seam := 1 - smoothstep(0.005, 0.012, e)
+		h := 0.45 + 0.3*smoothstep(0.008, 0.04, e)
+		rivet := 0.0
+		for _, p := range [][2]float64{{0.035, 0.035}, {0.965, 0.035}, {0.035, 0.965}, {0.965, 0.965}, {0.5, 0.035}, {0.5, 0.965}} {
+			if d := math.Hypot(u-p[0], v-p[1]); d < 0.011 {
+				rivet = math.Max(rivet, math.Sqrt(1-(d/0.011)*(d/0.011)))
 			}
 		}
-		// Grime: streaks hanging under horizontal seams (v grows downward).
-		below := gv
-		streak := stretched(v, u, 2, 12, 3, 710) // long vertical streaks
-		grime := clamp01((1-smoothstep(0, 0.45, below))*streak*1.4 - 0.25)
-		grime = math.Max(grime, clamp01(tfbm(u, v, 3, 4, 720)-0.62)*1.5)
-		wear := clamp01((tfbm(u, v, 20, 3, 730) - 0.55) * 3 * (1 - smoothstep(0.01, 0.06, seam)))
-		tone := painterly(0.9+0.05*(strokes(u, v, 6, 740)-0.5)+0.05*(warped(u, v, 4, 3, 745)-0.5), 5)
-		return texel{tone, grime, wear, h}
+		h += rivet * 0.25
+		streak := stretched(v, u, 2, 10, 3, 710)
+		grime := clamp01((1-smoothstep(0, 0.55, v))*(streak-0.45)*1.8) + smoothstep(0.7, 1, v)*0.3
+		tone := 0.5 + 0.3*(tfbm(u, v, 2, 3, 740)-0.5)
+		return texel{tone, grime, seam*0.8 + rivet*0.25, h}
 	})
 }
 

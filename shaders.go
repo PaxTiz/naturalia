@@ -402,12 +402,12 @@ vec3 paint(vec3 base, vec3 n, out float h) {
         h = t.a * 0.004;
         return mix(base * t.r, vec3(0.42, 0.42, 0.46) * t.r, t.b * 0.8);
     }
-    if (matInfo.x < 2.5) { // hull panels: seams, rivets, grime streaks, worn edges
-        vec4 t = tri(texture1, p, w, s);
-        h = t.a * 0.02;
-        vec3 c = base * t.r;
-        c = mix(c, c * vec3(0.55, 0.5, 0.45), t.g * 0.75);
-        return mix(c, vec3(0.62, 0.64, 0.68), t.b * 0.6);
+    if (matInfo.x < 2.5) { // hull plates laid by the mesh's UVs: seams, rivets, soft grime
+        vec4 t = texture(texture1, fragTexCoord);
+        h = t.a * 0.012;
+        vec3 c = base * (0.93 + 0.12 * t.r);
+        c = mix(c, c * vec3(0.64, 0.56, 0.5), t.g * 0.5);
+        return c * (1.0 - 0.6 * t.b);
     }
     if (matInfo.x < 3.5) { // brushed metal with scratches
         vec4 t = tri(texture2, p, w, s);
