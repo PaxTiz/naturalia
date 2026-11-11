@@ -513,24 +513,31 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
         if (float(i) >= lightCount) break;
         vec3 l = (lights[i].xyz - origin) - fragRel;
         float d = length(l);
+        // A lamp lights its own room: beyond 10 m its walls are in the way.
+        if (d > 10.0) continue;
         l /= d;
-        float win = clamp(1.0 - pow(d / 14.0, 4.0), 0.0, 1.0);
+        float win = clamp(1.0 - pow(d / 10.0, 4.0), 0.0, 1.0);
         float att = lights[i].w * win * win / (d * d + 1.2);
-        bounce += lights[i].w * win * win / (d * d * 0.35 + 6.0);
+        bounce += lights[i].w * win * win / (d * d * 0.3 + 5.0);
         float lit = 1.0;
         if (i < 4 && att > 0.01) {
             // Pushed a little off the surface, then looked up in the lamp's
-            // quarter of the map, softened over 4×4 texels.
+            // quarter of the map: the four texels around, compared, then
+            // blended by where the point falls between them (a soft edge
+            // for four reads).
             vec4 lp = mat4(lampVP[i * 4], lampVP[i * 4 + 1], lampVP[i * 4 + 2], lampVP[i * 4 + 3]) * vec4(fragRel + n * 0.04, 1.0);
             vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
             if (lp.w > 0.0 && all(greaterThan(sc.xy, vec2(0.01))) && all(lessThan(sc.xy, vec2(0.99)))) {
-                vec2 quarter = vec2(i % 2, i / 2) * 0.5;
-                vec2 t = 1.0 / vec2(textureSize(lampShadowMap, 0));
-                float sum = 0.0;
-                for (int y = 0; y < 4; y++)
-                    for (int x = 0; x < 4; x++)
-                        sum += step(sc.z - 0.00002, texture(lampShadowMap, quarter + sc.xy * 0.5 + (vec2(x, y) - 1.5) * t * 1.6).r);
-                lit = sum / 16.0;
+                vec2 size = vec2(textureSize(lampShadowMap, 0));
+                vec2 tc = (vec2(i % 2, i / 2) * 0.5 + sc.xy * 0.5) * size - 0.5;
+                vec2 f = fract(tc);
+                ivec2 c = ivec2(floor(tc));
+                float z = sc.z - 0.00002;
+                float s00 = step(z, texelFetch(lampShadowMap, c, 0).r);
+                float s10 = step(z, texelFetch(lampShadowMap, c + ivec2(1, 0), 0).r);
+                float s01 = step(z, texelFetch(lampShadowMap, c + ivec2(0, 1), 0).r);
+                float s11 = step(z, texelFetch(lampShadowMap, c + ivec2(1, 1), 0).r);
+                lit = mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
             }
         }
         col += direct(diff, f0, rough, n, v, l, lampCol * att * 11.0 * lit);

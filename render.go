@@ -388,6 +388,10 @@ func (g *Game) Draw() {
 	rl.EnableDepthMask()
 	rl.EnableBackfaceCulling()
 
+	// The base first: the terrain it hides then fails the depth test before
+	// its costly shader runs (most of the screen, indoors).
+	g.drawBase()
+	g.drawDrones()
 	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
 	for _, n := range patches {
@@ -396,8 +400,6 @@ func (g *Game) Draw() {
 	rl.EnableBackfaceCulling()
 	g.drawRocks()
 	g.drawPebbles()
-	g.drawBase()
-	g.drawDrones()
 	g.drawGems()
 	g.drawDevils()
 	if indoors(toLocal(g.player.Eye())) {

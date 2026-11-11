@@ -80,6 +80,7 @@ type shotRun struct {
 	heading vec3 // the view, held against stray mouse motion
 	pitch   float64
 	mode    mode
+	perf    float64 // summed frame times (MS_SHOT_PERF)
 }
 
 func newShotRun(g *Game) *shotRun {
@@ -144,6 +145,14 @@ func (s *shotRun) tick(g *Game) {
 		g.player.Heading, g.player.Pitch = s.heading, s.pitch
 	}
 	s.frames++
+	// MS_SHOT_PERF=1 prints the mean frame time over frames 120 to 239,
+	// without vsync (main.go). MS_SHOT_SIZE=WxH sets the window.
+	if os.Getenv("MS_SHOT_PERF") != "" && s.frames >= 120 && s.frames < 240 {
+		s.perf += float64(rl.GetFrameTime())
+		if s.frames == 239 {
+			fmt.Printf("frame %.2f ms\n", s.perf/120*1000)
+		}
+	}
 	// MS_SHOT_JITTER=radians takes a second shot after turning that much,
 	// to find what flickers as the camera moves (compare the two).
 	var jit float64

@@ -1,12 +1,21 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 func main() {
-	rl.SetConfigFlags(rl.FlagWindowResizable | rl.FlagMsaa4xHint | rl.FlagVsyncHint)
-	rl.InitWindow(1280, 720, "Mars Sweeper")
+	flags := uint32(rl.FlagWindowResizable | rl.FlagMsaa4xHint | rl.FlagVsyncHint)
+	if os.Getenv("MS_SHOT_PERF") != "" { // measuring: no wait for the screen (debug.go)
+		flags &^= rl.FlagVsyncHint
+	}
+	rl.SetConfigFlags(flags)
+	w, h := int32(1280), int32(720)
+	fmt.Sscanf(os.Getenv("MS_SHOT_SIZE"), "%dx%d", &w, &h)
+	rl.InitWindow(w, h, "Mars Sweeper")
 	defer rl.CloseWindow()
 	rl.SetWindowMinSize(800, 450)
 	// Escape pauses the game instead of quitting it.
