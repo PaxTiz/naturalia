@@ -65,6 +65,14 @@
     }
   ],
 
+  "terrain": {
+    "gems": 0.15,
+    "features": [
+      {"kind": "mesa", "dir": [1, 1], "distance": 320, "radius": 70, "height": 45},
+      {"kind": "crater", "dir": [-1, -0.3], "distance": 260, "radius": 60}
+    ]
+  },
+
   "patch": {
     "tools": {"core:broom": {"cost": 400}}
   }

@@ -22,7 +22,6 @@ const (
 	fullDust     = math.MaxUint16
 	atlasTiles   = 16    // the GPU keeps a 16×16 cache of tiles...
 	cacheRadius  = 300.0 // ...picked among the touched ones within this distance
-	gemChance    = 0.12  // a tile holds a crystal with this probability
 	cacheRefresh = 30    // frames between cache refreshes
 )
 
@@ -206,7 +205,7 @@ func (w *World) FindDusty(rng *rand.Rand, around vec3, spread float64) vec3 {
 // gemIn returns the crystal of a tile, if it has one left.
 func (w *World) gemIn(k tileKey) (Gem, bool) {
 	f, tx, ty := k.split()
-	if hash3(f, tx, ty, w.Seed+101) > gemChance || w.collected[k] {
+	if hash3(f, tx, ty, w.Seed+101) > terrain().Gems || w.collected[k] {
 		return Gem{}, false
 	}
 	i := tx*tileCells + 8 + int(hash3(f, tx, ty, w.Seed+102)*(tileCells-16))

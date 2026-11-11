@@ -96,6 +96,13 @@ func TestExampleMod(t *testing.T) {
 	if n := len(yardObstacles()); n != 14 {
 		t.Errorf("the greenhouse should push the barrels away: %d yard obstacles", n)
 	}
+	if tr := content.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {
+		t.Errorf("terrain: %+v", tr)
+	}
+	mesa := content.Terrain.Features[0].center.norm()
+	if h := content.Terrain.features(mesa); h != 45 {
+		t.Errorf("on the mesa: %f", h)
+	}
 	if got := buildingAt(vec3{-10, 1, 10}); got != "serre:serre" {
 		t.Errorf("in the greenhouse: %q", got)
 	}

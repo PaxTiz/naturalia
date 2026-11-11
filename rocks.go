@@ -84,7 +84,7 @@ type rock struct {
 // nor on the polar ice.
 func (w *World) rocksIn(k tileKey) []rock {
 	f, tx, ty := k.split()
-	count := int(hash3(f, tx, ty, w.Seed+201) * 8)
+	count := int(hash3(f, tx, ty, w.Seed+201) * 8 * terrain().Rocks)
 	var rocks []rock
 	for i := range count {
 		s := w.Seed + 210 + uint64(i)*7

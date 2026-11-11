@@ -32,6 +32,9 @@ type modFile struct {
 	Kits      map[string]kitJSON `json:"kits"`
 	Buildings []Blueprint        `json:"buildings"`
 	Scripts   []string           `json:"scripts"` // JavaScript files, run in order (script.go)
+	// Terrain changes the generation: only the settings given, features
+	// added to those of other packs (terrain_mod.go).
+	Terrain json.RawMessage `json:"terrain"`
 
 	// Patch changes some fields of existing entries, by ID; Remove takes
 	// entries out.
@@ -240,6 +243,13 @@ func (m *modFile) register(c *Content) {
 	patch("building", m.Patch.Buildings, func(id string, raw json.RawMessage) bool {
 		return c.Buildings.Patch(id, func(b *Blueprint) { unmarshal(raw, b) })
 	})
+
+	if len(m.Terrain) > 0 {
+		before := c.Terrain.Features
+		c.Terrain.Features = nil
+		unmarshal(m.Terrain, &c.Terrain)
+		c.Terrain.Features = append(before, c.Terrain.Features...)
+	}
 
 	m.loadScripts(c)
 }

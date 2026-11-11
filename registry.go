@@ -23,6 +23,7 @@ type Content struct {
 	Kits      Registry[kitProp]   // furniture and other kit pieces
 	Buildings Registry[Blueprint] // the first one is the hub
 	Events    Registry[RandomEvent]
+	Terrain   TerrainSettings // one for the whole game, patched by packs
 
 	handlers map[string][]Handler // by event name (On)
 }
@@ -133,6 +134,7 @@ func loadContent() {
 	c.Kits.init("kit")
 	c.Buildings.init("building")
 	c.Events.init("event")
+	c.Terrain = defaultTerrain()
 
 	byID := map[string]Pack{}
 	for _, p := range packs {
@@ -188,6 +190,7 @@ func (c *Content) setPack(id string) {
 
 // finish checks the content once every pack is loaded.
 func (c *Content) finish() {
+	c.Terrain.prepare()
 	if c.Tools.Len() == 0 {
 		panic("no tool registered: is the core pack missing?")
 	}

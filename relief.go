@@ -78,29 +78,43 @@ func (r Relief) Height(d vec3) float64 {
 }
 
 func (r Relief) raw(d vec3) float64 {
+	t := terrain()
 	p := d.scale(marsRadius)
 	fromBase := arcDist(d, baseUp)
 	away := smoothstep(plainRadius, plainRadius*2.2, fromBase) // 0 near the base
 	ice := r.Ice(d)
 	canyon, inCanyon := r.canyon(d, p)
 	volcano, onVolcano := r.volcano(d, p)
+	inCanyon *= math.Min(1, t.Canyon)
+	onVolcano *= math.Min(1, t.Volcano)
 
 	// Plains: long gentle swells, enough to catch the low light and break
 	// the flat color areas, still no small-scale bumps.
-	h := 14*(fbm3(p.scale(1.0/900), r.seed+11, 2)-0.5) +
+	h := t.Plains * (14*(fbm3(p.scale(1.0/900), r.seed+11, 2)-0.5) +
 		7*(fbm3(p.scale(1.0/220), r.seed+12, 2)-0.5) +
-		2.5*(fbm3(p.scale(1.0/70), r.seed+13, 2)-0.5)
+		2.5*(fbm3(p.scale(1.0/70), r.seed+13, 2)-0.5))
 
 	// Hills and dunes keep off the landmarks, whose shapes read better clean.
 	clear := away * (1 - ice) * (1 - onVolcano) * (1 - inCanyon)
-	h += r.hills(d, p) * clear
-	h += r.dunes(p) * away * (1 - ice) * (1 - onVolcano*0.8)
-	h += r.mountains(d, p)
-	h += r.craters(d, 520, 0.12, 35, 120, r.seed+40) * clear
-	h += r.craters(d, 150, 0.05, 8, 30, r.seed+50) * clear
+	if t.Hills != 0 {
+		h += r.hills(d, p) * clear * t.Hills
+	}
+	if t.Dunes != 0 {
+		h += r.dunes(p) * away * (1 - ice) * (1 - onVolcano*0.8) * t.Dunes
+	}
+	if t.Mountains != 0 {
+		h += r.mountains(d, p) * t.Mountains
+	}
+	if t.Craters != 0 {
+		h += (r.craters(d, 520, 0.12, 35, 120, r.seed+40) + r.craters(d, 150, 0.05, 8, 30, r.seed+50)) * clear * t.Craters
+	}
 
-	h += volcano + canyon
-	h += r.iceCap(d, p, ice)
+	h += volcano*t.Volcano + canyon*t.Canyon
+	h += r.iceCap(d, p, ice) * t.IceCap
+	h += t.features(d)
+	for _, layer := range t.Layers {
+		h += layer(r.seed, d, p)
+	}
 	return h
 }
 
@@ -216,7 +230,12 @@ func (r Relief) capInside(d vec3) float64 {
 
 // Ice is how much of the polar cap covers direction d (0..1). The white
 // starts right at the foot of the ice cliff.
-func (r Relief) Ice(d vec3) float64 { return smoothstep(-12, 12, r.capInside(d)) }
+func (r Relief) Ice(d vec3) float64 {
+	if terrain().IceCap == 0 {
+		return 0
+	}
+	return smoothstep(-12, 12, r.capInside(d))
+}
 
 // iceCap: a low dome of ice, carved by spiral troughs like the real one.
 func (r Relief) iceCap(d, p vec3, ice float64) float64 {
@@ -235,6 +254,9 @@ func (r Relief) iceCap(d, p vec3, ice float64) float64 {
 
 // Basalt is how much of the volcano's dark rock shows at d (0..1).
 func (r Relief) Basalt(d vec3) float64 {
+	if terrain().Volcano == 0 {
+		return 0
+	}
 	dist := arcDist(d, volcanoCenter)
 	return smoothstep(volcanoRadius*1.05, volcanoRadius*0.55, dist)
 }
