@@ -427,7 +427,7 @@ void main() {
 
     // Relief of the textures, fading out with distance.
     float fade = 1.0 - smoothstep(25.0, 70.0, dist);
-    float h = mix(rg.a * 0.03, ds.a * 0.018, cover);
+    float h = mix(rg.a * 0.03, ds.a * 0.012, cover);
     n = bump(n, fragRel, h, fade);
     // Steep relief shows its facets; plains stay smooth.
     vec3 face = normalize(cross(dFdx(fragRel), dFdy(fragRel)));
