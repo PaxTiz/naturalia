@@ -275,6 +275,9 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 			gfx.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
 		}
 		g.drawHints()
+		if g.messageT > 0 {
+			gfx.prompt("", g.message, h*0.2, withAlpha(visorCyan, math.Min(1, g.messageT)))
+		}
 	}
 	if g.mode != modePaused {
 		g.drawStatus()

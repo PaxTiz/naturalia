@@ -11,13 +11,14 @@ import (
 
 // State is the player's progress that gets saved.
 type State struct {
-	Credits     float64        `json:"credits"`
-	Tank        float64        `json:"tank"`
-	Tool        string         `json:"tool"`                // ID of the held tool
-	Levels      map[string]int `json:"levels"`              // by upgrade ID; a removed mod's stay
-	OldTier     int            `json:"tool_tier,omitempty"` // before IDs: index of the tool
-	TotalDust   float64        `json:"total_dust"`
-	TotalEarned float64        `json:"total_earned"`
+	Credits     float64                   `json:"credits"`
+	Tank        float64                   `json:"tank"`
+	Tool        string                    `json:"tool"`                // ID of the held tool
+	Levels      map[string]int            `json:"levels"`              // by upgrade ID; a removed mod's stay
+	Mods        map[string]map[string]any `json:"mods,omitempty"`      // what each mod's scripts keep
+	OldTier     int                       `json:"tool_tier,omitempty"` // before IDs: index of the tool
+	TotalDust   float64                   `json:"total_dust"`
+	TotalEarned float64                   `json:"total_earned"`
 }
 
 type mode int
@@ -97,6 +98,8 @@ type Game struct {
 	saveTimer   float64
 	sellPop     float64 // timer of the "+X cr" pop next to the credits
 	sellPopText string
+	message     string  // said by a mod (say), shown on the visor...
+	messageT    float64 // ...for this long still
 	hover       int
 
 	walls    []segment2 // the base's walls, for collisions
@@ -449,8 +452,15 @@ func (g *Game) addParticle(p Particle) {
 	g.particles = append(g.particles, p)
 }
 
+// say shows a message on the visor for a few seconds.
+func (g *Game) say(text string) {
+	g.message, g.messageT = text, 4.5
+	g.sfx.beep(0.03, 0.12, 0.1, 740, 988)
+}
+
 func (g *Game) updateEffects(dt float64) {
 	g.sellPop = math.Max(0, g.sellPop-dt)
+	g.messageT = math.Max(0, g.messageT-dt)
 
 	kept := g.particles[:0]
 	for _, p := range g.particles {

@@ -2,6 +2,7 @@
   "id": "serre",
   "name": "La serre",
   "version": "1.0",
+  "scripts": ["main.js"],
 
   "tokens": {
     "leaf": {"color": "#5aa04c", "material": "plain", "spec": 0.2},

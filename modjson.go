@@ -31,6 +31,7 @@ type modFile struct {
 	Tokens    map[string]token   `json:"tokens"`
 	Kits      map[string]kitJSON `json:"kits"`
 	Buildings []Blueprint        `json:"buildings"`
+	Scripts   []string           `json:"scripts"` // JavaScript files, run in order (script.go)
 
 	// Patch changes some fields of existing entries, by ID; Remove takes
 	// entries out.
@@ -239,6 +240,8 @@ func (m *modFile) register(c *Content) {
 	patch("building", m.Patch.Buildings, func(id string, raw json.RawMessage) bool {
 		return c.Buildings.Patch(id, func(b *Blueprint) { unmarshal(raw, b) })
 	})
+
+	m.loadScripts(c)
 }
 
 func orDefault(s, def string) string {
