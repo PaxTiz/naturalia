@@ -69,17 +69,18 @@ func (b *building) greebleRoom(bp *Blueprint, r room, seed int) {
 	top := r.center.add(vec3{0, r.wallH, 0})
 	a, bh := r.radius+0.12, r.radius*0.55
 	// A raised seam along every gore, wider steel ribs on every other one,
-	// and two bands around.
+	// and two bands around. Each stands 2 cm off the shell: sharing its
+	// surface, they would fight it for the depth and flicker.
 	for k := range domeGores {
 		th := float64(k) * 2 * math.Pi / domeGores
 		if k%2 == 1 {
-			domeRib(b.part("steel", litSun, vec3{}), top, a+0.03, bh+0.03, th, 0.1, 0.06)
+			domeRib(b.part("steel", litSun, vec3{}), top, a+0.05, bh+0.05, th, 0.1, 0.06)
 		} else {
-			domeRib(b.part("habitat.white2", litSun, vec3{}), top, a+0.015, bh+0.015, th, 0.05, 0.03)
+			domeRib(b.part("habitat.white2", litSun, vec3{}), top, a+0.035, bh+0.035, th, 0.05, 0.03)
 		}
 	}
 	for _, phi := range []float64{0.42, 0.85} {
-		r, y := a*math.Cos(phi)+0.01, bh*math.Sin(phi)
+		r, y := a*math.Cos(phi)+0.035*math.Cos(phi), (bh+0.035)*math.Sin(phi)
 		ring := b.part("habitat.white2", litSun, vec3{})
 		for k := range domeGores {
 			t0, t1 := float64(k)*2*math.Pi/domeGores, float64(k+1)*2*math.Pi/domeGores
@@ -92,8 +93,8 @@ func (b *building) greebleRoom(bp *Blueprint, r room, seed int) {
 			ring.boxBasis(p0.lerp(p1, 0.5), [3]vec3{ax, nrm.cross(ax), nrm}, vec3{along.length() + 0.04, 0.06, 0.03}, 0.01)
 		}
 	}
-	apex := top.add(vec3{0, bh - 0.04, 0})
-	b.part("steel", litSun, vec3{}).prism(apex, yUp, 0.75, 0.62, 0.16, 16, 0.03)
+	apex := top.add(vec3{0, bh + 0.01, 0}) // on the shell, not through it: it would show inside
+	b.part("steel", litSun, vec3{}).prism(apex, yUp, 0.4, 0.62, 0.16, 16, 0.03)
 	b.part("habitat.white2", litSun, vec3{}).prism(apex.add(vec3{0, 0.16, 0}), yUp, 0.5, 0.42, 0.1, 16, 0.02)
 	b.part("steel.dark", litSun, vec3{}).box(apex.add(vec3{0.3, 0.3, 0}), vec3{0.3, 0.12, 0.3}, vec3{1, 0, 0}, 0.02)
 }

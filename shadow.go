@@ -92,20 +92,26 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 	rl.EndTextureMode()
 }
 
-// lampShadow is the shadow map of the ceiling lamp of the room the player
-// is in: a wide perspective view straight down from the lamp. The base
-// never moves, so it is drawn again only when the player changes rooms.
+// lampShadow holds the shadows of the rooms' ceiling lamps: one wide
+// perspective view straight down from each lamp, in the four quarters of
+// one texture. The base never moves: they are drawn once. Every room keeps
+// its shadows, so nothing pops in when the player walks in.
 type lampShadow struct {
-	shadowMap
-	room int // index in rooms of the map drawn, -1 for none
+	target rl.RenderTexture2D
+	vp     []float32 // the lamps' cameras, four columns each
+	done   bool
 }
 
-const lampShadowRes = 1024
+const (
+	lampShadowRes = 2048 // the whole atlas; each lamp gets a quarter
+	lampShadows   = 4    // the rooms' lamps: the first lights of baseLights
+	lampFov       = 150.0
+)
 
 func newLampShadow() *lampShadow {
 	img := rl.GenImageColor(lampShadowRes, lampShadowRes, rl.White)
 	rl.ImageFormat(img, rl.UncompressedR32)
-	s := &lampShadow{room: -1}
+	s := &lampShadow{}
 	s.target.Texture = rl.LoadTextureFromImage(img)
 	rl.UnloadImage(img)
 	rl.SetTextureFilter(s.target.Texture, rl.FilterPoint)
@@ -119,37 +125,37 @@ func newLampShadow() *lampShadow {
 	return s
 }
 
-const lampFov = 150.0 // degrees: the lamp sees the whole room below it
-
-// update draws the map for room (an index in rooms) if it isn't already.
-func (s *lampShadow) update(gfx *Graphics, room int, lamp vec3, draw func()) {
-	if room == s.room {
+// render draws every lamp's view into its quarter, once.
+func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
+	if s.done {
 		return
 	}
-	s.room = room
-	if room < 0 {
-		return
-	}
+	s.done = true
+	half := int32(lampShadowRes / 2)
 	rl.BeginTextureMode(s.target)
 	rl.ClearBackground(rl.White)
 	rl.SetClipPlanes(0.1, 30)
-	cam := rl.Camera3D{
-		Position: lamp.rl(), Target: lamp.sub(vec3{0, 1, 0}).rl(), Up: rl.Vector3{X: 1},
-		Fovy: lampFov, Projection: rl.CameraPerspective,
-	}
-	rl.BeginMode3D(cam)
-	view := rl.MatrixLookAt(cam.Position, cam.Target, cam.Up)
-	proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
-	s.lightVP = rl.MatrixMultiply(view, proj)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
-	rl.SetBlendFactors(glOne, glOne, glMin)
-	rl.BeginBlendMode(rl.BlendCustom)
-	rl.DisableBackfaceCulling()
-	draw()
-	rl.EnableBackfaceCulling()
-	rl.EndBlendMode()
+	for i, lamp := range lamps[:lampShadows] {
+		cam := rl.Camera3D{
+			Position: lamp.rl(), Target: lamp.sub(vec3{0, 1, 0}).rl(), Up: rl.Vector3{X: 1},
+			Fovy: lampFov, Projection: rl.CameraPerspective,
+		}
+		rl.BeginMode3D(cam)
+		rl.Viewport(int32(i%2)*half, int32(i/2)*half, half, half)
+		view := rl.MatrixLookAt(cam.Position, cam.Target, cam.Up)
+		proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
+		m := rl.MatrixMultiply(view, proj)
+		s.vp = append(s.vp, m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15)
+		rl.SetBlendFactors(glOne, glOne, glMin)
+		rl.BeginBlendMode(rl.BlendCustom)
+		rl.DisableBackfaceCulling()
+		draw()
+		rl.EnableBackfaceCulling()
+		rl.EndBlendMode()
+		rl.EndMode3D()
+	}
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
-	rl.EndMode3D()
 	rl.SetClipPlanes(0.05, 9000)
 	rl.EndTextureMode()
 }

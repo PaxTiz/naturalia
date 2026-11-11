@@ -342,25 +342,18 @@ func (g *Game) Draw() {
 		g.drawBase()
 		g.drawDrones()
 	})
-	// The lamp of the room the player is in casts shadows too.
-	room := -1
-	eye := toLocal(g.player.Eye())
-	for i, r := range rooms {
-		if d := eye.sub(r.center); math.Hypot(d.X, d.Z) < r.radius {
-			room = i
+	// The rooms' lamps cast shadows too, drawn once.
+	g.setUniforms(cam)
+	if gfx.base != nil {
+		var lamps []vec3
+		for _, l := range baseLights() {
+			lamps = append(lamps, toWorld(l).sub(vec3{0, 0.12, 0}))
+		}
+		if !gfx.lampShadow.done {
+			gfx.lampShadow.render(gfx, lamps, func() { g.drawBase() })
+			rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), gfx.lampShadow.vp, rl.ShaderUniformVec4, int32(len(gfx.lampShadow.vp)/4))
 		}
 	}
-	if room >= 0 && gfx.base != nil {
-		gfx.lampShadow.update(gfx, room, toWorld(baseLights()[room]).sub(vec3{0, 0.12, 0}), func() { g.drawBase() })
-	}
-	g.setUniforms(cam)
-	m := gfx.lampShadow.lightVP
-	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), []float32{m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15}, rl.ShaderUniformVec4, 4)
-	lampIdx := float32(-1)
-	if room >= 0 && gfx.lampShadow.room == room {
-		lampIdx = float32(room)
-	}
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampShadowIdx"), []float32{lampIdx}, rl.ShaderUniformFloat)
 
 	sunUp := g.player.Pos.norm().dot(sunDir)
 	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors(toLocal(g.player.Eye())))
