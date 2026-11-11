@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"encoding/binary"
+	"mars_sweeper/internal/mathx"
 	"math"
 	"math/rand/v2"
 	"slices"
@@ -81,11 +82,11 @@ func NewWorld(seed uint64) *World {
 }
 
 func cellDir(f, i, j int) vec3 {
-	return faceDir(f, (float64(i)+0.5)/faceCells*2-1, (float64(j)+0.5)/faceCells*2-1)
+	return mathx.FaceDir(f, (float64(i)+0.5)/faceCells*2-1, (float64(j)+0.5)/faceCells*2-1)
 }
 
 func cellOf(d vec3) (f, i, j int) {
-	f, a, b := dirToFace(d)
+	f, a, b := mathx.DirToFace(d)
 	i = max(0, min(faceCells-1, int((a+1)/2*faceCells)))
 	j = max(0, min(faceCells-1, int((b+1)/2*faceCells)))
 	return f, i, j
@@ -96,12 +97,12 @@ func (w *World) dirOf(f, i, j int) vec3 {
 	if i < 0 || j < 0 || i >= faceCells || j >= faceCells {
 		return cellDir(f, i, j)
 	}
-	cf := cubeFaces[f]
-	return cf.n.add(cf.u.scale(w.tan[i])).add(cf.v.scale(w.tan[j])).norm()
+	cf := mathx.CubeFaces[f]
+	return cf.N.Add(cf.U.Scale(w.tan[i])).Add(cf.V.Scale(w.tan[j])).Norm()
 }
 
 func (w *World) DustAt(d vec3) float64 {
-	f, i, j := cellOf(d.norm())
+	f, i, j := cellOf(d.Norm())
 	t := w.tiles[keyOf(f, i/tileCells, j/tileCells)]
 	if t == nil {
 		return 1
@@ -143,9 +144,9 @@ func (w *World) Clean(center vec3, radius, amount, budget float64) float64 {
 // brush calls fn for every cell within radius meters of center, with the
 // squared normalized distance to the center, creating tiles as needed.
 func (w *World) brush(center vec3, radius float64, fn func(cell *uint16, d2 float64)) {
-	c := center.norm()
+	c := center.Norm()
 	radius = math.Max(radius, cellArc)
-	f, a, b := dirToFace(c)
+	f, a, b := mathx.DirToFace(c)
 	ci, cj := int((a+1)/2*faceCells), int((b+1)/2*faceCells)
 	// Cells shrink toward face corners, so look a bit wider than the radius.
 	span := int(radius/cellArc*1.5) + 1
@@ -154,7 +155,7 @@ func (w *World) brush(center vec3, radius float64, fn func(cell *uint16, d2 floa
 	for j := cj - span; j <= cj+span; j++ {
 		for i := ci - span; i <= ci+span; i++ {
 			d := w.dirOf(f, i, j)
-			chord := d.sub(c).length() * marsRadius
+			chord := d.Sub(c).Length() * marsRadius
 			d2 := chord * chord / (radius * radius)
 			if d2 > 1 {
 				continue
@@ -189,12 +190,12 @@ func (w *World) tile(k tileKey) []uint16 {
 // FindDusty samples random cells within spread meters of around and
 // returns the direction of the dustiest one.
 func (w *World) FindDusty(rng *rand.Rand, around vec3, spread float64) vec3 {
-	up := around.norm()
-	t1, t2 := tangentBasis(up)
+	up := around.Norm()
+	t1, t2 := mathx.TangentBasis(up)
 	best, bestDir := -1.0, up
 	for range 24 {
 		a, r := rng.Float64()*2*math.Pi, math.Sqrt(rng.Float64())*spread
-		d := up.scale(marsRadius).add(t1.scale(math.Cos(a) * r)).add(t2.scale(math.Sin(a) * r)).norm()
+		d := up.Scale(marsRadius).Add(t1.Scale(math.Cos(a) * r)).Add(t2.Scale(math.Sin(a) * r)).Norm()
 		if dust := w.DustAt(d); dust > best {
 			best, bestDir = dust, d
 		}
@@ -205,11 +206,11 @@ func (w *World) FindDusty(rng *rand.Rand, around vec3, spread float64) vec3 {
 // gemIn returns the crystal of a tile, if it has one left.
 func (w *World) gemIn(k tileKey) (Gem, bool) {
 	f, tx, ty := k.split()
-	if hash3(f, tx, ty, w.Seed+101) > terrain().Gems || w.collected[k] {
+	if mathx.Hash3(f, tx, ty, w.Seed+101) > terrain().Gems || w.collected[k] {
 		return Gem{}, false
 	}
-	i := tx*tileCells + 8 + int(hash3(f, tx, ty, w.Seed+102)*(tileCells-16))
-	j := ty*tileCells + 8 + int(hash3(f, tx, ty, w.Seed+103)*(tileCells-16))
+	i := tx*tileCells + 8 + int(mathx.Hash3(f, tx, ty, w.Seed+102)*(tileCells-16))
+	j := ty*tileCells + 8 + int(mathx.Hash3(f, tx, ty, w.Seed+103)*(tileCells-16))
 	d := cellDir(f, i, j)
 	if arcDist(d, baseUp) < padRadius+2 {
 		return Gem{}, false
@@ -219,14 +220,14 @@ func (w *World) gemIn(k tileKey) (Gem, bool) {
 
 // tilesNear calls fn for each tile within dist meters of c (roughly).
 func tilesNear(c vec3, dist float64, fn func(k tileKey)) {
-	f, a, b := dirToFace(c.norm())
+	f, a, b := mathx.DirToFace(c.Norm())
 	ti, tj := int((a+1)/2*tilesPerFace), int((b+1)/2*tilesPerFace)
 	span := int(dist/tileArc*1.5) + 1
 	seen := map[tileKey]bool{}
 	for j := tj - span; j <= tj+span; j++ {
 		for i := ti - span; i <= ti+span; i++ {
 			// Tiles past the face edge are found on the neighboring face.
-			mid := faceDir(f, (float64(i)+0.5)/tilesPerFace*2-1, (float64(j)+0.5)/tilesPerFace*2-1)
+			mid := mathx.FaceDir(f, (float64(i)+0.5)/tilesPerFace*2-1, (float64(j)+0.5)/tilesPerFace*2-1)
 			ff, ci, cj := cellOf(mid)
 			k := keyOf(ff, ci/tileCells, cj/tileCells)
 			if !seen[k] {
@@ -239,10 +240,10 @@ func tilesNear(c vec3, dist float64, fn func(k tileKey)) {
 
 // GemsNear lists the remaining crystals within dist meters of c.
 func (w *World) GemsNear(c vec3, dist float64) []Gem {
-	c = c.norm()
+	c = c.Norm()
 	var gems []Gem
 	tilesNear(c, dist, func(k tileKey) {
-		if g, ok := w.gemIn(k); ok && g.Dir.sub(c).length()*marsRadius <= dist {
+		if g, ok := w.gemIn(k); ok && g.Dir.Sub(c).Length()*marsRadius <= dist {
 			gems = append(gems, g)
 		}
 	})
@@ -251,7 +252,7 @@ func (w *World) GemsNear(c vec3, dist float64) []Gem {
 
 // CollectGems removes and returns the gems that are uncovered and under the brush.
 func (w *World) CollectGems(center vec3, radius float64) []Gem {
-	c := center.norm()
+	c := center.Norm()
 	var got []Gem
 	for _, g := range w.GemsNear(c, radius+0.5) {
 		if w.DustAt(g.Dir) < 0.2 {
@@ -273,7 +274,7 @@ func (w *World) Upload(player vec3) (rl.Texture2D, rl.Texture2D) {
 	if w.atlas.ID == 0 {
 		w.initGPU()
 	}
-	up := player.norm()
+	up := player.Norm()
 	w.cacheTick++
 	if w.cacheTick >= cacheRefresh {
 		w.cacheTick = 0
@@ -339,7 +340,7 @@ func (w *World) refreshCache(up vec3) {
 	}
 	var near []cand
 	for k := range w.tiles {
-		if d := tileCenter(k).sub(up).length() * marsRadius; d < cacheRadius {
+		if d := tileCenter(k).Sub(up).Length() * marsRadius; d < cacheRadius {
 			near = append(near, cand{k, d})
 		}
 	}
@@ -370,7 +371,7 @@ func (w *World) freeSlot(up vec3) int {
 		if k < 0 {
 			return slot
 		}
-		if d := tileCenter(k).sub(up).length(); d > far {
+		if d := tileCenter(k).Sub(up).Length(); d > far {
 			far, farSlot = d, slot
 		}
 	}
@@ -457,7 +458,7 @@ func (w *World) measure(k tileKey) {
 		sum += int(v)
 	}
 	cleaned := 1 - float64(sum)/float64(len(w.tiles[k])*fullDust)
-	w.covPix[w.indirIndex(k)/4] = byte(math.Round(clamp01(cleaned) * 255))
+	w.covPix[w.indirIndex(k)/4] = byte(math.Round(mathx.Clamp01(cleaned) * 255))
 	w.covDirty = true
 }
 

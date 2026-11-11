@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/mathx"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -40,7 +41,7 @@ func (c *Content) vehicleEntities() {
 func (g *Game) buyVehicle(v *Vehicle) {
 	g.st.Levels[v.ID] = 1
 	off := float64(len(g.st.Entities)%4) * 0.8
-	g.spawn(v.ID, g.terrain.Surface(toWorld(padSpot.add(vec3{off - 1.2, 0, off - 1.2}))))
+	g.spawn(v.ID, g.terrain.Surface(toWorld(padSpot.Add(vec3{off - 1.2, 0, off - 1.2}))))
 }
 
 // driven is the vehicle the player drives, if any.
@@ -66,8 +67,8 @@ func (g *Game) getOut() {
 	if !ok {
 		return
 	}
-	side := g.player.Right().scale(orZero(v.Radius, 1.2) + 0.6)
-	g.player.Pos = g.terrain.Surface(g.player.Pos.add(side))
+	side := g.player.Right().Scale(orZero(v.Radius, 1.2) + 0.6)
+	g.player.Pos = g.terrain.Surface(g.player.Pos.Add(side))
 	g.sfx.beep(0.02, 0.2, 0.12, 330, 220)
 	g.emit(Event{Name: evDrive, ID: ""})
 }
@@ -85,16 +86,16 @@ func (g *Game) updateVehicle(dt float64) {
 	}
 	g.player.speed, g.player.eyeH = v.Speed, orZero(v.Seat, 2.4)
 	e := &g.st.Entities[g.driving]
-	e.Dir = g.player.Pos.norm()
-	t1, t2 := tangentBasis(e.Dir)
-	e.Yaw = math.Atan2(g.player.Heading.dot(t2), g.player.Heading.dot(t1))
+	e.Dir = g.player.Pos.Norm()
+	t1, t2 := mathx.TangentBasis(e.Dir)
+	e.Yaw = math.Atan2(g.player.Heading.Dot(t2), g.player.Heading.Dot(t1))
 
 	if v.Sweep <= 0 || g.mode != modePlay || arcDist(e.Dir, baseUp) < baseReach {
 		return
 	}
 	at := g.terrain.Surface(e.Dir)
 	got := g.world.Clean(at, v.Sweep, v.Rate*g.powerMult()*dt, g.space())
-	g.collect(got, at, v.Sweep, at.add(e.Dir.scale(0.8)))
+	g.collect(got, at, v.Sweep, at.Add(e.Dir.Scale(0.8)))
 	for _, gem := range g.world.CollectGems(at, v.Sweep) {
 		g.collectGem(gem)
 	}

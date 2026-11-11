@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/mathx"
 	"math"
 	"runtime"
 	"slices"
@@ -82,7 +83,7 @@ func NewTerrain(seed uint64) *Terrain {
 
 func (t *Terrain) newNode(face, level int, a0, b0, size float64) *lodNode {
 	n := &lodNode{face: face, level: level, a0: a0, b0: b0, size: size}
-	n.center = faceDir(face, a0+size/2, b0+size/2)
+	n.center = mathx.FaceDir(face, a0+size/2, b0+size/2)
 	n.centerPos = t.Surface(n.center)
 	ang := size * math.Pi / 4 // equiangular faces: coordinates are angles
 	n.arc = ang * marsRadius
@@ -106,8 +107,8 @@ func (t *Terrain) build(n *lodNode) nodeData {
 	pos := make([]vec3, g*g)
 	for j := range g {
 		for i := range g {
-			d := faceDir(n.face, n.a0+n.size*float64(i-1)/nodeQuads, n.b0+n.size*float64(j-1)/nodeQuads)
-			pos[j*g+i] = d.scale(t.SurfaceRadius(d))
+			d := mathx.FaceDir(n.face, n.a0+n.size*float64(i-1)/nodeQuads, n.b0+n.size*float64(j-1)/nodeQuads)
+			pos[j*g+i] = d.Scale(t.SurfaceRadius(d))
 		}
 	}
 	at := func(i, j int) vec3 { return pos[(j+1)*g+i+1] }
@@ -121,7 +122,7 @@ func (t *Terrain) build(n *lodNode) nodeData {
 	kinds := make([][2]float32, (nodeQuads+1)*(nodeQuads+1))
 	for j := range nodeQuads + 1 {
 		for i := range nodeQuads + 1 {
-			d := at(i, j).norm()
+			d := at(i, j).Norm()
 			kinds[j*(nodeQuads+1)+i] = [2]float32{float32(t.Ice(d)), float32(t.Basalt(d))}
 		}
 	}
@@ -151,13 +152,13 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			i := max(0, min(nodeQuads, vx-1))
 			j := max(0, min(nodeQuads, vz-1))
 			p := at(i, j)
-			nrm := at(i+1, j).sub(at(i-1, j)).cross(at(i, j+1).sub(at(i, j-1))).norm()
-			if nrm.dot(p) < 0 {
-				nrm = nrm.scale(-1)
+			nrm := at(i+1, j).Sub(at(i-1, j)).Cross(at(i, j+1).Sub(at(i, j-1))).Norm()
+			if nrm.Dot(p) < 0 {
+				nrm = nrm.Scale(-1)
 			}
-			nrm = nrm.scale(lights[j*(nodeQuads+1)+i])
+			nrm = nrm.Scale(lights[j*(nodeQuads+1)+i])
 			if vx != i+1 || vz != j+1 {
-				p = p.sub(p.norm().scale(skirt))
+				p = p.Sub(p.Norm().Scale(skirt))
 			}
 			k := (vz*side + vx) * 3
 			verts[k], verts[k+1], verts[k+2] = float32(p.X), float32(p.Y), float32(p.Z)
@@ -176,16 +177,16 @@ func (t *Terrain) build(n *lodNode) nodeData {
 // change with the level of detail. The shader receives them in the length
 // of the normal: whole part the occlusion in 1/31 steps, then 0.9 × sun.
 func (t *Terrain) light(p vec3) (sun, ao float64) {
-	up := p.norm()
+	up := p.Norm()
 	sun = 1
-	if up.dot(sunDir) > -0.15 { // night side: the sun is gone anyway
-		start := p.add(up.scale(0.3))
+	if up.Dot(sunDir) > -0.15 { // night side: the sun is gone anyway
+		start := p.Add(up.Scale(0.3))
 		for s := 1.5; s < 4000; s *= 1.45 {
-			q := start.add(sunDir.scale(s))
-			if q.length()-marsRadius > maxMountain {
+			q := start.Add(sunDir.Scale(s))
+			if q.Length()-marsRadius > maxMountain {
 				break // above every peak
 			}
-			h := q.length() - t.SurfaceRadius(q.norm())
+			h := q.Length() - t.SurfaceRadius(q.Norm())
 			sun = min(sun, 14*h/s) // penumbra of about 4°
 			if sun <= 0 {
 				sun = 0
@@ -195,15 +196,15 @@ func (t *Terrain) light(p vec3) (sun, ao float64) {
 	}
 
 	// Occlusion: steepest horizon in 6 directions, at a few distances.
-	u, v := tangentBasis(up)
+	u, v := mathx.TangentBasis(up)
 	h0 := t.SurfaceRadius(up)
 	open := 0.0
 	for k := range 6 {
 		a := float64(k) * math.Pi / 3
-		dir := u.scale(math.Cos(a)).add(v.scale(math.Sin(a)))
+		dir := u.Scale(math.Cos(a)).Add(v.Scale(math.Sin(a)))
 		slope := 0.0
 		for _, dist := range [...]float64{2, 6, 16, 45} {
-			d := p.add(dir.scale(dist)).norm()
+			d := p.Add(dir.Scale(dist)).Norm()
 			slope = max(slope, (t.SurfaceRadius(d)-h0)/dist)
 		}
 		open += 1 - slope/math.Sqrt(1+slope*slope) // 1 - sin of the horizon angle
@@ -244,21 +245,21 @@ func (t *Terrain) Visible(eye vec3) []*lodNode {
 	t.frame++
 	t.upload(uploadsPerTick)
 	// Beyond this angle around Mars, even mountain tops are below the horizon.
-	horizon := math.Acos(math.Min(1, marsRadius/eye.length())) + math.Acos(marsRadius/(marsRadius+maxMountain))
+	horizon := math.Acos(math.Min(1, marsRadius/eye.Length())) + math.Acos(marsRadius/(marsRadius+maxMountain))
 	var draw []*lodNode
 	for _, r := range t.roots {
-		t.visit(r, eye, eye.norm(), horizon, &draw)
+		t.visit(r, eye, eye.Norm(), horizon, &draw)
 	}
 	t.evict()
 	return draw
 }
 
 func (t *Terrain) visit(n *lodNode, eye, up vec3, horizon float64, draw *[]*lodNode) {
-	if math.Acos(math.Max(-1, math.Min(1, n.center.dot(up))))-n.angulRad > horizon {
+	if math.Acos(math.Max(-1, math.Min(1, n.center.Dot(up))))-n.angulRad > horizon {
 		return
 	}
 	n.lastUsed = t.frame
-	wantSplit := n.level < maxLevel && eye.sub(n.centerPos).length() < splitFactor*n.arc
+	wantSplit := n.level < maxLevel && eye.Sub(n.centerPos).Length() < splitFactor*n.arc
 	if wantSplit || n.state != nodeReady {
 		if n.level < maxLevel && n.children == nil && wantSplit {
 			h := n.size / 2
@@ -324,12 +325,12 @@ func (t *Terrain) SurfaceRadius(d vec3) float64 { return marsRadius + t.Height(d
 
 // Surface returns the ground point in direction d (any length).
 func (t *Terrain) Surface(d vec3) vec3 {
-	d = d.norm()
-	return d.scale(t.SurfaceRadius(d))
+	d = d.Norm()
+	return d.Scale(t.SurfaceRadius(d))
 }
 
 // Altitude is the height of p above the ground right below it.
-func (t *Terrain) Altitude(p vec3) float64 { return p.length() - t.SurfaceRadius(p.norm()) }
+func (t *Terrain) Altitude(p vec3) float64 { return p.Length() - t.SurfaceRadius(p.Norm()) }
 
 // Raycast marches along the ray and returns the first ground hit within
 // maxDist. Steps grow with the height above ground (slopes stay gentle).
@@ -337,7 +338,7 @@ func (t *Terrain) Raycast(from, dir vec3, maxDist float64) (vec3, bool) {
 	const minStep = 0.1
 	prev := from
 	for d := minStep; d <= maxDist; {
-		p := from.add(dir.scale(d))
+		p := from.Add(dir.Scale(d))
 		alt := t.Altitude(p)
 		if alt > 0 {
 			prev = p
@@ -347,7 +348,7 @@ func (t *Terrain) Raycast(from, dir vec3, maxDist float64) (vec3, bool) {
 		// Refine between the last point above ground and this one.
 		lo, hi := prev, p
 		for range 10 {
-			mid := lo.lerp(hi, 0.5)
+			mid := lo.Lerp(hi, 0.5)
 			if t.Altitude(mid) <= 0 {
 				hi = mid
 			} else {

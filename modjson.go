@@ -356,10 +356,10 @@ func (k kitJSON) kit() kitProp {
 				if axis == (vec3{}) {
 					axis = vec3{0, 1, 0}
 				}
-				m.prism(at.add(p.At), axis.norm(), p.R0, orZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
+				m.prism(at.Add(p.At), axis.Norm(), p.R0, orZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
 			default:
 				a := p.Yaw * math.Pi / 180
-				m.box(at.add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
+				m.box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
 			}
 		}
 	}
@@ -392,20 +392,6 @@ func orInt(v, def int) int {
 }
 
 // JSON forms of the engine's types.
-
-// A vec3 reads [x, y, z] as well as {"X": x, ...}.
-func (a *vec3) UnmarshalJSON(b []byte) error {
-	var arr []float64
-	if err := json.Unmarshal(b, &arr); err == nil {
-		if len(arr) != 3 {
-			return fmt.Errorf("a position is [x, y, z], got %d numbers", len(arr))
-		}
-		*a = vec3{arr[0], arr[1], arr[2]}
-		return nil
-	}
-	type plain vec3
-	return json.Unmarshal(b, (*plain)(a))
-}
 
 // hexColor reads "#rrggbb" or "#rrggbbaa".
 func hexColor(s string) (color.RGBA, error) {

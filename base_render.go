@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/mathx"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -62,7 +63,7 @@ func (g *Game) drawBase() {
 	for _, bp := range plans {
 		for _, p := range bp.Props {
 			if k, _ := content.Kits.Get(p.Kit); k != nil && k.draw != nil {
-				k.draw(g, bp.At.add(p.At))
+				k.draw(g, bp.At.Add(p.At))
 			}
 		}
 	}
@@ -85,7 +86,7 @@ func (g *Game) drawAirlock() {
 	gfx.setMat(steel.mat, steel.scale, false)
 	w := (doorWidth + 0.2) / 2
 	for _, s := range []float64{-1, 1} {
-		at := end.add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0})
+		at := end.Add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0})
 		gfx.put(gfx.doorPanel, toWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, 0, steel.col, steel.spec, 0)
 	}
 	gfx.setMat(mtPlain, 1, false)
@@ -93,7 +94,7 @@ func (g *Game) drawAirlock() {
 	if g.doorOpen < 0.9 {
 		lamp = colGold
 	}
-	gfx.box(end.add(vec3{0, 2.6, -0.2}), vec3{1.2, 0.08, 0.04}, vec3{1, 0, 0}, lamp, 0, 1)
+	gfx.box(end.Add(vec3{0, 2.6, -0.2}), vec3{1.2, 0.08, 0.04}, vec3{1, 0, 0}, lamp, 0, 1)
 }
 
 // drawBeacon blinks the red light on top of the hub's antenna.
@@ -113,18 +114,18 @@ func beaconTop() vec3 {
 // drawGlobe draws the hologram of Mars above the map table.
 func (g *Game) drawGlobe(cam rl.Camera3D) {
 	gfx := g.gfx
-	center := toWorld(tableSpot.add(vec3{0, globeHeight, 0}))
+	center := toWorld(tableSpot.Add(vec3{0, globeHeight, 0}))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
 	// Turn the player's spot on Mars toward the viewer, a bit raised,
 	// with a slow sway so the hologram feels alive.
-	toViewer := g.player.Eye().sub(center)
-	toViewer = vec3{toViewer.X, 0, toViewer.Z}.norm()
+	toViewer := g.player.Eye().Sub(center)
+	toViewer = vec3{toViewer.X, 0, toViewer.Z}.Norm()
 	sway := math.Sin(g.clock*0.35) * 0.45
 	toViewer = vec3{
 		toViewer.X*math.Cos(sway) + toViewer.Z*math.Sin(sway), 0,
 		-toViewer.X*math.Sin(sway) + toViewer.Z*math.Cos(sway),
 	}
-	facing := toViewer.add(vec3{0, 0.2, 0}).norm()
+	facing := toViewer.Add(vec3{0, 0.2, 0}).Norm()
 	rl.SetShaderValueMatrix(gfx.holoSh, gfx.hLoc.globeRot, rotationBetween(facing, g.player.LocalUp()))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.playerDir, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
 	rl.SetMaterialTexture(&gfx.holo.GetMaterials()[0], rl.MapDiffuse, g.world.Coverage())
@@ -132,12 +133,12 @@ func (g *Game) drawGlobe(cam rl.Camera3D) {
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthMask()
 	rl.BeginBlendMode(rl.BlendAdditive)
-	rl.DrawModel(gfx.holo, center.rl(), globeRadius, rl.White)
+	rl.DrawModel(gfx.holo, toRL(center), globeRadius, rl.White)
 	// Soft light rising from the table to the globe.
 	for i := range 6 {
 		f := float64(i) / 5
-		p := toWorld(tableSpot.add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
-		rl.DrawBillboard(cam, gfx.glow, p.rl(), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
+		p := toWorld(tableSpot.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
+		rl.DrawBillboard(cam, gfx.glow, toRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()
@@ -151,12 +152,12 @@ const (
 // rotationBetween returns the rotation taking unit vector a onto unit
 // vector b (Rodrigues' formula), as a raylib matrix.
 func rotationBetween(a, b vec3) rl.Matrix {
-	k := a.cross(b)
-	c := a.dot(b)
+	k := a.Cross(b)
+	c := a.Dot(b)
 	if c < -0.9999 {
 		// Opposite vectors: half a turn around any perpendicular axis.
-		p, _ := tangentBasis(a)
-		k, c = p.scale(1e-6), -1+1e-12
+		p, _ := mathx.TangentBasis(a)
+		k, c = p.Scale(1e-6), -1+1e-12
 	}
 	f := 1 / (1 + c)
 	m := [3][3]float64{

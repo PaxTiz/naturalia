@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/mathx"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -30,22 +31,22 @@ func (g *Game) pebblesIn(k tileKey) []pebble {
 	var out []pebble
 	for i := range pebblesPerTile {
 		s := g.world.Seed + 900 + uint64(i)*5
-		a := (float64(tx*tileCells) + hash3(f, tx, ty, s)*tileCells) / faceCells * 2
-		b := (float64(ty*tileCells) + hash3(f, tx, ty, s+1)*tileCells) / faceCells * 2
-		d := faceDir(f, a-1, b-1)
+		a := (float64(tx*tileCells) + mathx.Hash3(f, tx, ty, s)*tileCells) / faceCells * 2
+		b := (float64(ty*tileCells) + mathx.Hash3(f, tx, ty, s+1)*tileCells) / faceCells * 2
+		d := mathx.FaceDir(f, a-1, b-1)
 		if arcDist(d, baseUp) < baseReach+2 || g.terrain.Ice(d) > 0.3 {
 			continue
 		}
-		t1, t2 := tangentBasis(d)
-		yaw := hash3(f, tx, ty, s+3) * 2 * math.Pi
-		ax := t1.scale(math.Cos(yaw)).add(t2.scale(math.Sin(yaw)))
+		t1, t2 := mathx.TangentBasis(d)
+		yaw := mathx.Hash3(f, tx, ty, s+3) * 2 * math.Pi
+		ax := t1.Scale(math.Cos(yaw)).Add(t2.Scale(math.Sin(yaw)))
 		out = append(out, pebble{
 			dir:    d,
 			ground: g.terrain.Surface(d),
-			size:   0.025 + 0.11*math.Pow(hash3(f, tx, ty, s+2), 2.5),
-			shape:  int(hash3(f, tx, ty, s+4) * pebbleShapes),
+			size:   0.025 + 0.11*math.Pow(mathx.Hash3(f, tx, ty, s+2), 2.5),
+			shape:  int(mathx.Hash3(f, tx, ty, s+4) * pebbleShapes),
 			ax:     ax,
-			az:     ax.cross(d),
+			az:     ax.Cross(d),
 		})
 	}
 	return out
@@ -68,14 +69,14 @@ func (g *Game) drawPebbles() {
 			g.pebbles[k] = ps
 		}
 		for _, p := range ps {
-			dist := p.ground.sub(g.player.Pos).length()
+			dist := p.ground.Sub(g.player.Pos).Length()
 			if dist > pebbleDist {
 				continue
 			}
 			// Shrink away near the edge rather than pop.
-			size := p.size * (1 - smoothstep(pebbleDist*0.75, pebbleDist, dist))
-			ground := p.ground.sub(p.dir.scale(size * (0.15 + 0.45*g.world.DustAt(p.dir))))
-			mats[p.shape] = append(mats[p.shape], basisMatrix(ground, p.ax.scale(size), p.dir.scale(size), p.az.scale(size)))
+			size := p.size * (1 - mathx.Smoothstep(pebbleDist*0.75, pebbleDist, dist))
+			ground := p.ground.Sub(p.dir.Scale(size * (0.15 + 0.45*g.world.DustAt(p.dir))))
+			mats[p.shape] = append(mats[p.shape], basisMatrix(ground, p.ax.Scale(size), p.dir.Scale(size), p.az.Scale(size)))
 		}
 	})
 	for k := range g.pebbles {
@@ -90,7 +91,7 @@ func (g *Game) drawPebbles() {
 	}
 	gfx.drawInstanced(gfx.pebbles, mats[:], func(k int) color.RGBA {
 		v := 120 + 30*float64(k)
-		return rgb(v, v*0.58, v*0.45)
+		return mathx.RGB(v, v*0.58, v*0.45)
 	})
 }
 

@@ -1,6 +1,8 @@
 package main
 
-import "math"
+import (
+	"math"
+)
 
 // The event bus (docs/MODS.md): the game says what happens, packs listen.
 // The base game listens like any mod does: its dust devils are a random

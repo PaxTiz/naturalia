@@ -6,10 +6,17 @@ LDFLAGS := -s -w
 # it at runtime: every platform cross-compiles from any machine.
 export CGO_ENABLED := 0
 
-.PHONY: run build windows mac linux desktop clean
+.PHONY: run build vet test windows mac linux desktop clean
 
 run:
 	go run .
+
+# Unkeyed vec3{x, y, z} literals are the norm here: vet's composites check is off.
+vet:
+	go vet -composites=false ./...
+
+test:
+	go test ./...
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o $(OUT)/$(APP) .

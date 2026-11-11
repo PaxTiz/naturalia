@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"mars_sweeper/internal/mathx"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -22,7 +23,7 @@ var (
 	colCyan  = color.RGBA{120, 235, 245, 255}
 
 	// Direction toward the sun: low on the horizon for long soft shadows.
-	sunDir = vec3{-0.5, 0.62, -0.6}.norm()
+	sunDir = vec3{-0.5, 0.62, -0.6}.Norm()
 )
 
 const (
@@ -208,6 +209,9 @@ func NewGraphics() *Graphics {
 	return gfx
 }
 
+// toRL is a vector as raylib takes it, in float32.
+func toRL(a vec3) rl.Vector3 { return rl.NewVector3(float32(a.X), float32(a.Y), float32(a.Z)) }
+
 type shaderWithLocs struct {
 	sh  rl.Shader
 	loc shaderLocs
@@ -222,23 +226,23 @@ func v3f(v vec3) []float32 { return []float32{float32(v.X), float32(v.Y), float3
 // put draws a unit model scaled, then rotated (angle in degrees around axis).
 func (gfx *Graphics) put(m rl.Model, pos, scale, axis vec3, angle float64, c color.RGBA, spec, emissive float32) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{spec, emissive}, rl.ShaderUniformVec2)
-	rl.DrawModelEx(m, pos.rl(), axis.rl(), float32(angle), scale.rl(), c)
+	rl.DrawModelEx(m, toRL(pos), toRL(axis), float32(angle), toRL(scale), c)
 }
 
 // segment stretches a unit cylinder or cone (base at y=0, top at y=1) from a to b.
 func (gfx *Graphics) segment(m rl.Model, a, b vec3, radius float64, c color.RGBA, spec, emissive float32) {
-	d := b.sub(a)
-	l := d.length()
+	d := b.Sub(a)
+	l := d.Length()
 	if l < 1e-6 {
 		return
 	}
-	dir := d.scale(1 / l)
-	axis := vec3{0, 1, 0}.cross(dir)
+	dir := d.Scale(1 / l)
+	axis := vec3{0, 1, 0}.Cross(dir)
 	angle := math.Acos(math.Max(-1, math.Min(1, dir.Y))) * 180 / math.Pi
-	if axis.length() < 1e-6 {
+	if axis.Length() < 1e-6 {
 		axis = vec3{1, 0, 0}
 	}
-	gfx.put(m, a, vec3{radius, l, radius}, axis.norm(), angle, c, spec, emissive)
+	gfx.put(m, a, vec3{radius, l, radius}, axis.Norm(), angle, c, spec, emissive)
 }
 
 // camera follows the eye with a little life: a gentle bob and sway when
@@ -249,16 +253,16 @@ func (g *Game) camera() rl.Camera3D {
 	eye := p.Eye()
 	walk := p.moveAmount
 	right, up := p.Right(), p.LocalUp()
-	eye = eye.add(up.scale(math.Sin(2*p.walkPhase) * 0.02 * walk)).add(right.scale(math.Sin(p.walkPhase) * 0.012 * walk))
-	camUp := up.add(right.scale(math.Sin(p.walkPhase) * 0.008 * walk))
+	eye = eye.Add(up.Scale(math.Sin(2*p.walkPhase) * 0.02 * walk)).Add(right.Scale(math.Sin(p.walkPhase) * 0.012 * walk))
+	camUp := up.Add(right.Scale(math.Sin(p.walkPhase) * 0.008 * walk))
 	if g.sweeping {
-		eye = eye.add(right.scale(math.Sin(g.clock*37) * 0.002)).add(up.scale(math.Sin(g.clock*23+1) * 0.002))
+		eye = eye.Add(right.Scale(math.Sin(g.clock*37) * 0.002)).Add(up.Scale(math.Sin(g.clock*23+1) * 0.002))
 	}
 	g.camEye = eye
 	return rl.Camera3D{
-		Position:   eye.rl(),
-		Target:     eye.add(p.Forward()).rl(),
-		Up:         camUp.rl(),
+		Position:   toRL(eye),
+		Target:     toRL(eye.Add(p.Forward())),
+		Up:         toRL(camUp),
 		Fovy:       float32(g.fov),
 		Projection: rl.CameraPerspective,
 	}
@@ -296,7 +300,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	g.origin = o
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
-		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.sub(o)), rl.ShaderUniformVec3)
+		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.Sub(o)), rl.ShaderUniformVec3)
 	}
 	// The base's shapes, for its ambient occlusion (baseAO).
 	var rms, crs, csz []float32
@@ -314,7 +318,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "blobCount"), []float32{float32(len(blobs) / 4)}, rl.ShaderUniformFloat)
-		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(basePos.sub(o)), rl.ShaderUniformVec3)
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(basePos.Sub(o)), rl.ShaderUniformVec3)
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseRooms"), rms, rl.ShaderUniformVec4, int32(len(rms)/4))
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrs"), crs, rl.ShaderUniformVec4, int32(len(crs)/4))
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrSize"), csz, rl.ShaderUniformVec4, int32(len(csz)/4))
@@ -339,7 +343,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	// the shadow map.
 	var casters []float32
 	for _, r := range rooms {
-		c := toWorld(r.center.add(vec3{0, r.wallH * 0.7, 0}))
+		c := toWorld(r.center.Add(vec3{0, r.wallH * 0.7, 0}))
 		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(r.radius*1.05))
 	}
 	n := min(len(casters)/4, maxCasters)
@@ -372,14 +376,14 @@ func (g *Game) Draw() {
 	if gfx.base != nil {
 		var lamps []vec3
 		for _, l := range baseLights()[:len(rooms)] {
-			lamps = append(lamps, toWorld(l).sub(vec3{0, 0.12, 0}))
+			lamps = append(lamps, toWorld(l).Sub(vec3{0, 0.12, 0}))
 		}
 		gfx.lampShadow.render(gfx, lamps, func() { g.drawBase() })
 		vp := gfx.lampShadow.cols(g.origin)
 		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
 	}
 
-	sunUp := g.player.Pos.norm().dot(sunDir)
+	sunUp := g.player.Pos.Norm().Dot(sunDir)
 	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors(toLocal(g.player.Eye())))
 	gfx.post.resize()
 	rl.BeginTextureMode(gfx.post.scene)
@@ -433,22 +437,22 @@ var (
 func (g *Game) drawDrones() {
 	gfx := g.gfx
 	for _, d := range g.drones {
-		up := d.Pos.norm()
-		axis, angle := orient(up)
-		downAxis, downAngle := orient(up.scale(-1))
-		t1, t2 := tangentBasis(up)
-		p := d.Pos.add(up.scale(math.Sin(d.phase*3) * 0.08))
+		up := d.Pos.Norm()
+		axis, angle := mathx.Orient(up)
+		downAxis, downAngle := mathx.Orient(up.Scale(-1))
+		t1, t2 := mathx.TangentBasis(up)
+		p := d.Pos.Add(up.Scale(math.Sin(d.phase*3) * 0.08))
 		gfx.setMat(mtPaint, 2, true)
 		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, matWhite, 0.8, 0)
-		gfx.put(gfx.sphere, p.add(up.scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, accentOrange, 0.6, 0)
+		gfx.put(gfx.sphere, p.Add(up.Scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, accentOrange, 0.6, 0)
 		gfx.setMat(mtMetal, 3, true)
-		gfx.put(gfx.hemi, p.sub(up.scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, matDark, 1, 0)
+		gfx.put(gfx.hemi, p.Sub(up.Scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, matDark, 1, 0)
 		for i := range 4 {
 			a := math.Pi/4 + float64(i)*math.Pi/2
-			arm := p.add(t1.scale(math.Cos(a) * 0.45)).add(t2.scale(math.Sin(a) * 0.45)).add(up.scale(0.05))
+			arm := p.Add(t1.Scale(math.Cos(a) * 0.45)).Add(t2.Scale(math.Sin(a) * 0.45)).Add(up.Scale(0.05))
 			gfx.segment(gfx.cyl, p, arm, 0.025, matSteel, 0.4, 0)
 			gfx.setMat(mtPlain, 1, false)
-			gfx.segment(gfx.cyl, arm.add(up.scale(0.04)), arm.add(up.scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
+			gfx.segment(gfx.cyl, arm.Add(up.Scale(0.04)), arm.Add(up.Scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
 			gfx.setMat(mtMetal, 3, true)
 		}
 		gfx.setMat(mtPlain, 1, false)
@@ -457,7 +461,7 @@ func (g *Game) drawDrones() {
 			light = colRed
 		}
 		if math.Sin(d.phase*6) > 0 {
-			gfx.put(gfx.sphere, p.add(up.scale(0.15)), vec3{0.045, 0.045, 0.045}, axis, angle, light, 0, 1)
+			gfx.put(gfx.sphere, p.Add(up.Scale(0.15)), vec3{0.045, 0.045, 0.045}, axis, angle, light, 0, 1)
 		}
 	}
 }
@@ -467,12 +471,12 @@ const gemDrawDist = 80.0
 
 // gemVisibility is how much of a crystal pokes out of the dust (0..1).
 func (g *Game) gemVisibility(gem Gem) float64 {
-	return clamp01(1 - g.world.DustAt(gem.Dir)*2.5)
+	return mathx.Clamp01(1 - g.world.DustAt(gem.Dir)*2.5)
 }
 
 func (g *Game) gemPos(gem Gem, s float64) vec3 {
 	lift := s*1.4 + math.Sin(g.clock*2+float64(gem.Key))*0.05
-	return g.terrain.Surface(gem.Dir).add(gem.Dir.scale(lift))
+	return g.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(lift))
 }
 
 func (g *Game) drawGems() {
@@ -484,8 +488,8 @@ func (g *Game) drawGems() {
 		}
 		s := 0.06 + 0.16*vis
 		p := g.gemPos(gem, s)
-		axis, angle := orient(gem.Dir)
-		downAxis, downAngle := orient(gem.Dir.scale(-1))
+		axis, angle := mathx.Orient(gem.Dir)
+		downAxis, downAngle := mathx.Orient(gem.Dir.Scale(-1))
 		gfx.put(gfx.crystal, p, vec3{s, s * 1.7, s}, axis, angle, colCyan, 1, 0.45)
 		gfx.put(gfx.crystal, p, vec3{s, s * 1.2, s}, downAxis, downAngle, color.RGBA{60, 170, 220, 255}, 1, 0.45)
 	}
@@ -499,106 +503,106 @@ func (g *Game) drawTool() {
 	gfx, look := g.gfx, g.tool().Look
 	base, dir := g.toolBase, g.toolDir
 	if g.sweeping {
-		base = base.add(vec3{(g.rng.Float64() - 0.5) * 0.006, (g.rng.Float64() - 0.5) * 0.006, 0})
+		base = base.Add(vec3{(g.rng.Float64() - 0.5) * 0.006, (g.rng.Float64() - 0.5) * 0.006, 0})
 	}
 	const k = toolViewScale
-	neck := base.add(dir.scale(look.HandleLen * k))
-	tip := neck.add(dir.scale(look.HeadLen * k))
+	neck := base.Add(dir.Scale(look.HandleLen * k))
+	tip := neck.Add(dir.Scale(look.HeadLen * k))
 	hr, r := look.HandleR*k, look.HeadR*k
 
 	gfx.setMat(mtPaint, 8, true)
 	gfx.segment(gfx.cyl, base, neck, hr, look.HandleCol, 0.5, 0)
 	// A dark rubber grip where the hand holds it, with a cyan ring.
-	grip := base.add(dir.scale(look.HandleLen * 0.35 * k))
+	grip := base.Add(dir.Scale(look.HandleLen * 0.35 * k))
 	gfx.setMat(mtPlain, 1, false)
-	gfx.segment(gfx.cyl, base.sub(dir.scale(0.01*k)), grip, hr*1.3, matDark, 0.2, 0)
-	gfx.segment(gfx.cyl, grip, grip.add(dir.scale(0.012*k)), hr*1.32, accentCyan, 0.3, 0)
+	gfx.segment(gfx.cyl, base.Sub(dir.Scale(0.01*k)), grip, hr*1.3, matDark, 0.2, 0)
+	gfx.segment(gfx.cyl, grip, grip.Add(dir.Scale(0.012*k)), hr*1.32, accentCyan, 0.3, 0)
 	gfx.setMat(mtMetal, 6, true)
 	collar := math.Max(hr, r) * 1.15
 	if look.Head == headFlare || look.Head == headBlock {
 		collar = hr * 1.5 // flat heads: a slim collar
 	}
 	if look.Head != headNozzle {
-		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), neck.add(dir.scale(0.02*k)), collar, matSteel, 0.8, 0)
+		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), neck.Add(dir.Scale(0.02*k)), collar, matSteel, 0.8, 0)
 	}
 	right := g.player.Right()
-	across := right.sub(dir.scale(right.dot(dir))).norm()
-	top := dir.cross(across)
-	if top.dot(g.player.LocalUp()) < 0 {
-		top = top.scale(-1)
+	across := right.Sub(dir.Scale(right.Dot(dir))).Norm()
+	top := dir.Cross(across)
+	if top.Dot(g.player.LocalUp()) < 0 {
+		top = top.Scale(-1)
 	}
 	switch look.Head {
 	case headBlock:
 		// A toothbrush: a flat plastic head, a white tuft of bristles
 		// standing under it.
-		at := neck.add(dir.scale(look.HeadLen * 0.5 * k))
+		at := neck.Add(dir.Scale(look.HeadLen * 0.5 * k))
 		gfx.setMat(mtPaint, 8, true)
-		gfx.putBasis(gfx.cube, at, across.scale(r*2.2), dir.scale(look.HeadLen*k), top.scale(r*0.9), look.HandleCol, 0.5, 0)
+		gfx.putBasis(gfx.cube, at, across.Scale(r*2.2), dir.Scale(look.HeadLen*k), top.Scale(r*0.9), look.HandleCol, 0.5, 0)
 		gfx.setMat(mtFabric, 12, true)
-		gfx.putBasis(gfx.cube, at.sub(top.scale(r*0.9)), across.scale(r*1.9), dir.scale(look.HeadLen*0.85*k), top.scale(r*1.2), look.HeadCol, 0.1, 0)
+		gfx.putBasis(gfx.cube, at.Sub(top.Scale(r*0.9)), across.Scale(r*1.9), dir.Scale(look.HeadLen*0.85*k), top.Scale(r*1.2), look.HeadCol, 0.1, 0)
 		gfx.setMat(mtPlain, 1, false)
-		gfx.putBasis(gfx.cube, at.add(top.scale(r*0.46)), across.scale(r*0.5), dir.scale(look.HeadLen*0.6*k), top.scale(0.004*k), accentCyan, 0, 0.3)
+		gfx.putBasis(gfx.cube, at.Add(top.Scale(r*0.46)), across.Scale(r*0.5), dir.Scale(look.HeadLen*0.6*k), top.Scale(0.004*k), accentCyan, 0, 0.3)
 	case headTaper:
 		// A paintbrush: a steel ferrule, then a tuft of bristles narrowing
 		// to a tip dipped in paint.
-		ferrule := neck.add(dir.scale(look.HeadLen * 0.3 * k))
-		body := ferrule.add(dir.scale(look.HeadLen * 0.35 * k))
+		ferrule := neck.Add(dir.Scale(look.HeadLen * 0.3 * k))
+		body := ferrule.Add(dir.Scale(look.HeadLen * 0.35 * k))
 		gfx.segment(gfx.cyl, neck, ferrule, r*0.85, matSteel, 0.9, 0)
 		gfx.setMat(mtFabric, 12, true)
 		gfx.segment(gfx.cyl, ferrule, body, r, look.HeadCol, 0.2, 0)
 		gfx.segment(gfx.cone, body, tip, r, look.HeadCol, 0.2, 0)
 		gfx.setMat(mtPlain, 1, false)
-		gfx.segment(gfx.cone, body.lerp(tip, 0.55), tip.add(dir.scale(0.002*k)), r*0.45, accentOrange, 0.4, 0)
+		gfx.segment(gfx.cone, body.Lerp(tip, 0.55), tip.Add(dir.Scale(0.002*k)), r*0.45, accentOrange, 0.4, 0)
 	case headFlare:
 		// A push broom: a painted head across the handle with steel end
 		// brackets and a hazard band, a thick row of bristles below.
 		width := look.HeadR * 3.2 * k
-		at := neck.add(dir.scale(0.03 * k))
+		at := neck.Add(dir.Scale(0.03 * k))
 		gfx.setMat(mtPaint, 8, true)
-		gfx.putBasis(gfx.cube, at, across.scale(width), dir.scale(0.06*k), depth(across, dir).scale(0.09*k), look.HandleCol, 0.3, 0)
+		gfx.putBasis(gfx.cube, at, across.Scale(width), dir.Scale(0.06*k), depth(across, dir).Scale(0.09*k), look.HandleCol, 0.3, 0)
 		gfx.setMat(mtHazard, 12, false)
-		gfx.putBasis(gfx.cube, at.add(top.scale(0.046*k)), across.scale(width*0.6), dir.scale(0.05*k), depth(across, dir).scale(0.004*k), colWhite, 0.3, 0)
+		gfx.putBasis(gfx.cube, at.Add(top.Scale(0.046*k)), across.Scale(width*0.6), dir.Scale(0.05*k), depth(across, dir).Scale(0.004*k), colWhite, 0.3, 0)
 		gfx.setMat(mtMetal, 6, true)
 		for _, sd := range []float64{-1, 1} {
-			gfx.putBasis(gfx.cube, at.add(across.scale(sd*width*0.5)), across.scale(0.02*k), dir.scale(0.08*k), depth(across, dir).scale(0.1*k), matSteel, 0.8, 0)
+			gfx.putBasis(gfx.cube, at.Add(across.Scale(sd*width*0.5)), across.Scale(0.02*k), dir.Scale(0.08*k), depth(across, dir).Scale(0.1*k), matSteel, 0.8, 0)
 		}
 		gfx.setMat(mtFabric, 10, true)
-		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.12*k)), across.scale(width*0.96), dir.scale(0.13*k), depth(across, dir).scale(0.07*k), look.HeadCol, 0.1, 0)
+		gfx.putBasis(gfx.cube, neck.Add(dir.Scale(0.12*k)), across.Scale(width*0.96), dir.Scale(0.13*k), depth(across, dir).Scale(0.07*k), look.HeadCol, 0.1, 0)
 	case headNozzle:
 		// A blower in the kit's language: a painted body with a dark rear
 		// cap and a hazard band, a steel nozzle in two steps, a glowing ring
 		// at the mouth and a status light on top.
-		body := neck.add(dir.scale(look.HeadLen * 0.5 * k))
-		mid := body.add(dir.scale(look.HeadLen * 0.28 * k))
+		body := neck.Add(dir.Scale(look.HeadLen * 0.5 * k))
+		mid := body.Add(dir.Scale(look.HeadLen * 0.28 * k))
 		gfx.setMat(mtPlain, 1, false)
-		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.04*k)), neck.sub(dir.scale(0.02*k)), r*0.9, matDark, 0.3, 0)
+		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.04*k)), neck.Sub(dir.Scale(0.02*k)), r*0.9, matDark, 0.3, 0)
 		gfx.setMat(mtPaint, 6, true)
-		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), body, r, look.HeadCol, 0.6, 0)
+		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), body, r, look.HeadCol, 0.6, 0)
 		gfx.setMat(mtHazard, 3, true)
-		gfx.segment(gfx.cyl, body.sub(dir.scale(0.04*k)), body.sub(dir.scale(0.01*k)), r*1.03, colWhite, 0.3, 0)
+		gfx.segment(gfx.cyl, body.Sub(dir.Scale(0.04*k)), body.Sub(dir.Scale(0.01*k)), r*1.03, colWhite, 0.3, 0)
 		gfx.setMat(mtMetal, 6, true)
 		gfx.segment(gfx.cyl, body, mid, r*0.74, matSteel, 0.8, 0)
 		gfx.segment(gfx.cyl, mid, tip, r*0.54, matSteel, 0.8, 0)
 		gfx.setMat(mtPlain, 1, false)
-		gfx.segment(gfx.cyl, mid.sub(dir.scale(0.008*k)), mid, r*0.8, matDark, 0.3, 0)
-		gfx.segment(gfx.cyl, tip.sub(dir.scale(0.012*k)), tip.add(dir.scale(0.002*k)), r*0.58, colCyan, 0, look.Glow)
+		gfx.segment(gfx.cyl, mid.Sub(dir.Scale(0.008*k)), mid, r*0.8, matDark, 0.3, 0)
+		gfx.segment(gfx.cyl, tip.Sub(dir.Scale(0.012*k)), tip.Add(dir.Scale(0.002*k)), r*0.58, colCyan, 0, look.Glow)
 		light := colGreen
 		if g.tankFull() {
 			light = colRed
 		}
-		gfx.putBasis(gfx.cube, neck.add(dir.scale(look.HeadLen*0.22*k)).add(top.scale(r)), across.scale(r*0.45), dir.scale(look.HeadLen*0.22*k), top.scale(0.012*k), light, 0, 0.9)
+		gfx.putBasis(gfx.cube, neck.Add(dir.Scale(look.HeadLen*0.22*k)).Add(top.Scale(r)), across.Scale(r*0.45), dir.Scale(look.HeadLen*0.22*k), top.Scale(0.012*k), light, 0, 0.9)
 	}
 	gfx.setMat(mtPlain, 1, false)
 }
 
 // depth is the third axis of a flat head lying across the handle.
-func depth(across, dir vec3) vec3 { return across.cross(dir) }
+func depth(across, dir vec3) vec3 { return across.Cross(dir) }
 
 // drawGlows draws the soft sprites: dust particles and crystal glows.
 // softness fades a particle as it reaches the ground, so its sprite
 // doesn't get cut by the terrain.
 func (g *Game) softness(p Particle) float64 {
-	return smoothstep(0, p.Size*3, g.terrain.Altitude(p.Pos))
+	return mathx.Smoothstep(0, p.Size*3, g.terrain.Altitude(p.Pos))
 }
 
 func (g *Game) drawGlows(cam rl.Camera3D) {
@@ -611,8 +615,8 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 			continue
 		}
 		c := p.C
-		c.A = uint8(200 * clamp01(p.Life/p.MaxLife*1.5) * g.softness(p))
-		rl.DrawBillboard(cam, gfx.glow, p.Pos.rl(), float32(p.Size*3), c)
+		c.A = uint8(200 * mathx.Clamp01(p.Life/p.MaxLife*1.5) * g.softness(p))
+		rl.DrawBillboard(cam, gfx.glow, toRL(p.Pos), float32(p.Size*3), c)
 	}
 
 	rl.BeginBlendMode(rl.BlendAdditive)
@@ -621,8 +625,8 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 			continue
 		}
 		c := p.C
-		c.A = uint8(255 * clamp01(p.Life/p.MaxLife*1.5) * g.softness(p))
-		rl.DrawBillboard(cam, gfx.glow, p.Pos.rl(), float32(p.Size*4), c)
+		c.A = uint8(255 * mathx.Clamp01(p.Life/p.MaxLife*1.5) * g.softness(p))
+		rl.DrawBillboard(cam, gfx.glow, toRL(p.Pos), float32(p.Size*4), c)
 	}
 	for _, gem := range g.nearGems {
 		vis := g.gemVisibility(gem)
@@ -631,10 +635,10 @@ func (g *Game) drawGlows(cam rl.Camera3D) {
 		}
 		pulse := 0.75 + 0.25*math.Sin(g.clock*3+float64(gem.Key))
 		c := color.RGBA{80, 200, 230, uint8(160 * vis * pulse)}
-		rl.DrawBillboard(cam, gfx.glow, g.gemPos(gem, 0.06+0.16*vis).rl(), float32(1.4*vis), c)
+		rl.DrawBillboard(cam, gfx.glow, toRL(g.gemPos(gem, 0.06+0.16*vis)), float32(1.4*vis), c)
 	}
 	if math.Mod(g.clock, 1.2) < 0.3 {
-		rl.DrawBillboard(cam, gfx.glow, beaconTop().rl(), 0.9, color.RGBA{255, 80, 60, 200})
+		rl.DrawBillboard(cam, gfx.glow, toRL(beaconTop()), 0.9, color.RGBA{255, 80, 60, 200})
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()

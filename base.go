@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"mars_sweeper/internal/mathx"
 	"math"
 	"slices"
 )
@@ -81,12 +82,12 @@ func setupBase() {
 			log.Printf("base: %s links to %s, which isn't built", bp.ID, bp.Link)
 			continue
 		}
-		d := to.At.sub(bp.At)
-		d = vec3{d.X, 0, d.Z}.norm()
+		d := to.At.Sub(bp.At)
+		d = vec3{d.X, 0, d.Z}.Norm()
 		bp.addDoor(math.Atan2(d.Z, d.X))
 		to.addDoor(math.Atan2(-d.Z, -d.X))
 		corridors = append(corridors, corridor{
-			to.At.sub(d.scale(to.Shape.Radius - 0.2)), bp.At.add(d.scale(bp.Shape.Radius - 0.2)), doorWidth, 2.4,
+			to.At.Sub(d.Scale(to.Shape.Radius - 0.2)), bp.At.Add(d.Scale(bp.Shape.Radius - 0.2)), doorWidth, 2.4,
 		})
 	}
 	corridors = append(corridors, corridor{vec3{0, 0, -(plans[0].Shape.Radius - 0.2)}, airlockEnd, doorWidth + 0.2, 2.6})
@@ -99,7 +100,7 @@ func setupBase() {
 	for _, bp := range plans {
 		for _, p := range bp.Props {
 			if qualify(p.Kit) == "core:maptable" {
-				tableSpot = bp.At.add(p.At)
+				tableSpot = bp.At.Add(p.At)
 			}
 		}
 	}
@@ -117,9 +118,9 @@ func (bp *Blueprint) addDoor(a float64) {
 	bp.Doors = append(bp.Doors, Door{a})
 }
 
-func toWorld(local vec3) vec3 { return basePos.add(local) }
+func toWorld(local vec3) vec3 { return basePos.Add(local) }
 
-func toLocal(world vec3) vec3 { return world.sub(basePos) }
+func toLocal(world vec3) vec3 { return world.Sub(basePos) }
 
 // panel is one wall section of a room: its middle at floor level, the angle
 // it faces, and its width. Doorways get a short panel above the door.
@@ -135,7 +136,7 @@ func (r room) panels() []panel {
 	var out []panel
 	for i := range n {
 		a := (float64(i) + 0.5) * 2 * math.Pi / float64(n)
-		mid := r.center.add(vec3{math.Cos(a) * r.radius, 0, math.Sin(a) * r.radius})
+		mid := r.center.Add(vec3{math.Cos(a) * r.radius, 0, math.Sin(a) * r.radius})
 		p := panel{mid: mid, angle: a, width: width, y0: 0, y1: r.wallH}
 		for _, o := range r.openings {
 			if angleDist(a, o) < (doorWidth/2)/r.radius+math.Pi/float64(n)*0.9 {
@@ -164,14 +165,14 @@ type plate struct {
 func junctionPlates() []plate {
 	var out []plate
 	for _, c := range corridors {
-		axis := c.to.sub(c.from).norm()
+		axis := c.to.Sub(c.from).Norm()
 		side := c.side()
 		for _, r := range rooms {
 			for _, end := range []vec3{c.from, c.to} {
-				if math.Abs(end.sub(r.center).length()-r.radius) > 0.6 {
+				if math.Abs(end.Sub(r.center).Length()-r.radius) > 0.6 {
 					continue // this end doesn't open into this room
 				}
-				wall := r.center.add(end.sub(r.center).norm().scale(r.radius))
+				wall := r.center.Add(end.Sub(r.center).Norm().Scale(r.radius))
 				half := c.width/2 + wallThick
 				// Each side plate runs from the corridor's wall to the edge of
 				// the first round panel left standing: the round wall curves
@@ -179,18 +180,18 @@ func junctionPlates() []plate {
 				// a slit open to the outside.
 				reach := half
 				for _, s := range []float64{-1, 1} {
-					a := wall.add(side.scale(s * half))
+					a := wall.Add(side.Scale(s * half))
 					e := nearestPanelEdge(r, a)
-					d := e.sub(a)
-					l := d.length()
-					d = d.scale(1 / l)
-					mid := a.add(e).scale(0.5)
+					d := e.Sub(a)
+					l := d.Length()
+					d = d.Scale(1 / l)
+					mid := a.Add(e).Scale(0.5)
 					nrm := vec3{d.Z, 0, -d.X}
-					if nrm.dot(mid.sub(r.center)) < 0 {
-						nrm = nrm.scale(-1) // facing out of the room, like the others
+					if nrm.Dot(mid.Sub(r.center)) < 0 {
+						nrm = nrm.Scale(-1) // facing out of the room, like the others
 					}
 					out = append(out, plate{mid, nrm, l + 0.12, 0, r.wallH})
-					reach = math.Max(reach, math.Abs(e.sub(wall).dot(side))+0.1)
+					reach = math.Max(reach, math.Abs(e.Sub(wall).Dot(side))+0.1)
 				}
 				out = append(out, plate{wall, axis, 2 * reach, c.height, r.wallH})
 			}
@@ -207,9 +208,9 @@ func nearestPanelEdge(r room, p vec3) vec3 {
 		if q.y0 > 0 {
 			continue
 		}
-		t := vec3{-math.Sin(q.angle), 0, math.Cos(q.angle)}.scale(q.width / 2)
-		for _, e := range []vec3{q.mid.sub(t), q.mid.add(t)} {
-			if d := e.sub(p).length(); d < bestD {
+		t := vec3{-math.Sin(q.angle), 0, math.Cos(q.angle)}.Scale(q.width / 2)
+		for _, e := range []vec3{q.mid.Sub(t), q.mid.Add(t)} {
+			if d := e.Sub(p).Length(); d < bestD {
 				best, bestD = e, d
 			}
 		}
@@ -228,27 +229,27 @@ func baseWalls() []segment2 {
 			if p.y0 > 0 {
 				continue // doorway
 			}
-			t := vec3{-math.Sin(p.angle), 0, math.Cos(p.angle)}.scale(p.width / 2)
-			walls = append(walls, segment2{p.mid.sub(t), p.mid.add(t)})
+			t := vec3{-math.Sin(p.angle), 0, math.Cos(p.angle)}.Scale(p.width / 2)
+			walls = append(walls, segment2{p.mid.Sub(t), p.mid.Add(t)})
 		}
 	}
 	for _, c := range corridors {
-		side := c.side().scale(c.width/2 + wallThick/2)
-		walls = append(walls, segment2{c.from.add(side), c.to.add(side)}, segment2{c.from.sub(side), c.to.sub(side)})
+		side := c.side().Scale(c.width/2 + wallThick/2)
+		walls = append(walls, segment2{c.from.Add(side), c.to.Add(side)}, segment2{c.from.Sub(side), c.to.Sub(side)})
 	}
 	for _, p := range junctionPlates() {
 		if p.y0 > 0 {
 			continue // above the corridor
 		}
-		across := vec3{-p.normal.Z, 0, p.normal.X}.scale(p.width / 2)
-		walls = append(walls, segment2{p.mid.sub(across), p.mid.add(across)})
+		across := vec3{-p.normal.Z, 0, p.normal.X}.Scale(p.width / 2)
+		walls = append(walls, segment2{p.mid.Sub(across), p.mid.Add(across)})
 	}
 	return walls
 }
 
 // side is the horizontal unit vector across the corridor.
 func (c corridor) side() vec3 {
-	d := c.to.sub(c.from).norm()
+	d := c.to.Sub(c.from).Norm()
 	return vec3{-d.Z, 0, d.X}
 }
 
@@ -267,18 +268,18 @@ func collideBase(p *Player, walls []segment2) {
 	}
 	flat := vec3{local.X, 0, local.Z}
 	for _, w := range walls {
-		ab := w.b.sub(w.a)
-		t := clamp01(flat.sub(w.a).dot(ab) / ab.dot(ab))
-		closest := w.a.add(ab.scale(t))
-		d := flat.sub(closest)
-		if l := d.length(); l < radius+wallThick/2 && l > 1e-9 {
-			flat = closest.add(d.scale((radius + wallThick/2) / l))
+		ab := w.b.Sub(w.a)
+		t := mathx.Clamp01(flat.Sub(w.a).Dot(ab) / ab.Dot(ab))
+		closest := w.a.Add(ab.Scale(t))
+		d := flat.Sub(closest)
+		if l := d.Length(); l < radius+wallThick/2 && l > 1e-9 {
+			flat = closest.Add(d.Scale((radius + wallThick/2) / l))
 		}
 	}
 	for _, o := range baseObstacles {
-		d := flat.sub(vec3{o.at.X, 0, o.at.Z})
-		if l := d.length(); l < radius+o.radius && l > 1e-9 {
-			flat = vec3{o.at.X, 0, o.at.Z}.add(d.scale((radius + o.radius) / l))
+		d := flat.Sub(vec3{o.at.X, 0, o.at.Z})
+		if l := d.Length(); l < radius+o.radius && l > 1e-9 {
+			flat = vec3{o.at.X, 0, o.at.Z}.Add(d.Scale((radius + o.radius) / l))
 		}
 	}
 	p.Pos = toWorld(vec3{flat.X, local.Y, flat.Z})
@@ -295,9 +296,9 @@ func indoors(local vec3) bool {
 		}
 	}
 	for _, c := range corridors {
-		d := c.to.sub(c.from)
-		t := vec3{local.X, 0, local.Z}.sub(c.from).dot(d) / d.dot(d)
-		across := math.Abs(vec3{local.X, 0, local.Z}.sub(c.from).dot(c.side()))
+		d := c.to.Sub(c.from)
+		t := vec3{local.X, 0, local.Z}.Sub(c.from).Dot(d) / d.Dot(d)
+		across := math.Abs(vec3{local.X, 0, local.Z}.Sub(c.from).Dot(c.side()))
 		if t >= 0 && t <= 1 && across < c.width/2 {
 			return true
 		}
@@ -309,10 +310,10 @@ func indoors(local vec3) bool {
 func baseLights() []vec3 {
 	lights := []vec3{{0, 2.7, 0}}
 	for _, r := range rooms[1:] {
-		lights = append(lights, r.center.add(vec3{0, 2.3, 0}))
+		lights = append(lights, r.center.Add(vec3{0, 2.3, 0}))
 	}
 	for _, c := range corridors {
-		lights = append(lights, c.from.lerp(c.to, 0.5).add(vec3{0, 2.1, 0}))
+		lights = append(lights, c.from.Lerp(c.to, 0.5).Add(vec3{0, 2.1, 0}))
 	}
 	return lights
 }
@@ -337,13 +338,13 @@ func (g *Game) nearbyUse() (interactable, bool) {
 	best, found := interactable{}, false
 	bestDist := math.Inf(1)
 	for _, it := range interactables {
-		to := vec3{it.at.X, 0, it.at.Z}.sub(flat)
-		d := to.length()
+		to := vec3{it.at.X, 0, it.at.Z}.Sub(flat)
+		d := to.Length()
 		if d > it.reach || d >= bestDist {
 			continue
 		}
-		heading := toLocal(g.player.Pos.add(g.player.Heading)).sub(local)
-		if d > 0.8 && heading.dot(to.norm()) < 0.3 {
+		heading := toLocal(g.player.Pos.Add(g.player.Heading)).Sub(local)
+		if d > 0.8 && heading.Dot(to.Norm()) < 0.3 {
 			continue // standing next to it but looking away
 		}
 		best, found, bestDist = it, true, d

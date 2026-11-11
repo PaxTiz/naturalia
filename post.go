@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/mathx"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -92,7 +93,7 @@ func (p *postFX) resize() {
 // adapt moves the exposure toward what the scene needs: brighter at night,
 // and higher indoors, so stepping out into the day dazzles for a moment.
 func (p *postFX) adapt(dt, sunUp float64, inside bool) {
-	target := baseExposure * (2.6 - 1.6*smoothstep(-0.15, 0.2, sunUp))
+	target := baseExposure * (2.6 - 1.6*mathx.Smoothstep(-0.15, 0.2, sunUp))
 	if inside {
 		target = baseExposure * 1.25
 	}
@@ -142,9 +143,9 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	rl.SetShaderValue(p.img, p.locs.time, []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
 	// Light shafts when the sun is low and ahead.
 	eye := vec3{float64(cam.Position.X), float64(cam.Position.Y), float64(cam.Position.Z)}
-	fwd := vec3{float64(cam.Target.X), float64(cam.Target.Y), float64(cam.Target.Z)}.sub(eye).norm()
-	shafts := smoothstep(0.3, 0.85, fwd.dot(sunDir)) * smoothstep(-0.12, 0.0, sunUp) * (1 - smoothstep(0.15, 0.45, sunUp))
-	sp := rl.GetWorldToScreen(eye.add(sunDir.scale(1000)).rl(), cam)
+	fwd := vec3{float64(cam.Target.X), float64(cam.Target.Y), float64(cam.Target.Z)}.Sub(eye).Norm()
+	shafts := mathx.Smoothstep(0.3, 0.85, fwd.Dot(sunDir)) * mathx.Smoothstep(-0.12, 0.0, sunUp) * (1 - mathx.Smoothstep(0.15, 0.45, sunUp))
+	sp := rl.GetWorldToScreen(toRL(eye.Add(sunDir.Scale(1000))), cam)
 	sw, sh := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
 	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
 	// Written as is, without blending: the alpha holds the luma for FXAA,

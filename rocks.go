@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/mathx"
 	"math"
 	"unsafe"
 
@@ -37,9 +38,9 @@ func sculptRock(seed uint64, rings, slices int) rl.Mesh {
 	norms := unsafe.Slice(mesh.Normals, n*3)
 	pos := make([]vec3, n)
 	for i := range n {
-		d := vec3{float64(verts[i*3]), float64(verts[i*3+1]), float64(verts[i*3+2])}.norm()
-		r := 1 + 0.55*(fbm3(d.scale(1.4), seed, 3)-0.5) + 0.12*(fbm3(d.scale(4), seed+1, 2)-0.5)
-		p := d.scale(r)
+		d := vec3{float64(verts[i*3]), float64(verts[i*3+1]), float64(verts[i*3+2])}.Norm()
+		r := 1 + 0.55*(mathx.Fbm3(d.Scale(1.4), seed, 3)-0.5) + 0.12*(mathx.Fbm3(d.Scale(4), seed+1, 2)-0.5)
+		p := d.Scale(r)
 		p.Y *= 0.68
 		if p.Y < -0.15 {
 			p.Y = -0.15 + (p.Y+0.15)*0.25 // flat-ish bottom
@@ -52,16 +53,16 @@ func sculptRock(seed uint64, rings, slices int) rl.Mesh {
 	}
 	acc := map[[3]int32]vec3{}
 	for t := 0; t+2 < n; t += 3 {
-		fn := pos[t+1].sub(pos[t]).cross(pos[t+2].sub(pos[t]))
-		if fn.dot(pos[t]) < 0 {
-			fn = fn.scale(-1)
+		fn := pos[t+1].Sub(pos[t]).Cross(pos[t+2].Sub(pos[t]))
+		if fn.Dot(pos[t]) < 0 {
+			fn = fn.Scale(-1)
 		}
 		for j := range 3 {
-			acc[key(pos[t+j])] = acc[key(pos[t+j])].add(fn)
+			acc[key(pos[t+j])] = acc[key(pos[t+j])].Add(fn)
 		}
 	}
 	for i, p := range pos {
-		nr := acc[key(p)].norm()
+		nr := acc[key(p)].Norm()
 		verts[i*3], verts[i*3+1], verts[i*3+2] = float32(p.X), float32(p.Y), float32(p.Z)
 		norms[i*3], norms[i*3+1], norms[i*3+2] = float32(nr.X), float32(nr.Y), float32(nr.Z)
 	}
@@ -84,32 +85,32 @@ type rock struct {
 // nor on the polar ice.
 func (w *World) rocksIn(k tileKey) []rock {
 	f, tx, ty := k.split()
-	count := int(hash3(f, tx, ty, w.Seed+201) * 8 * terrain().Rocks)
+	count := int(mathx.Hash3(f, tx, ty, w.Seed+201) * 8 * terrain().Rocks)
 	var rocks []rock
 	for i := range count {
 		s := w.Seed + 210 + uint64(i)*7
-		ci := tx*tileCells + int(hash3(f, tx, ty, s)*tileCells)
-		cj := ty*tileCells + int(hash3(f, tx, ty, s+1)*tileCells)
-		size := 0.2 + 0.7*math.Pow(hash3(f, tx, ty, s+2), 3)
-		if hash3(f, tx, ty, s+3) < 0.1 {
-			size = 1.4 + 1.3*hash3(f, tx, ty, s+4) // a big boulder
+		ci := tx*tileCells + int(mathx.Hash3(f, tx, ty, s)*tileCells)
+		cj := ty*tileCells + int(mathx.Hash3(f, tx, ty, s+1)*tileCells)
+		size := 0.2 + 0.7*math.Pow(mathx.Hash3(f, tx, ty, s+2), 3)
+		if mathx.Hash3(f, tx, ty, s+3) < 0.1 {
+			size = 1.4 + 1.3*mathx.Hash3(f, tx, ty, s+4) // a big boulder
 		}
 		d := cellDir(f, ci, cj)
 		if arcDist(d, baseUp) < baseReach+size+4 || (Relief{seed: w.Seed}).Ice(d) > 0.3 {
 			continue
 		}
-		rocks = append(rocks, rock{d, size, int(hash3(f, tx, ty, s+5) * rockShapes), hash3(f, tx, ty, s+6) * 2 * math.Pi, hash3(f, tx, ty, s+7)})
+		rocks = append(rocks, rock{d, size, int(mathx.Hash3(f, tx, ty, s+5) * rockShapes), mathx.Hash3(f, tx, ty, s+6) * 2 * math.Pi, mathx.Hash3(f, tx, ty, s+7)})
 	}
 	return rocks
 }
 
 // RocksNear lists the rocks within dist meters of c.
 func (w *World) RocksNear(c vec3, dist float64) []rock {
-	c = c.norm()
+	c = c.Norm()
 	var out []rock
 	tilesNear(c, dist, func(k tileKey) {
 		for _, r := range w.rocksIn(k) {
-			if r.dir.sub(c).length()*marsRadius <= dist {
+			if r.dir.Sub(c).Length()*marsRadius <= dist {
 				out = append(out, r)
 			}
 		}
@@ -124,16 +125,16 @@ func (g *Game) drawRocks() {
 	var mats [rockShapes][]rl.Matrix
 	for _, r := range g.nearRocks {
 		up := r.dir
-		t1, t2 := tangentBasis(up)
-		ax := t1.scale(math.Cos(r.yaw)).add(t2.scale(math.Sin(r.yaw)))
-		az := ax.cross(up)
+		t1, t2 := mathx.TangentBasis(up)
+		ax := t1.Scale(math.Cos(r.yaw)).Add(t2.Scale(math.Sin(r.yaw)))
+		az := ax.Cross(up)
 		ground := g.terrain.Surface(r.dir)
-		size := r.size * (1 - smoothstep(rockDrawDist*0.8, rockDrawDist, ground.sub(g.player.Pos).length()))
-		mats[r.shape] = append(mats[r.shape], basisMatrix(ground.sub(up.scale(size*0.12)), ax.scale(size), up.scale(size), az.scale(size)))
+		size := r.size * (1 - mathx.Smoothstep(rockDrawDist*0.8, rockDrawDist, ground.Sub(g.player.Pos).Length()))
+		mats[r.shape] = append(mats[r.shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
 	}
 	gfx.drawInstanced(gfx.rocks, mats[:], func(k int) color.RGBA {
 		v := 140 + 15*float64(k)
-		return rgb(v, v*0.6, v*0.46) // rusty red, like the regolith
+		return mathx.RGB(v, v*0.6, v*0.46) // rusty red, like the regolith
 	})
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/mathx"
 	"math"
 	"math/rand/v2"
 	"time"
@@ -237,20 +238,20 @@ func (g *Game) updateAim() {
 	p := &g.player
 	eye, fwd := p.Eye(), p.Forward()
 	g.aim, g.aimOK = g.terrain.Raycast(eye, fwd, g.tool().Reach)
-	if g.aimOK && arcDist(g.aim.norm(), baseUp) < baseReach {
+	if g.aimOK && arcDist(g.aim.Norm(), baseUp) < baseReach {
 		g.aimOK = false // the ground under the base isn't swept
 	}
 
 	// The held tool: lower right of the view, pointing at the aimed spot.
 	bob := math.Sin(p.walkPhase) * 0.015 * p.moveAmount
-	base := eye.add(fwd.scale(0.3)).add(p.Right().scale(0.26)).add(p.Up().scale(-0.24 + bob))
+	base := eye.Add(fwd.Scale(0.3)).Add(p.Right().Scale(0.26)).Add(p.Up().Scale(-0.24 + bob))
 	dir := fwd
 	if g.aimOK {
-		dir = g.aim.sub(base).norm()
+		dir = g.aim.Sub(base).Norm()
 	}
 	look := g.tool().Look
 	g.toolBase, g.toolDir = base, dir
-	g.toolTip = base.add(dir.scale((look.HandleLen + look.HeadLen) * toolViewScale))
+	g.toolTip = base.Add(dir.Scale((look.HandleLen + look.HeadLen) * toolViewScale))
 }
 
 func (g *Game) updateSweeping(dt float64) {
@@ -265,10 +266,10 @@ func (g *Game) updateSweeping(dt float64) {
 	from, steps := g.aim, 1
 	if g.sweeping {
 		from = g.lastSweep
-		steps = min(8, int(g.aim.sub(from).length()/(tool.Radius*0.5))+1)
+		steps = min(8, int(g.aim.Sub(from).Length()/(tool.Radius*0.5))+1)
 	}
 	for s := 1; s <= steps; s++ {
-		p := from.lerp(g.aim, float64(s)/float64(steps))
+		p := from.Lerp(g.aim, float64(s)/float64(steps))
 		g.collect(g.world.Clean(p, tool.Radius, amount, g.space()), p, tool.Radius, g.toolTip)
 	}
 	for _, gem := range g.world.CollectGems(g.aim, tool.Radius) {
@@ -287,16 +288,16 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	g.st.TotalDust += grams
 	g.emit(Event{Name: evDust, At: at, Amount: grams})
 	n := min(8, int(grams*4+g.rng.Float64()))
-	up := at.norm()
-	t1, t2 := tangentBasis(up)
+	up := at.Norm()
+	t1, t2 := mathx.TangentBasis(up)
 	for range n {
 		a := g.rng.Float64() * 2 * math.Pi
 		r := math.Sqrt(g.rng.Float64()) * radius
-		ground := g.terrain.Surface(at.add(t1.scale(math.Cos(a) * r)).add(t2.scale(math.Sin(a) * r)))
-		start := ground.add(up.scale(0.05))
+		ground := g.terrain.Surface(at.Add(t1.Scale(math.Cos(a) * r)).Add(t2.Scale(math.Sin(a) * r)))
+		start := ground.Add(up.Scale(0.05))
 		travel := 0.35 + g.rng.Float64()*0.3
 		g.addParticle(Particle{
-			Pos: start, Vel: sink.sub(start).scale(1 / travel),
+			Pos: start, Vel: sink.Sub(start).Scale(1 / travel),
 			MaxLife: travel, Size: 0.03 + g.rng.Float64()*0.04,
 			C: color.RGBA{210, 140, 95, 255},
 		})
@@ -308,11 +309,11 @@ func (g *Game) collectGem(gem Gem) {
 	g.st.Credits += v
 	g.st.TotalEarned += v
 	g.emit(Event{Name: evGem, At: gem.Dir, Amount: v})
-	pos := g.terrain.Surface(gem.Dir).add(gem.Dir.scale(0.3))
-	g.floaters = append(g.floaters, Floater{Pos: pos.add(gem.Dir.scale(0.4)), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
+	pos := g.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(0.3))
+	g.floaters = append(g.floaters, Floater{Pos: pos.Add(gem.Dir.Scale(0.4)), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
 	g.sfx.beep(0.07, 0.3, 0.16, 880, 1175, 1568)
 	for range 20 {
-		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.add(gem.Dir.scale(0.6)).scale(4)
+		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.Add(gem.Dir.Scale(0.6)).Scale(4)
 		g.addParticle(Particle{Pos: pos, Vel: vel, MaxLife: 0.7, Size: 0.06, C: colCyan, Falls: true, Additive: true})
 	}
 }
@@ -352,7 +353,7 @@ func (g *Game) updateDrones(dt float64) {
 	docked := arcDist(g.player.LocalUp(), baseUp) < baseReach+15
 	for i, d := range g.drones {
 		d.phase += dt
-		up := d.Pos.norm()
+		up := d.Pos.Norm()
 		hover := droneHover
 		switch {
 		case docked:
@@ -363,8 +364,8 @@ func (g *Game) updateDrones(dt float64) {
 			hover += 0.5 // tank full: drones hover in place, waiting
 		default:
 			d.retarget -= dt
-			arrived := up.sub(d.Target.norm()).length()*marsRadius < 0.3
-			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || arcDist(d.Target.norm(), baseUp) < baseReach {
+			arrived := up.Sub(d.Target.Norm()).Length()*marsRadius < 0.3
+			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || arcDist(d.Target.Norm(), baseUp) < baseReach {
 				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
 				d.retarget = 8 + g.rng.Float64()*5
 			}
@@ -372,18 +373,18 @@ func (g *Game) updateDrones(dt float64) {
 		if g.tankFull() && !docked {
 			d.Target = d.Pos
 		}
-		delta := d.Target.sub(d.Pos)
-		delta = delta.sub(up.scale(delta.dot(up))) // stay along the ground
-		if delta.length() > 0.05 {
-			d.Pos = d.Pos.add(delta.norm().scale(math.Min(delta.length(), droneSpeed*dt)))
-			up = d.Pos.norm()
+		delta := d.Target.Sub(d.Pos)
+		delta = delta.Sub(up.Scale(delta.Dot(up))) // stay along the ground
+		if delta.Length() > 0.05 {
+			d.Pos = d.Pos.Add(delta.Norm().Scale(math.Min(delta.Length(), droneSpeed*dt)))
+			up = d.Pos.Norm()
 		}
 		if arcDist(up, baseUp) < baseReach+6 {
 			hover = math.Max(hover, dockAltitude) // fly over the domes, not through them
 		}
-		r := d.Pos.length()
+		r := d.Pos.Length()
 		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
-		d.Pos = up.scale(r)
+		d.Pos = up.Scale(r)
 		if docked || g.tankFull() || arcDist(up, baseUp) < baseReach {
 			continue
 		}
@@ -397,7 +398,7 @@ func (g *Game) updateDrones(dt float64) {
 // updateBase animates the airlock doors and the incinerator glow.
 func (g *Game) updateBase(dt float64) {
 	open := 0.0
-	if toLocal(g.player.Pos).sub(airlockEnd).length() < 4 {
+	if toLocal(g.player.Pos).Sub(airlockEnd).Length() < 4 {
 		open = 1
 	}
 	g.doorOpen += (open - g.doorOpen) * math.Min(1, dt*4)
@@ -413,29 +414,29 @@ func (g *Game) use(it interactable) {
 // deposit feeds the tank's dust to the incinerator at the local point in,
 // which turns it into credits.
 func (g *Game) deposit(in vec3) {
-	hopper := toWorld(in.add(vec3{0, 2.6, 0}))
+	hopper := toWorld(in.Add(vec3{0, 2.6, 0}))
 	if g.st.Tank < 1 {
-		g.floaters = append(g.floaters, Floater{Pos: hopper.add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
+		g.floaters = append(g.floaters, Floater{Pos: hopper.Add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
 		g.sfx.beep(0, 0.25, 0.12, 220)
 		return
 	}
 	earned := g.st.Tank * g.priceMult()
 	g.sell()
 	g.burn = 2
-	g.floaters = append(g.floaters, Floater{Pos: hopper.add(vec3{0, 0.6, 0}), Life: 2, Text: "+" + fmtNum(earned) + " cr", C: colGold})
+	g.floaters = append(g.floaters, Floater{Pos: hopper.Add(vec3{0, 0.6, 0}), Life: 2, Text: "+" + fmtNum(earned) + " cr", C: colGold})
 	// A stream of dust flying from the player into the hopper.
-	from := g.player.Eye().sub(g.player.LocalUp().scale(0.6))
+	from := g.player.Eye().Sub(g.player.LocalUp().Scale(0.6))
 	for range 60 {
-		start := from.add(vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.scale(0.6))
+		start := from.Add(vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.Scale(0.6))
 		travel := 0.4 + g.rng.Float64()*0.6
 		g.addParticle(Particle{
-			Pos: start, Vel: hopper.sub(start).scale(1 / travel),
+			Pos: start, Vel: hopper.Sub(start).Scale(1 / travel),
 			MaxLife: travel, Size: 0.04 + g.rng.Float64()*0.05,
 			C: color.RGBA{210, 140, 95, 255},
 		})
 	}
 	for range 30 {
-		vel := vec3{g.rng.Float64() - 0.5, 1 + g.rng.Float64(), g.rng.Float64() - 0.5}.scale(1.5)
+		vel := vec3{g.rng.Float64() - 0.5, 1 + g.rng.Float64(), g.rng.Float64() - 0.5}.Scale(1.5)
 		g.addParticle(Particle{Pos: hopper, Vel: vel, MaxLife: 0.6 + g.rng.Float64()*0.6, Size: 0.06, C: accentOrange, Additive: true})
 	}
 }
@@ -477,9 +478,9 @@ func (g *Game) updateEffects(dt float64) {
 		if p.Life <= 0 {
 			continue
 		}
-		p.Pos = p.Pos.add(p.Vel.scale(dt))
+		p.Pos = p.Pos.Add(p.Vel.Scale(dt))
 		if p.Falls {
-			p.Vel = p.Vel.sub(p.Pos.norm().scale(marsGravity * dt))
+			p.Vel = p.Vel.Sub(p.Pos.Norm().Scale(marsGravity * dt))
 		}
 		kept = append(kept, p)
 	}
@@ -488,7 +489,7 @@ func (g *Game) updateEffects(dt float64) {
 	keptF := g.floaters[:0]
 	for _, f := range g.floaters {
 		f.Life -= dt
-		f.Pos = f.Pos.add(f.Pos.norm().scale(0.6 * dt))
+		f.Pos = f.Pos.Add(f.Pos.Norm().Scale(0.6 * dt))
 		if f.Life > 0 {
 			keptF = append(keptF, f)
 		}

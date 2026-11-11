@@ -1,6 +1,9 @@
 package main
 
-import rl "github.com/gen2brain/raylib-go/raylib"
+import (
+	rl "github.com/gen2brain/raylib-go/raylib"
+	"mars_sweeper/internal/mathx"
+)
 
 const (
 	maxSteps   = 48   // footprints kept: a trail of about 35 m
@@ -25,7 +28,7 @@ func (f *footprints) update(p *Player) bool {
 	if !p.onGround {
 		return false
 	}
-	if f.n > 0 && p.Pos.sub(f.last).length() < stepLength {
+	if f.n > 0 && p.Pos.Sub(f.last).Length() < stepLength {
 		return false
 	}
 	f.last = p.Pos
@@ -33,7 +36,7 @@ func (f *footprints) update(p *Player) bool {
 	if f.n%2 == 1 {
 		side = -side
 	}
-	f.ring[f.n%maxSteps] = footprint{p.Pos.add(p.Right().scale(side)), p.Heading}
+	f.ring[f.n%maxSteps] = footprint{p.Pos.Add(p.Right().Scale(side)), p.Heading}
 	f.n++
 	return true
 }
@@ -46,7 +49,7 @@ func (f *footprints) upload(gfx *Graphics) {
 	dir := make([]float32, 0, count*4)
 	for i := range count {
 		s := f.ring[(f.n-1-i)%maxSteps] // newest first
-		strength := 1 - smoothstep(maxSteps*0.7, maxSteps, float64(i))
+		strength := 1 - mathx.Smoothstep(maxSteps*0.7, maxSteps, float64(i))
 		pos = append(pos, float32(s.pos.X), float32(s.pos.Y), float32(s.pos.Z), 0)
 		dir = append(dir, float32(s.dir.X), float32(s.dir.Y), float32(s.dir.Z), float32(strength))
 	}

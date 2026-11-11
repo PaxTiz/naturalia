@@ -133,7 +133,7 @@ func (s *script) api(c *Content) map[string]any {
 		"level": func(id string) int {
 			return s.game().st.Levels[refIn(s.mod, id, func(id string) bool { _, ok := content.Upgrades.Get(id); return ok })]
 		},
-		"isDay":  func() bool { return sunDir.dot(s.game().player.LocalUp()) > 0.05 },
+		"isDay":  func() bool { return sunDir.Dot(s.game().player.LocalUp()) > 0.05 },
 		"inside": func() string { return s.game().inside },
 		"clock":  func() float64 { return s.game().clock },
 		// distanceToBase: in meters along the ground.
@@ -152,7 +152,7 @@ func (s *script) api(c *Content) map[string]any {
 			g.st.Credits = math.Max(0, g.st.Credits+n)
 			if n > 0 {
 				g.st.TotalEarned += n
-				g.floaters = append(g.floaters, Floater{Pos: g.player.Eye().add(g.player.Forward().scale(2)), Life: 2, Text: "+" + fmtNum(n) + " cr", C: colGold})
+				g.floaters = append(g.floaters, Floater{Pos: g.player.Eye().Add(g.player.Forward().Scale(2)), Life: 2, Text: "+" + fmtNum(n) + " cr", C: colGold})
 			}
 		},
 		// burst throws sparks around the player: color "#rrggbb".
@@ -162,9 +162,9 @@ func (s *script) api(c *Content) map[string]any {
 			if err != nil {
 				c = colCyan
 			}
-			at := g.player.Eye().add(g.player.Forward().scale(2))
+			at := g.player.Eye().Add(g.player.Forward().Scale(2))
 			for range min(n, 200) {
-				vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.add(g.player.LocalUp().scale(0.6)).scale(4)
+				vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.Add(g.player.LocalUp().Scale(0.6)).Scale(4)
 				g.addParticle(Particle{Pos: at, Vel: vel, MaxLife: 0.9, Size: 0.06, C: c, Falls: true, Additive: true})
 			}
 		},

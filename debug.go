@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"mars_sweeper/internal/mathx"
 	"math"
 	"os"
 	"runtime"
@@ -49,14 +50,14 @@ func (g *Game) drawDebug() {
 	}
 	gfx, u := g.gfx, uiScale()
 	t := g.terrain
-	up := g.player.Pos.norm()
+	up := g.player.Pos.Norm()
 	lines := []string{
 		fmt.Sprintf("FPS %d   image %.1f ms   pire %.1f ms", rl.GetFPS(), d.frameMs, d.worstMs),
 		fmt.Sprintf("terrain  %d dessinés  %d chargés  %d en attente", d.patches, len(t.loaded), t.pending),
 		fmt.Sprintf("cailloux %d   rochers %d", d.pebbles, len(g.nearRocks)),
 		fmt.Sprintf("lat %.2f°  lon %.2f°", math.Asin(up.Y)*180/math.Pi, math.Atan2(up.Z, up.X)*180/math.Pi),
 		fmt.Sprintf("alt sol %.1f m   relief %.1f m", t.Altitude(g.player.Pos), t.Height(up)),
-		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.dot(sunDir))*180/math.Pi, d.sun, d.ao),
+		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(sunDir))*180/math.Pi, d.sun, d.ao),
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.world.DustAt(up), len(g.world.tiles)),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
 		fmt.Sprintf("packs %s   entités %d", packList(), len(g.st.Entities)),
@@ -106,18 +107,18 @@ func newShotRun(g *Game) *shotRun {
 	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
 		var d vec3
 		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
-		up := d.norm()
+		up := d.Norm()
 		g.player.Pos = g.terrain.Surface(up)
-		h := sunDir.sub(up.scale(sunDir.dot(up)))
-		if h.length() < 0.1 { // the sun is overhead or right underfoot
-			h, _ = tangentBasis(up)
+		h := sunDir.Sub(up.Scale(sunDir.Dot(up)))
+		if h.Length() < 0.1 { // the sun is overhead or right underfoot
+			h, _ = mathx.TangentBasis(up)
 		}
-		g.player.Heading = h.norm()
-		g.player.Pitch = max(-0.25, math.Asin(up.dot(sunDir))-0.12)
+		g.player.Heading = h.Norm()
+		g.player.Pitch = max(-0.25, math.Asin(up.Dot(sunDir))-0.12)
 		var turn float64
 		if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TURN"), "%f", &turn); err == nil {
 			r := g.player.Right()
-			g.player.Heading = g.player.Heading.scale(math.Cos(turn)).add(r.scale(math.Sin(turn)))
+			g.player.Heading = g.player.Heading.Scale(math.Cos(turn)).Add(r.Scale(math.Sin(turn)))
 		}
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
@@ -163,9 +164,9 @@ func (s *shotRun) tick(g *Game) {
 	fmt.Sscanf(os.Getenv("MS_SHOT_JITTER"), "%f", &jit)
 	if jit != 0 && s.frames == 241 {
 		if os.Getenv("MS_SHOT_STEP") != "" { // a step forward instead of a turn
-			g.player.Pos = g.player.Pos.add(g.player.Heading.scale(jit))
+			g.player.Pos = g.player.Pos.Add(g.player.Heading.Scale(jit))
 		} else {
-			s.heading = s.heading.scale(math.Cos(jit)).add(g.player.Right().scale(math.Sin(jit)))
+			s.heading = s.heading.Scale(math.Cos(jit)).Add(g.player.Right().Scale(math.Sin(jit)))
 		}
 	}
 	// MS_SHOT_WALK=meters walks that much forward each frame and shoots
@@ -176,8 +177,8 @@ func (s *shotRun) tick(g *Game) {
 	var spin float64
 	fmt.Sscanf(os.Getenv("MS_SHOT_SPIN"), "%f", &spin)
 	if walk != 0 && s.frames > 240 {
-		g.player.Pos = g.player.Pos.add(g.player.Heading.scale(walk))
-		s.heading = s.heading.scale(math.Cos(spin)).add(g.player.Right().scale(math.Sin(spin)))
+		g.player.Pos = g.player.Pos.Add(g.player.Heading.Scale(walk))
+		s.heading = s.heading.Scale(math.Cos(spin)).Add(g.player.Right().Scale(math.Sin(spin)))
 		rl.TakeScreenshot(fmt.Sprintf("w%02d_%s", s.frames-241, s.file))
 		if s.frames == 264 {
 			os.Exit(0)

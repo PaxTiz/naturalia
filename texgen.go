@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/mathx"
 	"math"
 	"runtime"
 	"sync"
@@ -21,8 +22,8 @@ func tnoise(x, y float64, period int, seed uint64) float64 {
 	wrap := func(v int) int { return ((v % period) + period) % period }
 	x0, y0 := wrap(int(ix)), wrap(int(iy))
 	x1, y1 := wrap(x0+1), wrap(y0+1)
-	a, b := hash2(x0, y0, seed), hash2(x1, y0, seed)
-	c, d := hash2(x0, y1, seed), hash2(x1, y1, seed)
+	a, b := mathx.Hash2(x0, y0, seed), mathx.Hash2(x1, y0, seed)
+	c, d := mathx.Hash2(x0, y1, seed), mathx.Hash2(x1, y1, seed)
 	top, bottom := a+(b-a)*sx, c+(d-c)*sx
 	return top + (bottom-top)*sy
 }
@@ -46,8 +47,8 @@ func tnoiseXY(x, y float64, px, py int, seed uint64) float64 {
 	sx, sy := fx*fx*(3-2*fx), fy*fy*(3-2*fy)
 	x0, y0 := ((int(ix)%px)+px)%px, ((int(iy)%py)+py)%py
 	x1, y1 := (x0+1)%px, (y0+1)%py
-	a, b := hash2(x0, y0, seed), hash2(x1, y0, seed)
-	c, d := hash2(x0, y1, seed), hash2(x1, y1, seed)
+	a, b := mathx.Hash2(x0, y0, seed), mathx.Hash2(x1, y0, seed)
+	c, d := mathx.Hash2(x0, y1, seed), mathx.Hash2(x1, y1, seed)
 	top, bottom := a+(b-a)*sx, c+(d-c)*sx
 	return top + (bottom-top)*sy
 }
@@ -90,7 +91,7 @@ func warped(u, v float64, period, octaves int, seed uint64) float64 {
 func painterly(v float64, steps float64) float64 {
 	k := v * steps
 	f := k - math.Floor(k)
-	stepped := (math.Floor(k) + smoothstep(0.35, 0.65, f)) / steps
+	stepped := (math.Floor(k) + mathx.Smoothstep(0.35, 0.65, f)) / steps
 	return v*0.45 + stepped*0.55
 }
 
@@ -103,9 +104,9 @@ func cellular(u, v float64, cells int, seed uint64, fn func(d, r float64, h floa
 		for dx := -1; dx <= 1; dx++ {
 			gx, gy := cx+dx, cy+dy
 			wx, wy := ((gx%cells)+cells)%cells, ((gy%cells)+cells)%cells
-			px := float64(gx) + 0.15 + 0.7*hash2(wx, wy, seed)
-			py := float64(gy) + 0.15 + 0.7*hash2(wx, wy, seed+1)
-			fn(math.Hypot(x-px, y-py), hash2(wx, wy, seed+2), hash2(wx, wy, seed+3))
+			px := float64(gx) + 0.15 + 0.7*mathx.Hash2(wx, wy, seed)
+			py := float64(gy) + 0.15 + 0.7*mathx.Hash2(wx, wy, seed+1)
+			fn(math.Hypot(x-px, y-py), mathx.Hash2(wx, wy, seed+2), mathx.Hash2(wx, wy, seed+3))
 		}
 	}
 }
@@ -130,10 +131,10 @@ func bake(size int, fn func(u, v float64) texel) rl.Texture2D {
 				for x := range size {
 					t := fn((float64(x)+0.5)/float64(size), (float64(y)+0.5)/float64(size))
 					i := (y*size + x) * 4
-					pix[i] = byte(clamp01(t.r) * 255)
-					pix[i+1] = byte(clamp01(t.g) * 255)
-					pix[i+2] = byte(clamp01(t.b) * 255)
-					pix[i+3] = byte(clamp01(t.a) * 255)
+					pix[i] = byte(mathx.Clamp01(t.r) * 255)
+					pix[i+1] = byte(mathx.Clamp01(t.g) * 255)
+					pix[i+2] = byte(mathx.Clamp01(t.b) * 255)
+					pix[i+3] = byte(mathx.Clamp01(t.a) * 255)
 				}
 			}
 		}()
@@ -178,7 +179,7 @@ func genRegolith() rl.Texture2D {
 				x := d / rad
 				dome := math.Sqrt(1-x*x) * height
 				if dome > stone {
-					stone, stoneTone, stoneEdge = dome, tone, smoothstep(0.7, 1, x)
+					stone, stoneTone, stoneEdge = dome, tone, mathx.Smoothstep(0.7, 1, x)
 				}
 			})
 		}
@@ -208,8 +209,8 @@ func genRegolith() rl.Texture2D {
 			// Painted stones: a lit top and a dark outline.
 			tone = (0.3 + 0.35*stoneTone + stone*0.35) * (1 - 0.45*stoneEdge)
 		}
-		cavity := clamp01(-crater*1.2) + clamp01((0.4-base)*1.5)*0.4
-		return texel{tone, math.Min(1, stone*5), cavity, clamp01(h + 0.3)}
+		cavity := mathx.Clamp01(-crater*1.2) + mathx.Clamp01((0.4-base)*1.5)*0.4
+		return texel{tone, math.Min(1, stone*5), cavity, mathx.Clamp01(h + 0.3)}
 	})
 }
 
@@ -224,7 +225,7 @@ func genDust() rl.Texture2D {
 		// and a shaded side, fading in and out in patches.
 		wave := v*5 + 0.35*(tfbm(u, v, 3, 3, 630)-0.5) + 0.08*math.Sin(u*2*math.Pi*2)
 		ripple := math.Sin(wave * 2 * math.Pi)
-		patch := smoothstep(0.35, 0.65, tfbm(u, v, 2, 2, 640))
+		patch := mathx.Smoothstep(0.35, 0.65, tfbm(u, v, 2, 2, 640))
 		tone := painterly(0.5+0.4*(clumps-0.5)+0.25*(stroke-0.5)+0.07*ripple*patch, 4)
 		h := clumps*0.35 + stroke*0.2 + tfbm(u, v, 24, 2, 620)*0.08 + (0.5+0.5*ripple)*0.35*patch
 		return texel{tone, clumps, 0, h}
@@ -238,9 +239,9 @@ func genDust() rl.Texture2D {
 func genPanel() rl.Texture2D {
 	return bake(512, func(u, v float64) texel {
 		e := math.Min(math.Min(u, 1-u), math.Min(v, 1-v)) // distance to the edge
-		joint := 1 - smoothstep(0.004, 0.02, e)
-		h := 0.5 + 0.2*smoothstep(0.004, 0.03, e)
-		grime := smoothstep(0.85, 1, v) * 0.5
+		joint := 1 - mathx.Smoothstep(0.004, 0.02, e)
+		h := 0.5 + 0.2*mathx.Smoothstep(0.004, 0.03, e)
+		grime := mathx.Smoothstep(0.85, 1, v) * 0.5
 		tone := 0.5 + 0.1*(tfbm(u, v, 2, 2, 740)-0.5)
 		return texel{tone, grime, joint * 0.6, h}
 	})
@@ -258,8 +259,8 @@ func genFloor() rl.Texture2D {
 			cx, cy = cy, -cx // alternate the diamonds' direction
 		}
 		d := math.Abs(cx*0.9+cy*0.45) + math.Abs(cx*0.45-cy*0.9)*0.3
-		bump := 1 - smoothstep(0.12, 0.2, d)
-		grime := clamp01(tfbm(u, v, 4, 4, 801)*1.3 - 0.45)
+		bump := 1 - mathx.Smoothstep(0.12, 0.2, d)
+		grime := mathx.Clamp01(tfbm(u, v, 4, 4, 801)*1.3 - 0.45)
 		tone := painterly(0.5+0.15*(tfbm(u, v, 6, 3, 810)-0.5)+bump*0.12, 5)
 		return texel{tone, grime, 0, 0.4 + bump*0.4}
 	})
@@ -273,7 +274,7 @@ func genMetal() rl.Texture2D {
 		brushed := stretched(v, u, 2, 40, 3, 901)
 		// Scratches: thin contour lines of a stretched noise, here and there.
 		line := stretched(u, v, 3, 6, 2, 910)
-		scratch := (1 - smoothstep(0.003, 0.009, math.Abs(line-0.5))) * smoothstep(0.55, 0.7, tfbm(u, v, 4, 2, 920))
+		scratch := (1 - mathx.Smoothstep(0.003, 0.009, math.Abs(line-0.5))) * mathx.Smoothstep(0.55, 0.7, tfbm(u, v, 4, 2, 920))
 		tone := painterly(0.6+0.25*(brushed-0.5)+0.12*(tfbm(u, v, 3, 3, 930)-0.5), 6)
 		return texel{tone + scratch*0.25, scratch, 0, 0.5 + 0.05*brushed - scratch*0.1}
 	})
@@ -285,7 +286,7 @@ const paintTile = 0.8
 func genPaint() rl.Texture2D {
 	return bake(512, func(u, v float64) texel {
 		tone := painterly(0.92+0.12*(strokes(u, v, 5, 1001)-0.5)+0.06*(tfbm(u, v, 12, 2, 1010)-0.5), 6)
-		chips := clamp01((tfbm(u, v, 16, 3, 1020) - 0.6) * 4)
+		chips := mathx.Clamp01((tfbm(u, v, 16, 3, 1020) - 0.6) * 4)
 		return texel{tone, 0, chips, 0.5 + 0.05*tfbm(u, v, 10, 3, 1030) - chips*0.08}
 	})
 }
@@ -307,7 +308,7 @@ func genFabric() rl.Texture2D {
 // Hazard: diagonal yellow and black stripes, for the airlock.
 func genHazard() rl.Texture2D {
 	return bake(256, func(u, v float64) texel {
-		stripe := smoothstep(0.47, 0.53, math.Abs(math.Mod(u*4+v*4, 1)-0.5)*2)
+		stripe := mathx.Smoothstep(0.47, 0.53, math.Abs(math.Mod(u*4+v*4, 1)-0.5)*2)
 		return texel{stripe, 1 - stripe, 0.6, 1}
 	})
 }
@@ -347,21 +348,21 @@ func genVisor() rl.Texture2D {
 				ny := (float64(y)/h*2 - 1) * 1.04
 				// Superellipse: a rounded rectangle with soft corners.
 				d := math.Pow(math.Pow(math.Abs(nx), 7)+math.Pow(math.Abs(ny), 5), 1.0/6)
-				edge := smoothstep(0.985, 1.045, d)
-				vignette := smoothstep(0.7, 1.0, d) * 0.1
+				edge := mathx.Smoothstep(0.985, 1.045, d)
+				vignette := mathx.Smoothstep(0.7, 1.0, d) * 0.1
 				rim := math.Exp(-math.Pow((d-0.982)/0.006, 2)) * 0.05
 				// Reflection: a faint curved band across the upper left.
-				band := math.Exp(-math.Pow((nx*0.6+ny+0.95+0.25*nx*nx)/0.07, 2)) * 0.05 * smoothstep(0.2, -0.6, nx)
+				band := math.Exp(-math.Pow((nx*0.6+ny+0.95+0.25*nx*nx)/0.07, 2)) * 0.05 * mathx.Smoothstep(0.2, -0.6, nx)
 				a := math.Min(1, edge*0.94+vignette)
 				r, g, b := 0.03, 0.025, 0.035
 				light := rim + band
 				i := (y*w + x) * 4
-				alpha := clamp01(a + light)
+				alpha := mathx.Clamp01(a + light)
 				mix := func(c, l float64) byte {
 					if alpha == 0 {
 						return 0
 					}
-					return byte(clamp01((c*a+l*light)/alpha) * 255)
+					return byte(mathx.Clamp01((c*a+l*light)/alpha) * 255)
 				}
 				pix[i], pix[i+1], pix[i+2], pix[i+3] = mix(r, 1), mix(g, 0.85), mix(b, 0.75), byte(alpha*255)
 			}

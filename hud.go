@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"mars_sweeper/internal/mathx"
 	"math"
 	"strings"
 
@@ -39,7 +40,7 @@ var (
 )
 
 func withAlpha(c color.RGBA, a float64) color.RGBA {
-	c.A = uint8(float64(c.A) * clamp01(a))
+	c.A = uint8(float64(c.A) * mathx.Clamp01(a))
 	return c
 }
 
@@ -264,10 +265,10 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 	_, h := screenSize()
 
 	for _, f := range g.floaters {
-		if f.Pos.sub(g.player.Eye()).dot(g.player.Forward()) <= 0 {
+		if f.Pos.Sub(g.player.Eye()).Dot(g.player.Forward()) <= 0 {
 			continue // behind the camera
 		}
-		sp := rl.GetWorldToScreen(f.Pos.rl(), cam)
+		sp := rl.GetWorldToScreen(toRL(f.Pos), cam)
 		gfx.textCenter(f.Text, sp.X+1*u, sp.Y+2*u, 26*u, withAlpha(color.RGBA{0, 0, 0, 170}, f.Life))
 		gfx.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
 	}
@@ -422,7 +423,7 @@ func (g *Game) drawStatus() {
 	gfx.monoRight(fmtNum(g.st.Tank)+" / "+fmtNum(g.capacity())+" g", right, ty-1*u, 14*u, uiWhite)
 	bar := rl.NewRectangle(left, ty+19*u, right-left, 9*u)
 	fillCut(bar, 3*u, uiTrack)
-	fill := float32(clamp01(g.st.Tank / g.capacity()))
+	fill := float32(mathx.Clamp01(g.st.Tank / g.capacity()))
 	c := visorCyan
 	if fill > 0.8 {
 		c = visorAmber
@@ -444,13 +445,13 @@ func (g *Game) drawCompass() {
 	gfx, u := g.gfx, uiScale()
 	w, _ := screenSize()
 	up := g.player.LocalUp()
-	north := baseUp.sub(up.scale(baseUp.dot(up)))
-	if north.length() < 1e-6 {
+	north := baseUp.Sub(up.Scale(baseUp.Dot(up)))
+	if north.Length() < 1e-6 {
 		return // standing on the pole itself
 	}
-	north = north.norm()
-	east := north.cross(up)
-	heading := math.Atan2(g.player.Heading.dot(east), g.player.Heading.dot(north)) * 180 / math.Pi
+	north = north.Norm()
+	east := north.Cross(up)
+	heading := math.Atan2(g.player.Heading.Dot(east), g.player.Heading.Dot(north)) * 180 / math.Pi
 
 	cx, top, half := w/2, 24*u, 220*u
 	// A dark band fading out at both ends, and a baseline.
@@ -466,7 +467,7 @@ func (g *Game) drawCompass() {
 			continue
 		}
 		x := cx + float32(rel/62)*half
-		alpha := 1 - smoothstep(40, 62, math.Abs(rel))
+		alpha := 1 - mathx.Smoothstep(40, 62, math.Abs(rel))
 		switch l, ok := labels[a]; {
 		case ok && a%90 == 0:
 			c := uiWhite
@@ -500,11 +501,11 @@ func (g *Game) drawBaseMarker(cam rl.Camera3D) {
 	if arcDist(g.player.LocalUp(), baseUp) < 25 {
 		return
 	}
-	target := basePos.add(vec3{0, 9, 0})
-	if target.sub(g.player.Eye()).dot(g.player.Forward()) <= 0 {
+	target := basePos.Add(vec3{0, 9, 0})
+	if target.Sub(g.player.Eye()).Dot(g.player.Forward()) <= 0 {
 		return
 	}
-	sp := rl.GetWorldToScreen(target.rl(), cam)
+	sp := rl.GetWorldToScreen(toRL(target), cam)
 	if sp.X < 0 || sp.X > w || sp.Y < 0 || sp.Y > h {
 		return
 	}
@@ -723,7 +724,7 @@ func (g *Game) drawSleep() {
 	case t > sleepWake:
 		dark = 1 - (t-sleepWake)/(sleepEnd-sleepWake)
 	}
-	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{4, 2, 10, uint8(255 * clamp01(dark))})
+	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{4, 2, 10, uint8(255 * mathx.Clamp01(dark))})
 	if t > sleepFadeOut*0.6 && t < sleepWake+0.3 {
 		a := math.Min(t-sleepFadeOut*0.6, sleepWake+0.3-t) * 2
 		dots := strings.Repeat(" z", 1+int(t*2)%3)

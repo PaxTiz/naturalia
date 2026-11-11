@@ -1,6 +1,8 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestRegistryOverrideKeepsOrder(t *testing.T) {
 	var r Registry[int]
@@ -99,7 +101,7 @@ func TestExampleMod(t *testing.T) {
 	if tr := content.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {
 		t.Errorf("terrain: %+v", tr)
 	}
-	mesa := content.Terrain.Features[0].center.norm()
+	mesa := content.Terrain.Features[0].center.Norm()
 	if h := content.Terrain.features(mesa); h != 45 {
 		t.Errorf("on the mesa: %f", h)
 	}

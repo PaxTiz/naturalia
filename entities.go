@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/mathx"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -60,20 +61,20 @@ func (g *Game) spawn(kind string, at vec3) bool {
 	if !ok {
 		return false
 	}
-	up := at.norm()
-	t1, t2 := tangentBasis(up)
-	toward := tangentAt(up, g.player.Pos.sub(at))
-	yaw := math.Atan2(toward.dot(t2), toward.dot(t1))
+	up := at.Norm()
+	t1, t2 := mathx.TangentBasis(up)
+	toward := tangentAt(up, g.player.Pos.Sub(at))
+	yaw := math.Atan2(toward.Dot(t2), toward.Dot(t1))
 	g.st.Entities = append(g.st.Entities, Placed{Kind: def.ID, Dir: up, Yaw: yaw})
 	return true
 }
 
 // placeAt is where F puts an item: the aimed ground, or right ahead.
 func (g *Game) placeAt() vec3 {
-	if g.aimOK && g.aim.sub(g.player.Pos).length() < 6 {
+	if g.aimOK && g.aim.Sub(g.player.Pos).Length() < 6 {
 		return g.aim
 	}
-	return g.terrain.Surface(g.player.Pos.add(g.player.Heading.scale(1.5)))
+	return g.terrain.Surface(g.player.Pos.Add(g.player.Heading.Scale(1.5)))
 }
 
 // heldItem is the item F places, cycled with R, among those carried.
@@ -115,7 +116,7 @@ func (g *Game) updateItems() {
 // their index in the save.
 func (g *Game) entitiesNear(dist float64) []int {
 	var out []int
-	up := g.player.Pos.norm()
+	up := g.player.Pos.Norm()
 	for i, e := range g.st.Entities {
 		if arcDist(up, e.Dir) < dist {
 			out = append(out, i)
@@ -149,9 +150,9 @@ func (g *Game) nearbyEntity() (int, float64) {
 			continue
 		}
 		pos := g.terrain.Surface(e.Dir)
-		to := pos.sub(g.player.Pos)
-		d := to.length()
-		if d > entityReach+def.Radius || d >= bestDist || (d > 0.8 && g.player.Heading.dot(to.norm()) < 0.3) {
+		to := pos.Sub(g.player.Pos)
+		d := to.Length()
+		if d > entityReach+def.Radius || d >= bestDist || (d > 0.8 && g.player.Heading.Dot(to.Norm()) < 0.3) {
 			continue
 		}
 		best, bestDist = i, d
@@ -205,9 +206,9 @@ func (g *Game) drawEntities() {
 		}
 		pos := g.terrain.Surface(e.Dir)
 		up := e.Dir
-		t1, t2 := tangentBasis(up)
-		ax := t1.scale(math.Cos(e.Yaw)).add(t2.scale(math.Sin(e.Yaw)))
-		az := ax.cross(up)
+		t1, t2 := mathx.TangentBasis(up)
+		ax := t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw)))
+		az := ax.Cross(up)
 		lit := float32(litSun)
 		if indoors(toLocal(pos)) {
 			lit = litIndoor

@@ -1,6 +1,9 @@
 package main
 
-import "math"
+import (
+	"mars_sweeper/internal/mathx"
+	"math"
+)
 
 // TerrainSettings is how Mars is generated, open to packs: each layer of
 // the relief is scaled (0 removes it), and packs add their own shapes.
@@ -49,10 +52,10 @@ func (t *TerrainSettings) prepare() {
 	for i := range t.Features {
 		f := &t.Features[i]
 		dir := vec3{f.Dir[0], 0, f.Dir[1]}
-		if dir.length() < 1e-9 {
+		if dir.Length() < 1e-9 {
 			dir = vec3{1, 0, 0}
 		}
-		f.center = toward(dir.norm(), f.Distance)
+		f.center = toward(dir.Norm(), f.Distance)
 		if f.Radius <= 0 {
 			f.Radius = 50
 		}
@@ -72,9 +75,9 @@ func (t *TerrainSettings) features(d vec3) float64 {
 				h += f.Height * b * b
 			}
 		case "mesa": // a flat top with steep sides
-			h += f.Height * (1 - smoothstep(0.8, 1, x))
+			h += f.Height * (1 - mathx.Smoothstep(0.8, 1, x))
 		case "pit": // a flat floor with steep walls
-			h -= f.Height * (1 - smoothstep(0.8, 1, x))
+			h -= f.Height * (1 - mathx.Smoothstep(0.8, 1, x))
 		default: // crater: a bowl and a raised lip
 			if x < 1.8 {
 				depth := f.Height
