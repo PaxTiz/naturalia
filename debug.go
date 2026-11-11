@@ -168,8 +168,12 @@ func (s *shotRun) tick(g *Game) {
 	// every frame, w00_file to w23_file: what jumps shows in their diffs.
 	var walk float64
 	fmt.Sscanf(os.Getenv("MS_SHOT_WALK"), "%f", &walk)
+	// MS_SHOT_SPIN=radians turns that much each frame while walking.
+	var spin float64
+	fmt.Sscanf(os.Getenv("MS_SHOT_SPIN"), "%f", &spin)
 	if walk != 0 && s.frames > 240 {
 		g.player.Pos = g.player.Pos.add(g.player.Heading.scale(walk))
+		s.heading = s.heading.scale(math.Cos(spin)).add(g.player.Right().scale(math.Sin(spin)))
 		rl.TakeScreenshot(fmt.Sprintf("w%02d_%s", s.frames-241, s.file))
 		if s.frames == 264 {
 			os.Exit(0)

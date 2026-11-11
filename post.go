@@ -147,10 +147,16 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	sp := rl.GetWorldToScreen(eye.add(sunDir.scale(1000)).rl(), cam)
 	sw, sh := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
 	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
+	// Written as is, without blending: the alpha holds the luma for FXAA,
+	// and alpha blending would mix in what the last frame left there,
+	// trailing everything that moves.
 	rl.BeginTextureMode(p.ldr)
 	rl.BeginShaderMode(p.img)
+	rl.SetBlendFactors(glOne, glZero, glAdd)
+	rl.BeginBlendMode(rl.BlendCustom)
 	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "bloom"), p.bloom[0].Texture)
 	blit(p.scene.Texture, p.ldr.Texture.Width, p.ldr.Texture.Height)
+	rl.EndBlendMode()
 	rl.EndShaderMode()
 	rl.EndTextureMode()
 	// Then the edges are smoothed, straight to the screen.

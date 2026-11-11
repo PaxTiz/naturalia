@@ -66,7 +66,7 @@ func (s *shadowMap) camera(center vec3) rl.Camera3D {
 	}
 }
 
-const glMin, glOne = 0x8007, 1
+const glMin, glAdd, glOne, glZero = 0x8007, 0x8006, 1, 0
 
 // cols gives the sun's camera, as BeginMode3D sets it, but about origin o:
 // the shaders look the shadows up from fragRel. From the world position,
