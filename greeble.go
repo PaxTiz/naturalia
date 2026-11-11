@@ -69,14 +69,15 @@ func (b *building) greebleRoom(bp *Blueprint, r room, seed int) {
 	top := r.center.add(vec3{0, r.wallH, 0})
 	a, bh := r.radius+0.12, r.radius*0.55
 	// A raised seam along every gore, wider steel ribs on every other one,
-	// and two bands around. Each stands 2 cm off the shell: sharing its
-	// surface, they would fight it for the depth and flicker.
+	// and two bands around. Each stands off the shell: sharing its surface,
+	// they would fight it for the depth and flicker, and poking through it
+	// they would show inside as dashes.
 	for k := range domeGores {
 		th := float64(k) * 2 * math.Pi / domeGores
 		if k%2 == 1 {
-			domeRib(b.part("steel", litSun, vec3{}), top, a+0.05, bh+0.05, th, 0.1, 0.06)
+			domeRib(b.part("steel", litSun, vec3{}), top, a, bh, th, 0.1, 0.06)
 		} else {
-			domeRib(b.part("habitat.white2", litSun, vec3{}), top, a+0.035, bh+0.035, th, 0.05, 0.03)
+			domeRib(b.part("habitat.white2", litSun, vec3{}), top, a, bh, th, 0.05, 0.03)
 		}
 	}
 	for _, phi := range []float64{0.42, 0.85} {
@@ -104,14 +105,19 @@ func pipeRun(m *meshBuilder, c, along vec3, width, radius float64) {
 	m.prism(c.sub(along.scale(width/2)), along, radius, radius, width, 8, 0)
 }
 
-// domeRib follows the outside (or inside) of a dome along one meridian.
+// domeRib follows the outside of a dome (radius a, height bh) along one
+// meridian. Its straight pieces cut under the curve between their ends, so
+// they ride high enough above the shell that their underside clears it.
 func domeRib(m *meshBuilder, top vec3, a, bh, th, w, d float64) {
 	out := vec3{math.Cos(th), 0, math.Sin(th)}
 	side := vec3{-out.Z, 0, out.X}
-	const steps = 8
+	const steps = 16
+	lift := 0.015 + d/2 + 0.012 // gap, half the depth, the pieces' sag
 	pt := func(i int) vec3 {
-		phi := float64(i) / steps * 1.45
-		return top.add(out.scale(a * math.Cos(phi))).add(vec3{0, bh * math.Sin(phi), 0})
+		phi := float64(i) / steps * 1.5
+		cp, sp := math.Cos(phi), math.Sin(phi)
+		n := out.scale(cp / a).add(vec3{0, sp / bh, 0}).norm()
+		return top.add(out.scale(a * cp)).add(vec3{0, bh * sp, 0}).add(n.scale(lift))
 	}
 	for i := range steps {
 		p0, p1 := pt(i), pt(i+1)
