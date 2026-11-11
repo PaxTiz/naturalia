@@ -178,7 +178,7 @@ in vec3 vertexNormal;
 in vec2 vertexTexCoord;
 uniform mat4 mvp;
 uniform vec3 origin;
-uniform vec4 lightVP[4]; // the shadow map's camera, by columns
+uniform vec4 lightVP[4]; // the shadow map's camera about origin, by columns
 out vec3 fragPos;
 out vec3 fragRel;
 out vec3 shadowCoord; // where the vertex falls in the shadow map
@@ -194,7 +194,7 @@ void main() {
     fragTexCoord = vertexTexCoord;
     fragPos = vertexPosition; // terrain meshes are drawn with no transform
     fragRel = vertexPosition - origin;
-    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(vertexPosition, 1.0);
+    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragRel, 1.0);
     shadowCoord = lp.xyz / lp.w * 0.5 + 0.5; // orthographic: linear, so exact per vertex
     fragNormal = normalize(vertexNormal);
     gl_Position = mvp * vec4(vertexPosition, 1.0);
@@ -383,13 +383,13 @@ uniform vec3 room;
 uniform vec4 lights[12];  // ceiling lamps: xyz position, w intensity
 uniform float lightCount;
 uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a quarter each (shadow.go)
-uniform vec4 lampVP[16];         // their cameras, four columns each
+uniform vec4 lampVP[16];         // their cameras about origin, four columns each
 uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
 uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
 uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: height of their floor
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6; // texture3: the sun's shadow map
-uniform vec4 lightVP[4]; // the sun's shadow camera, by columns
+uniform vec4 lightVP[4]; // the sun's shadow camera about origin, by columns
 out vec4 finalColor;
 ` + shaderCommon + textureCommon + `
 // Indoor lighting, same rule as outside: warm lamps, cool violet shade,
@@ -410,7 +410,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
         if (i < 4 && att > 0.05) {
             // Pushed a little off the surface, then looked up in the lamp's
             // quarter of the map, softened over 4×4 texels.
-            vec4 lp = mat4(lampVP[i * 4], lampVP[i * 4 + 1], lampVP[i * 4 + 2], lampVP[i * 4 + 3]) * vec4(origin + fragRel + n * 0.04, 1.0);
+            vec4 lp = mat4(lampVP[i * 4], lampVP[i * 4 + 1], lampVP[i * 4 + 2], lampVP[i * 4 + 3]) * vec4(fragRel + n * 0.04, 1.0);
             vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
             if (lp.w > 0.0 && all(greaterThan(sc.xy, vec2(0.01))) && all(lessThan(sc.xy, vec2(0.99)))) {
                 vec2 quarter = vec2(i % 2, i / 2) * 0.5;
@@ -431,7 +431,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
 // sunShadow is how much sun reaches the fragment past the base and the
 // rocks (the shadow map), softened over 3×3 texels and faded at its edge.
 float sunShadow(vec3 n) {
-    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(origin + fragRel + n * 0.16, 1.0);
+    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragRel + n * 0.16, 1.0);
     vec3 sc = lp.xyz / lp.w * 0.5 + 0.5;
     vec2 border = abs(sc.xy - 0.5) * 2.0;
     float mapped = 1.0 - smoothstep(0.85, 1.0, max(border.x, border.y));

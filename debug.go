@@ -155,13 +155,25 @@ func (s *shotRun) tick(g *Game) {
 			s.heading = s.heading.scale(math.Cos(jit)).add(g.player.Right().scale(math.Sin(jit)))
 		}
 	}
+	// MS_SHOT_WALK=meters walks that much forward each frame and shoots
+	// every frame, w00_file to w23_file: what jumps shows in their diffs.
+	var walk float64
+	fmt.Sscanf(os.Getenv("MS_SHOT_WALK"), "%f", &walk)
+	if walk != 0 && s.frames > 240 {
+		g.player.Pos = g.player.Pos.add(g.player.Heading.scale(walk))
+		rl.TakeScreenshot(fmt.Sprintf("w%02d_%s", s.frames-241, s.file))
+		if s.frames == 264 {
+			os.Exit(0)
+		}
+		return
+	}
 	if jit != 0 && s.frames == 244 {
 		rl.TakeScreenshot("b_" + s.file)
 		os.Exit(0)
 	}
 	if s.frames == 240 {
 		rl.TakeScreenshot(s.file)
-		if jit == 0 {
+		if jit == 0 && walk == 0 {
 			os.Exit(0) // no save: the player was moved
 		}
 	}

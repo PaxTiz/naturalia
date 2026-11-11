@@ -293,16 +293,18 @@ func (b *building) room(bp *Blueprint) {
 	}
 	// The dome stays a smooth shell: dust settles on its top.
 	b.part(bp.Style, litBack, in).dome(r.center.add(vec3{0, r.wallH, 0}), r.radius+0.12, r.radius*0.55)
-	// Door frames: steel jambs and a hazard header.
+	// Door frames: steel jambs and a hazard header. They stand a little
+	// into the opening: flush with the corridor's walls and ceiling, they
+	// would fight them for the depth and flicker.
 	for _, d := range bp.Doors {
 		out := vec3{math.Cos(d.Facing), 0, math.Sin(d.Facing)}
 		tangent := vec3{-out.Z, 0, out.X}
 		w := r.center.add(out.scale(r.radius))
 		for _, s := range []float64{-1, 1} {
-			b.part("steel", litTowards, in).box(w.add(tangent.scale(s*(doorWidth/2+0.13))).add(vec3{0, (doorHeight + 0.1) / 2, 0}), vec3{0.26, doorHeight + 0.1, 0.42}, tangent, 0.05)
+			b.part("steel", litTowards, in).box(w.add(tangent.scale(s*(doorWidth/2+0.08))).add(vec3{0, (doorHeight + 0.1) / 2, 0}), vec3{0.26, doorHeight + 0.1, 0.42}, tangent, 0.05)
 		}
-		b.part("hazard", litTowards, in).box(w.add(vec3{0, doorHeight + 0.2, 0}), vec3{doorWidth + 0.52, 0.22, 0.42}, tangent, 0.05)
-		b.part(bp.Accent, litIndoor, vec3{}).box(w.add(vec3{0, doorHeight + 0.2, 0}).sub(out.scale(0.22)), vec3{doorWidth * 0.6, 0.05, 0.02}, tangent, 0)
+		b.part("hazard", litTowards, in).box(w.add(vec3{0, doorHeight + 0.12, 0}), vec3{doorWidth + 0.42, 0.22, 0.42}, tangent, 0.05)
+		b.part(bp.Accent, litIndoor, vec3{}).box(w.add(vec3{0, doorHeight + 0.12, 0}).sub(out.scale(0.22)), vec3{doorWidth * 0.6, 0.05, 0.02}, tangent, 0)
 	}
 	b.interior(bp, r)
 	for _, p := range bp.Props {

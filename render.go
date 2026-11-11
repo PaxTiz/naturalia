@@ -291,6 +291,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	e := g.camEye
 	snap := func(v float64) float64 { return float64(float32(math.Floor(v/32) * 32)) }
 	o := vec3{snap(e.X), snap(e.Y), snap(e.Z)}
+	g.origin = o
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.sub(o)), rl.ShaderUniformVec3)
@@ -319,9 +320,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	n := min(len(casters)/4, maxCasters)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.casterCount, []float32{float32(n)}, rl.ShaderUniformFloat)
-	// As four columns: passing a Matrix by value is unreliable without cgo.
-	m := gfx.shadow.lightVP
-	cols := []float32{m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15}
+	cols := gfx.shadow.cols(o)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 	rl.SetShaderValueV(gfx.objectSh, gfx.oLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
@@ -349,10 +348,9 @@ func (g *Game) Draw() {
 		for _, l := range baseLights() {
 			lamps = append(lamps, toWorld(l).sub(vec3{0, 0.12, 0}))
 		}
-		if !gfx.lampShadow.done {
-			gfx.lampShadow.render(gfx, lamps, func() { g.drawBase() })
-			rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), gfx.lampShadow.vp, rl.ShaderUniformVec4, int32(len(gfx.lampShadow.vp)/4))
-		}
+		gfx.lampShadow.render(gfx, lamps, func() { g.drawBase() })
+		vp := gfx.lampShadow.cols(g.origin)
+		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
 	}
 
 	sunUp := g.player.Pos.norm().dot(sunDir)

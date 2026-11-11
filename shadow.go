@@ -23,8 +23,9 @@ const (
 // The objects write their depth themselves into a float color texture,
 // blended with "min" to keep the nearest.
 type shadowMap struct {
-	target  rl.RenderTexture2D
-	lightVP rl.Matrix
+	target    rl.RenderTexture2D
+	eye, look vec3 // the light's camera, kept in double for lightCols
+	up        vec3
 }
 
 func newShadowMap() *shadowMap {
@@ -55,6 +56,7 @@ func (s *shadowMap) camera(center vec3) rl.Camera3D {
 	snap := func(v float64) float64 { return math.Floor(v/texel) * texel }
 	x, y, z := center.dot(right), center.dot(up), center.dot(sunDir)
 	center = right.scale(snap(x)).add(up.scale(snap(y))).add(sunDir.scale(z))
+	s.eye, s.look, s.up = center.add(sunDir.scale(shadowDepth/2)), center, up
 	return rl.Camera3D{
 		Position:   center.add(sunDir.scale(shadowDepth / 2)).rl(),
 		Target:     center.rl(),
@@ -66,19 +68,30 @@ func (s *shadowMap) camera(center vec3) rl.Camera3D {
 
 const glMin, glOne = 0x8007, 1
 
+// cols gives the sun's camera, as BeginMode3D sets it, but about origin o:
+// the shaders look the shadows up from fragRel. From the world position,
+// some 3 km from Mars' center, float precision is a quarter millimeter, a
+// grain that shifts as the camera moves and makes the shadows crawl.
+func (s *shadowMap) cols(o vec3) []float32 {
+	proj := rl.MatrixOrtho(-shadowRadius, shadowRadius, -shadowRadius, shadowRadius, 1, shadowDepth)
+	return relVP(s.eye, s.look, s.up, o, proj)
+}
+
+// relVP is a camera's view and projection about o, by columns: passing a
+// Matrix by value is unreliable without cgo.
+func relVP(eye, look, up, o vec3, proj rl.Matrix) []float32 {
+	view := rl.MatrixLookAt(eye.sub(o).rl(), look.sub(o).rl(), up.rl())
+	m := rl.MatrixMultiply(view, proj)
+	return []float32{m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15}
+}
+
 // render draws the casters into the map and keeps the light's matrix.
 // The object shader is switched to writing depth (shadowPass) meanwhile.
 func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 	rl.BeginTextureMode(s.target)
 	rl.ClearBackground(rl.White)
 	rl.SetClipPlanes(1, shadowDepth)
-	cam := s.camera(center)
-	rl.BeginMode3D(cam)
-	// The same matrices BeginMode3D uses, computed here: reading them back
-	// from rlgl is unreliable without cgo.
-	view := rl.MatrixLookAt(cam.Position, cam.Target, cam.Up)
-	proj := rl.MatrixOrtho(-shadowRadius, shadowRadius, -shadowRadius, shadowRadius, 1, shadowDepth)
-	s.lightVP = rl.MatrixMultiply(view, proj)
+	rl.BeginMode3D(s.camera(center))
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
 	rl.SetBlendFactors(glOne, glOne, glMin)
 	rl.BeginBlendMode(rl.BlendCustom)
@@ -98,7 +111,7 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 // its shadows, so nothing pops in when the player walks in.
 type lampShadow struct {
 	target rl.RenderTexture2D
-	vp     []float32 // the lamps' cameras, four columns each
+	lamps  []vec3 // where the cameras stand, looking down
 	done   bool
 }
 
@@ -125,6 +138,17 @@ func newLampShadow() *lampShadow {
 	return s
 }
 
+// cols gives the lamps' cameras about origin o, four columns each (see
+// shadowMap.cols).
+func (s *lampShadow) cols(o vec3) []float32 {
+	proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
+	var c []float32
+	for _, l := range s.lamps {
+		c = append(c, relVP(l, l.sub(vec3{0, 1, 0}), vec3{1, 0, 0}, o, proj)...)
+	}
+	return c
+}
+
 // render draws every lamp's view into its quarter, once.
 func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 	if s.done {
@@ -143,10 +167,7 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 		}
 		rl.BeginMode3D(cam)
 		rl.Viewport(int32(i%2)*half, int32(i/2)*half, half, half)
-		view := rl.MatrixLookAt(cam.Position, cam.Target, cam.Up)
-		proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
-		m := rl.MatrixMultiply(view, proj)
-		s.vp = append(s.vp, m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15)
+		s.lamps = append(s.lamps, lamp)
 		rl.SetBlendFactors(glOne, glOne, glMin)
 		rl.BeginBlendMode(rl.BlendCustom)
 		rl.DisableBackfaceCulling()
