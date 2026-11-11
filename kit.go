@@ -59,6 +59,11 @@ var tokens = map[string]token{
 	"pad.concrete": {color.RGBA{130, 120, 110, 255}, mtPanel, 1, 0.2, 0},
 	"screen.dim":   {accentCyan, mtPlain, 1, 0, 0.4},
 	"led.green":    {colGreen, mtPlain, 1, 0, 1},
+	"fabric.seat":   {color.RGBA{58, 74, 98, 255}, mtFabric, 1 / fabricTile, 0.1, 0},
+	"soil":          {color.RGBA{60, 40, 30, 255}, mtPlain, 1, 0, 0},
+	"planter.green": {color.RGBA{72, 150, 76, 255}, mtPlain, 1, 0.2, 0},
+	"planter.lime":  {color.RGBA{138, 186, 70, 255}, mtPlain, 1, 0.2, 0},
+	"lamp.grow":     {color.RGBA{230, 120, 220, 255}, mtPlain, 1, 0, 1},
 }
 
 // Blueprint is a building as data.
@@ -122,7 +127,12 @@ var (
 		Shape:  Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []Door{{west}},
-		Props:  []Prop{{Kit: "console", At: vec3{2.3, 0, 0}}},
+		Props: []Prop{
+			{Kit: "console", At: vec3{2.3, 0, 0}},
+			{Kit: "chair", At: vec3{1.2, 0, 0.5}, Seed: 0},
+			{Kit: "workbench", At: vec3{-0.6, 0, 3.0}, Seed: 6},
+			{Kit: "planter", At: vec3{-0.6, 0, -3.0}, Seed: 2},
+		},
 	}
 	sleepPlan = Blueprint{
 		ID:     "core:sleep",
@@ -131,7 +141,12 @@ var (
 		Shape:  Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []Door{{south}},
-		Props:  []Prop{{Kit: "bed", At: vec3{0, 0, 2.1}}},
+		Props: []Prop{
+			{Kit: "bed", At: vec3{0, 0, 2.1}},
+			{Kit: "desk", At: vec3{2.75, 0, 0.6}, Seed: 4},
+			{Kit: "chair", At: vec3{2.0, 0, 0.6}, Seed: 4},
+			{Kit: "planter", At: vec3{-2.8, 0, 0.6}, Seed: 2},
+		},
 	}
 
 	// plans in the order of rooms: the hub first.
@@ -169,6 +184,10 @@ var kitProps = map[string]kitProp{
 	"bed": {build: buildBed, draw: drawBed, obstacles: []obstacle{{vec3{-0.55, 0, 0}, 0.6}, {vec3{0.55, 0, 0}, 0.6}},
 		reach: 2.6, use: useBed, prompt: "[E] Dormir"},
 	"crate.stack": {build: buildCrates, obstacles: []obstacle{{vec3{}, 0.55}}},
+	"chair":       {build: buildChair, obstacles: []obstacle{{vec3{}, 0.35}}},
+	"workbench":   {build: buildWorkbench, obstacles: []obstacle{{vec3{}, 0.8}}},
+	"planter":     {build: buildPlanter, obstacles: []obstacle{{vec3{}, 0.85}}},
+	"desk":        {build: buildDesk, obstacles: []obstacle{{vec3{}, 0.65}}},
 }
 
 // spot returns where the first prop of a kit sits in the base.
@@ -463,6 +482,17 @@ func buildIncinerator(b *building, in vec3, _ int) {
 	dark.prism(in.add(vec3{-0.6, 1.5, 0.6}), up, 0.18, 0.18, 3.4, 10, 0.03)
 	dark.box(in.add(vec3{1.0, 1.0, 1.25}), vec3{0.5, 0.7, 0.3}, vec3{0, 0, 1}, 0.04)
 	b.part("hazard", litIndoor, vec3{}).prism(in.add(vec3{0, 1.6, 0}), up, 1.14, 1.14, 0.14, 20, 0.02)
+	// A framed furnace window with bars, rivets around the body, a gauge.
+	dark.box(in.add(vec3{1.03, 0.95, 0}), vec3{0.98, 0.72, 0.08}, vec3{0, 0, 1}, 0.03)
+	for _, z := range []float64{-0.2, 0, 0.2} {
+		steel.box(in.add(vec3{1.13, 0.95, z}), vec3{0.03, 0.56, 0.03}, vec3{0, 0, 1}, 0.005)
+	}
+	for k := range 20 {
+		a := (float64(k) + 0.5) * 2 * math.Pi / 20
+		dark.box(in.add(vec3{math.Cos(a) * 1.11, 1.78, math.Sin(a) * 1.11}), vec3{0.04, 0.04, 0.04}, vec3{-math.Sin(a), 0, math.Cos(a)}, 0)
+	}
+	b.part("pipe.red", litIndoor, vec3{}).prism(in.add(vec3{0.75, 1.3, -0.75}), vec3{1, 0, -1}, 0.12, 0.12, 0.05, 14, 0.01)
+	b.part("habitat.white", litIndoor, vec3{}).prism(in.add(vec3{0.77, 1.3, -0.77}), vec3{1, 0, -1}, 0.09, 0.09, 0.05, 14, 0)
 }
 
 // drawIncinerator: the window glows harder while it burns dust.
@@ -519,6 +549,12 @@ func buildBed(b *building, at vec3, _ int) {
 	white.box(at.add(vec3{-0.72, 0.62, 0}), vec3{0.42, 0.12, 0.7}, x, 0.05)
 	b.part("fabric.purple", litIndoor, vec3{}).box(at.add(vec3{0.32, 0.58, 0}), vec3{1.36, 0.06, 1.0}, x, 0.02)
 	b.part("fabric.rug", litIndoor, vec3{}).box(at.add(vec3{0, floorTop + 0.005, -1.3}), vec3{1.8, 0.01, 1.1}, x, 0)
+	// A padded headboard with a reading light, the blanket folded back.
+	wood.box(at.add(vec3{-1.08, 0.55, 0}), vec3{0.08, 1.1, 1.1}, x, 0.02)
+	b.part("fabric.seat", litIndoor, vec3{}).box(at.add(vec3{-1.02, 0.78, 0}), vec3{0.06, 0.5, 0.95}, x, 0.03)
+	b.part("fabric.purple", litIndoor, vec3{}).box(at.add(vec3{-0.33, 0.62, 0}), vec3{0.24, 0.08, 1.02}, x, 0.03)
+	b.part("steel.dark", litIndoor, vec3{}).box(at.add(vec3{1.45, 0.62, 0.2}), vec3{0.3, 0.03, 0.3}, x, 0)
+	b.part("pipe.blue", litIndoor, vec3{}).box(at.add(vec3{1.4, 0.65, 0.03}), vec3{0.2, 0.04, 0.14}, x, 0.005)
 }
 
 func drawBed(g *Game, at vec3) {

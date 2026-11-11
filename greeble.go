@@ -370,3 +370,101 @@ func yardObstacles() []obstacle {
 	}
 	return out
 }
+
+// More furniture, as kit pieces (kitProps): a chair, a workbench, a
+// hydroponic planter and a desk.
+
+// buildChair: a swivel chair facing toward -X (rotate with the seed: the
+// angle is seed × 45°).
+func buildChair(b *building, at vec3, seed int) {
+	a := float64(seed) * math.Pi / 4
+	f := vec3{math.Cos(a), 0, math.Sin(a)}
+	sd := vec3{-f.Z, 0, f.X}
+	dark, seat := b.part("steel.dark", litIndoor, vec3{}), b.part("fabric.seat", litIndoor, vec3{})
+	for k := range 5 {
+		t := float64(k) * 2 * math.Pi / 5
+		leg := vec3{math.Cos(t), 0, math.Sin(t)}
+		dark.box(at.add(leg.scale(0.18)).add(vec3{0, 0.05, 0}), vec3{0.36, 0.04, 0.05}, leg, 0.01)
+	}
+	dark.prism(at, yUp, 0.03, 0.03, 0.45, 8, 0)
+	seat.box(at.add(vec3{0, 0.5, 0}), vec3{0.5, 0.09, 0.5}, f, 0.04)
+	seat.boxBasis(at.sub(f.scale(0.25)).add(vec3{0, 0.85, 0}), [3]vec3{sd, vec3{0, 0.99, 0.1}.norm(), f}, vec3{0.46, 0.55, 0.08}, 0.04)
+	dark.box(at.sub(f.scale(0.22)).add(vec3{0, 0.6, 0}), vec3{0.06, 0.2, 0.04}, sd, 0.01)
+}
+
+// buildWorkbench: a steel bench with a pegboard, tools and a specimen jar.
+func buildWorkbench(b *building, at vec3, seed int) {
+	a := float64(seed) * math.Pi / 4
+	f := vec3{math.Cos(a), 0, math.Sin(a)} // toward the user
+	sd := vec3{-f.Z, 0, f.X}
+	steel, dark := b.part("steel", litIndoor, vec3{}), b.part("steel.dark", litIndoor, vec3{})
+	b.part("wood.brown", litIndoor, vec3{}).box(at.add(vec3{0, 0.9, 0}), vec3{1.8, 0.06, 0.75}, sd, 0.015)
+	for _, x := range []float64{-0.82, 0.82} {
+		for _, z := range []float64{-0.3, 0.3} {
+			dark.box(at.add(sd.scale(x)).add(f.scale(z)).add(vec3{0, 0.44, 0}), vec3{0.06, 0.88, 0.06}, sd, 0.01)
+		}
+	}
+	steel.box(at.add(vec3{0, 0.25, 0}), vec3{1.7, 0.03, 0.65}, sd, 0.01)
+	b.part("crate.slate", litIndoor, vec3{}).box(at.add(sd.scale(-0.45)).add(vec3{0, 0.42, 0}), vec3{0.6, 0.3, 0.45}, sd, 0.02)
+	board := at.sub(f.scale(0.38)).add(vec3{0, 1.45, 0})
+	b.part("wall.lower", litIndoor, vec3{}).box(board, vec3{1.7, 0.9, 0.04}, sd, 0.015)
+	for k := range 5 {
+		x := -0.6 + float64(k)*0.3
+		steel.box(board.add(sd.scale(x)).add(f.scale(0.04)).add(vec3{0, 0.1 * float64(k%2), 0}), vec3{0.04, 0.32, 0.03}, sd, 0.005)
+	}
+	b.part("pipe.red", litIndoor, vec3{}).box(at.add(sd.scale(0.5)).add(vec3{0, 0.99, 0}), vec3{0.42, 0.12, 0.22}, sd, 0.02)
+	b.part("glass.dark", litIndoor, vec3{}).prism(at.add(sd.scale(-0.1)).add(vec3{0, 0.93, 0}), yUp, 0.1, 0.1, 0.24, 12, 0.02)
+	b.part("planter.green", litIndoor, vec3{}).prism(at.add(sd.scale(-0.1)).add(vec3{0, 0.95, 0}), yUp, 0.07, 0.05, 0.1, 6, 0)
+	steel.prism(at.add(sd.scale(-0.1)).add(vec3{0, 1.17, 0}), yUp, 0.11, 0.11, 0.03, 12, 0.01)
+}
+
+// buildPlanter: a hydroponic trough on legs with rows of faceted plants
+// and a grow lamp above.
+func buildPlanter(b *building, at vec3, seed int) {
+	a := float64(seed%8) * math.Pi / 4
+	f := vec3{math.Cos(a), 0, math.Sin(a)}
+	sd := vec3{-f.Z, 0, f.X}
+	steel, dark := b.part("steel", litIndoor, vec3{}), b.part("steel.dark", litIndoor, vec3{})
+	b.part("habitat.white2", litIndoor, vec3{}).box(at.add(vec3{0, 0.7, 0}), vec3{1.7, 0.32, 0.6}, sd, 0.04)
+	b.part("soil", litIndoor, vec3{}).box(at.add(vec3{0, 0.865, 0}), vec3{1.6, 0.02, 0.5}, sd, 0)
+	for _, x := range []float64{-0.75, 0.75} {
+		dark.box(at.add(sd.scale(x)).add(vec3{0, 0.27, 0}), vec3{0.06, 0.54, 0.5}, sd, 0.01)
+		steel.box(at.add(sd.scale(x)).add(vec3{0, 1.35, 0}), vec3{0.04, 0.95, 0.04}, sd, 0.005)
+	}
+	b.part("pipe.blue", litIndoor, vec3{}).prism(at.add(sd.scale(-0.85)).add(f.scale(-0.2)).add(vec3{0, 0.75, 0}), sd, 0.03, 0.03, 1.7, 8, 0)
+	lamp := at.add(vec3{0, 1.82, 0})
+	dark.box(lamp, vec3{1.6, 0.06, 0.32}, sd, 0.015)
+	b.part("lamp.grow", litIndoor, vec3{}).box(lamp.add(vec3{0, -0.035, 0}), vec3{1.5, 0.01, 0.24}, sd, 0)
+	for k := range 6 {
+		for j, z := range []float64{-0.12, 0.12} {
+			r := grnd(seed, k*2+j)
+			p := at.add(sd.scale(-0.65 + float64(k)*0.26)).add(f.scale(z)).add(vec3{0, 0.87, 0})
+			h := 0.18 + 0.22*r
+			tok := "planter.green"
+			if (k+j)%3 == 0 {
+				tok = "planter.lime"
+			}
+			b.part(tok, litIndoor, vec3{}).prism(p, yUp, 0.1+0.05*r, 0.02, h, 5, 0)
+			b.part(tok, litIndoor, vec3{}).prism(p.add(vec3{0, h * 0.4, 0}), vec3{math.Cos(r * 6), 2, math.Sin(r * 6)}, 0.08, 0.01, h*0.6, 4, 0)
+		}
+	}
+}
+
+// buildDesk: a small desk with a lamp, a terminal and a stack of books.
+func buildDesk(b *building, at vec3, seed int) {
+	a := float64(seed) * math.Pi / 4
+	f := vec3{math.Cos(a), 0, math.Sin(a)}
+	sd := vec3{-f.Z, 0, f.X}
+	b.part("wood.brown", litIndoor, vec3{}).box(at.add(vec3{0, 0.74, 0}), vec3{1.3, 0.05, 0.6}, sd, 0.015)
+	for _, x := range []float64{-0.6, 0.6} {
+		b.part("steel.dark", litIndoor, vec3{}).box(at.add(sd.scale(x)).add(vec3{0, 0.36, 0}), vec3{0.05, 0.72, 0.55}, sd, 0.01)
+	}
+	b.part("steel.dark", litIndoor, vec3{}).box(at.sub(f.scale(0.18)).add(sd.scale(0.25)).add(vec3{0, 1.0, 0}), vec3{0.5, 0.34, 0.04}, sd, 0.015)
+	b.part("screen.dim", litIndoor, vec3{}).box(at.sub(f.scale(0.155)).add(sd.scale(0.25)).add(vec3{0, 1.0, 0}), vec3{0.44, 0.28, 0.01}, sd, 0)
+	b.part("steel.dark", litIndoor, vec3{}).box(at.sub(f.scale(0.18)).add(sd.scale(0.25)).add(vec3{0, 0.8, 0}), vec3{0.06, 0.1, 0.06}, sd, 0)
+	for k, tok := range []string{"pipe.red", "crate.sand", "pipe.blue"} {
+		b.part(tok, litIndoor, vec3{}).box(at.add(sd.scale(-0.35)).add(vec3{0, 0.79 + float64(k)*0.045, 0}), vec3{0.3, 0.04, 0.22}, vec3{math.Cos(a + float64(k)*0.3), 0, math.Sin(a + float64(k)*0.3)}, 0.005)
+	}
+	b.part("steel", litIndoor, vec3{}).prism(at.add(sd.scale(-0.5)).sub(f.scale(0.15)).add(vec3{0, 0.765, 0}), yUp, 0.02, 0.02, 0.35, 6, 0)
+	b.part("lamp.warm", litIndoor, vec3{}).prism(at.add(sd.scale(-0.5)).sub(f.scale(0.05)).add(vec3{0, 1.05, 0}), vec3{0, -1, 0}, 0.12, 0.06, 0.1, 10, 0)
+}
