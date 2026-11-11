@@ -1,15 +1,17 @@
-package main
+// Package core is the base game, as a pack: it registers its content
+// through the same API as a mod, from an init function.
+package core
 
 import (
 	"image/color"
 	"maps"
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
+	"mars_sweeper/internal/palette"
 	"math"
 	"slices"
 )
 
-// The base game, as a pack: it goes through the same API as a mod.
 func init() {
 	content.RegisterPack(content.Pack{
 		ID:       "core",
@@ -97,6 +99,7 @@ func registerCore(c *content.Content) {
 	})
 
 	// Dust devils rise in daytime, a few at once.
+	const maxDevils = 3
 	c.Events.Add("core:dust-devil", content.RandomEvent{Every: 15,
 		When: func(g content.Game) bool { return g.DustDevils() < maxDevils && g.SunHeight() > 0.2 },
 		Run:  content.Game.SpawnDustDevil})
@@ -110,12 +113,12 @@ var coreTokens = map[string]content.Token{
 	"steel":          {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
 	"steel.dark":     {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
 	"rack.slate":     {color.RGBA{58, 64, 80, 255}, content.MtPanel, 1, 0.4, 0},
-	"hazard":         {colWhite, content.MtHazard, 2.5, 0.3, 0},
-	"neon.cyan":      {accentCyan, content.MtPlain, 1, 0, 0.8},
-	"neon.orange":    {accentOrange, content.MtPlain, 1, 0, 0.8},
-	"neon.blue":      {accentBlue, content.MtPlain, 1, 0, 0.8},
-	"neon.purple":    {accentPurple, content.MtPlain, 1, 0, 0.8},
-	"lamp.warm":      {lampWarm, content.MtPlain, 1, 0, 1},
+	"hazard":         {palette.White, content.MtHazard, 2.5, 0.3, 0},
+	"neon.cyan":      {palette.AccentCyan, content.MtPlain, 1, 0, 0.8},
+	"neon.orange":    {palette.AccentOrange, content.MtPlain, 1, 0, 0.8},
+	"neon.blue":      {palette.AccentBlue, content.MtPlain, 1, 0, 0.8},
+	"neon.purple":    {palette.AccentPurple, content.MtPlain, 1, 0, 0.8},
+	"lamp.warm":      {palette.LampWarm, content.MtPlain, 1, 0, 1},
 	"floor.slate":    {color.RGBA{50, 54, 66, 255}, content.MtPanel, 1, 0.25, 0},
 	"wall.lower":     {color.RGBA{86, 100, 118, 255}, content.MtPanel, 1, 0.3, 0},
 	"floor.inlay":    {color.RGBA{68, 74, 90, 255}, content.MtPlain, 1, 0.3, 0},
@@ -124,8 +127,8 @@ var coreTokens = map[string]content.Token{
 	"crate.slate":    {color.RGBA{88, 116, 146, 255}, content.MtPanel, 1, 0.2, 0},
 	"crate.sand":     {color.RGBA{158, 148, 118, 255}, content.MtPanel, 1, 0.2, 0},
 	"wood.brown":     {color.RGBA{110, 80, 60, 255}, content.MtPlain, 1, 0.3, 0},
-	"fabric.white":   {matWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
-	"fabric.purple":  {accentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.white":   {palette.MatWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.purple":  {palette.AccentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
 	"fabric.rug":     {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	// Greebles and the yard (greeble.go).
 	"glass.dark":    {color.RGBA{26, 38, 54, 255}, content.MtPlain, 1, 1.0, 0},
@@ -138,8 +141,8 @@ var coreTokens = map[string]content.Token{
 	"locker":        {color.RGBA{72, 88, 108, 255}, content.MtPanel, 1, 0.4, 0},
 	"locker.ochre":  {color.RGBA{176, 124, 60, 255}, content.MtPanel, 1, 0.4, 0},
 	"pad.concrete":  {color.RGBA{130, 120, 110, 255}, content.MtPanel, 1, 0.2, 0},
-	"screen.dim":    {accentCyan, content.MtPlain, 1, 0, 0.4},
-	"led.green":     {colGreen, content.MtPlain, 1, 0, 1},
+	"screen.dim":    {palette.AccentCyan, content.MtPlain, 1, 0, 0.4},
+	"led.green":     {palette.Green, content.MtPlain, 1, 0, 1},
 	"fabric.seat":   {color.RGBA{58, 74, 98, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
 	"soil":          {color.RGBA{60, 40, 30, 255}, content.MtPlain, 1, 0, 0},
 	"planter.green": {color.RGBA{72, 150, 76, 255}, content.MtPlain, 1, 0.2, 0},

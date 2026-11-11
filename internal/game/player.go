@@ -1,4 +1,4 @@
-package main
+package game
 
 import (
 	"mars_sweeper/internal/content"
@@ -26,8 +26,8 @@ type Player struct {
 	Pitch      float64 `json:"pitch"`
 	vr         float64 // radial (vertical) speed
 	onGround   bool
-	walkPhase  float64
-	moveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
+	WalkPhase  float64
+	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 	speed      float64 // driving: the vehicle's speed, no sprint nor jump
 	eyeH       float64 // driving: the seat's height
 }
@@ -107,9 +107,9 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 	target := 0.0
 	if p.onGround && speed > 0 {
 		target = 1
-		p.walkPhase += dt * speed * 1.6
+		p.WalkPhase += dt * speed * 1.6
 	}
-	p.moveAmount += (target - p.moveAmount) * math.Min(1, dt*8)
+	p.MoveAmount += (target - p.MoveAmount) * math.Min(1, dt*8)
 }
 
 // pushOut keeps the player outside a vertical cylinder around center.

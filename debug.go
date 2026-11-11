@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
-	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/planet"
 	"math"
-	"os"
 	"runtime"
-	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -26,7 +23,7 @@ type debugInfo struct {
 }
 
 // updateDebug toggles the overlay and refreshes its slower measures.
-func (gfx *Graphics) updateDebug(g *Game, dt float64) {
+func (gfx *Graphics) updateDebug(g *game.Game, dt float64) {
 	d := &gfx.dbg
 	if rl.IsKeyPressed(rl.KeyF3) {
 		d.on = !d.on
@@ -46,26 +43,26 @@ func (gfx *Graphics) updateDebug(g *Game, dt float64) {
 	}
 }
 
-func (gfx *Graphics) drawDebug(g *Game) {
+func (gfx *Graphics) drawDebug(g *game.Game) {
 	d := &gfx.dbg
 	if !d.on {
 		return
 	}
 	u := uiScale()
 	t := gfx.terrain
-	up := g.player.Pos.Norm()
+	up := g.Player.Pos.Norm()
 	lines := []string{
 		fmt.Sprintf("FPS %d   image %.1f ms   pire %.1f ms", rl.GetFPS(), d.frameMs, d.worstMs),
 		fmt.Sprintf("terrain  %d dessinés  %d chargés  %d en attente", d.patches, len(t.loaded), t.pending),
-		fmt.Sprintf("cailloux %d   rochers %d", d.pebbles, len(g.nearRocks)),
+		fmt.Sprintf("cailloux %d   rochers %d", d.pebbles, len(g.NearRocks)),
 		fmt.Sprintf("lat %.2f°  lon %.2f°", math.Asin(up.Y)*180/math.Pi, math.Atan2(up.Z, up.X)*180/math.Pi),
-		fmt.Sprintf("alt sol %.1f m   relief %.1f m", t.Altitude(g.player.Pos), t.Height(up)),
+		fmt.Sprintf("alt sol %.1f m   relief %.1f m", t.Altitude(g.Player.Pos), t.Height(up)),
 		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(planet.SunDir))*180/math.Pi, d.sun, d.ao),
-		fmt.Sprintf("poussière %.2f   tuiles %d", g.world.DustAt(up), len(g.world.Touched())),
+		fmt.Sprintf("poussière %.2f   tuiles %d", g.World.DustAt(up), len(g.World.Touched())),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
-		fmt.Sprintf("packs %s   entités %d", content.PackList(), len(g.st.Entities)),
+		fmt.Sprintf("packs %s   entités %d", content.PackList(), len(g.State.Entities)),
 	}
-	for _, line := range reg.Debug { // added by packs
+	for _, line := range g.Content.Debug { // added by packs
 		lines = append(lines, line(g))
 	}
 	size, step := 15*u, 20*u
@@ -73,129 +70,5 @@ func (gfx *Graphics) drawDebug(g *Game) {
 	rl.DrawRectangleRec(rl.NewRectangle(x, y, 420*u, float32(len(lines))*step+20*u), withAlpha(rl.Black, 0.6))
 	for i, s := range lines {
 		rl.DrawTextEx(gfx.mono, s, rl.NewVector2(x+12*u, y+10*u+float32(i)*step), size, 0, visorCyan)
-	}
-}
-
-// shotRun checks the rendering without playing. With MS_SHOT=file.png the
-// game takes a screenshot after a few seconds and quits without saving;
-// MS_SHOT_UP=x,y,z first stands the player at that direction from Mars'
-// center, facing the sun; MS_SHOT_TURN (radians, to the right) and
-// MS_SHOT_PITCH then adjust the view.
-type shotRun struct {
-	file    string
-	frames  int
-	placed  bool
-	heading vec3 // the view, held against stray mouse motion
-	pitch   float64
-	mode    mode
-	perf    float64 // summed frame times (MS_SHOT_PERF)
-}
-
-func newShotRun(g *Game, gfx *Graphics) *shotRun {
-	s := &shotRun{file: os.Getenv("MS_SHOT"), mode: modePlay}
-	// MS_SHOT_MODE opens a screen for the shot: shop, map or pause.
-	switch os.Getenv("MS_SHOT_MODE") {
-	case "shop":
-		s.mode = modeShop
-	case "map":
-		s.mode = modeMap
-	case "pause":
-		s.mode = modePaused
-	}
-	// MS_SHOT_TOOL=n holds tool n (0 is the toothbrush) for the shot.
-	var tool int
-	if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TOOL"), "%d", &tool); err == nil && s.file != "" {
-		g.st.Tool = reg.Tools.IDs()[max(0, min(reg.Tools.Len()-1, tool))]
-	}
-	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
-		var d vec3
-		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
-		up := d.Norm()
-		g.player.Pos = gfx.terrain.Surface(up)
-		h := planet.SunDir.Sub(up.Scale(planet.SunDir.Dot(up)))
-		if h.Length() < 0.1 { // the sun is overhead or right underfoot
-			h, _ = mathx.TangentBasis(up)
-		}
-		g.player.Heading = h.Norm()
-		g.player.Pitch = max(-0.25, math.Asin(up.Dot(planet.SunDir))-0.12)
-		var turn float64
-		if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TURN"), "%f", &turn); err == nil {
-			r := g.player.Right()
-			g.player.Heading = g.player.Heading.Scale(math.Cos(turn)).Add(r.Scale(math.Sin(turn)))
-		}
-		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
-		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
-		gfx.terrain.Warm(g.player.Eye(), 20*time.Second)
-	}
-	// MS_SHOT_AT=x,z,yaw stands in the base (local coordinates, yaw in
-	// radians from +X toward +Z), for views of the buildings.
-	if v := os.Getenv("MS_SHOT_AT"); s.file != "" && v != "" {
-		var x, z, yaw float64
-		fmt.Sscanf(v, "%f,%f,%f", &x, &z, &yaw)
-		g.player.Pos = base.ToWorld(vec3{x, base.FloorTop, z})
-		g.player.Heading = vec3{math.Cos(yaw), 0, math.Sin(yaw)}
-		g.player.Pitch = 0.05
-		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.player.Pitch)
-		s.placed, s.heading, s.pitch = true, g.player.Heading, g.player.Pitch
-		gfx.terrain.Warm(g.player.Eye(), 20*time.Second)
-	}
-	return s
-}
-
-// tick runs after Update: it keeps the game playing even though the window
-// is not focused, and takes the shot once the exposure has settled.
-func (s *shotRun) tick(g *Game) {
-	if s.file == "" {
-		return
-	}
-	g.mode = s.mode
-	if s.placed {
-		g.player.Heading, g.player.Pitch = s.heading, s.pitch
-	}
-	s.frames++
-	// MS_SHOT_PERF=1 prints the mean frame time over frames 120 to 239,
-	// without vsync (main.go). MS_SHOT_SIZE=WxH sets the window.
-	if os.Getenv("MS_SHOT_PERF") != "" && s.frames >= 120 && s.frames < 240 {
-		s.perf += float64(rl.GetFrameTime())
-		if s.frames == 239 {
-			fmt.Printf("frame %.2f ms\n", s.perf/120*1000)
-		}
-	}
-	// MS_SHOT_JITTER=radians takes a second shot after turning that much,
-	// to find what flickers as the camera moves (compare the two).
-	var jit float64
-	fmt.Sscanf(os.Getenv("MS_SHOT_JITTER"), "%f", &jit)
-	if jit != 0 && s.frames == 241 {
-		if os.Getenv("MS_SHOT_STEP") != "" { // a step forward instead of a turn
-			g.player.Pos = g.player.Pos.Add(g.player.Heading.Scale(jit))
-		} else {
-			s.heading = s.heading.Scale(math.Cos(jit)).Add(g.player.Right().Scale(math.Sin(jit)))
-		}
-	}
-	// MS_SHOT_WALK=meters walks that much forward each frame and shoots
-	// every frame, w00_file to w23_file: what jumps shows in their diffs.
-	var walk float64
-	fmt.Sscanf(os.Getenv("MS_SHOT_WALK"), "%f", &walk)
-	// MS_SHOT_SPIN=radians turns that much each frame while walking.
-	var spin float64
-	fmt.Sscanf(os.Getenv("MS_SHOT_SPIN"), "%f", &spin)
-	if walk != 0 && s.frames > 240 {
-		g.player.Pos = g.player.Pos.Add(g.player.Heading.Scale(walk))
-		s.heading = s.heading.Scale(math.Cos(spin)).Add(g.player.Right().Scale(math.Sin(spin)))
-		rl.TakeScreenshot(fmt.Sprintf("w%02d_%s", s.frames-241, s.file))
-		if s.frames == 264 {
-			os.Exit(0)
-		}
-		return
-	}
-	if jit != 0 && s.frames == 244 {
-		rl.TakeScreenshot("b_" + s.file)
-		os.Exit(0)
-	}
-	if s.frames == 240 {
-		rl.TakeScreenshot(s.file)
-		if jit == 0 && walk == 0 {
-			os.Exit(0) // no save: the player was moved
-		}
 	}
 }

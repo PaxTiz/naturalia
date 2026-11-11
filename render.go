@@ -5,8 +5,10 @@ import (
 	"image/color"
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
+	"mars_sweeper/internal/palette"
 	"mars_sweeper/internal/planet"
 	"math"
 	"time"
@@ -16,16 +18,6 @@ import (
 	"golang.org/x/image/font/gofont/gomonobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/gofont/gosmallcaps"
-)
-
-var (
-	colWhite = color.RGBA{235, 237, 245, 255}
-	colGray  = color.RGBA{150, 155, 178, 255}
-	colGold  = color.RGBA{250, 210, 90, 255}
-	colGreen = color.RGBA{110, 220, 120, 255}
-	colRed   = color.RGBA{235, 90, 90, 255}
-	colBlue  = color.RGBA{90, 160, 240, 255}
-	colCyan  = color.RGBA{120, 235, 245, 255}
 )
 
 const (
@@ -77,6 +69,7 @@ type Graphics struct {
 	glow                                              rl.Texture2D
 	font, bold                                        rl.Font
 
+	content     *content.Content            // materials, entities
 	terrain     *Terrain                    // the ground as drawn, in levels of detail
 	nearGems    []planet.Gem                // crystals around the player, refreshed every frame
 	nearPebbles map[planet.TileKey][]pebble // per tile, around the player
@@ -106,9 +99,9 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 
 // NewGraphics loads everything the game is drawn with, and the ground
 // around the player.
-func NewGraphics(g *Game) *Graphics {
-	gfx := &Graphics{entities: map[string][]entityModel{}, hover: -1}
-	gfx.terrain = NewTerrain(g.world.Relief)
+func NewGraphics(g *game.Game) *Graphics {
+	gfx := &Graphics{content: g.Content, entities: map[string][]entityModel{}, hover: -1}
+	gfx.terrain = NewTerrain(g.World.Relief)
 	gfx.post = newPostFX()
 	gfx.terrainSh, gfx.tLoc = loadShaderVS(glsl("terrain.vert"), glsl("terrain.frag"))
 	gfx.objectSh, gfx.oLoc = loadShaderVS(glsl("object.vert"), glsl("object.frag"))
@@ -185,10 +178,10 @@ func NewGraphics(g *Game) *Graphics {
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
 
 	gfx.signBox = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
-	for i, c := range []color.RGBA{accentCyan, accentBlue, accentCyan, accentOrange} {
+	for i, c := range []color.RGBA{palette.AccentCyan, palette.AccentBlue, palette.AccentCyan, palette.AccentOrange} {
 		gfx.screens = append(gfx.screens, paintScreen(i, c))
 	}
-	for _, s := range baseSigns() {
+	for _, s := range gfx.baseSigns() {
 		s.tex = paintSign(s, gfx.smallcaps)
 		gfx.signs = append(gfx.signs, s)
 	}
@@ -222,7 +215,7 @@ func NewGraphics(g *Game) *Graphics {
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "tilesPerFace"), []float32{planet.TilesPerFace}, rl.ShaderUniformFloat)
-	gfx.terrain.Warm(g.player.Eye(), 5*time.Second)
+	gfx.terrain.Warm(g.Player.Eye(), 5*time.Second)
 	return gfx
 }
 
@@ -265,45 +258,29 @@ func (gfx *Graphics) segment(m rl.Model, a, b vec3, radius float64, c color.RGBA
 // camera follows the eye with a little life: a gentle bob and sway when
 // walking, a slight tremor while the tool runs, and the field of view
 // eased by updateFov.
-func (gfx *Graphics) camera(g *Game) rl.Camera3D {
-	p := &g.player
+func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
+	p := &g.Player
 	eye := p.Eye()
-	walk := p.moveAmount
+	walk := p.MoveAmount
 	right, up := p.Right(), p.LocalUp()
-	eye = eye.Add(up.Scale(math.Sin(2*p.walkPhase) * 0.02 * walk)).Add(right.Scale(math.Sin(p.walkPhase) * 0.012 * walk))
-	camUp := up.Add(right.Scale(math.Sin(p.walkPhase) * 0.008 * walk))
-	if g.sweeping {
-		eye = eye.Add(right.Scale(math.Sin(g.clock*37) * 0.002)).Add(up.Scale(math.Sin(g.clock*23+1) * 0.002))
+	eye = eye.Add(up.Scale(math.Sin(2*p.WalkPhase) * 0.02 * walk)).Add(right.Scale(math.Sin(p.WalkPhase) * 0.012 * walk))
+	camUp := up.Add(right.Scale(math.Sin(p.WalkPhase) * 0.008 * walk))
+	if g.Sweeping {
+		eye = eye.Add(right.Scale(math.Sin(g.Elapsed*37) * 0.002)).Add(up.Scale(math.Sin(g.Elapsed*23+1) * 0.002))
 	}
 	gfx.camEye = eye
 	return rl.Camera3D{
 		Position:   toRL(eye),
 		Target:     toRL(eye.Add(p.Forward())),
 		Up:         toRL(camUp),
-		Fovy:       float32(g.fov),
+		Fovy:       float32(g.Fov),
 		Projection: rl.CameraPerspective,
 	}
 }
 
-// updateFov widens the view when running and narrows it a touch while
-// sweeping, smoothly.
-func (g *Game) updateFov(dt float64) {
-	target := 70.0
-	switch {
-	case g.sweeping:
-		target = 67
-	case rl.IsKeyDown(rl.KeyLeftShift) && g.player.moveAmount > 0.5:
-		target = 76
-	}
-	if g.fov == 0 {
-		g.fov = target
-	}
-	g.fov += (target - g.fov) * (1 - math.Exp(-dt*5))
-}
-
-func (gfx *Graphics) setUniforms(g *Game, cam rl.Camera3D) {
+func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	eye := []float32{cam.Position.X, cam.Position.Y, cam.Position.Z}
-	t := []float32{float32(g.clock)}
+	t := []float32{float32(g.Elapsed)}
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
@@ -341,19 +318,19 @@ func (gfx *Graphics) setUniforms(g *Game, cam rl.Camera3D) {
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "roomCount"), []float32{float32(len(rms) / 4)}, rl.ShaderUniformFloat)
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "corrCount"), []float32{float32(len(crs) / 4)}, rl.ShaderUniformFloat)
 	}
-	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.player.LocalUp()), rl.ShaderUniformVec3)
+	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
 	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
-	sun, ao := gfx.terrain.light(gfx.terrain.Surface(g.player.Pos))
+	sun, ao := gfx.terrain.light(gfx.terrain.Surface(g.Player.Pos))
 	gfx.dbg.sun, gfx.dbg.ao = sun, ao
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(ao)}, rl.ShaderUniformVec2)
 
 	brush := []float32{0, 0, 0, 0}
-	if g.aimOK && g.mode == modePlay {
-		brush = []float32{float32(g.aim.X), float32(g.aim.Y), float32(g.aim.Z), float32(g.tool().Radius)}
+	if g.AimOK && g.Mode == game.ModePlay {
+		brush = []float32{float32(g.Aim.X), float32(g.Aim.Y), float32(g.Aim.Z), float32(g.Tool().Radius)}
 	}
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
-	g.steps.upload(gfx)
+	gfx.uploadSteps(&g.Steps)
 
 	// Soft round shadows of the base's domes, for when the base is beyond
 	// the shadow map.
@@ -370,17 +347,17 @@ func (gfx *Graphics) setUniforms(g *Game, cam rl.Camera3D) {
 	rl.SetShaderValueV(gfx.objectSh, gfx.oLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
 
-func (gfx *Graphics) Draw(g *Game) {
+func (gfx *Graphics) Draw(g *game.Game) {
 	cam := gfx.camera(g)
 
-	atlas, lookup := gfx.dust.Upload(g.world, g.player.Pos)
+	atlas, lookup := gfx.dust.Upload(g.World, g.Player.Pos)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapSpecular, lookup)
-	patches := gfx.terrain.Visible(g.player.Eye())
+	patches := gfx.terrain.Visible(g.Player.Eye())
 	gfx.dbg.patches = len(patches)
-	gfx.nearGems = g.world.GemsNear(g.player.Pos, gemDrawDist)
+	gfx.nearGems = g.World.GemsNear(g.Player.Pos, gemDrawDist)
 	// Objects cast their shadows first, then the scene is lit with them.
-	gfx.shadow.render(gfx, g.player.Pos, func() {
+	gfx.shadow.render(gfx, g.Player.Pos, func() {
 		gfx.drawRocks(g)
 		gfx.drawBase(g)
 		gfx.drawDrones(g)
@@ -398,8 +375,8 @@ func (gfx *Graphics) Draw(g *Game) {
 		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
 	}
 
-	sunUp := g.player.Pos.Norm().Dot(planet.SunDir)
-	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, base.Indoors(base.ToLocal(g.player.Eye())))
+	sunUp := g.Player.Pos.Norm().Dot(planet.SunDir)
+	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, base.Indoors(base.ToLocal(g.Player.Eye())))
 	gfx.post.resize()
 	rl.BeginTextureMode(gfx.post.scene)
 	rl.ClearBackground(rl.Black)
@@ -427,7 +404,7 @@ func (gfx *Graphics) Draw(g *Game) {
 	gfx.drawPebbles(g)
 	gfx.drawGems(g)
 	gfx.drawDevils(g)
-	if base.Indoors(base.ToLocal(g.player.Eye())) {
+	if base.Indoors(base.ToLocal(g.Player.Eye())) {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
 	gfx.drawTool(g)
@@ -438,43 +415,37 @@ func (gfx *Graphics) Draw(g *Game) {
 	rl.EndTextureMode()
 
 	rl.BeginDrawing()
-	gfx.post.finish(cam, sunUp, g.clock)
+	gfx.post.finish(cam, sunUp, g.Elapsed)
 	gfx.drawHUD(g, cam)
 	rl.EndDrawing()
 }
 
-var (
-	matWhite = color.RGBA{232, 234, 240, 255}
-	matSteel = color.RGBA{150, 155, 170, 255}
-	matDark  = color.RGBA{48, 52, 66, 255}
-)
-
-func (gfx *Graphics) drawDrones(g *Game) {
-	for _, d := range g.drones {
+func (gfx *Graphics) drawDrones(g *game.Game) {
+	for _, d := range g.Drones {
 		up := d.Pos.Norm()
 		axis, angle := mathx.Orient(up)
 		downAxis, downAngle := mathx.Orient(up.Scale(-1))
 		t1, t2 := mathx.TangentBasis(up)
-		p := d.Pos.Add(up.Scale(math.Sin(d.phase*3) * 0.08))
+		p := d.Pos.Add(up.Scale(math.Sin(d.Phase*3) * 0.08))
 		gfx.setMat(content.MtPaint, 2, true)
-		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, matWhite, 0.8, 0)
-		gfx.put(gfx.sphere, p.Add(up.Scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, accentOrange, 0.6, 0)
+		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, palette.MatWhite, 0.8, 0)
+		gfx.put(gfx.sphere, p.Add(up.Scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, palette.AccentOrange, 0.6, 0)
 		gfx.setMat(content.MtMetal, 3, true)
-		gfx.put(gfx.hemi, p.Sub(up.Scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, matDark, 1, 0)
+		gfx.put(gfx.hemi, p.Sub(up.Scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, palette.MatDark, 1, 0)
 		for i := range 4 {
 			a := math.Pi/4 + float64(i)*math.Pi/2
 			arm := p.Add(t1.Scale(math.Cos(a) * 0.45)).Add(t2.Scale(math.Sin(a) * 0.45)).Add(up.Scale(0.05))
-			gfx.segment(gfx.cyl, p, arm, 0.025, matSteel, 0.4, 0)
+			gfx.segment(gfx.cyl, p, arm, 0.025, palette.MatSteel, 0.4, 0)
 			gfx.setMat(content.MtPlain, 1, false)
 			gfx.segment(gfx.cyl, arm.Add(up.Scale(0.04)), arm.Add(up.Scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
 			gfx.setMat(content.MtMetal, 3, true)
 		}
 		gfx.setMat(content.MtPlain, 1, false)
-		light := colGreen
-		if g.tankFull() {
-			light = colRed
+		light := palette.Green
+		if g.TankFull() {
+			light = palette.Red
 		}
-		if math.Sin(d.phase*6) > 0 {
+		if math.Sin(d.Phase*6) > 0 {
 			gfx.put(gfx.sphere, p.Add(up.Scale(0.15)), vec3{0.045, 0.045, 0.045}, axis, angle, light, 0, 1)
 		}
 	}
@@ -484,16 +455,16 @@ func (gfx *Graphics) drawDrones(g *Game) {
 const gemDrawDist = 80.0
 
 // gemVisibility is how much of a crystal pokes out of the dust (0..1).
-func (gfx *Graphics) gemVisibility(g *Game, gem planet.Gem) float64 {
-	return mathx.Clamp01(1 - g.world.DustAt(gem.Dir)*2.5)
+func (gfx *Graphics) gemVisibility(g *game.Game, gem planet.Gem) float64 {
+	return mathx.Clamp01(1 - g.World.DustAt(gem.Dir)*2.5)
 }
 
-func (gfx *Graphics) gemPos(g *Game, gem planet.Gem, s float64) vec3 {
-	lift := s*1.4 + math.Sin(g.clock*2+float64(gem.Key))*0.05
+func (gfx *Graphics) gemPos(g *game.Game, gem planet.Gem, s float64) vec3 {
+	lift := s*1.4 + math.Sin(g.Elapsed*2+float64(gem.Key))*0.05
 	return gfx.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(lift))
 }
 
-func (gfx *Graphics) drawGems(g *Game) {
+func (gfx *Graphics) drawGems(g *game.Game) {
 	for _, gem := range gfx.nearGems {
 		vis := gfx.gemVisibility(g, gem)
 		if vis <= 0 {
@@ -503,22 +474,22 @@ func (gfx *Graphics) drawGems(g *Game) {
 		p := gfx.gemPos(g, gem, s)
 		axis, angle := mathx.Orient(gem.Dir)
 		downAxis, downAngle := mathx.Orient(gem.Dir.Scale(-1))
-		gfx.put(gfx.crystal, p, vec3{s, s * 1.7, s}, axis, angle, colCyan, 1, 0.45)
+		gfx.put(gfx.crystal, p, vec3{s, s * 1.7, s}, axis, angle, palette.Cyan, 1, 0.45)
 		gfx.put(gfx.crystal, p, vec3{s, s * 1.2, s}, downAxis, downAngle, color.RGBA{60, 170, 220, 255}, 1, 0.45)
 	}
 }
 
 // drawTool draws the held tool, in the lower right corner of the view.
-func (gfx *Graphics) drawTool(g *Game) {
-	if g.mode == modePaused {
+func (gfx *Graphics) drawTool(g *game.Game) {
+	if g.Mode == game.ModePaused {
 		return
 	}
-	look := g.tool().Look
-	base, dir := g.toolBase, g.toolDir
-	if g.sweeping {
-		base = base.Add(vec3{(g.rng.Float64() - 0.5) * 0.006, (g.rng.Float64() - 0.5) * 0.006, 0})
+	look := g.Tool().Look
+	base, dir := g.ToolBase, g.ToolDir
+	if g.Sweeping {
+		base = base.Add(vec3{(g.Rng.Float64() - 0.5) * 0.006, (g.Rng.Float64() - 0.5) * 0.006, 0})
 	}
-	const k = toolViewScale
+	const k = game.ToolViewScale
 	neck := base.Add(dir.Scale(look.HandleLen * k))
 	tip := neck.Add(dir.Scale(look.HeadLen * k))
 	hr, r := look.HandleR*k, look.HeadR*k
@@ -528,20 +499,20 @@ func (gfx *Graphics) drawTool(g *Game) {
 	// A dark rubber grip where the hand holds it, with a cyan ring.
 	grip := base.Add(dir.Scale(look.HandleLen * 0.35 * k))
 	gfx.setMat(content.MtPlain, 1, false)
-	gfx.segment(gfx.cyl, base.Sub(dir.Scale(0.01*k)), grip, hr*1.3, matDark, 0.2, 0)
-	gfx.segment(gfx.cyl, grip, grip.Add(dir.Scale(0.012*k)), hr*1.32, accentCyan, 0.3, 0)
+	gfx.segment(gfx.cyl, base.Sub(dir.Scale(0.01*k)), grip, hr*1.3, palette.MatDark, 0.2, 0)
+	gfx.segment(gfx.cyl, grip, grip.Add(dir.Scale(0.012*k)), hr*1.32, palette.AccentCyan, 0.3, 0)
 	gfx.setMat(content.MtMetal, 6, true)
 	collar := math.Max(hr, r) * 1.15
 	if look.Head == content.HeadFlare || look.Head == content.HeadBlock {
 		collar = hr * 1.5 // flat heads: a slim collar
 	}
 	if look.Head != content.HeadNozzle {
-		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), neck.Add(dir.Scale(0.02*k)), collar, matSteel, 0.8, 0)
+		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), neck.Add(dir.Scale(0.02*k)), collar, palette.MatSteel, 0.8, 0)
 	}
-	right := g.player.Right()
+	right := g.Player.Right()
 	across := right.Sub(dir.Scale(right.Dot(dir))).Norm()
 	top := dir.Cross(across)
-	if top.Dot(g.player.LocalUp()) < 0 {
+	if top.Dot(g.Player.LocalUp()) < 0 {
 		top = top.Scale(-1)
 	}
 	switch look.Head {
@@ -554,18 +525,18 @@ func (gfx *Graphics) drawTool(g *Game) {
 		gfx.setMat(content.MtFabric, 12, true)
 		gfx.putBasis(gfx.cube, at.Sub(top.Scale(r*0.9)), across.Scale(r*1.9), dir.Scale(look.HeadLen*0.85*k), top.Scale(r*1.2), look.HeadCol, 0.1, 0)
 		gfx.setMat(content.MtPlain, 1, false)
-		gfx.putBasis(gfx.cube, at.Add(top.Scale(r*0.46)), across.Scale(r*0.5), dir.Scale(look.HeadLen*0.6*k), top.Scale(0.004*k), accentCyan, 0, 0.3)
+		gfx.putBasis(gfx.cube, at.Add(top.Scale(r*0.46)), across.Scale(r*0.5), dir.Scale(look.HeadLen*0.6*k), top.Scale(0.004*k), palette.AccentCyan, 0, 0.3)
 	case content.HeadTaper:
 		// A paintbrush: a steel ferrule, then a tuft of bristles narrowing
 		// to a tip dipped in paint.
 		ferrule := neck.Add(dir.Scale(look.HeadLen * 0.3 * k))
 		body := ferrule.Add(dir.Scale(look.HeadLen * 0.35 * k))
-		gfx.segment(gfx.cyl, neck, ferrule, r*0.85, matSteel, 0.9, 0)
+		gfx.segment(gfx.cyl, neck, ferrule, r*0.85, palette.MatSteel, 0.9, 0)
 		gfx.setMat(content.MtFabric, 12, true)
 		gfx.segment(gfx.cyl, ferrule, body, r, look.HeadCol, 0.2, 0)
 		gfx.segment(gfx.cone, body, tip, r, look.HeadCol, 0.2, 0)
 		gfx.setMat(content.MtPlain, 1, false)
-		gfx.segment(gfx.cone, body.Lerp(tip, 0.55), tip.Add(dir.Scale(0.002*k)), r*0.45, accentOrange, 0.4, 0)
+		gfx.segment(gfx.cone, body.Lerp(tip, 0.55), tip.Add(dir.Scale(0.002*k)), r*0.45, palette.AccentOrange, 0.4, 0)
 	case content.HeadFlare:
 		// A push broom: a painted head across the handle with steel end
 		// brackets and a hazard band, a thick row of bristles below.
@@ -574,10 +545,10 @@ func (gfx *Graphics) drawTool(g *Game) {
 		gfx.setMat(content.MtPaint, 8, true)
 		gfx.putBasis(gfx.cube, at, across.Scale(width), dir.Scale(0.06*k), depth(across, dir).Scale(0.09*k), look.HandleCol, 0.3, 0)
 		gfx.setMat(content.MtHazard, 12, false)
-		gfx.putBasis(gfx.cube, at.Add(top.Scale(0.046*k)), across.Scale(width*0.6), dir.Scale(0.05*k), depth(across, dir).Scale(0.004*k), colWhite, 0.3, 0)
+		gfx.putBasis(gfx.cube, at.Add(top.Scale(0.046*k)), across.Scale(width*0.6), dir.Scale(0.05*k), depth(across, dir).Scale(0.004*k), palette.White, 0.3, 0)
 		gfx.setMat(content.MtMetal, 6, true)
 		for _, sd := range []float64{-1, 1} {
-			gfx.putBasis(gfx.cube, at.Add(across.Scale(sd*width*0.5)), across.Scale(0.02*k), dir.Scale(0.08*k), depth(across, dir).Scale(0.1*k), matSteel, 0.8, 0)
+			gfx.putBasis(gfx.cube, at.Add(across.Scale(sd*width*0.5)), across.Scale(0.02*k), dir.Scale(0.08*k), depth(across, dir).Scale(0.1*k), palette.MatSteel, 0.8, 0)
 		}
 		gfx.setMat(content.MtFabric, 10, true)
 		gfx.putBasis(gfx.cube, neck.Add(dir.Scale(0.12*k)), across.Scale(width*0.96), dir.Scale(0.13*k), depth(across, dir).Scale(0.07*k), look.HeadCol, 0.1, 0)
@@ -588,20 +559,20 @@ func (gfx *Graphics) drawTool(g *Game) {
 		body := neck.Add(dir.Scale(look.HeadLen * 0.5 * k))
 		mid := body.Add(dir.Scale(look.HeadLen * 0.28 * k))
 		gfx.setMat(content.MtPlain, 1, false)
-		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.04*k)), neck.Sub(dir.Scale(0.02*k)), r*0.9, matDark, 0.3, 0)
+		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.04*k)), neck.Sub(dir.Scale(0.02*k)), r*0.9, palette.MatDark, 0.3, 0)
 		gfx.setMat(content.MtPaint, 6, true)
 		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), body, r, look.HeadCol, 0.6, 0)
 		gfx.setMat(content.MtHazard, 3, true)
-		gfx.segment(gfx.cyl, body.Sub(dir.Scale(0.04*k)), body.Sub(dir.Scale(0.01*k)), r*1.03, colWhite, 0.3, 0)
+		gfx.segment(gfx.cyl, body.Sub(dir.Scale(0.04*k)), body.Sub(dir.Scale(0.01*k)), r*1.03, palette.White, 0.3, 0)
 		gfx.setMat(content.MtMetal, 6, true)
-		gfx.segment(gfx.cyl, body, mid, r*0.74, matSteel, 0.8, 0)
-		gfx.segment(gfx.cyl, mid, tip, r*0.54, matSteel, 0.8, 0)
+		gfx.segment(gfx.cyl, body, mid, r*0.74, palette.MatSteel, 0.8, 0)
+		gfx.segment(gfx.cyl, mid, tip, r*0.54, palette.MatSteel, 0.8, 0)
 		gfx.setMat(content.MtPlain, 1, false)
-		gfx.segment(gfx.cyl, mid.Sub(dir.Scale(0.008*k)), mid, r*0.8, matDark, 0.3, 0)
-		gfx.segment(gfx.cyl, tip.Sub(dir.Scale(0.012*k)), tip.Add(dir.Scale(0.002*k)), r*0.58, colCyan, 0, look.Glow)
-		light := colGreen
-		if g.tankFull() {
-			light = colRed
+		gfx.segment(gfx.cyl, mid.Sub(dir.Scale(0.008*k)), mid, r*0.8, palette.MatDark, 0.3, 0)
+		gfx.segment(gfx.cyl, tip.Sub(dir.Scale(0.012*k)), tip.Add(dir.Scale(0.002*k)), r*0.58, palette.Cyan, 0, look.Glow)
+		light := palette.Green
+		if g.TankFull() {
+			light = palette.Red
 		}
 		gfx.putBasis(gfx.cube, neck.Add(dir.Scale(look.HeadLen*0.22*k)).Add(top.Scale(r)), across.Scale(r*0.45), dir.Scale(look.HeadLen*0.22*k), top.Scale(0.012*k), light, 0, 0.9)
 	}
@@ -614,15 +585,15 @@ func depth(across, dir vec3) vec3 { return across.Cross(dir) }
 // drawGlows draws the soft sprites: dust particles and crystal glows.
 // softness fades a particle as it reaches the ground, so its sprite
 // doesn't get cut by the terrain.
-func (gfx *Graphics) softness(g *Game, p Particle) float64 {
+func (gfx *Graphics) softness(g *game.Game, p game.Particle) float64 {
 	return mathx.Smoothstep(0, p.Size*3, gfx.terrain.Altitude(p.Pos))
 }
 
-func (gfx *Graphics) drawGlows(g *Game, cam rl.Camera3D) {
+func (gfx *Graphics) drawGlows(g *game.Game, cam rl.Camera3D) {
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthMask()
 
-	for _, p := range g.particles {
+	for _, p := range g.Particles {
 		if p.Additive {
 			continue
 		}
@@ -632,7 +603,7 @@ func (gfx *Graphics) drawGlows(g *Game, cam rl.Camera3D) {
 	}
 
 	rl.BeginBlendMode(rl.BlendAdditive)
-	for _, p := range g.particles {
+	for _, p := range g.Particles {
 		if !p.Additive {
 			continue
 		}
@@ -645,11 +616,11 @@ func (gfx *Graphics) drawGlows(g *Game, cam rl.Camera3D) {
 		if vis <= 0 {
 			continue
 		}
-		pulse := 0.75 + 0.25*math.Sin(g.clock*3+float64(gem.Key))
+		pulse := 0.75 + 0.25*math.Sin(g.Elapsed*3+float64(gem.Key))
 		c := color.RGBA{80, 200, 230, uint8(160 * vis * pulse)}
 		rl.DrawBillboard(cam, gfx.glow, toRL(gfx.gemPos(g, gem, 0.06+0.16*vis)), float32(1.4*vis), c)
 	}
-	if math.Mod(g.clock, 1.2) < 0.3 {
+	if math.Mod(g.Elapsed, 1.2) < 0.3 {
 		rl.DrawBillboard(cam, gfx.glow, toRL(beaconTop()), 0.9, color.RGBA{255, 80, 60, 200})
 	}
 	rl.EndBlendMode()

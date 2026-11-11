@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
@@ -30,11 +31,11 @@ type pebble struct {
 
 // pebblesIn places the pebbles of a dust tile, mostly a few centimeters
 // wide. None on the base's pad nor on the polar ice.
-func (gfx *Graphics) pebblesIn(g *Game, k planet.TileKey) []pebble {
+func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 	f, tx, ty := k.Split()
 	var out []pebble
 	for i := range pebblesPerTile {
-		s := g.world.Seed + 900 + uint64(i)*5
+		s := g.World.Seed + 900 + uint64(i)*5
 		a := (float64(tx*planet.TileCells) + mathx.Hash3(f, tx, ty, s)*planet.TileCells) / planet.FaceCells * 2
 		b := (float64(ty*planet.TileCells) + mathx.Hash3(f, tx, ty, s+1)*planet.TileCells) / planet.FaceCells * 2
 		d := mathx.FaceDir(f, a-1, b-1)
@@ -58,13 +59,13 @@ func (gfx *Graphics) pebblesIn(g *Game, k planet.TileKey) []pebble {
 
 // drawPebbles draws the pebbles near the player, one instanced call per
 // shape. They sink into thick dust and come out where it is swept.
-func (gfx *Graphics) drawPebbles(g *Game) {
+func (gfx *Graphics) drawPebbles(g *game.Game) {
 	if gfx.nearPebbles == nil {
 		gfx.nearPebbles = map[planet.TileKey][]pebble{}
 	}
 	near := map[planet.TileKey]bool{}
 	var mats [pebbleShapes][]rl.Matrix
-	planet.TilesNear(g.player.Pos, pebbleDist, func(k planet.TileKey) {
+	planet.TilesNear(g.Player.Pos, pebbleDist, func(k planet.TileKey) {
 		near[k] = true
 		ps, ok := gfx.nearPebbles[k]
 		if !ok {
@@ -72,13 +73,13 @@ func (gfx *Graphics) drawPebbles(g *Game) {
 			gfx.nearPebbles[k] = ps
 		}
 		for _, p := range ps {
-			dist := p.ground.Sub(g.player.Pos).Length()
+			dist := p.ground.Sub(g.Player.Pos).Length()
 			if dist > pebbleDist {
 				continue
 			}
 			// Shrink away near the edge rather than pop.
 			size := p.size * (1 - mathx.Smoothstep(pebbleDist*0.75, pebbleDist, dist))
-			ground := p.ground.Sub(p.dir.Scale(size * (0.15 + 0.45*g.world.DustAt(p.dir))))
+			ground := p.ground.Sub(p.dir.Scale(size * (0.15 + 0.45*g.World.DustAt(p.dir))))
 			mats[p.shape] = append(mats[p.shape], basisMatrix(ground, p.ax.Scale(size), p.dir.Scale(size), p.az.Scale(size)))
 		}
 	})

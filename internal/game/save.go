@@ -1,4 +1,4 @@
-package main
+package game
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/planet"
 	"os"
 	"path/filepath"
@@ -35,7 +36,7 @@ func saveDir() (string, error) {
 	return filepath.Join(dir, "mars_sweeper"), nil
 }
 
-func (g *Game) save() {
+func (g *Game) Save() {
 	dir, err := saveDir()
 	if err != nil {
 		log.Println("save:", err)
@@ -44,11 +45,11 @@ func (g *Game) save() {
 	data, err := json.Marshal(saveFile{
 		Version:   saveVersion,
 		SavedAt:   time.Now().Unix(),
-		State:     g.st,
-		Player:    g.player,
-		Seed:      g.world.Seed,
-		Tiles:     g.world.TileBytes(),
-		Collected: g.world.CollectedKeys(),
+		State:     g.State,
+		Player:    g.Player,
+		Seed:      g.World.Seed,
+		Tiles:     g.World.TileBytes(),
+		Collected: g.World.CollectedKeys(),
 	})
 	if err != nil {
 		log.Println("save:", err)
@@ -98,16 +99,16 @@ func (g *Game) load() {
 		return
 	}
 
-	g.st = sf.State
-	migrateState(&g.st)
+	g.State = sf.State
+	migrateState(&g.State, g.Content)
 	if sf.Version != saveVersion {
 		log.Println("load: save from an older version, keeping progress on a new Mars")
 		return
 	}
-	g.player = sf.Player
-	g.world = planet.NewWorld(sf.Seed, &reg.Terrain)
-	g.world.SetTileBytes(sf.Tiles)
-	g.world.SetCollected(sf.Collected)
+	g.Player = sf.Player
+	g.World = planet.NewWorld(sf.Seed, &g.Content.Terrain)
+	g.World.SetTileBytes(sf.Tiles)
+	g.World.SetCollected(sf.Collected)
 }
 
 func readGzip(path string) ([]byte, error) {
@@ -128,7 +129,7 @@ func readGzip(path string) ([]byte, error) {
 var coreTools = []string{"core:toothbrush", "core:paintbrush", "core:broom", "core:vacuum", "core:blower", "core:vacuum-cannon"}
 
 // migrateState turns indexes and bare names from older saves into IDs.
-func migrateState(st *State) {
+func migrateState(st *State, c *content.Content) {
 	if st.Tool == "" {
 		st.Tool = coreTools[max(0, min(st.OldTier, len(coreTools)-1))]
 	}
@@ -139,14 +140,14 @@ func migrateState(st *State) {
 			st.Levels["core:"+k] = v
 		}
 	}
-	if _, ok := reg.Tools.Get(st.Tool); !ok {
+	if _, ok := c.Tools.Get(st.Tool); !ok {
 		log.Printf("load: tool %s no longer exists (mod removed?), back to the first one", st.Tool)
 	}
 }
 
-// modDirs are where mods are looked for: mods/ in the current folder, then
+// ModDirs are where mods are looked for: mods/ in the current folder, then
 // in the game's settings folder, next to the save.
-func modDirs() []string {
+func ModDirs() []string {
 	dirs := []string{"mods"}
 	if d, err := saveDir(); err == nil {
 		dirs = append(dirs, filepath.Join(d, "mods"))
@@ -154,9 +155,9 @@ func modDirs() []string {
 	return dirs
 }
 
-// disabledMods lists the mods turned off in mods.json, in the settings
+// DisabledMods lists the mods turned off in mods.json, in the settings
 // folder: {"disabled": ["serre"]}.
-func disabledMods() map[string]bool {
+func DisabledMods() map[string]bool {
 	off := map[string]bool{}
 	d, err := saveDir()
 	if err != nil {

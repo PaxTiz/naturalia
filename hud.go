@@ -5,7 +5,9 @@ import (
 	"image/color"
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/palette"
 	"mars_sweeper/internal/planet"
 	"math"
 	"strings"
@@ -263,12 +265,12 @@ func shopItemRect(i int) rl.Rectangle {
 	return rl.NewRectangle(p.X+18*u, p.Y+72*u+float32(i)*64*u, p.Width-36*u, 58*u)
 }
 
-func (gfx *Graphics) drawHUD(g *Game, cam rl.Camera3D) {
+func (gfx *Graphics) drawHUD(g *game.Game, cam rl.Camera3D) {
 	u := uiScale()
 	_, h := screenSize()
 
-	for _, f := range g.floaters {
-		if f.Pos.Sub(g.player.Eye()).Dot(g.player.Forward()) <= 0 {
+	for _, f := range g.Floaters {
+		if f.Pos.Sub(g.Player.Eye()).Dot(g.Player.Forward()) <= 0 {
 			continue // behind the camera
 		}
 		sp := rl.GetWorldToScreen(toRL(f.Pos), cam)
@@ -276,54 +278,54 @@ func (gfx *Graphics) drawHUD(g *Game, cam rl.Camera3D) {
 		gfx.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
 	}
 
-	if g.mode == modePlay || g.mode == modeMap || g.mode == modeShop {
+	if g.Mode == game.ModePlay || g.Mode == game.ModeMap || g.Mode == game.ModeShop {
 		gfx.drawVisor(g)
 	}
 
-	if g.mode == modePlay {
+	if g.Mode == game.ModePlay {
 		gfx.drawBaseMarker(g, cam)
 		gfx.drawCompass(g)
 		gfx.drawReticle(g)
 		gfx.drawHeldItem(g)
 		switch {
-		case g.driving >= 0:
-			v, _ := g.driven()
+		case g.Riding >= 0:
+			v, _ := g.Driven()
 			gfx.prompt("E", "Descendre du "+strings.ToLower(v.Name), h*0.64, visorCyan)
-		case g.st.TotalDust < 5:
+		case g.State.TotalDust < 5:
 			gfx.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
 		case gfx.hasUse(g):
-			it, _ := g.nearbyUse()
+			it, _ := g.NearbyUse()
 			gfx.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
-		case g.tankFull() && !g.autoSell() && math.Mod(g.clock, 1) < 0.7:
+		case g.TankFull() && !g.AutoSell() && math.Mod(g.Elapsed, 1) < 0.7:
 			gfx.prompt("", "RÉSERVOIR PLEIN · rapporte la poussière à l'incinérateur", h*0.64, visorAmber)
-		case !g.aimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
+		case !g.AimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
 			gfx.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
 		}
 		gfx.drawHints(g)
-		if g.messageT > 0 {
-			gfx.prompt("", g.message, h*0.2, withAlpha(visorCyan, math.Min(1, g.messageT)))
+		if g.MessageT > 0 {
+			gfx.prompt("", g.Message, h*0.2, withAlpha(visorCyan, math.Min(1, g.MessageT)))
 		}
 	}
-	if g.mode != modePaused {
+	if g.Mode != game.ModePaused {
 		gfx.drawStatus(g)
 	}
 
 	gfx.drawDebug(g)
 
-	switch g.mode {
-	case modePaused:
+	switch g.Mode {
+	case game.ModePaused:
 		gfx.drawPause(g)
-	case modeShop:
+	case game.ModeShop:
 		gfx.drawShop(g)
-	case modeMap:
+	case game.ModeMap:
 		gfx.drawMapPanel(g)
-	case modeSleep:
+	case game.ModeSleep:
 		gfx.drawSleep(g)
 	}
 }
 
 // drawVisor lays the helmet's visor over the view.
-func (gfx *Graphics) drawVisor(g *Game) {
+func (gfx *Graphics) drawVisor(g *game.Game) {
 	w, h := screenSize()
 	src := rl.NewRectangle(0, 0, float32(gfx.visor.Width), float32(gfx.visor.Height))
 	rl.DrawTexturePro(gfx.visor, src, rl.NewRectangle(0, 0, w, h), rl.NewVector2(0, 0), 0, rl.White)
@@ -331,8 +333,8 @@ func (gfx *Graphics) drawVisor(g *Game) {
 
 // drawHints lists the controls along the bottom of the visor, as keys.
 // drawHeldItem: what F places, under the status panel.
-func (gfx *Graphics) drawHeldItem(g *Game) {
-	it, n := g.heldItem()
+func (gfx *Graphics) drawHeldItem(g *game.Game) {
+	it, n := g.HeldItem()
 	if it == nil {
 		return
 	}
@@ -351,7 +353,7 @@ func (gfx *Graphics) drawHeldItem(g *Game) {
 	gfx.caps("changer", kx, y+11*u, 12*u, visorDim)
 }
 
-func (gfx *Graphics) drawHints(g *Game) {
+func (gfx *Graphics) drawHints(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	hints := [][2]string{
@@ -372,13 +374,13 @@ func (gfx *Graphics) drawHints(g *Game) {
 }
 
 // drawReticle: a thin ring with four ticks; brighter when the ground is in reach.
-func (gfx *Graphics) drawReticle(g *Game) {
+func (gfx *Graphics) drawReticle(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	cx, cy := w/2, h/2
 	c := withAlpha(uiWhite, 0.45)
 	r := 9 * u
-	if g.aimOK {
+	if g.AimOK {
 		c = withAlpha(visorCyan, 0.95)
 		r = 7 * u
 	}
@@ -390,30 +392,30 @@ func (gfx *Graphics) drawReticle(g *Game) {
 }
 
 // drawStatus: credits, tool and tank, top left of the visor.
-func (gfx *Graphics) drawStatus(g *Game) {
+func (gfx *Graphics) drawStatus(g *game.Game) {
 	u := uiScale()
 	r := rl.NewRectangle(32*u, 28*u, 300*u, 112*u)
-	visorPanel(r, colGold)
+	visorPanel(r, palette.Gold)
 	left, right, y := r.X+20*u, r.X+r.Width-18*u, r.Y
 
 	// Credits, with a little coin.
 	gfx.caps("CRÉDITS", left, y+12*u, 13*u, visorDim)
 	coin := rl.NewVector2(left+8*u, y+46*u)
-	rl.DrawCircleV(coin, 8*u, colGold)
+	rl.DrawCircleV(coin, 8*u, palette.Gold)
 	rl.DrawRing(coin, 3*u, 5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
-	vw := gfx.monoAt(fmtNum(g.st.Credits), left+24*u, y+30*u, 30*u, colGold)
-	if g.sellPop > 0 {
-		rise := float32(1.5-g.sellPop) * 10 * u
-		gfx.monoAt(g.sellPopText, left+30*u+vw, y+38*u-rise, 16*u, withAlpha(colGold, g.sellPop))
+	vw := gfx.monoAt(game.FmtNum(g.State.Credits), left+24*u, y+30*u, 30*u, palette.Gold)
+	if g.SellPop > 0 {
+		rise := float32(1.5-g.SellPop) * 10 * u
+		gfx.monoAt(g.SellPopText, left+30*u+vw, y+38*u-rise, 16*u, withAlpha(palette.Gold, g.SellPop))
 	}
 
 	// Tool, with its tier as pips.
 	gfx.capsRight("OUTIL", right, y+12*u, 13*u, visorDim)
-	gfx.textRight(g.tool().Name, right, y+29*u, 17*u, uiWhite)
-	n := reg.Tools.Len()
+	gfx.textRight(g.Tool().Name, right, y+29*u, 17*u, uiWhite)
+	n := g.Content.Tools.Len()
 	for i := range n {
 		c := uiTrack
-		if i <= g.toolTier() {
+		if i <= g.ToolTier() {
 			c = visorCyan
 		}
 		x := right - float32(n-i)*10*u + 2*u
@@ -423,16 +425,16 @@ func (gfx *Graphics) drawStatus(g *Game) {
 	// Tank: a gauge with quarter ticks.
 	ty := y + 70*u
 	gfx.caps("RÉSERVOIR", left, ty, 13*u, visorDim)
-	gfx.monoRight(fmtNum(g.st.Tank)+" / "+fmtNum(g.Capacity())+" g", right, ty-1*u, 14*u, uiWhite)
+	gfx.monoRight(game.FmtNum(g.State.Tank)+" / "+game.FmtNum(g.Capacity())+" g", right, ty-1*u, 14*u, uiWhite)
 	bar := rl.NewRectangle(left, ty+19*u, right-left, 9*u)
 	fillCut(bar, 3*u, uiTrack)
-	fill := float32(mathx.Clamp01(g.st.Tank / g.Capacity()))
+	fill := float32(mathx.Clamp01(g.State.Tank / g.Capacity()))
 	c := visorCyan
 	if fill > 0.8 {
 		c = visorAmber
 	}
-	if g.tankFull() && math.Mod(g.clock, 0.5) < 0.25 {
-		c = colRed
+	if g.TankFull() && math.Mod(g.Elapsed, 0.5) < 0.25 {
+		c = palette.Red
 	}
 	if fw := bar.Width * fill; fw > 1 {
 		fillCut(rl.NewRectangle(bar.X, bar.Y, fw, bar.Height), min(3*u, fw/2), c)
@@ -444,17 +446,17 @@ func (gfx *Graphics) drawStatus(g *Game) {
 
 // drawCompass: a heading strip at the top of the visor, north being the
 // way to the base (it stands on the north pole).
-func (gfx *Graphics) drawCompass(g *Game) {
+func (gfx *Graphics) drawCompass(g *game.Game) {
 	u := uiScale()
 	w, _ := screenSize()
-	up := g.player.LocalUp()
+	up := g.Player.LocalUp()
 	north := planet.BaseUp.Sub(up.Scale(planet.BaseUp.Dot(up)))
 	if north.Length() < 1e-6 {
 		return // standing on the pole itself
 	}
 	north = north.Norm()
 	east := north.Cross(up)
-	heading := math.Atan2(g.player.Heading.Dot(east), g.player.Heading.Dot(north)) * 180 / math.Pi
+	heading := math.Atan2(g.Player.Heading.Dot(east), g.Player.Heading.Dot(north)) * 180 / math.Pi
 
 	cx, top, half := w/2, 24*u, 220*u
 	// A dark band fading out at both ends, and a baseline.
@@ -475,7 +477,7 @@ func (gfx *Graphics) drawCompass(g *Game) {
 		case ok && a%90 == 0:
 			c := uiWhite
 			if a == 0 {
-				c = colGold // the base
+				c = palette.Gold // the base
 			}
 			gfx.capsCenter(l, x, top+4*u, 18*u, withAlpha(c, alpha))
 			rl.DrawRectangleRec(rl.NewRectangle(x-1*u, top+25*u, 2*u, 9*u), withAlpha(c, alpha))
@@ -488,34 +490,34 @@ func (gfx *Graphics) drawCompass(g *Game) {
 	}
 	tri(rl.NewVector2(cx, top+30*u), rl.NewVector2(cx-6*u, top+38*u), rl.NewVector2(cx+6*u, top+38*u), visorCyan)
 	if dist := planet.ArcDist(up, planet.BaseUp); dist > 15 {
-		s := "BASE  " + fmtNum(dist) + " M"
+		s := "BASE  " + game.FmtNum(dist) + " M"
 		sw := gfx.capsWidth(s, 13*u)
 		chip := rl.NewRectangle(cx-sw/2-18*u, top+42*u, sw+30*u, 20*u)
 		fillCut(chip, 5*u, uiPlate)
-		rl.DrawPoly(rl.NewVector2(chip.X+10*u, chip.Y+10*u), 4, 4*u, 0, colGold)
-		gfx.caps(s, chip.X+20*u, chip.Y+3*u, 13*u, colGold)
+		rl.DrawPoly(rl.NewVector2(chip.X+10*u, chip.Y+10*u), 4, 4*u, 0, palette.Gold)
+		gfx.caps(s, chip.X+20*u, chip.Y+3*u, 13*u, palette.Gold)
 	}
 }
 
 // drawBaseMarker shows where the base is when it is in view.
-func (gfx *Graphics) drawBaseMarker(g *Game, cam rl.Camera3D) {
+func (gfx *Graphics) drawBaseMarker(g *game.Game, cam rl.Camera3D) {
 	u := uiScale()
 	w, h := screenSize()
-	if planet.ArcDist(g.player.LocalUp(), planet.BaseUp) < 25 {
+	if planet.ArcDist(g.Player.LocalUp(), planet.BaseUp) < 25 {
 		return
 	}
 	target := base.Origin.Add(vec3{0, 9, 0})
-	if target.Sub(g.player.Eye()).Dot(g.player.Forward()) <= 0 {
+	if target.Sub(g.Player.Eye()).Dot(g.Player.Forward()) <= 0 {
 		return
 	}
 	sp := rl.GetWorldToScreen(toRL(target), cam)
 	if sp.X < 0 || sp.X > w || sp.Y < 0 || sp.Y > h {
 		return
 	}
-	rl.DrawPolyLinesEx(sp, 4, 8*u, 0, 2*u, colGold)
-	rl.DrawPoly(sp, 4, 3*u, 0, colGold)
+	rl.DrawPolyLinesEx(sp, 4, 8*u, 0, 2*u, palette.Gold)
+	rl.DrawPoly(sp, 4, 3*u, 0, palette.Gold)
 	gfx.capsCenter("BASE", sp.X+1*u, sp.Y+13*u, 13*u, color.RGBA{0, 0, 0, 140})
-	gfx.capsCenter("BASE", sp.X, sp.Y+12*u, 13*u, colGold)
+	gfx.capsCenter("BASE", sp.X, sp.Y+12*u, 13*u, palette.Gold)
 }
 
 // marsEmblem paints a little flat Mars: bands of rust and ochre, a white
@@ -543,7 +545,7 @@ func marsEmblem(cx, cy, r float32) {
 	rl.DrawRing(rl.NewVector2(cx, cy), r+2*uiScale(), r+4*uiScale(), 200, 340, 48, color.RGBA{255, 170, 120, 120})
 }
 
-func (gfx *Graphics) drawPause(g *Game) {
+func (gfx *Graphics) drawPause(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{8, 4, 10, 215}, color.RGBA{20, 8, 10, 235})
@@ -561,7 +563,7 @@ func (gfx *Graphics) drawPause(g *Game) {
 	gfx.title(title, tx+3*u, ty+4*u, size, color.RGBA{0, 0, 0, 150})
 	gfx.title(title, tx, ty, size, uiWhite)
 	hazard(rl.NewRectangle(tx+2*u, ty+size+4*u, tw, 7*u))
-	if math.Mod(g.clock, 1.4) < 1.0 {
+	if math.Mod(g.Elapsed, 1.4) < 1.0 {
 		gfx.caps("CLIQUE POUR ENFILER TON CASQUE", tx+2*u, ty+size+22*u, 18*u, visorCyan)
 	}
 
@@ -585,7 +587,7 @@ func (gfx *Graphics) drawPause(g *Game) {
 // terminal draws a base computer screen: a charcoal body under an
 // off-white header, like the habitat panels, with an accent square, a
 // hazard block at its end and an accent line beneath.
-func (gfx *Graphics) terminal(g *Game, p rl.Rectangle, title string, accent color.RGBA) {
+func (gfx *Graphics) terminal(g *game.Game, p rl.Rectangle, title string, accent color.RGBA) {
 	u := uiScale()
 	w, h := screenSize()
 	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{0, 0, 0, 90}, color.RGBA{0, 0, 0, 170})
@@ -600,18 +602,18 @@ func (gfx *Graphics) terminal(g *Game, p rl.Rectangle, title string, accent colo
 	gfx.title(title, p.X+46*u, p.Y+13*u, 25*u, uiInk)
 }
 
-func (gfx *Graphics) drawShop(g *Game) {
+func (gfx *Graphics) drawShop(g *game.Game) {
 	u := uiScale()
 	p := shopPanel()
 	gfx.terminal(g, p, "LABORATOIRE DE RECHERCHE", visorCyan)
 	right := p.X + p.Width - 72*u
-	vw := rl.MeasureTextEx(gfx.mono, fmtNum(g.st.Credits)+" cr", 24*u, 0).X
+	vw := rl.MeasureTextEx(gfx.mono, game.FmtNum(g.State.Credits)+" cr", 24*u, 0).X
 	coin := rl.NewVector2(right-vw-16*u, p.Y+26*u)
-	rl.DrawCircleV(coin, 9*u, colGold)
+	rl.DrawCircleV(coin, 9*u, palette.Gold)
 	rl.DrawRing(coin, 3.5*u, 5.5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
-	gfx.monoRight(fmtNum(g.st.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
+	gfx.monoRight(game.FmtNum(g.State.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
 
-	items := g.shopItems()
+	items := g.ShopItems()
 	for i, it := range items {
 		if i < gfx.shopScroll || i >= gfx.shopScroll+shopRows {
 			continue
@@ -623,29 +625,29 @@ func (gfx *Graphics) drawShop(g *Game) {
 		}
 		fillCut(r, 8*u, bg)
 		state, costCol := uiFaint, uiCostOff
-		if it.affordable(g.st.Credits) {
-			state, costCol = visorCyan, colGold
+		if it.Affordable(g.State.Credits) {
+			state, costCol = visorCyan, palette.Gold
 		}
-		if it.maxed {
-			state = colGold
+		if it.Maxed {
+			state = palette.Gold
 		}
 		if i == gfx.hover {
 			rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+8*u, 3*u, r.Height-8*u), state)
 		}
 		tile := rl.NewRectangle(r.X+8*u, r.Y+7*u, 44*u, 44*u)
 		fillCut(tile, 6*u, uiInk)
-		icon(it.icon, tile.X+22*u, tile.Y+22*u, 14*u, state)
-		gfx.text(it.name, r.X+66*u, r.Y+7*u, 20*u, uiWhite)
-		gfx.text(it.desc, r.X+66*u, r.Y+32*u, 15*u, uiMuted)
+		icon(it.Icon, tile.X+22*u, tile.Y+22*u, 14*u, state)
+		gfx.text(it.Name, r.X+66*u, r.Y+7*u, 20*u, uiWhite)
+		gfx.text(it.Desc, r.X+66*u, r.Y+32*u, 15*u, uiMuted)
 		right := r.X + r.Width - 16*u
-		if it.maxed {
+		if it.Maxed {
 			cw := gfx.capsWidth("MAX", 15*u)
-			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, colGold)
+			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, palette.Gold)
 			gfx.caps("MAX", right-cw-7*u, r.Y+11*u, 15*u, uiInk)
 		} else {
-			gfx.monoRight(fmtNum(it.cost)+" cr", right, r.Y+8*u, 20*u, costCol)
+			gfx.monoRight(game.FmtNum(it.Cost)+" cr", right, r.Y+8*u, 20*u, costCol)
 		}
-		gfx.capsRight(strings.ToUpper(it.info), right, r.Y+35*u, 12*u, visorDim)
+		gfx.capsRight(strings.ToUpper(it.Info), right, r.Y+35*u, 12*u, visorDim)
 	}
 	// A scroll bar when everything doesn't fit.
 	if len(items) > shopRows {
@@ -660,7 +662,7 @@ func (gfx *Graphics) drawShop(g *Game) {
 }
 
 // closeHint says how to leave a terminal, under it.
-func (gfx *Graphics) closeHint(g *Game, x, y float32, centered bool) {
+func (gfx *Graphics) closeHint(g *game.Game, x, y float32, centered bool) {
 	u := uiScale()
 	s := "OU ÉCHAP POUR FERMER"
 	kw := rl.MeasureTextEx(gfx.mono, "E", 14*u, 0).X + 12*u
@@ -672,26 +674,26 @@ func (gfx *Graphics) closeHint(g *Game, x, y float32, centered bool) {
 }
 
 // hasUse tells whether something can be used right now with E.
-func (gfx *Graphics) hasUse(g *Game) bool {
-	_, ok := g.nearbyUse()
+func (gfx *Graphics) hasUse(g *game.Game) bool {
+	_, ok := g.NearbyUse()
 	return ok
 }
 
 // drawMapPanel shows the state of Mars next to the hologram.
-func (gfx *Graphics) drawMapPanel(g *Game) {
+func (gfx *Graphics) drawMapPanel(g *game.Game) {
 	u := uiScale()
 	_, h := screenSize()
-	s := g.world.Stats(g.st.TotalDust)
+	s := g.World.Stats(g.State.TotalDust)
 	p := rl.NewRectangle(40*u, h/2-190*u, 440*u, 380*u)
 	gfx.terminal(g, p, "ÉTAT DE MARS", visorCyan)
 
 	rows := []struct{ label, value string }{
 		{"MARS NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
-		{"POUSSIÈRE COLLECTÉE", fmtNum(g.st.TotalDust) + " g"},
+		{"POUSSIÈRE COLLECTÉE", game.FmtNum(g.State.TotalDust) + " g"},
 		{"ZONES VISITÉES", fmt.Sprintf("%d / %d", s.TilesVisited, s.TilesTotal)},
 		{"CRISTAUX TROUVÉS", fmt.Sprintf("%d / %d", s.Gems, s.GemTotal)},
-		{"CRÉDITS GAGNÉS", fmtNum(g.st.TotalEarned) + " cr"},
-		{"DISTANCE DE LA BASE", fmtNum(planet.ArcDist(g.player.LocalUp(), planet.BaseUp)) + " m"},
+		{"CRÉDITS GAGNÉS", game.FmtNum(g.State.TotalEarned) + " cr"},
+		{"DISTANCE DE LA BASE", game.FmtNum(planet.ArcDist(g.Player.LocalUp(), planet.BaseUp)) + " m"},
 	}
 	for i, r := range rows {
 		y := p.Y + 74*u + float32(i)*42*u
@@ -705,7 +707,7 @@ func (gfx *Graphics) drawMapPanel(g *Game) {
 	legend := []struct {
 		c     color.RGBA
 		label string
-	}{{colGold, "BASE"}, {color.RGBA{255, 90, 70, 255}, "TOI"}, {color.RGBA{190, 255, 255, 255}, "NETTOYÉ"}}
+	}{{palette.Gold, "BASE"}, {color.RGBA{255, 90, 70, 255}, "TOI"}, {color.RGBA{190, 255, 255, 255}, "NETTOYÉ"}}
 	x := p.X + 28*u
 	for _, l := range legend {
 		rl.DrawPoly(rl.NewVector2(x, y+8*u), 4, 6*u, 0, l.c)
@@ -716,23 +718,23 @@ func (gfx *Graphics) drawMapPanel(g *Game) {
 }
 
 // drawSleep fades to black, shows the night passing, then fades back in.
-func (gfx *Graphics) drawSleep(g *Game) {
+func (gfx *Graphics) drawSleep(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
-	t := g.sleepT
+	t := g.SleepT
 	dark := 1.0
 	switch {
-	case t < sleepFadeOut:
-		dark = t / sleepFadeOut
-	case t > sleepWake:
-		dark = 1 - (t-sleepWake)/(sleepEnd-sleepWake)
+	case t < game.SleepFadeOut:
+		dark = t / game.SleepFadeOut
+	case t > game.SleepWake:
+		dark = 1 - (t-game.SleepWake)/(game.SleepEnd-game.SleepWake)
 	}
 	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{4, 2, 10, uint8(255 * mathx.Clamp01(dark))})
-	if t > sleepFadeOut*0.6 && t < sleepWake+0.3 {
-		a := math.Min(t-sleepFadeOut*0.6, sleepWake+0.3-t) * 2
+	if t > game.SleepFadeOut*0.6 && t < game.SleepWake+0.3 {
+		a := math.Min(t-game.SleepFadeOut*0.6, game.SleepWake+0.3-t) * 2
 		dots := strings.Repeat(" z", 1+int(t*2)%3)
 		gfx.capsCenter("Z"+dots+"…", w/2, h/2-30*u, 44*u, withAlpha(color.RGBA{180, 170, 255, 255}, a))
-		if t > sleepSave {
+		if t > game.SleepSave {
 			gfx.capsCenter("PARTIE SAUVEGARDÉE", w/2, h/2+30*u, 16*u, withAlpha(uiMuted, a))
 		}
 	}
@@ -740,17 +742,17 @@ func (gfx *Graphics) drawSleep(g *Game) {
 
 // update follows the interface's input: the debug overlay, the shop. It
 // runs before the game's update.
-func (gfx *Graphics) update(g *Game, dt float64) {
+func (gfx *Graphics) update(g *game.Game, dt float64) {
 	gfx.updateDebug(g, dt)
-	if g.mode == modeShop {
+	if g.Mode == game.ModeShop {
 		gfx.updateShop(g)
 	}
 }
 
 // updateShop scrolls the shop, follows the mouse over its rows and buys
 // the one clicked.
-func (gfx *Graphics) updateShop(g *Game) {
-	items := g.shopItems()
+func (gfx *Graphics) updateShop(g *game.Game) {
+	items := g.ShopItems()
 	wheel := rl.GetMouseWheelMove()
 	if wheel < 0 || rl.IsKeyPressed(rl.KeyDown) {
 		gfx.shopScroll++
@@ -769,6 +771,6 @@ func (gfx *Graphics) updateShop(g *Game) {
 		return
 	}
 	if gfx.hover >= 0 {
-		g.buy(items[gfx.hover])
+		g.Buy(items[gfx.hover])
 	}
 }

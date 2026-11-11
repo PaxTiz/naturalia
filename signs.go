@@ -4,8 +4,10 @@ import (
 	"image/color"
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
+	"mars_sweeper/internal/palette"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -23,7 +25,7 @@ type sign struct {
 
 const signHeight = 0.34
 
-func baseSigns() []sign {
+func (gfx *Graphics) baseSigns() []sign {
 	inHub := func(angle float64, text string, accent color.RGBA) sign {
 		dir := vec3{math.Cos(angle), 0, math.Sin(angle)}
 		at := dir.Scale(base.HubRoom.Radius - base.WallThick/2 - 0.03).Add(vec3{0, 2.6, 0})
@@ -34,12 +36,12 @@ func baseSigns() []sign {
 	for _, bp := range base.Plans[1:] {
 		if bp.Sign != "" && bp.Link == base.Plans[0].ID {
 			d := bp.At.Sub(base.Plans[0].At)
-			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, tok(bp.Accent).Col))
+			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, gfx.tok(bp.Accent).Col))
 		}
 	}
 	return append(signs,
-		inHub(base.South, "SAS 01 - SORTIE", colGold),
-		sign{at: base.AirlockEnd.Add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: colGold},
+		inHub(base.South, "SAS 01 - SORTIE", palette.Gold),
+		sign{at: base.AirlockEnd.Add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: palette.Gold},
 	)
 }
 
@@ -69,7 +71,7 @@ func paintSign(s sign, font rl.Font) rl.Texture2D {
 	return tex
 }
 
-func (gfx *Graphics) drawSigns(g *Game) {
+func (gfx *Graphics) drawSigns(g *game.Game) {
 	gfx.setMat(content.MtDecal, 1, false)
 	for _, s := range gfx.signs {
 		rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, s.tex)

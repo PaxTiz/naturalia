@@ -1,4 +1,4 @@
-package main
+package game
 
 import (
 	"mars_sweeper/internal/base"
@@ -8,7 +8,7 @@ import (
 
 // emit runs the handlers of an event, in the order packs registered them.
 func (g *Game) emit(e content.Event) {
-	for _, h := range reg.Handlers(e.Name) {
+	for _, h := range g.Content.Handlers(e.Name) {
 		h(g, &e)
 	}
 }
@@ -16,20 +16,20 @@ func (g *Game) emit(e content.Event) {
 // updateEvents ticks the listeners, rolls the random events and follows
 // the player in and out of buildings.
 func (g *Game) updateEvents(dt float64) {
-	if g.mode != modePlay {
+	if g.Mode != ModePlay {
 		return
 	}
 	g.moveDevils(dt)
 	g.emit(content.Event{Name: content.EvTick, Dt: dt})
-	for _, ev := range reg.Events.All() {
+	for _, ev := range g.Content.Events.All() {
 		if ev.Every <= 0 || (ev.When != nil && !ev.When(g)) {
 			continue
 		}
-		if g.rng.Float64() < -math.Expm1(-dt/ev.Every) {
+		if g.Rng.Float64() < -math.Expm1(-dt/ev.Every) {
 			ev.Run(g)
 		}
 	}
-	in := buildingAt(base.ToLocal(g.player.Pos))
+	in := buildingAt(base.ToLocal(g.Player.Pos))
 	if in != g.inside {
 		if g.inside != "" {
 			g.emit(content.Event{Name: content.EvLeave, ID: g.inside})

@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
 	"math"
@@ -10,7 +11,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-const rockDrawDist = 150.0 // far enough to dot the plains at mid distance
+// far enough to dot the plains at mid distance
 
 // rockModels sculpts count rock shapes with the given sphere resolution.
 func rockModels(sh rl.Shader, maps []rl.Texture2D, count int, seed uint64, rings, slices int) []rl.Model {
@@ -71,29 +72,19 @@ func sculptRock(seed uint64, rings, slices int) rl.Mesh {
 
 // drawRocks draws the rocks around the player, one instanced call per shape.
 // They shrink away at the edge of the drawing distance rather than pop.
-func (gfx *Graphics) drawRocks(g *Game) {
+func (gfx *Graphics) drawRocks(g *game.Game) {
 	var mats [planet.RockShapes][]rl.Matrix
-	for _, r := range g.nearRocks {
+	for _, r := range g.NearRocks {
 		up := r.Dir
 		t1, t2 := mathx.TangentBasis(up)
 		ax := t1.Scale(math.Cos(r.Yaw)).Add(t2.Scale(math.Sin(r.Yaw)))
 		az := ax.Cross(up)
 		ground := gfx.terrain.Surface(r.Dir)
-		size := r.Size * (1 - mathx.Smoothstep(rockDrawDist*0.8, rockDrawDist, ground.Sub(g.player.Pos).Length()))
+		size := r.Size * (1 - mathx.Smoothstep(game.RockDrawDist*0.8, game.RockDrawDist, ground.Sub(g.Player.Pos).Length()))
 		mats[r.Shape] = append(mats[r.Shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
 	}
 	gfx.drawInstanced(gfx.rocks, mats[:], func(k int) color.RGBA {
 		v := 140 + 15*float64(k)
 		return mathx.RGB(v, v*0.6, v*0.46) // rusty red, like the regolith
 	})
-}
-
-// collideRocks keeps the player out of the bigger rocks.
-func (g *Game) collideRocks() {
-	for _, r := range g.nearRocks {
-		if r.Size < 0.6 {
-			continue
-		}
-		g.player.pushOut(g.world.Relief.Surface(r.Dir), r.Size*0.85)
-	}
 }

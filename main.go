@@ -3,9 +3,10 @@ package main
 import (
 	"fmt"
 	"log"
-	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
+	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/script"
+	_ "mars_sweeper/packs/core" // the base game, registered as a pack
 	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -25,10 +26,10 @@ func main() {
 	// Escape pauses the game instead of quitting it.
 	rl.SetExitKey(0)
 
-	content.LoadMods(modDirs(), disabledMods(), script.Run)
-	loadContent()
+	content.LoadMods(game.ModDirs(), game.DisabledMods(), script.Run)
+	c := game.LoadContent()
 	log.Println("packs:", content.PackList())
-	g := NewGame()
+	g := game.New(c)
 	gfx := NewGraphics(g)
 	shot := newShotRun(g, gfx)
 	for !rl.WindowShouldClose() {
@@ -39,16 +40,6 @@ func main() {
 		shot.tick(g)
 		gfx.Draw(g)
 	}
-	g.save()
+	g.Save()
 	rl.CloseAudioDevice()
 }
-
-// loadContent loads the game's content, with extra packs for tests, then
-// lays out the base.
-func loadContent(extra ...content.Pack) {
-	reg = content.Build(extra...)
-	base.Setup(reg)
-}
-
-// reg is the game's content once every pack is loaded (loadContent).
-var reg *content.Content
