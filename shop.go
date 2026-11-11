@@ -99,6 +99,7 @@ func (g *Game) gemValue() float64 {
 }
 
 type shopItem struct {
+	id               string // of the tool or upgrade
 	name, desc, info string
 	icon             string // what the shop draws next to it: "tool" or an upgrade id
 	cost             float64
@@ -115,6 +116,7 @@ func (g *Game) shopItems() []shopItem {
 	if next := g.toolTier() + 1; next < len(tools) {
 		t := tools[next]
 		items = append(items, shopItem{
+			id:   t.ID,
 			name: "Outil : " + t.Name,
 			desc: fmt.Sprintf("Rayon %.1f m, portée %.0f m, vitesse %.1f g/s", t.Radius, t.Reach, t.Rate),
 			info: fmt.Sprintf("Outil %d/%d", next+1, len(tools)),
@@ -129,6 +131,7 @@ func (g *Game) shopItems() []shopItem {
 	for _, u := range content.Upgrades.All() {
 		lvl := g.st.Levels[u.ID]
 		it := shopItem{
+			id:   u.ID,
 			name: u.Name,
 			desc: u.Desc,
 			icon: u.Icon,

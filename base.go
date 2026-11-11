@@ -258,7 +258,6 @@ type obstacle struct {
 	radius float64
 }
 
-
 // collide keeps a player of the given radius out of walls and furniture.
 func collideBase(p *Player, walls []segment2) {
 	const radius = 0.35
@@ -320,7 +319,8 @@ func baseLights() []vec3 {
 
 // interactable is something the player can use with E.
 type interactable struct {
-	at     vec3 // local
+	kit    string // ID of the kit piece
+	at     vec3   // local
 	reach  float64
 	use    func(g *Game, at vec3)
 	prompt string

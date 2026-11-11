@@ -58,6 +58,9 @@ func registerCore(c *Content) {
 	for _, bp := range coreBuildings {
 		c.Buildings.Add(bp.ID, bp)
 	}
+
+	c.Events.Add("core:dust-devil", RandomEvent{Every: 15, When: devilWeather, Run: spawnDevil})
+	c.On(evTick, moveDevils)
 }
 
 // Off-whites, steel greys, cyan and yellow/black accents: they stand out

@@ -22,6 +22,9 @@ type Content struct {
 	Tokens    Registry[token]     // materials of the buildings
 	Kits      Registry[kitProp]   // furniture and other kit pieces
 	Buildings Registry[Blueprint] // the first one is the hub
+	Events    Registry[RandomEvent]
+
+	handlers map[string][]Handler // by event name (On)
 }
 
 // Registry holds one kind of content, in registration order.
@@ -129,6 +132,7 @@ func loadContent() {
 	c.Tokens.init("token")
 	c.Kits.init("kit")
 	c.Buildings.init("building")
+	c.Events.init("event")
 
 	byID := map[string]Pack{}
 	for _, p := range packs {
@@ -179,6 +183,7 @@ func (c *Content) setPack(id string) {
 	c.Tokens.pack = id
 	c.Kits.pack = id
 	c.Buildings.pack = id
+	c.Events.pack = id
 }
 
 // finish checks the content once every pack is loaded.
@@ -205,6 +210,9 @@ func (c *Content) finish() {
 	}
 	for _, id := range c.Buildings.ids {
 		c.Buildings.items[id].ID = id
+	}
+	for _, id := range c.Events.ids {
+		c.Events.items[id].ID = id
 	}
 }
 

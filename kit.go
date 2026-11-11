@@ -107,7 +107,7 @@ func planInteractables() (out []interactable) {
 	for _, bp := range plans {
 		for _, p := range bp.Props {
 			if k, _ := content.Kits.Get(p.Kit); k != nil && k.use != nil {
-				out = append(out, interactable{bp.At.add(p.At), k.reach, k.use, k.prompt})
+				out = append(out, interactable{qualify(p.Kit), bp.At.add(p.At), k.reach, k.use, k.prompt})
 			}
 		}
 	}

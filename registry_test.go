@@ -38,3 +38,22 @@ func TestMigrateOldSave(t *testing.T) {
 		t.Errorf("capacity = %f", c)
 	}
 }
+
+func TestEventsAndBuildings(t *testing.T) {
+	loadContent()
+	if got := buildingAt(vec3{-13, 1, 0}); got != "core:sale" {
+		t.Errorf("in the sale room: %q", got)
+	}
+	if got := buildingAt(vec3{0, 1, -9}); got != "" {
+		t.Errorf("in the airlock corridor: %q", got)
+	}
+	if len(corridors) != 4 || len(rooms) != 4 || len(interactables) != 4 {
+		t.Errorf("%d corridors, %d rooms, %d interactables", len(corridors), len(rooms), len(interactables))
+	}
+	var sold float64
+	content.On(evSell, func(g *Game, e *Event) { sold += e.Amount })
+	(&Game{}).emit(Event{Name: evSell, Amount: 12})
+	if sold != 12 {
+		t.Errorf("sold = %f", sold)
+	}
+}
