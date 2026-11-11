@@ -25,9 +25,6 @@ var (
 	colRed   = color.RGBA{235, 90, 90, 255}
 	colBlue  = color.RGBA{90, 160, 240, 255}
 	colCyan  = color.RGBA{120, 235, 245, 255}
-
-	// Direction toward the sun: low on the horizon for long soft shadows.
-	sunDir = vec3{-0.5, 0.62, -0.6}.Norm()
 )
 
 const (
@@ -148,7 +145,7 @@ func NewGraphics() *Graphics {
 	rl.SetTextureFilter(gfx.bold.Texture, rl.FilterBilinear)
 
 	for _, s := range gfx.shaders() {
-		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(sunDir), rl.ShaderUniformVec3)
+		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(planet.SunDir), rl.ShaderUniformVec3)
 	}
 	for name, v := range map[string]float32{
 		"faceCells": planet.FaceCells, "tileCells": planet.TileCells, "tilesPerFace": planet.TilesPerFace,
@@ -389,7 +386,7 @@ func (g *Game) Draw() {
 		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
 	}
 
-	sunUp := g.player.Pos.Norm().Dot(sunDir)
+	sunUp := g.player.Pos.Norm().Dot(planet.SunDir)
 	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, base.Indoors(base.ToLocal(g.player.Eye())))
 	gfx.post.resize()
 	rl.BeginTextureMode(gfx.post.scene)

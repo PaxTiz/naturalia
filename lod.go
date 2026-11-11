@@ -180,10 +180,10 @@ func (t *Terrain) build(n *lodNode) nodeData {
 func (t *Terrain) light(p vec3) (sun, ao float64) {
 	up := p.Norm()
 	sun = 1
-	if up.Dot(sunDir) > -0.15 { // night side: the sun is gone anyway
+	if up.Dot(planet.SunDir) > -0.15 { // night side: the sun is gone anyway
 		start := p.Add(up.Scale(0.3))
 		for s := 1.5; s < 4000; s *= 1.45 {
-			q := start.Add(sunDir.Scale(s))
+			q := start.Add(planet.SunDir.Scale(s))
 			if q.Length()-planet.Radius > planet.MaxMountain {
 				break // above every peak
 			}
@@ -320,43 +320,4 @@ func (t *Terrain) Warm(eye vec3, timeout time.Duration) {
 		t.upload(1 << 20)
 		time.Sleep(2 * time.Millisecond)
 	}
-}
-
-func (t *Terrain) SurfaceRadius(d vec3) float64 { return planet.Radius + t.Height(d) }
-
-// Surface returns the ground point in direction d (any length).
-func (t *Terrain) Surface(d vec3) vec3 {
-	d = d.Norm()
-	return d.Scale(t.SurfaceRadius(d))
-}
-
-// Altitude is the height of p above the ground right below it.
-func (t *Terrain) Altitude(p vec3) float64 { return p.Length() - t.SurfaceRadius(p.Norm()) }
-
-// Raycast marches along the ray and returns the first ground hit within
-// maxDist. Steps grow with the height above ground (slopes stay gentle).
-func (t *Terrain) Raycast(from, dir vec3, maxDist float64) (vec3, bool) {
-	const minStep = 0.1
-	prev := from
-	for d := minStep; d <= maxDist; {
-		p := from.Add(dir.Scale(d))
-		alt := t.Altitude(p)
-		if alt > 0 {
-			prev = p
-			d += math.Max(minStep, alt*0.5)
-			continue
-		}
-		// Refine between the last point above ground and this one.
-		lo, hi := prev, p
-		for range 10 {
-			mid := lo.Lerp(hi, 0.5)
-			if t.Altitude(mid) <= 0 {
-				hi = mid
-			} else {
-				lo = mid
-			}
-		}
-		return hi, true
-	}
-	return vec3{}, false
 }

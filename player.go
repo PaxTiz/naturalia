@@ -3,6 +3,7 @@ package main
 import (
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -52,7 +53,7 @@ func (p *Player) tangentHeading() {
 }
 
 // Update moves the player. With control false (menus) only gravity applies.
-func (p *Player) Update(dt float64, t *Terrain, control bool) {
+func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 	p.tangentHeading()
 	up := p.LocalUp()
 	var move vec3

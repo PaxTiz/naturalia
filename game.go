@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/audio"
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
@@ -91,7 +92,7 @@ type Game struct {
 	nearRocks []planet.Rock               // boulders around the player
 	pebbles   map[planet.TileKey][]pebble // per tile, around the player
 	dbg       debugInfo
-	sfx       *synth
+	sfx       *audio.Synth
 	fov       float64 // degrees, eased by updateFov
 	steps     footprints
 	devils    []*dustDevil
@@ -131,7 +132,7 @@ func NewGame() *Game {
 		rng:     rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 		hover:   -1,
 		driving: -1,
-		sfx:     newSynth(),
+		sfx:     audio.New(),
 	}
 	g.load()
 	if g.st.Levels == nil {
@@ -150,7 +151,7 @@ func NewGame() *Game {
 		g.player = Player{Pos: base.ToWorld(base.SpawnSpot), Heading: vec3{0, 0, -1}}
 		g.wakeUp = true
 	}
-	g.player.Pos = g.terrain.Surface(g.player.Pos)
+	g.player.Pos = g.world.Relief.Surface(g.player.Pos)
 	g.walls = base.Walls()
 	g.gfx = NewGraphics()
 	g.terrain.Warm(g.player.Eye(), 5*time.Second)
@@ -207,14 +208,14 @@ func (g *Game) Update(dt float64) {
 	}
 
 	g.nearRocks = g.world.RocksNear(g.player.Pos, rockDrawDist)
-	g.player.Update(dt, g.terrain, g.mode == modePlay)
+	g.player.Update(dt, g.world.Relief, g.mode == modePlay)
 	if g.steps.update(&g.player) {
-		g.sfx.step()
+		g.sfx.Step()
 	}
-	g.sfx.outside = !base.Indoors(base.ToLocal(g.player.Eye()))
-	g.sfx.sweeping = g.sweeping
-	g.sfx.power = math.Min(1, (g.powerMult()-1)/3)
-	g.sfx.update()
+	g.sfx.Outside = !base.Indoors(base.ToLocal(g.player.Eye()))
+	g.sfx.Sweeping = g.sweeping
+	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)
+	g.sfx.Update()
 	g.updateFov(dt)
 	g.player.Pos = base.Collide(g.player.Pos, g.walls)
 	g.collideRocks()
@@ -241,7 +242,7 @@ func (g *Game) Update(dt float64) {
 func (g *Game) updateAim() {
 	p := &g.player
 	eye, fwd := p.Eye(), p.Forward()
-	g.aim, g.aimOK = g.terrain.Raycast(eye, fwd, g.tool().Reach)
+	g.aim, g.aimOK = g.world.Relief.Raycast(eye, fwd, g.tool().Reach)
 	if g.aimOK && planet.ArcDist(g.aim.Norm(), planet.BaseUp) < base.Reach {
 		g.aimOK = false // the ground under the base isn't swept
 	}
@@ -297,7 +298,7 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	for range n {
 		a := g.rng.Float64() * 2 * math.Pi
 		r := math.Sqrt(g.rng.Float64()) * radius
-		ground := g.terrain.Surface(at.Add(t1.Scale(math.Cos(a) * r)).Add(t2.Scale(math.Sin(a) * r)))
+		ground := g.world.Relief.Surface(at.Add(t1.Scale(math.Cos(a) * r)).Add(t2.Scale(math.Sin(a) * r)))
 		start := ground.Add(up.Scale(0.05))
 		travel := 0.35 + g.rng.Float64()*0.3
 		g.addParticle(Particle{
@@ -313,9 +314,9 @@ func (g *Game) collectGem(gem planet.Gem) {
 	g.st.Credits += v
 	g.st.TotalEarned += v
 	g.emit(content.Event{Name: content.EvGem, At: gem.Dir, Amount: v})
-	pos := g.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(0.3))
+	pos := g.world.Relief.Surface(gem.Dir).Add(gem.Dir.Scale(0.3))
 	g.floaters = append(g.floaters, Floater{Pos: pos.Add(gem.Dir.Scale(0.4)), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
-	g.sfx.beep(0.07, 0.3, 0.16, 880, 1175, 1568)
+	g.sfx.Beep(0.07, 0.3, 0.16, 880, 1175, 1568)
 	for range 20 {
 		vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.Add(gem.Dir.Scale(0.6)).Scale(4)
 		g.addParticle(Particle{Pos: pos, Vel: vel, MaxLife: 0.7, Size: 0.06, C: colCyan, Falls: true, Additive: true})
@@ -332,7 +333,7 @@ func (g *Game) sell() {
 	g.st.Tank = 0
 	g.sellPop, g.sellPopText = 1.5, "+"+fmtNum(earned)+" cr"
 	g.emit(content.Event{Name: content.EvSell, Amount: earned})
-	g.sfx.beep(0.08, 0.22, 0.14, 660, 990)
+	g.sfx.Beep(0.08, 0.22, 0.14, 660, 990)
 }
 
 func (g *Game) syncDrones() {
@@ -370,7 +371,7 @@ func (g *Game) updateDrones(dt float64) {
 			d.retarget -= dt
 			arrived := up.Sub(d.Target.Norm()).Length()*planet.Radius < 0.3
 			if d.retarget <= 0 || (arrived && g.world.DustAt(d.Target) < 0.05) || planet.ArcDist(d.Target.Norm(), planet.BaseUp) < base.Reach {
-				d.Target = g.terrain.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
+				d.Target = g.world.Relief.Surface(g.world.FindDusty(g.rng, g.player.Pos, droneRange))
 				d.retarget = 8 + g.rng.Float64()*5
 			}
 		}
@@ -387,12 +388,12 @@ func (g *Game) updateDrones(dt float64) {
 			hover = math.Max(hover, dockAltitude) // fly over the domes, not through them
 		}
 		r := d.Pos.Length()
-		r += (g.terrain.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
+		r += (g.world.Relief.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
 		d.Pos = up.Scale(r)
 		if docked || g.tankFull() || planet.ArcDist(up, planet.BaseUp) < base.Reach {
 			continue
 		}
-		g.collect(g.world.Clean(up, radius, amount, g.space()), g.terrain.Surface(up), radius, d.Pos)
+		g.collect(g.world.Clean(up, radius, amount, g.space()), g.world.Relief.Surface(up), radius, d.Pos)
 		for _, gem := range g.world.CollectGems(up, radius) {
 			g.collectGem(gem)
 		}
@@ -421,7 +422,7 @@ func (g *Game) Deposit(in vec3) {
 	hopper := base.ToWorld(in.Add(vec3{0, 2.6, 0}))
 	if g.st.Tank < 1 {
 		g.floaters = append(g.floaters, Floater{Pos: hopper.Add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
-		g.sfx.beep(0, 0.25, 0.12, 220)
+		g.sfx.Beep(0, 0.25, 0.12, 220)
 		return
 	}
 	earned := g.st.Tank * g.priceMult()
@@ -469,7 +470,7 @@ func (g *Game) addParticle(p Particle) {
 // Say shows a message on the visor for a few seconds.
 func (g *Game) Say(text string) {
 	g.message, g.messageT = text, 4.5
-	g.sfx.beep(0.03, 0.12, 0.1, 740, 988)
+	g.sfx.Beep(0.03, 0.12, 0.1, 740, 988)
 }
 
 func (g *Game) updateEffects(dt float64) {
@@ -525,9 +526,9 @@ func (g *Game) updateShop() {
 			g.st.Credits -= it.cost
 			it.buy()
 			g.emit(content.Event{Name: content.EvBuy, ID: it.id, Amount: it.cost})
-			g.sfx.beep(0.06, 0.18, 0.14, 523, 784)
+			g.sfx.Beep(0.06, 0.18, 0.14, 523, 784)
 		} else {
-			g.sfx.beep(0, 0.15, 0.1, 180)
+			g.sfx.Beep(0, 0.15, 0.1, 180)
 		}
 	}
 }

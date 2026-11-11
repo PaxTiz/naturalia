@@ -1,4 +1,4 @@
-package main
+package audio
 
 import (
 	"math"
@@ -15,15 +15,15 @@ const (
 // Every sound is synthesized here, sample by sample: no audio file.
 // One mono stream mixes the wind, the sweeping tool, footsteps and the
 // interface beeps.
-type synth struct {
+type Synth struct {
 	stream rl.AudioStream
 	buf    []float32
 	rng    *rand.Rand
 
 	// What the game asks for, read when filling the buffer.
-	outside  bool
-	sweeping bool
-	power    float64 // tool strength, raises the motor's pitch
+	Outside  bool
+	Sweeping bool
+	Power    float64 // tool strength, raises the motor's pitch
 
 	// Wind: low-passed noise with slow gusts.
 	windLP, windLP2, gust, gustTarget float64
@@ -41,10 +41,10 @@ type voice struct {
 	lp                        float64
 }
 
-func newSynth() *synth {
+func New() *Synth {
 	rl.InitAudioDevice()
 	rl.SetAudioStreamBufferSizeDefault(audioBuffer)
-	s := &synth{
+	s := &Synth{
 		stream: rl.LoadAudioStream(sampleRate, 32, 1),
 		buf:    make([]float32, audioBuffer),
 		rng:    rand.New(rand.NewPCG(7, 11)),
@@ -53,36 +53,36 @@ func newSynth() *synth {
 	return s
 }
 
-// update refills the stream whenever it has played a buffer.
-func (s *synth) update() {
+// Update refills the stream whenever it has played a buffer.
+func (s *Synth) Update() {
 	for rl.IsAudioStreamProcessed(s.stream) {
 		s.fill()
 		rl.UpdateAudioStream(s.stream, s.buf)
 	}
 }
 
-// beep plays a sequence of notes (Hz), one every gap seconds.
-func (s *synth) beep(gap, dur, gain float64, notes ...float64) {
+// Beep plays a sequence of notes (Hz), one every gap seconds.
+func (s *Synth) Beep(gap, dur, gain float64, notes ...float64) {
 	for i, f := range notes {
 		s.voices = append(s.voices, voice{freq: f, dur: dur, gain: gain, delay: float64(i) * gap})
 	}
 }
 
-// step plays a soft footstep in the dust.
-func (s *synth) step() {
+// Step plays a soft footstep in the dust.
+func (s *Synth) Step() {
 	s.voices = append(s.voices, voice{dur: 0.12, gain: 0.35 + 0.1*s.rng.Float64()})
 }
 
-func (s *synth) fill() {
+func (s *Synth) fill() {
 	const dt = 1.0 / sampleRate
 	windGain, windCut := 0.0, 0.0
-	if s.outside {
+	if s.Outside {
 		windGain, windCut = 0.22, 0.02
 	} else {
 		windGain, windCut = 0.05, 0.006 // heard through the walls
 	}
 	toolTarget := 0.0
-	if s.sweeping {
+	if s.Sweeping {
 		toolTarget = 1
 	}
 	for i := range s.buf {
@@ -107,7 +107,7 @@ func (s *synth) fill() {
 		}
 		s.toolEnv += (toolTarget - s.toolEnv) * dt * rate
 		if s.toolEnv > 0.001 {
-			freq := 95 + 25*s.power
+			freq := 95 + 25*s.Power
 			s.motorPhase = math.Mod(s.motorPhase+freq*dt, 1)
 			motor := math.Sin(2*math.Pi*s.motorPhase) + 0.35*math.Sin(4*math.Pi*s.motorPhase) + 0.15*(2*s.motorPhase-1)
 			s.hissLP += (n - s.hissLP) * 0.25

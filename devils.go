@@ -56,7 +56,7 @@ func spawnDevil(g *Game) {
 	t1, t2 := mathx.TangentBasis(up)
 	a := g.rng.Float64() * 2 * math.Pi
 	at := planet.Toward2(up, t1.Scale(math.Cos(a)).Add(t2.Scale(math.Sin(a))), devilMinDist+g.rng.Float64()*(devilMaxDist-devilMinDist))
-	if g.terrain.Ice(at) > 0.05 || planet.ArcDist(at, planet.BaseUp) < 80 {
+	if g.world.Relief.Ice(at) > 0.05 || planet.ArcDist(at, planet.BaseUp) < 80 {
 		return // they need warm bare ground
 	}
 	b := g.rng.Float64() * 2 * math.Pi
@@ -85,7 +85,7 @@ func (g *Game) drawDevils() {
 	for _, d := range g.devils {
 		up := d.dir
 		t1, t2 := mathx.TangentBasis(up)
-		foot := g.terrain.Surface(d.dir).Sub(up.Scale(1))
+		foot := g.world.Relief.Surface(d.dir).Sub(up.Scale(1))
 		rl.SetShaderValue(gfx.devilSh, gfx.devilLoc, []float32{float32(d.seed), float32(d.strength()), 0, 0}, rl.ShaderUniformVec4)
 		ax, ay, az := t1.Scale(d.radius), up.Scale(d.height), t2.Scale(d.radius)
 		rl.DrawMesh(gfx.devilMesh, gfx.devilMat, rl.Matrix{

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -47,18 +48,18 @@ func newShadowMap() *shadowMap {
 // map's texels so the shadows don't shimmer as the player walks.
 func (s *shadowMap) camera(center vec3) rl.Camera3D {
 	ref := vec3{0, 1, 0}
-	if math.Abs(sunDir.Y) > 0.9 {
+	if math.Abs(planet.SunDir.Y) > 0.9 {
 		ref = vec3{1, 0, 0}
 	}
-	right := sunDir.Cross(ref).Norm()
-	up := right.Cross(sunDir).Norm()
+	right := planet.SunDir.Cross(ref).Norm()
+	up := right.Cross(planet.SunDir).Norm()
 	texel := 2 * shadowRadius / shadowRes
 	snap := func(v float64) float64 { return math.Floor(v/texel) * texel }
-	x, y, z := center.Dot(right), center.Dot(up), center.Dot(sunDir)
-	center = right.Scale(snap(x)).Add(up.Scale(snap(y))).Add(sunDir.Scale(z))
-	s.eye, s.look, s.up = center.Add(sunDir.Scale(shadowDepth/2)), center, up
+	x, y, z := center.Dot(right), center.Dot(up), center.Dot(planet.SunDir)
+	center = right.Scale(snap(x)).Add(up.Scale(snap(y))).Add(planet.SunDir.Scale(z))
+	s.eye, s.look, s.up = center.Add(planet.SunDir.Scale(shadowDepth/2)), center, up
 	return rl.Camera3D{
-		Position:   toRL(center.Add(sunDir.Scale(shadowDepth / 2))),
+		Position:   toRL(center.Add(planet.SunDir.Scale(shadowDepth / 2))),
 		Target:     toRL(center),
 		Up:         toRL(up),
 		Fovy:       2 * shadowRadius,

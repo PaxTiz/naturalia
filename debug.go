@@ -5,6 +5,7 @@ import (
 	"mars_sweeper/internal/base"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 	"os"
 	"runtime"
@@ -59,7 +60,7 @@ func (g *Game) drawDebug() {
 		fmt.Sprintf("cailloux %d   rochers %d", d.pebbles, len(g.nearRocks)),
 		fmt.Sprintf("lat %.2f°  lon %.2f°", math.Asin(up.Y)*180/math.Pi, math.Atan2(up.Z, up.X)*180/math.Pi),
 		fmt.Sprintf("alt sol %.1f m   relief %.1f m", t.Altitude(g.player.Pos), t.Height(up)),
-		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(sunDir))*180/math.Pi, d.sun, d.ao),
+		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(planet.SunDir))*180/math.Pi, d.sun, d.ao),
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.world.DustAt(up), len(g.world.Touched())),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
 		fmt.Sprintf("packs %s   entités %d", content.PackList(), len(g.st.Entities)),
@@ -111,12 +112,12 @@ func newShotRun(g *Game) *shotRun {
 		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
 		up := d.Norm()
 		g.player.Pos = g.terrain.Surface(up)
-		h := sunDir.Sub(up.Scale(sunDir.Dot(up)))
+		h := planet.SunDir.Sub(up.Scale(planet.SunDir.Dot(up)))
 		if h.Length() < 0.1 { // the sun is overhead or right underfoot
 			h, _ = mathx.TangentBasis(up)
 		}
 		g.player.Heading = h.Norm()
-		g.player.Pitch = max(-0.25, math.Asin(up.Dot(sunDir))-0.12)
+		g.player.Pitch = max(-0.25, math.Asin(up.Dot(planet.SunDir))-0.12)
 		var turn float64
 		if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TURN"), "%f", &turn); err == nil {
 			r := g.player.Right()

@@ -2,6 +2,7 @@ package main
 
 import (
 	"mars_sweeper/internal/mathx"
+	"mars_sweeper/internal/planet"
 	"math"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -144,8 +145,8 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	// Light shafts when the sun is low and ahead.
 	eye := vec3{float64(cam.Position.X), float64(cam.Position.Y), float64(cam.Position.Z)}
 	fwd := vec3{float64(cam.Target.X), float64(cam.Target.Y), float64(cam.Target.Z)}.Sub(eye).Norm()
-	shafts := mathx.Smoothstep(0.3, 0.85, fwd.Dot(sunDir)) * mathx.Smoothstep(-0.12, 0.0, sunUp) * (1 - mathx.Smoothstep(0.15, 0.45, sunUp))
-	sp := rl.GetWorldToScreen(toRL(eye.Add(sunDir.Scale(1000))), cam)
+	shafts := mathx.Smoothstep(0.3, 0.85, fwd.Dot(planet.SunDir)) * mathx.Smoothstep(-0.12, 0.0, sunUp) * (1 - mathx.Smoothstep(0.15, 0.45, sunUp))
+	sp := rl.GetWorldToScreen(toRL(eye.Add(planet.SunDir.Scale(1000))), cam)
 	sw, sh := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
 	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
 	// Written as is, without blending: the alpha holds the luma for FXAA,

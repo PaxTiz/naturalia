@@ -54,7 +54,7 @@ func (g *Game) placeAt() vec3 {
 	if g.aimOK && g.aim.Sub(g.player.Pos).Length() < 6 {
 		return g.aim
 	}
-	return g.terrain.Surface(g.player.Pos.Add(g.player.Heading.Scale(1.5)))
+	return g.world.Relief.Surface(g.player.Pos.Add(g.player.Heading.Scale(1.5)))
 }
 
 // heldItem is the item F places, cycled with R, among those carried.
@@ -88,7 +88,7 @@ func (g *Game) updateItems() {
 		return
 	}
 	g.st.Items[it.ID]--
-	g.sfx.beep(0.02, 0.15, 0.12, 392, 523)
+	g.sfx.Beep(0.02, 0.15, 0.12, 392, 523)
 	g.emit(content.Event{Name: content.EvPlace, ID: content.Qualify(it.Places), At: at})
 }
 
@@ -112,7 +112,7 @@ func (g *Game) collideEntities() {
 		}
 		e := g.st.Entities[i]
 		if def, ok := reg.Entities.Get(e.Kind); ok && def.Radius > 0 {
-			g.player.pushOut(g.terrain.Surface(e.Dir), def.Radius)
+			g.player.pushOut(g.world.Relief.Surface(e.Dir), def.Radius)
 		}
 	}
 }
@@ -129,7 +129,7 @@ func (g *Game) nearbyEntity() (int, float64) {
 		if !ok || (def.Prompt == "" && !def.Pickup) {
 			continue
 		}
-		pos := g.terrain.Surface(e.Dir)
+		pos := g.world.Relief.Surface(e.Dir)
 		to := pos.Sub(g.player.Pos)
 		d := to.Length()
 		if d > entityReach+def.Radius || d >= bestDist || (d > 0.8 && g.player.Heading.Dot(to.Norm()) < 0.3) {
@@ -149,12 +149,12 @@ func (g *Game) entityUse(i int) base.Interactable {
 		prompt = "Ramasser : " + def.Name
 	}
 	if _, ok := reg.Vehicles.Get(e.Kind); ok {
-		return base.Interactable{Kit: def.ID, At: base.ToLocal(g.terrain.Surface(e.Dir)), Prompt: prompt,
+		return base.Interactable{Kit: def.ID, At: base.ToLocal(g.world.Relief.Surface(e.Dir)), Prompt: prompt,
 			Use: func(content.Game, vec3) { g.getIn(i) }}
 	}
 	return base.Interactable{
 		Kit:    def.ID,
-		At:     base.ToLocal(g.terrain.Surface(e.Dir)),
+		At:     base.ToLocal(g.world.Relief.Surface(e.Dir)),
 		Prompt: prompt,
 		Use: func(content.Game, vec3) {
 			if def.Pickup {
@@ -165,7 +165,7 @@ func (g *Game) entityUse(i int) base.Interactable {
 					}
 					g.st.Items[def.Item]++
 				}
-				g.sfx.beep(0.02, 0.15, 0.12, 523, 392)
+				g.sfx.Beep(0.02, 0.15, 0.12, 523, 392)
 			}
 		},
 	}
@@ -186,7 +186,7 @@ func (g *Game) drawEntities() {
 			models = buildEntity(def, gfx)
 			gfx.entities[def.ID] = models
 		}
-		pos := g.terrain.Surface(e.Dir)
+		pos := g.world.Relief.Surface(e.Dir)
 		up := e.Dir
 		t1, t2 := mathx.TangentBasis(up)
 		ax := t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw)))

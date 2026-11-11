@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/planet"
 	"math"
 )
 
@@ -9,13 +10,13 @@ func (g *Game) Credits() float64       { return g.st.Credits }
 func (g *Game) Tank() float64          { return g.st.Tank }
 func (g *Game) ToolID() string         { return g.tool().ID }
 func (g *Game) Level(id string) int    { return g.st.Levels[id] }
-func (g *Game) SunHeight() float64     { return sunDir.Dot(g.player.LocalUp()) }
+func (g *Game) SunHeight() float64     { return planet.SunDir.Dot(g.player.LocalUp()) }
 func (g *Game) Inside() string         { return g.inside }
 func (g *Game) Clock() float64         { return g.clock }
 func (g *Game) PlayerPos() vec3        { return g.player.Pos }
 func (g *Game) DustDevils() int        { return len(g.devils) }
 func (g *Game) Random() float64        { return g.rng.Float64() }
-func (g *Game) Beep(freq float64)      { g.sfx.beep(0.05, 0.25, 0.14, freq) }
+func (g *Game) Beep(freq float64)      { g.sfx.Beep(0.05, 0.25, 0.14, freq) }
 func (g *Game) SpawnDustDevil()        { spawnDevil(g) }
 func (g *Game) OpenMap()               { g.setMode(modeMap) }
 func (g *Game) OpenShop()              { g.setMode(modeShop) }
