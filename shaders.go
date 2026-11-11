@@ -368,15 +368,17 @@ out vec4 finalColor;
 // a crisp but soft turn from one to the other.
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec) {
     const vec3 lampCol = vec3(1.0, 0.86, 0.68);
-    vec3 col = albedo * vec3(0.22, 0.20, 0.32);
+    vec3 col = albedo * vec3(0.15, 0.13, 0.25);
     for (int i = 0; i < 12; i++) {
         if (float(i) >= lightCount) break;
         vec3 l = lights[i].xyz - fragPos;
         float d = length(l);
         l /= d;
-        float att = lights[i].w / (1.0 + 0.12 * d * d);
+        // Pools of warm light: bright under the lamp, falling off quickly,
+        // so the room has a lit heart and cool, deep edges.
+        float att = lights[i].w / (1.0 + 0.22 * d * d);
         float wrap = smoothstep(-0.2, 0.45, dot(n, l));
-        col += albedo * lampCol * wrap * att * 1.5;
+        col += albedo * lampCol * wrap * att * 2.1;
         col += lampCol * pow(max(dot(n, normalize(l + v)), 0.0), 40.0) * spec * att * 0.6;
     }
     return col;

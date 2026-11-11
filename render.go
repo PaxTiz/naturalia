@@ -480,12 +480,34 @@ func (g *Game) drawTool() {
 		gfx.setMat(mtFabric, 10, true)
 		gfx.putBasis(gfx.cube, neck.add(dir.scale(0.12*k)), across.scale(width*0.96), dir.scale(0.13*k), depth.scale(0.07*k), look.HeadCol, 0.1, 0)
 	case headNozzle:
-		gfx.setMat(mtPaint, 6, true)
-		gfx.put(gfx.sphere, neck, vec3{r * 1.3, r * 1.3, r * 1.3}, vec3{0, 1, 0}, 0, look.HeadCol, 0.7, 0)
-		gfx.setMat(mtMetal, 6, true)
-		gfx.segment(gfx.cyl, neck, tip, r*0.7, look.HeadCol, 0.7, 0)
+		// A blower in the kit's language: a painted body with a dark rear
+		// cap and a hazard band, a steel nozzle in two steps, a glowing ring
+		// at the mouth and a status light on top.
+		body := neck.add(dir.scale(look.HeadLen * 0.5 * k))
+		mid := body.add(dir.scale(look.HeadLen * 0.28 * k))
 		gfx.setMat(mtPlain, 1, false)
-		gfx.segment(gfx.cyl, tip.sub(dir.scale(0.015*k)), tip, r*0.85, colCyan, 0, look.Glow)
+		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.06*k)), neck.sub(dir.scale(0.02*k)), r*1.1, matDark, 0.3, 0)
+		gfx.setMat(mtPaint, 6, true)
+		gfx.segment(gfx.cyl, neck.sub(dir.scale(0.02*k)), body, r, look.HeadCol, 0.6, 0)
+		gfx.setMat(mtHazard, 3, true)
+		gfx.segment(gfx.cyl, body.sub(dir.scale(0.04*k)), body.sub(dir.scale(0.01*k)), r*1.03, colWhite, 0.3, 0)
+		gfx.setMat(mtMetal, 6, true)
+		gfx.segment(gfx.cyl, body, mid, r*0.74, matSteel, 0.8, 0)
+		gfx.segment(gfx.cyl, mid, tip, r*0.54, matSteel, 0.8, 0)
+		gfx.setMat(mtPlain, 1, false)
+		gfx.segment(gfx.cyl, mid.sub(dir.scale(0.008*k)), mid, r*0.8, matDark, 0.3, 0)
+		gfx.segment(gfx.cyl, tip.sub(dir.scale(0.012*k)), tip.add(dir.scale(0.002*k)), r*0.58, colCyan, 0, look.Glow)
+		right := g.player.Right()
+		across := right.sub(dir.scale(right.dot(dir))).norm()
+		top := dir.cross(across)
+		if top.dot(g.player.LocalUp()) < 0 {
+			top = top.scale(-1)
+		}
+		light := colGreen
+		if g.tankFull() {
+			light = colRed
+		}
+		gfx.putBasis(gfx.cube, neck.add(dir.scale(look.HeadLen*0.22*k)).add(top.scale(r)), across.scale(r*0.45), dir.scale(look.HeadLen*0.22*k), top.scale(0.012*k), light, 0, 0.9)
 	}
 	gfx.setMat(mtPlain, 1, false)
 }

@@ -35,8 +35,9 @@ var tokens = map[string]token{
 	"neon.blue":      {accentBlue, mtPlain, 1, 0, 0.8},
 	"neon.purple":    {accentPurple, mtPlain, 1, 0, 0.8},
 	"lamp.warm":      {lampWarm, mtPlain, 1, 0, 1},
-	"floor.slate":    {color.RGBA{74, 78, 92, 255}, mtPlain, 1, 0.25, 0},
-	"floor.inlay":    {color.RGBA{96, 102, 120, 255}, mtPlain, 1, 0.3, 0},
+	"floor.slate":    {color.RGBA{50, 54, 66, 255}, mtPlain, 1, 0.25, 0},
+	"wall.lower":     {color.RGBA{86, 100, 118, 255}, mtPlain, 1, 0.3, 0},
+	"floor.inlay":    {color.RGBA{68, 74, 90, 255}, mtPlain, 1, 0.3, 0},
 	"solar.blue":     {color.RGBA{40, 62, 130, 255}, mtPlain, 1, 0.9, 0},
 	"crate.ochre":    {color.RGBA{196, 132, 60, 255}, mtPlain, 1, 0.2, 0},
 	"crate.slate":    {color.RGBA{88, 116, 146, 255}, mtPlain, 1, 0.2, 0},
@@ -285,8 +286,14 @@ func (b *building) interior(bp *Blueprint, r room) {
 			continue
 		}
 		out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
-		strip := p.mid.sub(out.scale(wallThick/2 + 0.015)).add(vec3{0, 1.0, 0})
-		b.part(bp.Accent, litIndoor, vec3{}).box(strip, vec3{p.width * 0.94, 0.07, 0.02}, vec3{-out.Z, 0, out.X}, 0.008)
+		along := vec3{-out.Z, 0, out.X}
+		// Two-tone walls: a steel-blue wainscot capped by the accent strip,
+		// so the light upper walls stand out over a darker base.
+		inner := p.mid.sub(out.scale(wallThick/2 + 0.02))
+		b.part("wall.lower", litIndoor, vec3{}).box(inner.add(vec3{0, 0.5, 0}), vec3{p.width * 0.99, 0.96, 0.04}, along, 0.012)
+		b.part("steel.dark", litIndoor, vec3{}).box(inner.add(vec3{0, 0.07, 0}).sub(out.scale(0.02)), vec3{p.width * 0.99, 0.14, 0.04}, along, 0.01)
+		strip := p.mid.sub(out.scale(wallThick/2 + 0.045)).add(vec3{0, 1.0, 0})
+		b.part(bp.Accent, litIndoor, vec3{}).box(strip, vec3{p.width * 0.94, 0.07, 0.03}, along, 0.008)
 	}
 	// Ribs follow the inside of the dome up to the lamp's collar.
 	a, bh := r.radius+0.02, r.radius*0.55-0.06
