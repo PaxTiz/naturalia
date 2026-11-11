@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"mars_sweeper/internal/planet"
@@ -59,9 +59,9 @@ func (s *shadowMap) camera(center vec3) rl.Camera3D {
 	center = right.Scale(snap(x)).Add(up.Scale(snap(y))).Add(planet.SunDir.Scale(z))
 	s.eye, s.look, s.up = center.Add(planet.SunDir.Scale(shadowDepth/2)), center, up
 	return rl.Camera3D{
-		Position:   toRL(center.Add(planet.SunDir.Scale(shadowDepth / 2))),
-		Target:     toRL(center),
-		Up:         toRL(up),
+		Position:   ToRL(center.Add(planet.SunDir.Scale(shadowDepth / 2))),
+		Target:     ToRL(center),
+		Up:         ToRL(up),
 		Fovy:       2 * shadowRadius,
 		Projection: rl.CameraOrthographic,
 	}
@@ -81,7 +81,7 @@ func (s *shadowMap) cols(o vec3) []float32 {
 // relVP is a camera's view and projection about o, by columns: passing a
 // Matrix by value is unreliable without cgo.
 func relVP(eye, look, up, o vec3, proj rl.Matrix) []float32 {
-	view := rl.MatrixLookAt(toRL(eye.Sub(o)), toRL(look.Sub(o)), toRL(up))
+	view := rl.MatrixLookAt(ToRL(eye.Sub(o)), ToRL(look.Sub(o)), ToRL(up))
 	m := rl.MatrixMultiply(view, proj)
 	return []float32{m.M0, m.M1, m.M2, m.M3, m.M4, m.M5, m.M6, m.M7, m.M8, m.M9, m.M10, m.M11, m.M12, m.M13, m.M14, m.M15}
 }
@@ -165,7 +165,7 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
 	for i, lamp := range lamps[:min(len(lamps), s.grid*s.grid)] {
 		cam := rl.Camera3D{
-			Position: toRL(lamp), Target: toRL(lamp.Sub(vec3{0, 1, 0})), Up: rl.Vector3{X: 1},
+			Position: ToRL(lamp), Target: ToRL(lamp.Sub(vec3{0, 1, 0})), Up: rl.Vector3{X: 1},
 			Fovy: lampFov, Projection: rl.CameraPerspective,
 		}
 		rl.BeginMode3D(cam)

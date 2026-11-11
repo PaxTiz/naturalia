@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"image/color"
@@ -122,12 +122,12 @@ func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthMask()
 	rl.BeginBlendMode(rl.BlendAdditive)
-	rl.DrawModel(gfx.holo, toRL(center), globeRadius, rl.White)
+	rl.DrawModel(gfx.holo, ToRL(center), globeRadius, rl.White)
 	// Soft light rising from the table to the globe.
 	for i := range 6 {
 		f := float64(i) / 5
 		p := base.ToWorld(base.TableSpot.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
-		rl.DrawBillboard(cam, gfx.glow, toRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
+		rl.DrawBillboard(cam, gfx.glow, ToRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()

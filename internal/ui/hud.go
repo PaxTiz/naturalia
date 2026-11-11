@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"fmt"
@@ -9,10 +9,15 @@ import (
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/palette"
 	"mars_sweeper/internal/planet"
+	"mars_sweeper/internal/render"
 	"math"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gomonobold"
+	"golang.org/x/image/font/gofont/goregular"
+	"golang.org/x/image/font/gofont/gosmallcaps"
 )
 
 // The interface is the helmet's visor display, in the base's kit language:
@@ -49,57 +54,57 @@ func withAlpha(c color.RGBA, a float64) color.RGBA {
 	return c
 }
 
-func (gfx *Graphics) text(s string, x, y, size float32, c color.RGBA) {
-	rl.DrawTextEx(gfx.font, s, rl.NewVector2(x, y), size, 0, c)
+func (hud *HUD) text(s string, x, y, size float32, c color.RGBA) {
+	rl.DrawTextEx(hud.font, s, rl.NewVector2(x, y), size, 0, c)
 }
 
-func (gfx *Graphics) width(s string, size float32) float32 {
-	return rl.MeasureTextEx(gfx.font, s, size, 0).X
+func (hud *HUD) width(s string, size float32) float32 {
+	return rl.MeasureTextEx(hud.font, s, size, 0).X
 }
 
-func (gfx *Graphics) textRight(s string, right, y, size float32, c color.RGBA) {
-	gfx.text(s, right-gfx.width(s, size), y, size, c)
+func (hud *HUD) textRight(s string, right, y, size float32, c color.RGBA) {
+	hud.text(s, right-hud.width(s, size), y, size, c)
 }
 
-func (gfx *Graphics) textCenter(s string, cx, y, size float32, c color.RGBA) {
-	gfx.text(s, cx-gfx.width(s, size)/2, y, size, c)
+func (hud *HUD) textCenter(s string, cx, y, size float32, c color.RGBA) {
+	hud.text(s, cx-hud.width(s, size)/2, y, size, c)
 }
 
 // caps writes a label in spaced small capitals.
-func (gfx *Graphics) caps(s string, x, y, size float32, c color.RGBA) {
-	rl.DrawTextEx(gfx.smallcaps, s, rl.NewVector2(x, y), size, size*0.12, c)
+func (hud *HUD) caps(s string, x, y, size float32, c color.RGBA) {
+	rl.DrawTextEx(hud.smallcaps, s, rl.NewVector2(x, y), size, size*0.12, c)
 }
 
-func (gfx *Graphics) capsWidth(s string, size float32) float32 {
-	return rl.MeasureTextEx(gfx.smallcaps, s, size, size*0.12).X
+func (hud *HUD) capsWidth(s string, size float32) float32 {
+	return rl.MeasureTextEx(hud.smallcaps, s, size, size*0.12).X
 }
 
-func (gfx *Graphics) capsCenter(s string, cx, y, size float32, c color.RGBA) {
-	gfx.caps(s, cx-gfx.capsWidth(s, size)/2, y, size, c)
+func (hud *HUD) capsCenter(s string, cx, y, size float32, c color.RGBA) {
+	hud.caps(s, cx-hud.capsWidth(s, size)/2, y, size, c)
 }
 
-func (gfx *Graphics) capsRight(s string, right, y, size float32, c color.RGBA) {
-	gfx.caps(s, right-gfx.capsWidth(s, size), y, size, c)
+func (hud *HUD) capsRight(s string, right, y, size float32, c color.RGBA) {
+	hud.caps(s, right-hud.capsWidth(s, size), y, size, c)
 }
 
 // mono writes a readout in the monospace font.
-func (gfx *Graphics) monoAt(s string, x, y, size float32, c color.RGBA) float32 {
-	rl.DrawTextEx(gfx.mono, s, rl.NewVector2(x, y), size, 0, c)
-	return rl.MeasureTextEx(gfx.mono, s, size, 0).X
+func (hud *HUD) monoAt(s string, x, y, size float32, c color.RGBA) float32 {
+	rl.DrawTextEx(hud.mono, s, rl.NewVector2(x, y), size, 0, c)
+	return rl.MeasureTextEx(hud.mono, s, size, 0).X
 }
 
-func (gfx *Graphics) monoRight(s string, right, y, size float32, c color.RGBA) {
-	w := rl.MeasureTextEx(gfx.mono, s, size, 0).X
-	rl.DrawTextEx(gfx.mono, s, rl.NewVector2(right-w, y), size, 0, c)
+func (hud *HUD) monoRight(s string, right, y, size float32, c color.RGBA) {
+	w := rl.MeasureTextEx(hud.mono, s, size, 0).X
+	rl.DrawTextEx(hud.mono, s, rl.NewVector2(right-w, y), size, 0, c)
 }
 
 // title writes big bold capitals, slightly spaced.
-func (gfx *Graphics) title(s string, x, y, size float32, c color.RGBA) {
-	rl.DrawTextEx(gfx.bold, s, rl.NewVector2(x, y), size, size*0.08, c)
+func (hud *HUD) title(s string, x, y, size float32, c color.RGBA) {
+	rl.DrawTextEx(hud.bold, s, rl.NewVector2(x, y), size, size*0.08, c)
 }
 
-func (gfx *Graphics) titleWidth(s string, size float32) float32 {
-	return rl.MeasureTextEx(gfx.bold, s, size, size*0.08).X
+func (hud *HUD) titleWidth(s string, size float32) float32 {
+	return rl.MeasureTextEx(hud.bold, s, size, size*0.08).X
 }
 
 // tri fills a triangle whatever the order of its corners.
@@ -167,33 +172,33 @@ func hazard(r rl.Rectangle) {
 }
 
 // keycap draws a keyboard key with its label and returns its width.
-func (gfx *Graphics) keycap(label string, x, y, size float32) float32 {
+func (hud *HUD) keycap(label string, x, y, size float32) float32 {
 	u := uiScale()
-	w := rl.MeasureTextEx(gfx.mono, label, size, 0).X + 12*u
+	w := rl.MeasureTextEx(hud.mono, label, size, 0).X + 12*u
 	h := size + 7*u
 	fillBevel(rl.NewRectangle(x, y+2*u, w, h), 3*u, color.RGBA{110, 114, 126, 255})
 	fillBevel(rl.NewRectangle(x, y, w, h-1*u), 3*u, uiWhite)
-	rl.DrawTextEx(gfx.mono, label, rl.NewVector2(x+6*u, y+3*u), size, 0, uiInk)
+	rl.DrawTextEx(hud.mono, label, rl.NewVector2(x+6*u, y+3*u), size, 0, uiInk)
 	return w
 }
 
 // prompt is a centered visor message, optionally led by a key to press.
-func (gfx *Graphics) prompt(key, msg string, y float32, c color.RGBA) {
+func (hud *HUD) prompt(key, msg string, y float32, c color.RGBA) {
 	u := uiScale()
 	w, _ := screenSize()
 	size := 20 * u
 	kw := float32(0)
 	if key != "" {
-		kw = rl.MeasureTextEx(gfx.mono, key, size*0.75, 0).X + 24*u
+		kw = rl.MeasureTextEx(hud.mono, key, size*0.75, 0).X + 24*u
 	}
-	tw := gfx.width(msg, size)
+	tw := hud.width(msg, size)
 	total := kw + tw
 	visorPanel(rl.NewRectangle(w/2-total/2-22*u, y-10*u, total+44*u, size+20*u), c)
 	x := w/2 - total/2
 	if key != "" {
-		gfx.keycap(key, x, y, size*0.75)
+		hud.keycap(key, x, y, size*0.75)
 	}
-	gfx.text(msg, x+kw, y, size, c)
+	hud.text(msg, x+kw, y, size, c)
 }
 
 // icon draws a small flat pictogram centered on (cx, cy), s being its
@@ -265,7 +270,9 @@ func shopItemRect(i int) rl.Rectangle {
 	return rl.NewRectangle(p.X+18*u, p.Y+72*u+float32(i)*64*u, p.Width-36*u, 58*u)
 }
 
-func (gfx *Graphics) drawHUD(g *game.Game, cam rl.Camera3D) {
+// Draw draws the interface over the frame: rs are the rendering's
+// measures, for the debug overlay.
+func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 	u := uiScale()
 	_, h := screenSize()
 
@@ -273,67 +280,67 @@ func (gfx *Graphics) drawHUD(g *game.Game, cam rl.Camera3D) {
 		if f.Pos.Sub(g.Player.Eye()).Dot(g.Player.Forward()) <= 0 {
 			continue // behind the camera
 		}
-		sp := rl.GetWorldToScreen(toRL(f.Pos), cam)
-		gfx.textCenter(f.Text, sp.X+1*u, sp.Y+2*u, 26*u, withAlpha(color.RGBA{0, 0, 0, 170}, f.Life))
-		gfx.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
+		sp := rl.GetWorldToScreen(render.ToRL(f.Pos), cam)
+		hud.textCenter(f.Text, sp.X+1*u, sp.Y+2*u, 26*u, withAlpha(color.RGBA{0, 0, 0, 170}, f.Life))
+		hud.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
 	}
 
 	if g.Mode == game.ModePlay || g.Mode == game.ModeMap || g.Mode == game.ModeShop {
-		gfx.drawVisor(g)
+		hud.drawVisor(g)
 	}
 
 	if g.Mode == game.ModePlay {
-		gfx.drawBaseMarker(g, cam)
-		gfx.drawCompass(g)
-		gfx.drawReticle(g)
-		gfx.drawHeldItem(g)
+		hud.drawBaseMarker(g, cam)
+		hud.drawCompass(g)
+		hud.drawReticle(g)
+		hud.drawHeldItem(g)
 		switch {
 		case g.Riding >= 0:
 			v, _ := g.Driven()
-			gfx.prompt("E", "Descendre du "+strings.ToLower(v.Name), h*0.64, visorCyan)
+			hud.prompt("E", "Descendre du "+strings.ToLower(v.Name), h*0.64, visorCyan)
 		case g.State.TotalDust < 5:
-			gfx.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
-		case gfx.hasUse(g):
+			hud.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
+		case hud.hasUse(g):
 			it, _ := g.NearbyUse()
-			gfx.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
+			hud.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
 		case g.TankFull() && !g.AutoSell() && math.Mod(g.Elapsed, 1) < 0.7:
-			gfx.prompt("", "RÉSERVOIR PLEIN · rapporte la poussière à l'incinérateur", h*0.64, visorAmber)
+			hud.prompt("", "RÉSERVOIR PLEIN · rapporte la poussière à l'incinérateur", h*0.64, visorAmber)
 		case !g.AimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
-			gfx.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
+			hud.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
 		}
-		gfx.drawHints(g)
+		hud.drawHints(g)
 		if g.MessageT > 0 {
-			gfx.prompt("", g.Message, h*0.2, withAlpha(visorCyan, math.Min(1, g.MessageT)))
+			hud.prompt("", g.Message, h*0.2, withAlpha(visorCyan, math.Min(1, g.MessageT)))
 		}
 	}
 	if g.Mode != game.ModePaused {
-		gfx.drawStatus(g)
+		hud.drawStatus(g)
 	}
 
-	gfx.drawDebug(g)
+	hud.drawDebug(g, rs)
 
 	switch g.Mode {
 	case game.ModePaused:
-		gfx.drawPause(g)
+		hud.drawPause(g)
 	case game.ModeShop:
-		gfx.drawShop(g)
+		hud.drawShop(g)
 	case game.ModeMap:
-		gfx.drawMapPanel(g)
+		hud.drawMapPanel(g)
 	case game.ModeSleep:
-		gfx.drawSleep(g)
+		hud.drawSleep(g)
 	}
 }
 
 // drawVisor lays the helmet's visor over the view.
-func (gfx *Graphics) drawVisor(g *game.Game) {
+func (hud *HUD) drawVisor(g *game.Game) {
 	w, h := screenSize()
-	src := rl.NewRectangle(0, 0, float32(gfx.visor.Width), float32(gfx.visor.Height))
-	rl.DrawTexturePro(gfx.visor, src, rl.NewRectangle(0, 0, w, h), rl.NewVector2(0, 0), 0, rl.White)
+	src := rl.NewRectangle(0, 0, float32(hud.visor.Width), float32(hud.visor.Height))
+	rl.DrawTexturePro(hud.visor, src, rl.NewRectangle(0, 0, w, h), rl.NewVector2(0, 0), 0, rl.White)
 }
 
 // drawHints lists the controls along the bottom of the visor, as keys.
 // drawHeldItem: what F places, under the status panel.
-func (gfx *Graphics) drawHeldItem(g *game.Game) {
+func (hud *HUD) drawHeldItem(g *game.Game) {
 	it, n := g.HeldItem()
 	if it == nil {
 		return
@@ -341,19 +348,19 @@ func (gfx *Graphics) drawHeldItem(g *game.Game) {
 	u := uiScale()
 	x, y := 40*u, 158*u
 	label := fmt.Sprintf("%s ×%d", it.Name, n)
-	w := gfx.width(label, 16*u) + 150*u
+	w := hud.width(label, 16*u) + 150*u
 	visorPanel(rl.NewRectangle(x, y, w, 34*u), visorCyan)
 	icon(content.OrDefault(it.Icon, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
-	gfx.text(label, x+36*u, y+8*u, 16*u, uiWhite)
-	kx := x + 44*u + gfx.width(label, 16*u)
-	kx += gfx.keycap("F", kx, y+9*u, 11*u) + 4*u
-	gfx.caps("poser", kx, y+11*u, 12*u, visorDim)
-	kx += gfx.capsWidth("poser", 12*u) + 10*u
-	kx += gfx.keycap("R", kx, y+9*u, 11*u) + 4*u
-	gfx.caps("changer", kx, y+11*u, 12*u, visorDim)
+	hud.text(label, x+36*u, y+8*u, 16*u, uiWhite)
+	kx := x + 44*u + hud.width(label, 16*u)
+	kx += hud.keycap("F", kx, y+9*u, 11*u) + 4*u
+	hud.caps("poser", kx, y+11*u, 12*u, visorDim)
+	kx += hud.capsWidth("poser", 12*u) + 10*u
+	kx += hud.keycap("R", kx, y+9*u, 11*u) + 4*u
+	hud.caps("changer", kx, y+11*u, 12*u, visorDim)
 }
 
-func (gfx *Graphics) drawHints(g *game.Game) {
+func (hud *HUD) drawHints(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	hints := [][2]string{
@@ -363,18 +370,18 @@ func (gfx *Graphics) drawHints(g *game.Game) {
 	key, label := 11*u, 12*u
 	total := float32(0)
 	for _, k := range hints {
-		total += rl.MeasureTextEx(gfx.mono, k[0], key, 0).X + 12*u + 6*u + gfx.capsWidth(k[1], label) + 18*u
+		total += rl.MeasureTextEx(hud.mono, k[0], key, 0).X + 12*u + 6*u + hud.capsWidth(k[1], label) + 18*u
 	}
 	x, y := w/2-(total-18*u)/2, h-36*u
 	for _, k := range hints {
-		x += gfx.keycap(k[0], x, y, key) + 6*u
-		gfx.caps(k[1], x, y+2*u, label, withAlpha(uiWhite, 0.8))
-		x += gfx.capsWidth(k[1], label) + 18*u
+		x += hud.keycap(k[0], x, y, key) + 6*u
+		hud.caps(k[1], x, y+2*u, label, withAlpha(uiWhite, 0.8))
+		x += hud.capsWidth(k[1], label) + 18*u
 	}
 }
 
 // drawReticle: a thin ring with four ticks; brighter when the ground is in reach.
-func (gfx *Graphics) drawReticle(g *game.Game) {
+func (hud *HUD) drawReticle(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	cx, cy := w/2, h/2
@@ -392,26 +399,26 @@ func (gfx *Graphics) drawReticle(g *game.Game) {
 }
 
 // drawStatus: credits, tool and tank, top left of the visor.
-func (gfx *Graphics) drawStatus(g *game.Game) {
+func (hud *HUD) drawStatus(g *game.Game) {
 	u := uiScale()
 	r := rl.NewRectangle(32*u, 28*u, 300*u, 112*u)
 	visorPanel(r, palette.Gold)
 	left, right, y := r.X+20*u, r.X+r.Width-18*u, r.Y
 
 	// Credits, with a little coin.
-	gfx.caps("CRÉDITS", left, y+12*u, 13*u, visorDim)
+	hud.caps("CRÉDITS", left, y+12*u, 13*u, visorDim)
 	coin := rl.NewVector2(left+8*u, y+46*u)
 	rl.DrawCircleV(coin, 8*u, palette.Gold)
 	rl.DrawRing(coin, 3*u, 5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
-	vw := gfx.monoAt(game.FmtNum(g.State.Credits), left+24*u, y+30*u, 30*u, palette.Gold)
+	vw := hud.monoAt(game.FmtNum(g.State.Credits), left+24*u, y+30*u, 30*u, palette.Gold)
 	if g.SellPop > 0 {
 		rise := float32(1.5-g.SellPop) * 10 * u
-		gfx.monoAt(g.SellPopText, left+30*u+vw, y+38*u-rise, 16*u, withAlpha(palette.Gold, g.SellPop))
+		hud.monoAt(g.SellPopText, left+30*u+vw, y+38*u-rise, 16*u, withAlpha(palette.Gold, g.SellPop))
 	}
 
 	// Tool, with its tier as pips.
-	gfx.capsRight("OUTIL", right, y+12*u, 13*u, visorDim)
-	gfx.textRight(g.Tool().Name, right, y+29*u, 17*u, uiWhite)
+	hud.capsRight("OUTIL", right, y+12*u, 13*u, visorDim)
+	hud.textRight(g.Tool().Name, right, y+29*u, 17*u, uiWhite)
 	n := g.Content.Tools.Len()
 	for i := range n {
 		c := uiTrack
@@ -424,8 +431,8 @@ func (gfx *Graphics) drawStatus(g *game.Game) {
 
 	// Tank: a gauge with quarter ticks.
 	ty := y + 70*u
-	gfx.caps("RÉSERVOIR", left, ty, 13*u, visorDim)
-	gfx.monoRight(game.FmtNum(g.State.Tank)+" / "+game.FmtNum(g.Capacity())+" g", right, ty-1*u, 14*u, uiWhite)
+	hud.caps("RÉSERVOIR", left, ty, 13*u, visorDim)
+	hud.monoRight(game.FmtNum(g.State.Tank)+" / "+game.FmtNum(g.Capacity())+" g", right, ty-1*u, 14*u, uiWhite)
 	bar := rl.NewRectangle(left, ty+19*u, right-left, 9*u)
 	fillCut(bar, 3*u, uiTrack)
 	fill := float32(mathx.Clamp01(g.State.Tank / g.Capacity()))
@@ -446,7 +453,7 @@ func (gfx *Graphics) drawStatus(g *game.Game) {
 
 // drawCompass: a heading strip at the top of the visor, north being the
 // way to the base (it stands on the north pole).
-func (gfx *Graphics) drawCompass(g *game.Game) {
+func (hud *HUD) drawCompass(g *game.Game) {
 	u := uiScale()
 	w, _ := screenSize()
 	up := g.Player.LocalUp()
@@ -479,10 +486,10 @@ func (gfx *Graphics) drawCompass(g *game.Game) {
 			if a == 0 {
 				c = palette.Gold // the base
 			}
-			gfx.capsCenter(l, x, top+4*u, 18*u, withAlpha(c, alpha))
+			hud.capsCenter(l, x, top+4*u, 18*u, withAlpha(c, alpha))
 			rl.DrawRectangleRec(rl.NewRectangle(x-1*u, top+25*u, 2*u, 9*u), withAlpha(c, alpha))
 		case ok:
-			gfx.capsCenter(l, x, top+8*u, 12*u, withAlpha(uiMuted, alpha))
+			hud.capsCenter(l, x, top+8*u, 12*u, withAlpha(uiMuted, alpha))
 			rl.DrawRectangleRec(rl.NewRectangle(x-0.75*u, top+27*u, 1.5*u, 7*u), withAlpha(uiMuted, alpha))
 		default:
 			rl.DrawRectangleRec(rl.NewRectangle(x-0.75*u, top+29*u, 1.5*u, 5*u), withAlpha(uiFaint, alpha))
@@ -491,16 +498,16 @@ func (gfx *Graphics) drawCompass(g *game.Game) {
 	tri(rl.NewVector2(cx, top+30*u), rl.NewVector2(cx-6*u, top+38*u), rl.NewVector2(cx+6*u, top+38*u), visorCyan)
 	if dist := planet.ArcDist(up, planet.BaseUp); dist > 15 {
 		s := "BASE  " + game.FmtNum(dist) + " M"
-		sw := gfx.capsWidth(s, 13*u)
+		sw := hud.capsWidth(s, 13*u)
 		chip := rl.NewRectangle(cx-sw/2-18*u, top+42*u, sw+30*u, 20*u)
 		fillCut(chip, 5*u, uiPlate)
 		rl.DrawPoly(rl.NewVector2(chip.X+10*u, chip.Y+10*u), 4, 4*u, 0, palette.Gold)
-		gfx.caps(s, chip.X+20*u, chip.Y+3*u, 13*u, palette.Gold)
+		hud.caps(s, chip.X+20*u, chip.Y+3*u, 13*u, palette.Gold)
 	}
 }
 
 // drawBaseMarker shows where the base is when it is in view.
-func (gfx *Graphics) drawBaseMarker(g *game.Game, cam rl.Camera3D) {
+func (hud *HUD) drawBaseMarker(g *game.Game, cam rl.Camera3D) {
 	u := uiScale()
 	w, h := screenSize()
 	if planet.ArcDist(g.Player.LocalUp(), planet.BaseUp) < 25 {
@@ -510,14 +517,14 @@ func (gfx *Graphics) drawBaseMarker(g *game.Game, cam rl.Camera3D) {
 	if target.Sub(g.Player.Eye()).Dot(g.Player.Forward()) <= 0 {
 		return
 	}
-	sp := rl.GetWorldToScreen(toRL(target), cam)
+	sp := rl.GetWorldToScreen(render.ToRL(target), cam)
 	if sp.X < 0 || sp.X > w || sp.Y < 0 || sp.Y > h {
 		return
 	}
 	rl.DrawPolyLinesEx(sp, 4, 8*u, 0, 2*u, palette.Gold)
 	rl.DrawPoly(sp, 4, 3*u, 0, palette.Gold)
-	gfx.capsCenter("BASE", sp.X+1*u, sp.Y+13*u, 13*u, color.RGBA{0, 0, 0, 140})
-	gfx.capsCenter("BASE", sp.X, sp.Y+12*u, 13*u, palette.Gold)
+	hud.capsCenter("BASE", sp.X+1*u, sp.Y+13*u, 13*u, color.RGBA{0, 0, 0, 140})
+	hud.capsCenter("BASE", sp.X, sp.Y+12*u, 13*u, palette.Gold)
 }
 
 // marsEmblem paints a little flat Mars: bands of rust and ochre, a white
@@ -545,26 +552,26 @@ func marsEmblem(cx, cy, r float32) {
 	rl.DrawRing(rl.NewVector2(cx, cy), r+2*uiScale(), r+4*uiScale(), 200, 340, 48, color.RGBA{255, 170, 120, 120})
 }
 
-func (gfx *Graphics) drawPause(g *game.Game) {
+func (hud *HUD) drawPause(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{8, 4, 10, 215}, color.RGBA{20, 8, 10, 235})
-	gfx.drawVisor(g)
+	hud.drawVisor(g)
 
 	// Emblem and title, centered as one block.
 	title := "MARS SWEEPER"
 	size := 76 * u
-	tw := gfx.titleWidth(title, size)
+	tw := hud.titleWidth(title, size)
 	er := 46 * u
 	x0 := w/2 - (2*er+28*u+tw)/2
 	ty := h * 0.16
 	marsEmblem(x0+er, ty+size*0.5+6*u, er)
 	tx := x0 + 2*er + 28*u
-	gfx.title(title, tx+3*u, ty+4*u, size, color.RGBA{0, 0, 0, 150})
-	gfx.title(title, tx, ty, size, uiWhite)
+	hud.title(title, tx+3*u, ty+4*u, size, color.RGBA{0, 0, 0, 150})
+	hud.title(title, tx, ty, size, uiWhite)
 	hazard(rl.NewRectangle(tx+2*u, ty+size+4*u, tw, 7*u))
 	if math.Mod(g.Elapsed, 1.4) < 1.0 {
-		gfx.caps("CLIQUE POUR ENFILER TON CASQUE", tx+2*u, ty+size+22*u, 18*u, visorCyan)
+		hud.caps("CLIQUE POUR ENFILER TON CASQUE", tx+2*u, ty+size+22*u, 18*u, visorCyan)
 	}
 
 	keys := [][2]string{
@@ -573,21 +580,21 @@ func (gfx *Graphics) drawPause(g *game.Game) {
 	}
 	box := rl.NewRectangle(w/2-330*u, h*0.53, 660*u, 4*38*u+50*u)
 	visorPanel(box, visorCyan)
-	gfx.caps("COMMANDES", box.X+24*u, box.Y+14*u, 13*u, visorDim)
+	hud.caps("COMMANDES", box.X+24*u, box.Y+14*u, 13*u, visorDim)
 	for i, k := range keys {
 		col := float32(i / 4)
 		x := box.X + 24*u + col*300*u
 		y := box.Y + 42*u + float32(i%4)*38*u
-		kw := rl.MeasureTextEx(gfx.mono, k[0], 15*u, 0).X + 12*u
-		gfx.keycap(k[0], x+70*u-kw, y, 15*u)
-		gfx.text(k[1], x+84*u, y+1*u, 19*u, uiWhite)
+		kw := rl.MeasureTextEx(hud.mono, k[0], 15*u, 0).X + 12*u
+		hud.keycap(k[0], x+70*u-kw, y, 15*u)
+		hud.text(k[1], x+84*u, y+1*u, 19*u, uiWhite)
 	}
 }
 
 // terminal draws a base computer screen: a charcoal body under an
 // off-white header, like the habitat panels, with an accent square, a
 // hazard block at its end and an accent line beneath.
-func (gfx *Graphics) terminal(g *game.Game, p rl.Rectangle, title string, accent color.RGBA) {
+func (hud *HUD) terminal(g *game.Game, p rl.Rectangle, title string, accent color.RGBA) {
 	u := uiScale()
 	w, h := screenSize()
 	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{0, 0, 0, 90}, color.RGBA{0, 0, 0, 170})
@@ -599,28 +606,28 @@ func (gfx *Graphics) terminal(g *game.Game, p rl.Rectangle, title string, accent
 	hazard(rl.NewRectangle(p.X+p.Width-56*u, p.Y, 56*u, 52*u))
 	rl.DrawRectangleRec(rl.NewRectangle(p.X, p.Y+52*u, p.Width, 3*u), accent)
 	fillCut(rl.NewRectangle(p.X+22*u, p.Y+15*u, 12*u, 22*u), 3*u, uiInk)
-	gfx.title(title, p.X+46*u, p.Y+13*u, 25*u, uiInk)
+	hud.title(title, p.X+46*u, p.Y+13*u, 25*u, uiInk)
 }
 
-func (gfx *Graphics) drawShop(g *game.Game) {
+func (hud *HUD) drawShop(g *game.Game) {
 	u := uiScale()
 	p := shopPanel()
-	gfx.terminal(g, p, "LABORATOIRE DE RECHERCHE", visorCyan)
+	hud.terminal(g, p, "LABORATOIRE DE RECHERCHE", visorCyan)
 	right := p.X + p.Width - 72*u
-	vw := rl.MeasureTextEx(gfx.mono, game.FmtNum(g.State.Credits)+" cr", 24*u, 0).X
+	vw := rl.MeasureTextEx(hud.mono, game.FmtNum(g.State.Credits)+" cr", 24*u, 0).X
 	coin := rl.NewVector2(right-vw-16*u, p.Y+26*u)
 	rl.DrawCircleV(coin, 9*u, palette.Gold)
 	rl.DrawRing(coin, 3.5*u, 5.5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
-	gfx.monoRight(game.FmtNum(g.State.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
+	hud.monoRight(game.FmtNum(g.State.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
 
 	items := g.ShopItems()
 	for i, it := range items {
-		if i < gfx.shopScroll || i >= gfx.shopScroll+shopRows {
+		if i < hud.shopScroll || i >= hud.shopScroll+shopRows {
 			continue
 		}
-		r := shopItemRect(i - gfx.shopScroll)
+		r := shopItemRect(i - hud.shopScroll)
 		bg := uiRow
-		if i == gfx.hover {
+		if i == hud.hover {
 			bg = uiRowLit
 		}
 		fillCut(r, 8*u, bg)
@@ -631,23 +638,23 @@ func (gfx *Graphics) drawShop(g *game.Game) {
 		if it.Maxed {
 			state = palette.Gold
 		}
-		if i == gfx.hover {
+		if i == hud.hover {
 			rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+8*u, 3*u, r.Height-8*u), state)
 		}
 		tile := rl.NewRectangle(r.X+8*u, r.Y+7*u, 44*u, 44*u)
 		fillCut(tile, 6*u, uiInk)
 		icon(it.Icon, tile.X+22*u, tile.Y+22*u, 14*u, state)
-		gfx.text(it.Name, r.X+66*u, r.Y+7*u, 20*u, uiWhite)
-		gfx.text(it.Desc, r.X+66*u, r.Y+32*u, 15*u, uiMuted)
+		hud.text(it.Name, r.X+66*u, r.Y+7*u, 20*u, uiWhite)
+		hud.text(it.Desc, r.X+66*u, r.Y+32*u, 15*u, uiMuted)
 		right := r.X + r.Width - 16*u
 		if it.Maxed {
-			cw := gfx.capsWidth("MAX", 15*u)
+			cw := hud.capsWidth("MAX", 15*u)
 			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, palette.Gold)
-			gfx.caps("MAX", right-cw-7*u, r.Y+11*u, 15*u, uiInk)
+			hud.caps("MAX", right-cw-7*u, r.Y+11*u, 15*u, uiInk)
 		} else {
-			gfx.monoRight(game.FmtNum(it.Cost)+" cr", right, r.Y+8*u, 20*u, costCol)
+			hud.monoRight(game.FmtNum(it.Cost)+" cr", right, r.Y+8*u, 20*u, costCol)
 		}
-		gfx.capsRight(strings.ToUpper(it.Info), right, r.Y+35*u, 12*u, visorDim)
+		hud.capsRight(strings.ToUpper(it.Info), right, r.Y+35*u, 12*u, visorDim)
 	}
 	// A scroll bar when everything doesn't fit.
 	if len(items) > shopRows {
@@ -655,37 +662,37 @@ func (gfx *Graphics) drawShop(g *game.Game) {
 		track := rl.NewRectangle(p.X+p.Width-12*u, top.Y, 4*u, bottom.Y+bottom.Height-top.Y)
 		rl.DrawRectangleRec(track, uiTrack)
 		h := track.Height * shopRows / float32(len(items))
-		y := track.Y + (track.Height-h)*float32(gfx.shopScroll)/float32(len(items)-shopRows)
+		y := track.Y + (track.Height-h)*float32(hud.shopScroll)/float32(len(items)-shopRows)
 		rl.DrawRectangleRec(rl.NewRectangle(track.X, y, track.Width, h), visorCyan)
 	}
-	gfx.closeHint(g, p.X+p.Width/2, p.Y+p.Height+16*u, true)
+	hud.closeHint(g, p.X+p.Width/2, p.Y+p.Height+16*u, true)
 }
 
 // closeHint says how to leave a terminal, under it.
-func (gfx *Graphics) closeHint(g *game.Game, x, y float32, centered bool) {
+func (hud *HUD) closeHint(g *game.Game, x, y float32, centered bool) {
 	u := uiScale()
 	s := "OU ÉCHAP POUR FERMER"
-	kw := rl.MeasureTextEx(gfx.mono, "E", 14*u, 0).X + 12*u
+	kw := rl.MeasureTextEx(hud.mono, "E", 14*u, 0).X + 12*u
 	if centered {
-		x -= (kw + 8*u + gfx.capsWidth(s, 13*u)) / 2
+		x -= (kw + 8*u + hud.capsWidth(s, 13*u)) / 2
 	}
-	gfx.keycap("E", x, y, 14*u)
-	gfx.caps(s, x+kw+8*u, y+3*u, 13*u, withAlpha(uiWhite, 0.8))
+	hud.keycap("E", x, y, 14*u)
+	hud.caps(s, x+kw+8*u, y+3*u, 13*u, withAlpha(uiWhite, 0.8))
 }
 
 // hasUse tells whether something can be used right now with E.
-func (gfx *Graphics) hasUse(g *game.Game) bool {
+func (hud *HUD) hasUse(g *game.Game) bool {
 	_, ok := g.NearbyUse()
 	return ok
 }
 
 // drawMapPanel shows the state of Mars next to the hologram.
-func (gfx *Graphics) drawMapPanel(g *game.Game) {
+func (hud *HUD) drawMapPanel(g *game.Game) {
 	u := uiScale()
 	_, h := screenSize()
 	s := g.World.Stats(g.State.TotalDust)
 	p := rl.NewRectangle(40*u, h/2-190*u, 440*u, 380*u)
-	gfx.terminal(g, p, "ÉTAT DE MARS", visorCyan)
+	hud.terminal(g, p, "ÉTAT DE MARS", visorCyan)
 
 	rows := []struct{ label, value string }{
 		{"MARS NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
@@ -700,8 +707,8 @@ func (gfx *Graphics) drawMapPanel(g *game.Game) {
 		if i%2 == 0 {
 			rl.DrawRectangleRec(rl.NewRectangle(p.X+14*u, y-8*u, p.Width-28*u, 38*u), color.RGBA{255, 255, 255, 8})
 		}
-		gfx.caps(r.label, p.X+26*u, y+4*u, 14*u, visorDim)
-		gfx.monoRight(r.value, p.X+p.Width-26*u, y+1*u, 19*u, uiWhite)
+		hud.caps(r.label, p.X+26*u, y+4*u, 14*u, visorDim)
+		hud.monoRight(r.value, p.X+p.Width-26*u, y+1*u, 19*u, uiWhite)
 	}
 	y := p.Y + p.Height - 38*u
 	legend := []struct {
@@ -711,14 +718,14 @@ func (gfx *Graphics) drawMapPanel(g *game.Game) {
 	x := p.X + 28*u
 	for _, l := range legend {
 		rl.DrawPoly(rl.NewVector2(x, y+8*u), 4, 6*u, 0, l.c)
-		gfx.caps(l.label, x+12*u, y+1*u, 14*u, uiMuted)
-		x += gfx.capsWidth(l.label, 14*u) + 40*u
+		hud.caps(l.label, x+12*u, y+1*u, 14*u, uiMuted)
+		x += hud.capsWidth(l.label, 14*u) + 40*u
 	}
-	gfx.closeHint(g, p.X, p.Y+p.Height+16*u, false)
+	hud.closeHint(g, p.X, p.Y+p.Height+16*u, false)
 }
 
 // drawSleep fades to black, shows the night passing, then fades back in.
-func (gfx *Graphics) drawSleep(g *game.Game) {
+func (hud *HUD) drawSleep(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	t := g.SleepT
@@ -733,44 +740,65 @@ func (gfx *Graphics) drawSleep(g *game.Game) {
 	if t > game.SleepFadeOut*0.6 && t < game.SleepWake+0.3 {
 		a := math.Min(t-game.SleepFadeOut*0.6, game.SleepWake+0.3-t) * 2
 		dots := strings.Repeat(" z", 1+int(t*2)%3)
-		gfx.capsCenter("Z"+dots+"…", w/2, h/2-30*u, 44*u, withAlpha(color.RGBA{180, 170, 255, 255}, a))
+		hud.capsCenter("Z"+dots+"…", w/2, h/2-30*u, 44*u, withAlpha(color.RGBA{180, 170, 255, 255}, a))
 		if t > game.SleepSave {
-			gfx.capsCenter("PARTIE SAUVEGARDÉE", w/2, h/2+30*u, 16*u, withAlpha(uiMuted, a))
+			hud.capsCenter("PARTIE SAUVEGARDÉE", w/2, h/2+30*u, 16*u, withAlpha(uiMuted, a))
 		}
 	}
 }
 
-// update follows the interface's input: the debug overlay, the shop. It
+// Update follows the interface's input: the debug overlay, the shop. It
 // runs before the game's update.
-func (gfx *Graphics) update(g *game.Game, dt float64) {
-	gfx.updateDebug(g, dt)
+func (hud *HUD) Update(g *game.Game, dt float64) {
+	hud.updateDebug(dt)
 	if g.Mode == game.ModeShop {
-		gfx.updateShop(g)
+		hud.updateShop(g)
 	}
 }
 
 // updateShop scrolls the shop, follows the mouse over its rows and buys
 // the one clicked.
-func (gfx *Graphics) updateShop(g *game.Game) {
+func (hud *HUD) updateShop(g *game.Game) {
 	items := g.ShopItems()
 	wheel := rl.GetMouseWheelMove()
 	if wheel < 0 || rl.IsKeyPressed(rl.KeyDown) {
-		gfx.shopScroll++
+		hud.shopScroll++
 	} else if wheel > 0 || rl.IsKeyPressed(rl.KeyUp) {
-		gfx.shopScroll--
+		hud.shopScroll--
 	}
-	gfx.shopScroll = max(0, min(gfx.shopScroll, len(items)-shopRows))
+	hud.shopScroll = max(0, min(hud.shopScroll, len(items)-shopRows))
 	mouse := rl.GetMousePosition()
-	gfx.hover = -1
-	for i := gfx.shopScroll; i < min(len(items), gfx.shopScroll+shopRows); i++ {
-		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-gfx.shopScroll)) {
-			gfx.hover = i
+	hud.hover = -1
+	for i := hud.shopScroll; i < min(len(items), hud.shopScroll+shopRows); i++ {
+		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-hud.shopScroll)) {
+			hud.hover = i
 		}
 	}
 	if !rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 		return
 	}
-	if gfx.hover >= 0 {
-		g.Buy(items[gfx.hover])
+	if hud.hover >= 0 {
+		g.Buy(items[hud.hover])
+	}
+}
+
+// HUD is the interface drawn over the view: the helmet's visor, prompts,
+// the shop, the map panel, the pause screen, the debug overlay.
+type HUD struct {
+	font, bold, smallcaps, mono rl.Font
+	visor                       rl.Texture2D
+	hover                       int // shop row under the mouse
+	shopScroll                  int // first row shown in the shop
+	dbg                         debugInfo
+}
+
+func New() *HUD {
+	return &HUD{
+		font:      render.LoadFont(goregular.TTF, 64),
+		bold:      render.LoadFont(gobold.TTF, 64),
+		smallcaps: render.LoadFont(gosmallcaps.TTF, 96),
+		mono:      render.LoadFont(gomonobold.TTF, 64),
+		visor:     render.GenVisor(),
+		hover:     -1,
 	}
 }

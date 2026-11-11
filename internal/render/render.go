@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"fmt"
@@ -14,9 +14,6 @@ import (
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
-	"golang.org/x/image/font/gofont/gobold"
-	"golang.org/x/image/font/gofont/gomonobold"
-	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/gofont/gosmallcaps"
 )
 
@@ -49,7 +46,7 @@ type Graphics struct {
 	devilMat                           rl.Material
 
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
-	terrainMat                                        *rl.Material // own allocation: see NewGraphics
+	terrainMat                                        *rl.Material // own allocation: see New
 	signBox                                           rl.Model
 	rocks, pebbles                                    []rl.Model
 	post                                              *postFX
@@ -62,22 +59,17 @@ type Graphics struct {
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
-	mono                                              rl.Font
-	visor                                             rl.Texture2D
 	tex                                               Textures
 	objectMaps                                        []rl.Texture2D // the painted textures, in the object shader's order
 	glow                                              rl.Texture2D
-	font, bold                                        rl.Font
 
 	content     *content.Content            // materials, entities
-	terrain     *Terrain                    // the ground as drawn, in levels of detail
+	Terrain     *Terrain                    // the ground as drawn, in levels of detail
 	nearGems    []planet.Gem                // crystals around the player, refreshed every frame
 	nearPebbles map[planet.TileKey][]pebble // per tile, around the player
-	dbg         debugInfo
+	stats       Stats
 	camEye      vec3 // the camera's position in double precision (camera)
 	origin      vec3 // the shaders' origin this frame (setUniforms)
-	hover       int  // shop row under the mouse
-	shopScroll  int  // first row shown in the shop
 }
 
 func loadShader(fs string) (rl.Shader, shaderLocs) { return loadShaderVS(glsl("mesh.vert"), fs) }
@@ -97,11 +89,11 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 	}
 }
 
-// NewGraphics loads everything the game is drawn with, and the ground
+// New loads everything the game is drawn with, and the ground
 // around the player.
-func NewGraphics(g *game.Game) *Graphics {
-	gfx := &Graphics{content: g.Content, entities: map[string][]entityModel{}, hover: -1}
-	gfx.terrain = NewTerrain(g.World.Relief)
+func New(g *game.Game) *Graphics {
+	gfx := &Graphics{content: g.Content, entities: map[string][]entityModel{}}
+	gfx.Terrain = NewTerrain(g.World.Relief)
 	gfx.post = newPostFX()
 	gfx.terrainSh, gfx.tLoc = loadShaderVS(glsl("terrain.vert"), glsl("terrain.frag"))
 	gfx.objectSh, gfx.oLoc = loadShaderVS(glsl("object.vert"), glsl("object.frag"))
@@ -134,21 +126,7 @@ func NewGraphics(g *game.Game) *Graphics {
 	rl.UnloadImage(img)
 	rl.SetTextureFilter(gfx.glow, rl.FilterBilinear)
 
-	// Latin-1 covers French accents; the default raylib font is ASCII only.
-	var runes []rune
-	for r := rune(32); r < 256; r++ {
-		runes = append(runes, r)
-	}
-	runes = append(runes, '…', '’', '→', '►', '◄')
-	gfx.font = rl.LoadFontFromMemory(".ttf", goregular.TTF, 64, runes)
-	gfx.bold = rl.LoadFontFromMemory(".ttf", gobold.TTF, 64, runes)
-	gfx.smallcaps = rl.LoadFontFromMemory(".ttf", gosmallcaps.TTF, 96, runes)
-	gfx.mono = rl.LoadFontFromMemory(".ttf", gomonobold.TTF, 64, runes)
-	rl.SetTextureFilter(gfx.mono.Texture, rl.FilterBilinear)
-	gfx.visor = genVisor()
-	rl.SetTextureFilter(gfx.smallcaps.Texture, rl.FilterBilinear)
-	rl.SetTextureFilter(gfx.font.Texture, rl.FilterBilinear)
-	rl.SetTextureFilter(gfx.bold.Texture, rl.FilterBilinear)
+	gfx.smallcaps = LoadFont(gosmallcaps.TTF, 96) // for the signs
 
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(planet.SunDir), rl.ShaderUniformVec3)
@@ -215,12 +193,12 @@ func NewGraphics(g *game.Game) *Graphics {
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "tilesPerFace"), []float32{planet.TilesPerFace}, rl.ShaderUniformFloat)
-	gfx.terrain.Warm(g.Player.Eye(), 5*time.Second)
+	gfx.Terrain.Warm(g.Player.Eye(), 5*time.Second)
 	return gfx
 }
 
-// toRL is a vector as raylib takes it, in float32.
-func toRL(a vec3) rl.Vector3 { return rl.NewVector3(float32(a.X), float32(a.Y), float32(a.Z)) }
+// ToRL is a vector as raylib takes it, in float32.
+func ToRL(a vec3) rl.Vector3 { return rl.NewVector3(float32(a.X), float32(a.Y), float32(a.Z)) }
 
 type shaderWithLocs struct {
 	sh  rl.Shader
@@ -236,7 +214,7 @@ func v3f(v vec3) []float32 { return []float32{float32(v.X), float32(v.Y), float3
 // put draws a unit model scaled, then rotated (angle in degrees around axis).
 func (gfx *Graphics) put(m rl.Model, pos, scale, axis vec3, angle float64, c color.RGBA, spec, emissive float32) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{spec, emissive}, rl.ShaderUniformVec2)
-	rl.DrawModelEx(m, toRL(pos), toRL(axis), float32(angle), toRL(scale), c)
+	rl.DrawModelEx(m, ToRL(pos), ToRL(axis), float32(angle), ToRL(scale), c)
 }
 
 // segment stretches a unit cylinder or cone (base at y=0, top at y=1) from a to b.
@@ -270,9 +248,9 @@ func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 	}
 	gfx.camEye = eye
 	return rl.Camera3D{
-		Position:   toRL(eye),
-		Target:     toRL(eye.Add(p.Forward())),
-		Up:         toRL(camUp),
+		Position:   ToRL(eye),
+		Target:     ToRL(eye.Add(p.Forward())),
+		Up:         ToRL(camUp),
 		Fovy:       float32(g.Fov),
 		Projection: rl.CameraPerspective,
 	}
@@ -321,8 +299,8 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
 	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
-	sun, ao := gfx.terrain.light(gfx.terrain.Surface(g.Player.Pos))
-	gfx.dbg.sun, gfx.dbg.ao = sun, ao
+	sun, ao := gfx.Terrain.light(gfx.Terrain.Surface(g.Player.Pos))
+	gfx.stats.Sun, gfx.stats.AO = sun, ao
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(ao)}, rl.ShaderUniformVec2)
 
 	brush := []float32{0, 0, 0, 0}
@@ -347,14 +325,16 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	rl.SetShaderValueV(gfx.objectSh, gfx.oLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
 
-func (gfx *Graphics) Draw(g *game.Game) {
+// Draw draws a frame of the game; overlay draws over it, on the screen
+// (the interface).
+func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	cam := gfx.camera(g)
 
 	atlas, lookup := gfx.dust.Upload(g.World, g.Player.Pos)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapSpecular, lookup)
-	patches := gfx.terrain.Visible(g.Player.Eye())
-	gfx.dbg.patches = len(patches)
+	patches := gfx.Terrain.Visible(g.Player.Eye())
+	gfx.stats.Patches = len(patches)
 	gfx.nearGems = g.World.GemsNear(g.Player.Pos, gemDrawDist)
 	// Objects cast their shadows first, then the scene is lit with them.
 	gfx.shadow.render(gfx, g.Player.Pos, func() {
@@ -416,7 +396,7 @@ func (gfx *Graphics) Draw(g *game.Game) {
 
 	rl.BeginDrawing()
 	gfx.post.finish(cam, sunUp, g.Elapsed)
-	gfx.drawHUD(g, cam)
+	overlay(cam)
 	rl.EndDrawing()
 }
 
@@ -461,7 +441,7 @@ func (gfx *Graphics) gemVisibility(g *game.Game, gem planet.Gem) float64 {
 
 func (gfx *Graphics) gemPos(g *game.Game, gem planet.Gem, s float64) vec3 {
 	lift := s*1.4 + math.Sin(g.Elapsed*2+float64(gem.Key))*0.05
-	return gfx.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(lift))
+	return gfx.Terrain.Surface(gem.Dir).Add(gem.Dir.Scale(lift))
 }
 
 func (gfx *Graphics) drawGems(g *game.Game) {
@@ -586,7 +566,7 @@ func depth(across, dir vec3) vec3 { return across.Cross(dir) }
 // softness fades a particle as it reaches the ground, so its sprite
 // doesn't get cut by the terrain.
 func (gfx *Graphics) softness(g *game.Game, p game.Particle) float64 {
-	return mathx.Smoothstep(0, p.Size*3, gfx.terrain.Altitude(p.Pos))
+	return mathx.Smoothstep(0, p.Size*3, gfx.Terrain.Altitude(p.Pos))
 }
 
 func (gfx *Graphics) drawGlows(g *game.Game, cam rl.Camera3D) {
@@ -599,7 +579,7 @@ func (gfx *Graphics) drawGlows(g *game.Game, cam rl.Camera3D) {
 		}
 		c := p.C
 		c.A = uint8(200 * mathx.Clamp01(p.Life/p.MaxLife*1.5) * gfx.softness(g, p))
-		rl.DrawBillboard(cam, gfx.glow, toRL(p.Pos), float32(p.Size*3), c)
+		rl.DrawBillboard(cam, gfx.glow, ToRL(p.Pos), float32(p.Size*3), c)
 	}
 
 	rl.BeginBlendMode(rl.BlendAdditive)
@@ -609,7 +589,7 @@ func (gfx *Graphics) drawGlows(g *game.Game, cam rl.Camera3D) {
 		}
 		c := p.C
 		c.A = uint8(255 * mathx.Clamp01(p.Life/p.MaxLife*1.5) * gfx.softness(g, p))
-		rl.DrawBillboard(cam, gfx.glow, toRL(p.Pos), float32(p.Size*4), c)
+		rl.DrawBillboard(cam, gfx.glow, ToRL(p.Pos), float32(p.Size*4), c)
 	}
 	for _, gem := range gfx.nearGems {
 		vis := gfx.gemVisibility(g, gem)
@@ -618,10 +598,10 @@ func (gfx *Graphics) drawGlows(g *game.Game, cam rl.Camera3D) {
 		}
 		pulse := 0.75 + 0.25*math.Sin(g.Elapsed*3+float64(gem.Key))
 		c := color.RGBA{80, 200, 230, uint8(160 * vis * pulse)}
-		rl.DrawBillboard(cam, gfx.glow, toRL(gfx.gemPos(g, gem, 0.06+0.16*vis)), float32(1.4*vis), c)
+		rl.DrawBillboard(cam, gfx.glow, ToRL(gfx.gemPos(g, gem, 0.06+0.16*vis)), float32(1.4*vis), c)
 	}
 	if math.Mod(g.Elapsed, 1.2) < 0.3 {
-		rl.DrawBillboard(cam, gfx.glow, toRL(beaconTop()), 0.9, color.RGBA{255, 80, 60, 200})
+		rl.DrawBillboard(cam, gfx.glow, ToRL(beaconTop()), 0.9, color.RGBA{255, 80, 60, 200})
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()
@@ -644,4 +624,30 @@ func (gfx *Graphics) putBasis(m rl.Model, pos, ax, ay, az vec3, c color.RGBA, sp
 	mat.GetMap(rl.MapAlbedo).Color = c
 	rl.DrawMesh(m.GetMeshes()[0], mat, basisMatrix(pos, ax, ay, az))
 	mat.GetMap(rl.MapAlbedo).Color = rl.White
+}
+
+// LoadFont loads a TrueType font at size, with Latin-1 for the French
+// accents (raylib's default font is ASCII only) and a few symbols.
+func LoadFont(ttf []byte, size int32) rl.Font {
+	var runes []rune
+	for r := rune(32); r < 256; r++ {
+		runes = append(runes, r)
+	}
+	runes = append(runes, '…', '’', '→', '►', '◄')
+	f := rl.LoadFontFromMemory(".ttf", ttf, size, runes)
+	rl.SetTextureFilter(f.Texture, rl.FilterBilinear)
+	return f
+}
+
+// Stats are what the debug overlay shows of the rendering.
+type Stats struct {
+	Patches, Pebbles int     // drawn this frame
+	Loaded, Pending  int     // terrain meshes on the GPU, being built
+	Sun, AO          float64 // relief light under the player
+}
+
+func (gfx *Graphics) Stats() Stats {
+	s := gfx.stats
+	s.Loaded, s.Pending = len(gfx.Terrain.loaded), gfx.Terrain.pending
+	return s
 }

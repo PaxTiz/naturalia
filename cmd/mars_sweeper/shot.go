@@ -6,6 +6,7 @@ import (
 	"mars_sweeper/internal/game"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
+	"mars_sweeper/internal/render"
 	"math"
 	"os"
 	"time"
@@ -28,7 +29,7 @@ type shotRun struct {
 	perf    float64 // summed frame times (MS_SHOT_PERF)
 }
 
-func newShotRun(g *game.Game, gfx *Graphics) *shotRun {
+func newShotRun(g *game.Game, gfx *render.Graphics) *shotRun {
 	s := &shotRun{file: os.Getenv("MS_SHOT"), mode: game.ModePlay}
 	// MS_SHOT_MODE opens a screen for the shot: shop, map or pause.
 	switch os.Getenv("MS_SHOT_MODE") {
@@ -48,7 +49,7 @@ func newShotRun(g *game.Game, gfx *Graphics) *shotRun {
 		var d vec3
 		fmt.Sscanf(v, "%f,%f,%f", &d.X, &d.Y, &d.Z)
 		up := d.Norm()
-		g.Player.Pos = gfx.terrain.Surface(up)
+		g.Player.Pos = gfx.Terrain.Surface(up)
 		h := planet.SunDir.Sub(up.Scale(planet.SunDir.Dot(up)))
 		if h.Length() < 0.1 { // the sun is overhead or right underfoot
 			h, _ = mathx.TangentBasis(up)
@@ -62,7 +63,7 @@ func newShotRun(g *game.Game, gfx *Graphics) *shotRun {
 		}
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.Player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
-		gfx.terrain.Warm(g.Player.Eye(), 20*time.Second)
+		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}
 	// MS_SHOT_AT=x,z,yaw stands in the base (local coordinates, yaw in
 	// radians from +X toward +Z), for views of the buildings.
@@ -74,7 +75,7 @@ func newShotRun(g *game.Game, gfx *Graphics) *shotRun {
 		g.Player.Pitch = 0.05
 		fmt.Sscanf(os.Getenv("MS_SHOT_PITCH"), "%f", &g.Player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
-		gfx.terrain.Warm(g.Player.Eye(), 20*time.Second)
+		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}
 	return s
 }

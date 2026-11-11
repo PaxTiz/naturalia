@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"mars_sweeper/internal/mathx"
@@ -330,10 +330,10 @@ func bakeTextures() Textures {
 	}
 }
 
-// genVisor paints the helmet visor seen from inside, for a 16:9 screen:
+// GenVisor paints the helmet visor seen from inside, for a 16:9 screen:
 // a thin dark rim hugging the corners, a faint glint along its edge and a
 // soft reflection on the glass. It frames the view without eating it.
-func genVisor() rl.Texture2D {
+func GenVisor() rl.Texture2D {
 	const w, h = 1280, 720
 	pix := make([]byte, w*h*4)
 	var wg sync.WaitGroup

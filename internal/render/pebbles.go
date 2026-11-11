@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"image/color"
@@ -39,7 +39,7 @@ func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 		a := (float64(tx*planet.TileCells) + mathx.Hash3(f, tx, ty, s)*planet.TileCells) / planet.FaceCells * 2
 		b := (float64(ty*planet.TileCells) + mathx.Hash3(f, tx, ty, s+1)*planet.TileCells) / planet.FaceCells * 2
 		d := mathx.FaceDir(f, a-1, b-1)
-		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || gfx.terrain.Ice(d) > 0.3 {
+		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || gfx.Terrain.Ice(d) > 0.3 {
 			continue
 		}
 		t1, t2 := mathx.TangentBasis(d)
@@ -47,7 +47,7 @@ func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 		ax := t1.Scale(math.Cos(yaw)).Add(t2.Scale(math.Sin(yaw)))
 		out = append(out, pebble{
 			dir:    d,
-			ground: gfx.terrain.Surface(d),
+			ground: gfx.Terrain.Surface(d),
 			size:   0.025 + 0.11*math.Pow(mathx.Hash3(f, tx, ty, s+2), 2.5),
 			shape:  int(mathx.Hash3(f, tx, ty, s+4) * pebbleShapes),
 			ax:     ax,
@@ -89,9 +89,9 @@ func (gfx *Graphics) drawPebbles(g *game.Game) {
 		}
 	}
 
-	gfx.dbg.pebbles = 0
+	gfx.stats.Pebbles = 0
 	for _, m := range mats {
-		gfx.dbg.pebbles += len(m)
+		gfx.stats.Pebbles += len(m)
 	}
 	gfx.drawInstanced(gfx.pebbles, mats[:], func(k int) color.RGBA {
 		v := 120 + 30*float64(k)

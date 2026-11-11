@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"image/color"
@@ -79,7 +79,7 @@ func (gfx *Graphics) drawRocks(g *game.Game) {
 		t1, t2 := mathx.TangentBasis(up)
 		ax := t1.Scale(math.Cos(r.Yaw)).Add(t2.Scale(math.Sin(r.Yaw)))
 		az := ax.Cross(up)
-		ground := gfx.terrain.Surface(r.Dir)
+		ground := gfx.Terrain.Surface(r.Dir)
 		size := r.Size * (1 - mathx.Smoothstep(game.RockDrawDist*0.8, game.RockDrawDist, ground.Sub(g.Player.Pos).Length()))
 		mats[r.Shape] = append(mats[r.Shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
 	}

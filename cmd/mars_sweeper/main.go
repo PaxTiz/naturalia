@@ -5,7 +5,9 @@ import (
 	"log"
 	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/game"
+	"mars_sweeper/internal/render"
 	"mars_sweeper/internal/script"
+	"mars_sweeper/internal/ui"
 	_ "mars_sweeper/packs/core" // the base game, registered as a pack
 	"os"
 
@@ -14,7 +16,7 @@ import (
 
 func main() {
 	flags := uint32(rl.FlagWindowResizable | rl.FlagMsaa4xHint | rl.FlagVsyncHint)
-	if os.Getenv("MS_SHOT_PERF") != "" { // measuring: no wait for the screen (debug.go)
+	if os.Getenv("MS_SHOT_PERF") != "" { // measuring: no wait for the screen (shot.go)
 		flags &^= rl.FlagVsyncHint
 	}
 	rl.SetConfigFlags(flags)
@@ -30,15 +32,16 @@ func main() {
 	c := game.LoadContent()
 	log.Println("packs:", content.PackList())
 	g := game.New(c)
-	gfx := NewGraphics(g)
+	gfx := render.New(g)
+	hud := ui.New()
 	shot := newShotRun(g, gfx)
 	for !rl.WindowShouldClose() {
 		// Clamp so a window drag or a hitch doesn't teleport everything.
 		dt := min(float64(rl.GetFrameTime()), 0.05)
-		gfx.update(g, dt)
+		hud.Update(g, dt)
 		g.Update(dt)
 		shot.tick(g)
-		gfx.Draw(g)
+		gfx.Draw(g, func(cam rl.Camera3D) { hud.Draw(g, cam, gfx.Stats()) })
 	}
 	g.Save()
 	rl.CloseAudioDevice()

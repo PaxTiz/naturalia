@@ -130,7 +130,7 @@ var coreTokens = map[string]content.Token{
 	"fabric.white":   {palette.MatWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
 	"fabric.purple":  {palette.AccentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
 	"fabric.rug":     {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
-	// Greebles and the yard (greeble.go).
+	// Greebles and the yard (internal/base/greeble.go).
 	"glass.dark":    {color.RGBA{26, 38, 54, 255}, content.MtPlain, 1, 1.0, 0},
 	"pipe.yellow":   {color.RGBA{214, 164, 52, 255}, content.MtPlain, 1, 0.5, 0},
 	"pipe.blue":     {color.RGBA{62, 112, 168, 255}, content.MtPlain, 1, 0.5, 0},
