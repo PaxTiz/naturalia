@@ -9,8 +9,10 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// The interface is the helmet's visor display: tinted glass panels with
-// corner brackets, small capitals for labels, monospace for readouts.
+// The interface is the helmet's visor display, in the base's kit language:
+// flat charcoal plates with two chamfered corners, off-white headers like
+// the habitat panels, hazard blocks, small capitals for labels and
+// monospace for readouts. Cyan marks what can be used, gold what is earned.
 // It is laid out for a 720 px tall window and scaled from there.
 func uiScale() float32 { return float32(rl.GetScreenHeight()) / 720 }
 
@@ -19,16 +21,19 @@ func screenSize() (float32, float32) {
 }
 
 var (
-	visorCyan   = color.RGBA{120, 235, 245, 255}
-	visorDim    = color.RGBA{70, 140, 160, 255}
-	visorAmber  = color.RGBA{255, 190, 80, 255}
-	visorGlass  = color.RGBA{10, 20, 30, 185}
-	visorStroke = color.RGBA{80, 190, 210, 110}
-	// The base's tokens, flat on the visor: off-white, dark steel, hazard.
-	uiWhite   = color.RGBA{228, 225, 216, 255}
-	uiSteel   = color.RGBA{30, 38, 50, 240}
-	uiRow     = color.RGBA{18, 32, 44, 220}
-	uiRowLit  = color.RGBA{28, 54, 68, 235}
+	visorCyan  = color.RGBA{120, 235, 245, 255}
+	visorDim   = color.RGBA{150, 156, 166, 255} // labels
+	visorAmber = color.RGBA{255, 190, 80, 255}
+	// The base's tokens, flat on the visor: off-white, charcoal, hazard.
+	uiWhite   = color.RGBA{238, 234, 224, 255}
+	uiMuted   = color.RGBA{160, 164, 172, 255}
+	uiFaint   = color.RGBA{92, 98, 110, 255}
+	uiInk     = color.RGBA{20, 22, 28, 255}
+	uiPlate   = color.RGBA{20, 22, 29, 205}
+	uiRow     = color.RGBA{34, 37, 46, 235}
+	uiRowLit  = color.RGBA{50, 58, 72, 245}
+	uiTrack   = color.RGBA{52, 56, 68, 230}
+	uiCostOff = color.RGBA{205, 120, 105, 255}
 	uiHazardY = color.RGBA{240, 190, 40, 255}
 	uiHazardK = color.RGBA{22, 22, 26, 255}
 )
@@ -67,10 +72,28 @@ func (gfx *Graphics) capsCenter(s string, cx, y, size float32, c color.RGBA) {
 	gfx.caps(s, cx-gfx.capsWidth(s, size)/2, y, size, c)
 }
 
-// mono writes a readout in the monospace font, right-aligned on right.
+func (gfx *Graphics) capsRight(s string, right, y, size float32, c color.RGBA) {
+	gfx.caps(s, right-gfx.capsWidth(s, size), y, size, c)
+}
+
+// mono writes a readout in the monospace font.
+func (gfx *Graphics) monoAt(s string, x, y, size float32, c color.RGBA) float32 {
+	rl.DrawTextEx(gfx.mono, s, rl.NewVector2(x, y), size, 0, c)
+	return rl.MeasureTextEx(gfx.mono, s, size, 0).X
+}
+
 func (gfx *Graphics) monoRight(s string, right, y, size float32, c color.RGBA) {
 	w := rl.MeasureTextEx(gfx.mono, s, size, 0).X
 	rl.DrawTextEx(gfx.mono, s, rl.NewVector2(right-w, y), size, 0, c)
+}
+
+// title writes big bold capitals, slightly spaced.
+func (gfx *Graphics) title(s string, x, y, size float32, c color.RGBA) {
+	rl.DrawTextEx(gfx.bold, s, rl.NewVector2(x, y), size, size*0.08, c)
+}
+
+func (gfx *Graphics) titleWidth(s string, size float32) float32 {
+	return rl.MeasureTextEx(gfx.bold, s, size, size*0.08).X
 }
 
 // tri fills a triangle whatever the order of its corners.
@@ -81,52 +104,56 @@ func tri(a, b, c rl.Vector2, col color.RGBA) {
 	rl.DrawTriangle(a, b, c, col)
 }
 
-// bevel returns the outline of a rectangle with chamfered corners, like
-// the base's kit pieces.
-func bevel(r rl.Rectangle, cut float32) [8]rl.Vector2 {
+// chamfer returns the outline of r with each corner cut by its own amount
+// (top left, top right, bottom right, bottom left), like the kit's bevels.
+func chamfer(r rl.Rectangle, tl, tr, br, bl float32) [8]rl.Vector2 {
 	x0, y0, x1, y1 := r.X, r.Y, r.X+r.Width, r.Y+r.Height
 	return [8]rl.Vector2{
-		{X: x0 + cut, Y: y0}, {X: x1 - cut, Y: y0}, {X: x1, Y: y0 + cut}, {X: x1, Y: y1 - cut},
-		{X: x1 - cut, Y: y1}, {X: x0 + cut, Y: y1}, {X: x0, Y: y1 - cut}, {X: x0, Y: y0 + cut},
+		{X: x0 + tl, Y: y0}, {X: x1 - tr, Y: y0}, {X: x1, Y: y0 + tr}, {X: x1, Y: y1 - br},
+		{X: x1 - br, Y: y1}, {X: x0 + bl, Y: y1}, {X: x0, Y: y1 - bl}, {X: x0, Y: y0 + tl},
 	}
 }
 
-// fillBevel fills a chamfered rectangle.
-func fillBevel(r rl.Rectangle, cut float32, col color.RGBA) {
-	p := bevel(r, cut)
-	c := rl.NewVector2(r.X+r.Width/2, r.Y+r.Height/2)
+// fillShape fills a convex outline from chamfer.
+func fillShape(p [8]rl.Vector2, col color.RGBA) {
+	var c rl.Vector2
+	for _, v := range p {
+		c.X += v.X / 8
+		c.Y += v.Y / 8
+	}
 	for i := range p {
 		tri(c, p[i], p[(i+1)%8], col)
 	}
 }
 
-// outline draws the edge of a chamfered rectangle.
-func outline(r rl.Rectangle, cut, thick float32, col color.RGBA) {
-	p := bevel(r, cut)
-	for i := range p {
-		rl.DrawLineEx(p[i], p[(i+1)%8], thick, col)
-	}
+// fillBevel fills a rectangle with its four corners chamfered.
+func fillBevel(r rl.Rectangle, cut float32, col color.RGBA) {
+	fillShape(chamfer(r, cut, cut, cut, cut), col)
 }
 
-// glass draws a visor panel: tinted glass with chamfered corners, a thin
-// outline and an accent tab on the top edge.
-func glass(r rl.Rectangle, accent color.RGBA) {
+// fillCut fills the plate shape: top left and bottom right corners cut.
+func fillCut(r rl.Rectangle, cut float32, col color.RGBA) {
+	fillShape(chamfer(r, cut, 0, cut, 0), col)
+}
+
+// visorPanel draws a visor panel: flat charcoal, two chamfered corners, a lit
+// top edge like a bevel catching the light, and an accent notch on the left.
+func visorPanel(r rl.Rectangle, accent color.RGBA) {
 	u := uiScale()
-	cut := 10 * u
-	fillBevel(r, cut, visorGlass)
-	outline(r, cut, 1*u, visorStroke)
-	rl.DrawRectangleRec(rl.NewRectangle(r.X+cut+6*u, r.Y-1.5*u, 34*u, 3*u), accent)
-	rl.DrawRectangleRec(rl.NewRectangle(r.X+r.Width-cut-12*u, r.Y+r.Height-1.5*u, 6*u, 3*u), accent)
+	cut := 12 * u
+	fillCut(r, cut, uiPlate)
+	rl.DrawRectangleRec(rl.NewRectangle(r.X+cut, r.Y, r.Width-cut, 1*u), color.RGBA{255, 255, 255, 26})
+	rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+cut+4*u, 3*u, 20*u), accent)
 }
 
 // hazard paints yellow and black stripes across r.
 func hazard(r rl.Rectangle) {
 	u := uiScale()
 	rl.DrawRectangleRec(r, uiHazardK)
-	rl.BeginScissorMode(int32(r.X), int32(r.Y), int32(r.Width), int32(r.Height))
-	for x := r.X - r.Height; x < r.X+r.Width; x += 16 * u {
-		a, b := rl.NewVector2(x, r.Y+r.Height), rl.NewVector2(x+8*u, r.Y+r.Height)
-		c, d := rl.NewVector2(x+8*u+r.Height, r.Y), rl.NewVector2(x+r.Height, r.Y)
+	rl.BeginScissorMode(int32(r.X), int32(r.Y), int32(math.Ceil(float64(r.Width))), int32(math.Ceil(float64(r.Height))))
+	for x := r.X - r.Height; x < r.X+r.Width; x += 14 * u {
+		a, b := rl.NewVector2(x, r.Y+r.Height), rl.NewVector2(x+7*u, r.Y+r.Height)
+		c, d := rl.NewVector2(x+7*u+r.Height, r.Y), rl.NewVector2(x+r.Height, r.Y)
 		tri(a, b, c, uiHazardY)
 		tri(a, c, d, uiHazardY)
 	}
@@ -136,11 +163,11 @@ func hazard(r rl.Rectangle) {
 // keycap draws a keyboard key with its label and returns its width.
 func (gfx *Graphics) keycap(label string, x, y, size float32) float32 {
 	u := uiScale()
-	w := rl.MeasureTextEx(gfx.mono, label, size, 0).X + 14*u
-	r := rl.NewRectangle(x, y, w, size+8*u)
-	fillBevel(r, 4*u, uiWhite)
-	fillBevel(rl.NewRectangle(x, y+r.Height-4*u, w, 4*u), 2*u, color.RGBA{120, 126, 140, 255})
-	rl.DrawTextEx(gfx.mono, label, rl.NewVector2(x+7*u, y+3*u), size, 0, color.RGBA{20, 26, 34, 255})
+	w := rl.MeasureTextEx(gfx.mono, label, size, 0).X + 12*u
+	h := size + 7*u
+	fillBevel(rl.NewRectangle(x, y+2*u, w, h), 3*u, color.RGBA{110, 114, 126, 255})
+	fillBevel(rl.NewRectangle(x, y, w, h-1*u), 3*u, uiWhite)
+	rl.DrawTextEx(gfx.mono, label, rl.NewVector2(x+6*u, y+3*u), size, 0, uiInk)
 	return w
 }
 
@@ -148,44 +175,83 @@ func (gfx *Graphics) keycap(label string, x, y, size float32) float32 {
 func (gfx *Graphics) prompt(key, msg string, y float32, c color.RGBA) {
 	u := uiScale()
 	w, _ := screenSize()
-	size := 22 * u
+	size := 20 * u
 	kw := float32(0)
 	if key != "" {
-		kw = rl.MeasureTextEx(gfx.mono, key, size*0.8, 0).X + 26*u
+		kw = rl.MeasureTextEx(gfx.mono, key, size*0.75, 0).X + 24*u
 	}
 	tw := gfx.width(msg, size)
 	total := kw + tw
-	r := rl.NewRectangle(w/2-total/2-18*u, y-8*u, total+36*u, size+16*u)
-	glass(r, c)
+	visorPanel(rl.NewRectangle(w/2-total/2-22*u, y-10*u, total+44*u, size+20*u), c)
 	x := w/2 - total/2
 	if key != "" {
-		gfx.keycap(key, x, y-1*u, size*0.8)
+		gfx.keycap(key, x, y, size*0.75)
 	}
 	gfx.text(msg, x+kw, y, size, c)
+}
+
+// icon draws a small flat pictogram centered on (cx, cy), s being its
+// half size: the shop's tools and upgrades.
+func icon(kind string, cx, cy, s float32, c color.RGBA) {
+	u := uiScale()
+	v := func(x, y float32) rl.Vector2 { return rl.NewVector2(cx+x*s, cy+y*s) }
+	rect := func(x0, y0, x1, y1 float32, col color.RGBA) {
+		rl.DrawRectangleRec(rl.NewRectangle(cx+x0*s, cy+y0*s, (x1-x0)*s, (y1-y0)*s), col)
+	}
+	switch kind {
+	case "tool": // a push broom
+		rl.DrawLineEx(v(0.55, -1), v(0.05, 0.15), 2.6*u, c)
+		tri(v(-0.75, 0.1), v(0.75, 0.1), v(0.75, 0.42), c)
+		tri(v(-0.75, 0.1), v(0.75, 0.42), v(-0.75, 0.42), c)
+		for i := range 6 {
+			x := -0.65 + float32(i)*0.26
+			rl.DrawLineEx(v(x, 0.5), v(x-0.08, 1), 1.6*u, c)
+		}
+	case "tank": // a canister, two thirds full
+		rect(-0.25, -1, 0.25, -0.72, c)
+		rl.DrawRectangleRounded(rl.NewRectangle(cx-0.6*s, cy-0.75*s, 1.2*s, 1.75*s), 0.3, 6, c)
+		rect(-0.38, -0.5, 0.38, 0.05, uiInk)
+	case "power": // a lightning bolt
+		tri(v(0.35, -1), v(-0.55, 0.2), v(0.15, 0.05), c)
+		tri(v(-0.15, -0.05), v(0.55, -0.2), v(-0.35, 1), c)
+	case "price": // a coin marked with a C
+		rl.DrawCircleV(v(0, 0), 0.95*s, c)
+		rl.DrawRing(v(0, 0), 0.32*s, 0.55*s, 50, 310, 24, uiInk)
+	case "drone": // a quadcopter seen from above
+		for _, d := range [][2]float32{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}} {
+			rl.DrawLineEx(v(0, 0), v(d[0]*0.62, d[1]*0.62), 2.2*u, c)
+			rl.DrawRing(v(d[0]*0.62, d[1]*0.62), 0.2*s, 0.36*s, 0, 360, 20, c)
+		}
+		rl.DrawCircleV(v(0, 0), 0.3*s, c)
+	case "auto": // a teleporter pad: rings and a beam
+		rl.DrawRing(v(0, 0.55), 0.7*s, 0.95*s, 0, 360, 32, c)
+		rect(-0.18, -1, 0.18, 0.4, c)
+		tri(v(-0.5, -0.45), v(0.5, -0.45), v(0, -1.05), c)
+	}
 }
 
 // shopPanel and the item rows are shared by drawing and mouse handling.
 func shopPanel() rl.Rectangle {
 	u := uiScale()
 	w, h := screenSize()
-	return rl.NewRectangle((w-680*u)/2, (h-490*u)/2, 680*u, 490*u)
+	return rl.NewRectangle((w-700*u)/2, (h-470*u)/2, 700*u, 470*u)
 }
 
 func shopItemRect(i int) rl.Rectangle {
 	p, u := shopPanel(), uiScale()
-	return rl.NewRectangle(p.X+20*u, p.Y+84*u+float32(i)*64*u, p.Width-40*u, 58*u)
+	return rl.NewRectangle(p.X+18*u, p.Y+72*u+float32(i)*64*u, p.Width-36*u, 58*u)
 }
 
 func (g *Game) drawHUD(cam rl.Camera3D) {
 	gfx, u := g.gfx, uiScale()
-	w, h := screenSize()
+	_, h := screenSize()
 
 	for _, f := range g.floaters {
 		if f.Pos.sub(g.player.Eye()).dot(g.player.Forward()) <= 0 {
 			continue // behind the camera
 		}
 		sp := rl.GetWorldToScreen(f.Pos.rl(), cam)
-		gfx.textCenter(f.Text, sp.X+1*u, sp.Y+1*u, 26*u, withAlpha(color.RGBA{0, 0, 0, 160}, f.Life))
+		gfx.textCenter(f.Text, sp.X+1*u, sp.Y+2*u, 26*u, withAlpha(color.RGBA{0, 0, 0, 170}, f.Life))
 		gfx.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
 	}
 
@@ -208,7 +274,7 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 		case !g.aimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
 			gfx.prompt("", "Trop loin : rapproche-toi du sol", h*0.64, visorDim)
 		}
-		gfx.caps("ZQSD bouger · MAJ courir · ESPACE sauter · CLIC balayer · E utiliser · ÉCHAP pause · F3 debug", 34*u, h-40*u, 14*u, withAlpha(visorDim, 0.9))
+		g.drawHints()
 	}
 	if g.mode != modePaused {
 		g.drawStatus()
@@ -226,7 +292,6 @@ func (g *Game) drawHUD(cam rl.Camera3D) {
 	case modeSleep:
 		g.drawSleep()
 	}
-	_ = w
 }
 
 // drawVisor lays the helmet's visor over the view.
@@ -236,68 +301,95 @@ func (g *Game) drawVisor() {
 	rl.DrawTexturePro(g.gfx.visor, src, rl.NewRectangle(0, 0, w, h), rl.NewVector2(0, 0), 0, rl.White)
 }
 
+// drawHints lists the controls along the bottom of the visor, as keys.
+func (g *Game) drawHints() {
+	gfx, u := g.gfx, uiScale()
+	w, h := screenSize()
+	hints := [][2]string{
+		{"ZQSD", "bouger"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"CLIC", "balayer"},
+		{"E", "utiliser"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
+	}
+	key, label := 11*u, 12*u
+	total := float32(0)
+	for _, k := range hints {
+		total += rl.MeasureTextEx(gfx.mono, k[0], key, 0).X + 12*u + 6*u + gfx.capsWidth(k[1], label) + 18*u
+	}
+	x, y := w/2-(total-18*u)/2, h-36*u
+	for _, k := range hints {
+		x += gfx.keycap(k[0], x, y, key) + 6*u
+		gfx.caps(k[1], x, y+2*u, label, withAlpha(uiWhite, 0.8))
+		x += gfx.capsWidth(k[1], label) + 18*u
+	}
+}
+
 // drawReticle: a thin ring with four ticks; brighter when the ground is in reach.
 func (g *Game) drawReticle() {
 	u := uiScale()
 	w, h := screenSize()
 	cx, cy := w/2, h/2
-	c := withAlpha(visorCyan, 0.45)
+	c := withAlpha(uiWhite, 0.45)
 	r := 9 * u
 	if g.aimOK {
 		c = withAlpha(visorCyan, 0.95)
 		r = 7 * u
 	}
-	rl.DrawRing(rl.NewVector2(cx, cy), r-1*u, r, 0, 360, 32, c)
+	rl.DrawRing(rl.NewVector2(cx, cy), r-1.2*u, r, 0, 360, 32, c)
 	for _, d := range [][2]float32{{1, 0}, {-1, 0}, {0, 1}, {0, -1}} {
 		rl.DrawLineEx(rl.NewVector2(cx+d[0]*(r+3*u), cy+d[1]*(r+3*u)), rl.NewVector2(cx+d[0]*(r+8*u), cy+d[1]*(r+8*u)), 1.5*u, c)
 	}
 	rl.DrawCircleV(rl.NewVector2(cx, cy), 1.2*u, c)
 }
 
-// drawStatus: credits, tank and tool readouts, top left of the visor.
+// drawStatus: credits, tool and tank, top left of the visor.
 func (g *Game) drawStatus() {
 	gfx, u := g.gfx, uiScale()
-	x, y := 40*u, 34*u
-	r := rl.NewRectangle(x, y, 300*u, 128*u)
-	glass(r, visorCyan)
-	left, right := x+16*u, x+r.Width-16*u
+	r := rl.NewRectangle(32*u, 28*u, 300*u, 112*u)
+	visorPanel(r, colGold)
+	left, right, y := r.X+20*u, r.X+r.Width-18*u, r.Y
 
 	// Credits, with a little coin.
-	coin := rl.NewVector2(left+9*u, y+24*u)
-	rl.DrawCircleV(coin, 9*u, colGold)
-	rl.DrawCircleV(coin, 6*u, color.RGBA{200, 150, 40, 255})
-	rl.DrawCircleV(rl.NewVector2(coin.X-3*u, coin.Y-3*u), 2*u, color.RGBA{255, 240, 180, 255})
-	gfx.caps("CRÉDITS", left+26*u, y+15*u, 15*u, visorDim)
-	gfx.monoRight(fmtNum(g.st.Credits), right, y+10*u, 28*u, colGold)
+	gfx.caps("CRÉDITS", left, y+12*u, 13*u, visorDim)
+	coin := rl.NewVector2(left+8*u, y+46*u)
+	rl.DrawCircleV(coin, 8*u, colGold)
+	rl.DrawRing(coin, 3*u, 5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
+	vw := gfx.monoAt(fmtNum(g.st.Credits), left+24*u, y+30*u, 30*u, colGold)
 	if g.sellPop > 0 {
-		gfx.monoRight(g.sellPopText, right, y-24*u-float32(1.5-g.sellPop)*12*u, 20*u, withAlpha(colGold, g.sellPop))
+		rise := float32(1.5-g.sellPop) * 10 * u
+		gfx.monoAt(g.sellPopText, left+30*u+vw, y+38*u-rise, 16*u, withAlpha(colGold, g.sellPop))
 	}
 
-	// Tank: a canister icon and a segmented gauge.
-	ty := y + 52*u
-	rl.DrawRectangleRounded(rl.NewRectangle(left+2*u, ty+2*u, 14*u, 20*u), 0.3, 4, visorDim)
-	rl.DrawRectangleRec(rl.NewRectangle(left+6*u, ty-1*u, 6*u, 4*u), visorDim)
-	gfx.caps("RÉSERVOIR", left+26*u, ty+2*u, 15*u, visorDim)
-	gfx.monoRight(fmtNum(g.st.Tank)+"/"+fmtNum(g.capacity())+" g", right, ty, 18*u, colWhite)
-	const segs = 20
-	fill := clamp01(g.st.Tank / g.capacity())
-	segW := (right - left - 26*u) / segs
-	for i := range segs {
-		c := color.RGBA{30, 60, 75, 200}
-		if float64(i)+0.5 < fill*segs {
-			c = colBlue
-			if fill > 0.8 {
-				c = visorAmber
-			}
-			if g.tankFull() && math.Mod(g.clock, 0.5) < 0.25 {
-				c = colRed
-			}
+	// Tool, with its tier as pips.
+	gfx.capsRight("OUTIL", right, y+12*u, 13*u, visorDim)
+	gfx.textRight(g.tool().Name, right, y+29*u, 17*u, uiWhite)
+	for i := range len(tools) {
+		c := uiTrack
+		if i <= g.st.ToolTier {
+			c = visorCyan
 		}
-		rl.DrawRectangleRec(rl.NewRectangle(left+26*u+float32(i)*segW, ty+26*u, segW-2*u, 8*u), c)
+		x := right - float32(len(tools)-i)*10*u + 2*u
+		fillCut(rl.NewRectangle(x, y+53*u, 8*u, 4*u), 1.5*u, c)
 	}
 
-	gfx.caps("OUTIL", left, y+r.Height-30*u, 15*u, visorDim)
-	gfx.textRight(g.tool().Name, right, y+r.Height-32*u, 18*u, colWhite)
+	// Tank: a gauge with quarter ticks.
+	ty := y + 70*u
+	gfx.caps("RÉSERVOIR", left, ty, 13*u, visorDim)
+	gfx.monoRight(fmtNum(g.st.Tank)+" / "+fmtNum(g.capacity())+" g", right, ty-1*u, 14*u, uiWhite)
+	bar := rl.NewRectangle(left, ty+19*u, right-left, 9*u)
+	fillCut(bar, 3*u, uiTrack)
+	fill := float32(clamp01(g.st.Tank / g.capacity()))
+	c := visorCyan
+	if fill > 0.8 {
+		c = visorAmber
+	}
+	if g.tankFull() && math.Mod(g.clock, 0.5) < 0.25 {
+		c = colRed
+	}
+	if fw := bar.Width * fill; fw > 1 {
+		fillCut(rl.NewRectangle(bar.X, bar.Y, fw, bar.Height), min(3*u, fw/2), c)
+	}
+	for i := 1; i < 4; i++ {
+		rl.DrawRectangleRec(rl.NewRectangle(bar.X+bar.Width*float32(i)/4, bar.Y, 1.5*u, bar.Height), uiInk)
+	}
 }
 
 // drawCompass: a heading strip at the top of the visor, north being the
@@ -314,30 +406,44 @@ func (g *Game) drawCompass() {
 	east := north.cross(up)
 	heading := math.Atan2(g.player.Heading.dot(east), g.player.Heading.dot(north)) * 180 / math.Pi
 
-	cx, top, half := w/2, 30*u, 220*u
-	r := rl.NewRectangle(cx-half-14*u, top-6*u, 2*half+28*u, 46*u)
-	glass(r, visorDim)
-	labels := map[int]string{0: "N", 90: "E", 180: "S", 270: "O"}
+	cx, top, half := w/2, 24*u, 220*u
+	// A dark band fading out at both ends, and a baseline.
+	shade := color.RGBA{10, 10, 14, 150}
+	fade := 60 * u
+	rl.DrawRectangleGradientH(int32(cx-half-fade), int32(top), int32(fade), int32(34*u), color.RGBA{}, shade)
+	rl.DrawRectangleRec(rl.NewRectangle(cx-half, top, 2*half, 34*u), shade)
+	rl.DrawRectangleGradientH(int32(cx+half), int32(top), int32(fade), int32(34*u), shade, color.RGBA{})
+	labels := map[int]string{0: "N", 90: "E", 180: "S", 270: "O", 45: "NE", 135: "SE", 225: "SO", 315: "NO"}
 	for a := 0; a < 360; a += 15 {
 		rel := math.Mod(float64(a)-heading+540, 360) - 180
-		if math.Abs(rel) > 60 {
+		if math.Abs(rel) > 62 {
 			continue
 		}
-		x := cx + float32(rel/60)*half
-		alpha := 1 - math.Abs(rel)/70
-		if l, ok := labels[a]; ok {
-			c := visorCyan
+		x := cx + float32(rel/62)*half
+		alpha := 1 - smoothstep(40, 62, math.Abs(rel))
+		switch l, ok := labels[a]; {
+		case ok && a%90 == 0:
+			c := uiWhite
 			if a == 0 {
-				c = colGold
+				c = colGold // the base
 			}
-			gfx.capsCenter(l, x, top+2*u, 18*u, withAlpha(c, alpha))
-		} else {
-			rl.DrawRectangleRec(rl.NewRectangle(x-0.75*u, top+6*u, 1.5*u, 8*u), withAlpha(visorDim, alpha))
+			gfx.capsCenter(l, x, top+4*u, 18*u, withAlpha(c, alpha))
+			rl.DrawRectangleRec(rl.NewRectangle(x-1*u, top+25*u, 2*u, 9*u), withAlpha(c, alpha))
+		case ok:
+			gfx.capsCenter(l, x, top+8*u, 12*u, withAlpha(uiMuted, alpha))
+			rl.DrawRectangleRec(rl.NewRectangle(x-0.75*u, top+27*u, 1.5*u, 7*u), withAlpha(uiMuted, alpha))
+		default:
+			rl.DrawRectangleRec(rl.NewRectangle(x-0.75*u, top+29*u, 1.5*u, 5*u), withAlpha(uiFaint, alpha))
 		}
 	}
-	rl.DrawTriangle(rl.NewVector2(cx, top+26*u), rl.NewVector2(cx-5*u, top+33*u), rl.NewVector2(cx+5*u, top+33*u), visorCyan)
+	tri(rl.NewVector2(cx, top+30*u), rl.NewVector2(cx-6*u, top+38*u), rl.NewVector2(cx+6*u, top+38*u), visorCyan)
 	if dist := arcDist(up, baseUp); dist > 15 {
-		gfx.capsCenter("BASE "+fmtNum(dist)+" M", cx, top+44*u, 14*u, withAlpha(colGold, 0.9))
+		s := "BASE  " + fmtNum(dist) + " M"
+		sw := gfx.capsWidth(s, 13*u)
+		chip := rl.NewRectangle(cx-sw/2-18*u, top+42*u, sw+30*u, 20*u)
+		fillCut(chip, 5*u, uiPlate)
+		rl.DrawPoly(rl.NewVector2(chip.X+10*u, chip.Y+10*u), 4, 4*u, 0, colGold)
+		gfx.caps(s, chip.X+20*u, chip.Y+3*u, 13*u, colGold)
 	}
 }
 
@@ -358,61 +464,102 @@ func (g *Game) drawBaseMarker(cam rl.Camera3D) {
 	}
 	rl.DrawPolyLinesEx(sp, 4, 8*u, 0, 2*u, colGold)
 	rl.DrawPoly(sp, 4, 3*u, 0, colGold)
-	gfx.capsCenter("BASE", sp.X, sp.Y+12*u, 14*u, colGold)
+	gfx.capsCenter("BASE", sp.X+1*u, sp.Y+13*u, 13*u, color.RGBA{0, 0, 0, 140})
+	gfx.capsCenter("BASE", sp.X, sp.Y+12*u, 13*u, colGold)
+}
+
+// marsEmblem paints a little flat Mars: bands of rust and ochre, a white
+// polar cap and the night side in violet, row by row.
+func marsEmblem(cx, cy, r float32) {
+	bands := []color.RGBA{
+		{206, 112, 66, 255}, {194, 98, 58, 255}, {214, 124, 74, 255}, {186, 90, 54, 255}, {200, 106, 62, 255},
+	}
+	night := func(c color.RGBA) color.RGBA {
+		return color.RGBA{uint8(float32(c.R)*0.32 + 22), uint8(float32(c.G)*0.28 + 12), uint8(float32(c.B)*0.4 + 30), 255}
+	}
+	for y := -r; y < r; y++ {
+		my := y + 0.5
+		half := float32(math.Sqrt(float64(r*r - my*my)))
+		lat := my / r
+		// Wavy bands, like the dark and light regions seen from orbit.
+		c := bands[min(len(bands)-1, max(0, int((lat+1+0.12*float32(math.Sin(float64(lat*9))))/2*float32(len(bands)))))]
+		if lat < -0.78 {
+			c = color.RGBA{240, 234, 228, 255}
+		}
+		term := half * 0.42 // the terminator, an ellipse: the night is on the right
+		rl.DrawRectangleRec(rl.NewRectangle(cx-half, cy+y, half+term, 1), c)
+		rl.DrawRectangleRec(rl.NewRectangle(cx+term, cy+y, half-term, 1), night(c))
+	}
+	rl.DrawRing(rl.NewVector2(cx, cy), r+2*uiScale(), r+4*uiScale(), 200, 340, 48, color.RGBA{255, 170, 120, 120})
 }
 
 func (g *Game) drawPause() {
 	gfx, u := g.gfx, uiScale()
 	w, h := screenSize()
-	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{2, 6, 14, 200})
+	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{8, 4, 10, 215}, color.RGBA{20, 8, 10, 235})
 	g.drawVisor()
 
+	// Emblem and title, centered as one block.
 	title := "MARS SWEEPER"
-	size := 84 * u
-	tw := rl.MeasureTextEx(gfx.smallcaps, title, size, size*0.12).X
-	gfx.caps(title, w/2-tw/2+3*u, h*0.2+3*u, size, color.RGBA{0, 0, 0, 160})
-	gfx.caps(title, w/2-tw/2, h*0.2, size, colGold)
-	rl.DrawRectangleRec(rl.NewRectangle(w/2-tw/2, h*0.2+size+4*u, tw, 2*u), withAlpha(visorCyan, 0.6))
+	size := 76 * u
+	tw := gfx.titleWidth(title, size)
+	er := 46 * u
+	x0 := w/2 - (2*er+28*u+tw)/2
+	ty := h * 0.16
+	marsEmblem(x0+er, ty+size*0.5+6*u, er)
+	tx := x0 + 2*er + 28*u
+	gfx.title(title, tx+3*u, ty+4*u, size, color.RGBA{0, 0, 0, 150})
+	gfx.title(title, tx, ty, size, uiWhite)
+	hazard(rl.NewRectangle(tx+2*u, ty+size+4*u, tw, 7*u))
 	if math.Mod(g.clock, 1.4) < 1.0 {
-		gfx.capsCenter("CLIQUE POUR ENFILER TON CASQUE", w/2, h*0.2+size+22*u, 22*u, visorCyan)
+		gfx.caps("CLIQUE POUR ENFILER TON CASQUE", tx+2*u, ty+size+22*u, 18*u, visorCyan)
 	}
 
 	keys := [][2]string{
-		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter"},
-		{"CLIC", "balayer la poussière visée"}, {"E", "utiliser : incinérateur, labo, carte, lit"},
-		{"ÉCHAP", "pause"}, {"F11", "plein écran"},
+		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"F11", "plein écran"},
+		{"CLIC", "balayer la poussière visée"}, {"E", "incinérateur, labo, carte, lit"}, {"ÉCHAP", "pause"},
 	}
-	panel := rl.NewRectangle(w/2-300*u, h*0.5, 600*u, float32(len(keys))*34*u+28*u)
-	glass(panel, visorCyan)
+	box := rl.NewRectangle(w/2-330*u, h*0.53, 660*u, 4*38*u+50*u)
+	visorPanel(box, visorCyan)
+	gfx.caps("COMMANDES", box.X+24*u, box.Y+14*u, 13*u, visorDim)
 	for i, k := range keys {
-		y := panel.Y + 16*u + float32(i)*34*u
-		kw := rl.MeasureTextEx(gfx.mono, k[0], 16*u, 0).X + 14*u
-		gfx.keycap(k[0], panel.X+170*u-kw, y, 16*u)
-		gfx.text(k[1], panel.X+190*u, y+2*u, 20*u, colWhite)
+		col := float32(i / 4)
+		x := box.X + 24*u + col*300*u
+		y := box.Y + 42*u + float32(i%4)*38*u
+		kw := rl.MeasureTextEx(gfx.mono, k[0], 15*u, 0).X + 12*u
+		gfx.keycap(k[0], x+70*u-kw, y, 15*u)
+		gfx.text(k[1], x+84*u, y+1*u, 19*u, uiWhite)
 	}
 }
 
-// terminal draws a base computer screen: glass, a striped header bar and
-// a faint grid, with the title in small capitals.
+// terminal draws a base computer screen: a charcoal body under an
+// off-white header, like the habitat panels, with an accent square, a
+// hazard block at its end and an accent line beneath.
 func (g *Game) terminal(p rl.Rectangle, title string, accent color.RGBA) {
 	gfx, u := g.gfx, uiScale()
 	w, h := screenSize()
-	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{0, 4, 10, 120})
-	fillBevel(p, 14*u, color.RGBA{8, 16, 24, 238})
-	// Header: a dark steel bar, an accent tab and a hazard strip.
-	fillBevel(rl.NewRectangle(p.X+3*u, p.Y+3*u, p.Width-6*u, 52*u), 11*u, uiSteel)
-	rl.DrawRectangleRec(rl.NewRectangle(p.X+14*u, p.Y+18*u, 5*u, 22*u), accent)
-	hazard(rl.NewRectangle(p.X+p.Width-170*u, p.Y+48*u, 150*u, 5*u))
-	outline(p, 14*u, 1*u, visorStroke)
-	rl.DrawRectangleRec(rl.NewRectangle(p.X+20*u, p.Y-1.5*u, 60*u, 3*u), accent)
-	gfx.caps(title, p.X+30*u, p.Y+16*u, 24*u, uiWhite)
+	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{0, 0, 0, 90}, color.RGBA{0, 0, 0, 170})
+	cut := 16 * u
+	fillCut(rl.NewRectangle(p.X+5*u, p.Y+7*u, p.Width, p.Height), cut, color.RGBA{0, 0, 0, 110})
+	fillCut(p, cut, color.RGBA{22, 24, 31, 246})
+	head := rl.NewRectangle(p.X, p.Y, p.Width, 52*u)
+	fillShape(chamfer(head, cut, 0, 0, 0), uiWhite)
+	hazard(rl.NewRectangle(p.X+p.Width-56*u, p.Y, 56*u, 52*u))
+	rl.DrawRectangleRec(rl.NewRectangle(p.X, p.Y+52*u, p.Width, 3*u), accent)
+	fillCut(rl.NewRectangle(p.X+22*u, p.Y+15*u, 12*u, 22*u), 3*u, uiInk)
+	gfx.title(title, p.X+46*u, p.Y+13*u, 25*u, uiInk)
 }
 
 func (g *Game) drawShop() {
 	gfx, u := g.gfx, uiScale()
 	p := shopPanel()
 	g.terminal(p, "LABORATOIRE DE RECHERCHE", visorCyan)
-	gfx.monoRight(fmtNum(g.st.Credits)+" cr", p.X+p.Width-22*u, p.Y+12*u, 26*u, colGold)
+	right := p.X + p.Width - 72*u
+	vw := rl.MeasureTextEx(gfx.mono, fmtNum(g.st.Credits)+" cr", 24*u, 0).X
+	coin := rl.NewVector2(right-vw-16*u, p.Y+26*u)
+	rl.DrawCircleV(coin, 9*u, colGold)
+	rl.DrawRing(coin, 3.5*u, 5.5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
+	gfx.monoRight(fmtNum(g.st.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
 
 	for i, it := range g.shopItems() {
 		r := shopItemRect(i)
@@ -420,27 +567,45 @@ func (g *Game) drawShop() {
 		if i == g.hover {
 			bg = uiRowLit
 		}
-		fillBevel(r, 8*u, bg)
-		accent, costCol := color.RGBA{60, 90, 104, 255}, colRed
+		fillCut(r, 8*u, bg)
+		state, costCol := uiFaint, uiCostOff
 		if it.affordable(g.st.Credits) {
-			accent, costCol = colGreen, colGreen
+			state, costCol = visorCyan, colGold
 		}
 		if it.maxed {
-			accent = colGold
+			state = colGold
 		}
-		rl.DrawRectangleRec(rl.NewRectangle(r.X+2*u, r.Y+10*u, 4*u, r.Height-20*u), accent)
-		gfx.text(it.name, r.X+18*u, r.Y+6*u, 22*u, uiWhite)
-		gfx.text(it.desc, r.X+18*u, r.Y+33*u, 16*u, color.RGBA{150, 180, 190, 255})
-		right := r.X + r.Width - 14*u
+		if i == g.hover {
+			rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+8*u, 3*u, r.Height-8*u), state)
+		}
+		tile := rl.NewRectangle(r.X+8*u, r.Y+7*u, 44*u, 44*u)
+		fillCut(tile, 6*u, uiInk)
+		icon(it.icon, tile.X+22*u, tile.Y+22*u, 14*u, state)
+		gfx.text(it.name, r.X+66*u, r.Y+7*u, 20*u, uiWhite)
+		gfx.text(it.desc, r.X+66*u, r.Y+32*u, 15*u, uiMuted)
+		right := r.X + r.Width - 16*u
 		if it.maxed {
-			gfx.caps("MAX", right-gfx.capsWidth("MAX", 20*u), r.Y+8*u, 20*u, colGold)
+			cw := gfx.capsWidth("MAX", 15*u)
+			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, colGold)
+			gfx.caps("MAX", right-cw-7*u, r.Y+11*u, 15*u, uiInk)
 		} else {
-			gfx.monoRight(fmtNum(it.cost)+" cr", right, r.Y+7*u, 22*u, costCol)
+			gfx.monoRight(fmtNum(it.cost)+" cr", right, r.Y+8*u, 20*u, costCol)
 		}
-		gfx.caps(strings.ToUpper(it.info), right-gfx.capsWidth(strings.ToUpper(it.info), 14*u), r.Y+35*u, 14*u, visorDim)
+		gfx.capsRight(strings.ToUpper(it.info), right, r.Y+35*u, 12*u, visorDim)
 	}
-	w := gfx.keycap("E", p.X+p.Width/2-70*u, p.Y+p.Height+14*u, 16*u)
-	gfx.caps("OU ÉCHAP POUR FERMER", p.X+p.Width/2-62*u+w, p.Y+p.Height+17*u, 15*u, visorDim)
+	g.closeHint(p.X+p.Width/2, p.Y+p.Height+16*u, true)
+}
+
+// closeHint says how to leave a terminal, under it.
+func (g *Game) closeHint(x, y float32, centered bool) {
+	gfx, u := g.gfx, uiScale()
+	s := "OU ÉCHAP POUR FERMER"
+	kw := rl.MeasureTextEx(gfx.mono, "E", 14*u, 0).X + 12*u
+	if centered {
+		x -= (kw + 8*u + gfx.capsWidth(s, 13*u)) / 2
+	}
+	gfx.keycap("E", x, y, 14*u)
+	gfx.caps(s, x+kw+8*u, y+3*u, 13*u, withAlpha(uiWhite, 0.8))
 }
 
 // hasUse tells whether something can be used right now with E.
@@ -454,36 +619,37 @@ func (g *Game) drawMapPanel() {
 	gfx, u := g.gfx, uiScale()
 	_, h := screenSize()
 	s := g.world.Stats(g.st.TotalDust)
-	p := rl.NewRectangle(40*u, h/2-170*u, 440*u, 390*u)
+	p := rl.NewRectangle(40*u, h/2-190*u, 440*u, 380*u)
 	g.terminal(p, "ÉTAT DE MARS", visorCyan)
 
 	rows := []struct{ label, value string }{
 		{"MARS NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
 		{"POUSSIÈRE COLLECTÉE", fmtNum(g.st.TotalDust) + " g"},
-		{"ZONES VISITÉES", fmt.Sprintf("%d/%d", s.TilesVisited, s.TilesTotal)},
-		{"CRISTAUX TROUVÉS", fmt.Sprintf("%d/%d", s.Gems, s.GemTotal)},
+		{"ZONES VISITÉES", fmt.Sprintf("%d / %d", s.TilesVisited, s.TilesTotal)},
+		{"CRISTAUX TROUVÉS", fmt.Sprintf("%d / %d", s.Gems, s.GemTotal)},
 		{"CRÉDITS GAGNÉS", fmtNum(g.st.TotalEarned) + " cr"},
 		{"DISTANCE DE LA BASE", fmtNum(arcDist(g.player.LocalUp(), baseUp)) + " m"},
 	}
 	for i, r := range rows {
-		y := p.Y + 76*u + float32(i)*42*u
-		gfx.caps(r.label, p.X+22*u, y+3*u, 16*u, visorDim)
-		gfx.monoRight(r.value, p.X+p.Width-22*u, y, 20*u, colWhite)
-		rl.DrawRectangleRec(rl.NewRectangle(p.X+22*u, y+30*u, p.Width-44*u, 1), color.RGBA{60, 120, 140, 70})
+		y := p.Y + 74*u + float32(i)*42*u
+		if i%2 == 0 {
+			rl.DrawRectangleRec(rl.NewRectangle(p.X+14*u, y-8*u, p.Width-28*u, 38*u), color.RGBA{255, 255, 255, 8})
+		}
+		gfx.caps(r.label, p.X+26*u, y+4*u, 14*u, visorDim)
+		gfx.monoRight(r.value, p.X+p.Width-26*u, y+1*u, 19*u, uiWhite)
 	}
-	y := p.Y + p.Height - 40*u
+	y := p.Y + p.Height - 38*u
 	legend := []struct {
 		c     color.RGBA
 		label string
 	}{{colGold, "BASE"}, {color.RGBA{255, 90, 70, 255}, "TOI"}, {color.RGBA{190, 255, 255, 255}, "NETTOYÉ"}}
-	x := p.X + 26*u
+	x := p.X + 28*u
 	for _, l := range legend {
-		rl.DrawCircleV(rl.NewVector2(x, y+8*u), 5*u, l.c)
-		gfx.caps(l.label, x+12*u, y, 15*u, visorDim)
-		x += gfx.capsWidth(l.label, 15*u) + 40*u
+		rl.DrawPoly(rl.NewVector2(x, y+8*u), 4, 6*u, 0, l.c)
+		gfx.caps(l.label, x+12*u, y+1*u, 14*u, uiMuted)
+		x += gfx.capsWidth(l.label, 14*u) + 40*u
 	}
-	kw := gfx.keycap("E", p.X, p.Y+p.Height+14*u, 16*u)
-	gfx.caps("OU ÉCHAP POUR FERMER", p.X+kw+8*u, p.Y+p.Height+17*u, 15*u, visorDim)
+	g.closeHint(p.X, p.Y+p.Height+16*u, false)
 }
 
 // drawSleep fades to black, shows the night passing, then fades back in.
@@ -498,13 +664,13 @@ func (g *Game) drawSleep() {
 	case t > sleepWake:
 		dark = 1 - (t-sleepWake)/(sleepEnd-sleepWake)
 	}
-	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{0, 0, 4, uint8(255 * clamp01(dark))})
+	rl.DrawRectangle(0, 0, int32(w), int32(h), color.RGBA{4, 2, 10, uint8(255 * clamp01(dark))})
 	if t > sleepFadeOut*0.6 && t < sleepWake+0.3 {
 		a := math.Min(t-sleepFadeOut*0.6, sleepWake+0.3-t) * 2
 		dots := strings.Repeat(" z", 1+int(t*2)%3)
-		gfx.capsCenter("Z"+dots+"…", w/2, h/2-30*u, 44*u, withAlpha(color.RGBA{180, 190, 255, 255}, a))
+		gfx.capsCenter("Z"+dots+"…", w/2, h/2-30*u, 44*u, withAlpha(color.RGBA{180, 170, 255, 255}, a))
 		if t > sleepSave {
-			gfx.capsCenter("PARTIE SAUVEGARDÉE", w/2, h/2+30*u, 18*u, withAlpha(visorDim, a))
+			gfx.capsCenter("PARTIE SAUVEGARDÉE", w/2, h/2+30*u, 16*u, withAlpha(uiMuted, a))
 		}
 	}
 }

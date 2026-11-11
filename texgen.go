@@ -344,7 +344,8 @@ func bakeTextures() Textures {
 }
 
 // genVisor paints the helmet visor seen from inside, for a 16:9 screen:
-// dark rounded edges, a thin glowing rim, a soft reflection on the glass.
+// a thin dark rim hugging the corners, a faint glint along its edge and a
+// soft reflection on the glass. It frames the view without eating it.
 func genVisor() rl.Texture2D {
 	const w, h = 1280, 720
 	pix := make([]byte, w*h*4)
@@ -358,13 +359,13 @@ func genVisor() rl.Texture2D {
 				ny := (float64(y)/h*2 - 1) * 1.04
 				// Superellipse: a rounded rectangle with soft corners.
 				d := math.Pow(math.Pow(math.Abs(nx), 7)+math.Pow(math.Abs(ny), 5), 1.0/6)
-				edge := smoothstep(0.93, 1.07, d)
-				vignette := smoothstep(0.5, 1.0, d) * 0.18
-				rim := math.Exp(-math.Pow((d-0.955)/0.01, 2)) * 0.07
+				edge := smoothstep(0.985, 1.045, d)
+				vignette := smoothstep(0.7, 1.0, d) * 0.1
+				rim := math.Exp(-math.Pow((d-0.982)/0.006, 2)) * 0.05
 				// Reflection: a faint curved band across the upper left.
 				band := math.Exp(-math.Pow((nx*0.6+ny+0.95+0.25*nx*nx)/0.07, 2)) * 0.05 * smoothstep(0.2, -0.6, nx)
-				a := math.Min(1, edge*0.88+vignette)
-				r, g, b := 0.02, 0.035, 0.06
+				a := math.Min(1, edge*0.94+vignette)
+				r, g, b := 0.03, 0.025, 0.035
 				light := rim + band
 				i := (y*w + x) * 4
 				alpha := clamp01(a + light)
@@ -374,7 +375,7 @@ func genVisor() rl.Texture2D {
 					}
 					return byte(clamp01((c*a+l*light)/alpha) * 255)
 				}
-				pix[i], pix[i+1], pix[i+2], pix[i+3] = mix(r, 0.7), mix(g, 0.9), mix(b, 1), byte(alpha*255)
+				pix[i], pix[i+1], pix[i+2], pix[i+3] = mix(r, 1), mix(g, 0.85), mix(b, 0.75), byte(alpha*255)
 			}
 		}()
 	}
