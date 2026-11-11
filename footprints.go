@@ -1,8 +1,9 @@
 package main
 
 import (
-	rl "github.com/gen2brain/raylib-go/raylib"
 	"mars_sweeper/internal/mathx"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 const (

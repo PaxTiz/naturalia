@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"math"
@@ -32,7 +33,7 @@ func baseSigns() []sign {
 	for _, bp := range plans[1:] {
 		if bp.Sign != "" && bp.Link == plans[0].ID {
 			d := bp.At.Sub(plans[0].At)
-			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, tok(bp.Accent).col))
+			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, tok(bp.Accent).Col))
 		}
 	}
 	return append(signs,
@@ -69,7 +70,7 @@ func paintSign(s sign, font rl.Font) rl.Texture2D {
 
 func (g *Game) drawSigns() {
 	gfx := g.gfx
-	gfx.setMat(mtDecal, 1, false)
+	gfx.setMat(content.MtDecal, 1, false)
 	for _, s := range gfx.signs {
 		rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, s.tex)
 		if indoors(s.at.Sub(s.facing.Scale(0.3))) {
@@ -80,7 +81,7 @@ func (g *Game) drawSigns() {
 		yaw := math.Atan2(s.facing.X, s.facing.Z) * 180 / math.Pi
 		gfx.put(gfx.signBox, toWorld(s.at), vec3{s.width, signHeight, 0.03}, vec3{0, 1, 0}, yaw, color.RGBA{255, 255, 255, 255}, 0.2, 0.25)
 	}
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 }
 
 // paintScreen draws a fake computer display in flat colors: a header,
@@ -116,9 +117,9 @@ func paintScreen(seed int, accent color.RGBA) rl.Texture2D {
 
 // drawScreen shows a display texture on a thin panel facing the given way.
 func (gfx *Graphics) drawScreen(at, facing vec3, w, h float64, tex rl.Texture2D, glow float32) {
-	gfx.setMat(mtDecal, 1, false)
+	gfx.setMat(content.MtDecal, 1, false)
 	rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, tex)
 	yaw := math.Atan2(facing.X, facing.Z) * 180 / math.Pi
 	gfx.put(gfx.signBox, toWorld(at), vec3{w, h, 0.03}, vec3{0, 1, 0}, yaw, color.RGBA{255, 255, 255, 255}, 0, glow)
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 }

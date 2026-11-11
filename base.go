@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
 	"math"
@@ -23,8 +24,8 @@ type room struct {
 	center   vec3 // local, on the floor
 	radius   float64
 	wallH    float64
-	openings []float64  // angles (radians, atan2(z, x)) of the doorways
-	plan     *Blueprint // drawn from the kit when set
+	openings []float64          // angles (radians, atan2(z, x)) of the doorways
+	plan     *content.Blueprint // drawn from the kit when set
 }
 
 // corridor is a straight rectangular tube between two rooms (or outside).
@@ -52,12 +53,12 @@ var (
 
 // The base as laid out from the buildings in the content (setupBase).
 var (
-	plans         []*Blueprint // the hub first
-	rooms         []room       // in the order of plans
+	plans         []*content.Blueprint // the hub first
+	rooms         []room               // in the order of plans
 	hubRoom       room
 	corridors     []corridor // one per linked building, then the airlock's
 	tableSpot     vec3       // the map table, under the hologram
-	baseObstacles []obstacle
+	baseObstacles []content.Obstacle
 	interactables []interactable
 )
 
@@ -85,8 +86,8 @@ func setupBase() {
 		}
 		d := to.At.Sub(bp.At)
 		d = vec3{d.X, 0, d.Z}.Norm()
-		bp.addDoor(math.Atan2(d.Z, d.X))
-		to.addDoor(math.Atan2(-d.Z, -d.X))
+		addDoor(bp, math.Atan2(d.Z, d.X))
+		addDoor(to, math.Atan2(-d.Z, -d.X))
 		corridors = append(corridors, corridor{
 			to.At.Sub(d.Scale(to.Shape.Radius - 0.2)), bp.At.Add(d.Scale(bp.Shape.Radius - 0.2)), doorWidth, 2.4,
 		})
@@ -100,7 +101,7 @@ func setupBase() {
 	tableSpot = vec3{0, 0, 0}
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if qualify(p.Kit) == "core:maptable" {
+			if content.Qualify(p.Kit) == "core:maptable" {
 				tableSpot = bp.At.Add(p.At)
 			}
 		}
@@ -109,14 +110,14 @@ func setupBase() {
 	interactables = planInteractables()
 }
 
-// addDoor opens a door facing angle a, unless there is one already.
-func (bp *Blueprint) addDoor(a float64) {
+// addDoor opens a door of bp facing angle a, unless there is one already.
+func addDoor(bp *content.Blueprint, a float64) {
 	for _, d := range bp.Doors {
 		if angleDist(d.Facing, a) < 0.05 {
 			return
 		}
 	}
-	bp.Doors = append(bp.Doors, Door{a})
+	bp.Doors = append(bp.Doors, content.Door{a})
 }
 
 // basePos is the base's origin on the ground, set once the relief is known
@@ -258,12 +259,6 @@ func (c corridor) side() vec3 {
 	return vec3{-d.Z, 0, d.X}
 }
 
-// obstacle is a round piece of furniture the player walks around.
-type obstacle struct {
-	at     vec3
-	radius float64
-}
-
 // collide keeps a player of the given radius out of walls and furniture.
 func collideBase(p *Player, walls []segment2) {
 	const radius = 0.35
@@ -282,9 +277,9 @@ func collideBase(p *Player, walls []segment2) {
 		}
 	}
 	for _, o := range baseObstacles {
-		d := flat.Sub(vec3{o.at.X, 0, o.at.Z})
-		if l := d.Length(); l < radius+o.radius && l > 1e-9 {
-			flat = vec3{o.at.X, 0, o.at.Z}.Add(d.Scale((radius + o.radius) / l))
+		d := flat.Sub(vec3{o.At.X, 0, o.At.Z})
+		if l := d.Length(); l < radius+o.Radius && l > 1e-9 {
+			flat = vec3{o.At.X, 0, o.At.Z}.Add(d.Scale((radius + o.Radius) / l))
 		}
 	}
 	p.Pos = toWorld(vec3{flat.X, local.Y, flat.Z})

@@ -280,9 +280,8 @@ func genMetal() rl.Texture2D {
 	})
 }
 
-// Paint: tinted objects. R stroke tone, B chipped edges, A height.
-const paintTile = 0.8
-
+// Paint: tinted objects. R stroke tone, B chipped edges, A height
+// (content.PaintTile tiles per meter).
 func genPaint() rl.Texture2D {
 	return bake(512, func(u, v float64) texel {
 		tone := painterly(0.92+0.12*(strokes(u, v, 5, 1001)-0.5)+0.06*(tfbm(u, v, 12, 2, 1010)-0.5), 6)
@@ -291,9 +290,8 @@ func genPaint() rl.Texture2D {
 	})
 }
 
-// Fabric: a soft weave. R tone, A height.
-const fabricTile = 0.25
-
+// Fabric: a soft weave. R tone, A height (content.FabricTile tiles per
+// meter).
 func genFabric() rl.Texture2D {
 	return bake(256, func(u, v float64) texel {
 		const n = 24

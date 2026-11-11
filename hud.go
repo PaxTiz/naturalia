@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
 	"math"
@@ -339,7 +340,7 @@ func (g *Game) drawHeldItem() {
 	label := fmt.Sprintf("%s ×%d", it.Name, n)
 	w := gfx.width(label, 16*u) + 150*u
 	visorPanel(rl.NewRectangle(x, y, w, 34*u), visorCyan)
-	icon(orDefault(it.Icon, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
+	icon(content.OrDefault(it.Icon, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
 	gfx.text(label, x+36*u, y+8*u, 16*u, uiWhite)
 	kx := x + 44*u + gfx.width(label, 16*u)
 	kx += gfx.keycap("F", kx, y+9*u, 11*u) + 4*u

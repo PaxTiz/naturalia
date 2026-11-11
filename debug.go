@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"math"
 	"os"
@@ -60,7 +61,7 @@ func (g *Game) drawDebug() {
 		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(sunDir))*180/math.Pi, d.sun, d.ao),
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.world.DustAt(up), len(g.world.Touched())),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
-		fmt.Sprintf("packs %s   entités %d", packList(), len(g.st.Entities)),
+		fmt.Sprintf("packs %s   entités %d", content.PackList(), len(g.st.Entities)),
 	}
 	for _, line := range reg.Debug { // added by packs
 		lines = append(lines, line(g))

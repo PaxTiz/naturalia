@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
@@ -15,31 +16,9 @@ import (
 // stand is saved with the game. Items are what the player carries and
 // places as entities (key F): bought in the shop, picked back up with E.
 
-// EntityDef describes a kind of entity, in its own frame: y up, standing
-// on the ground at the origin.
-type EntityDef struct {
-	ID     string     `json:"id"`
-	Name   string     `json:"name"`
-	Parts  []partJSON `json:"parts"`
-	Radius float64    `json:"radius"` // what the player bumps into; 0 walks through
-	Prompt string     `json:"prompt"` // what E says; empty: nothing to do
-	Pickup bool       `json:"pickup"` // E puts it back in the inventory
-	Item   string     `json:"item"`   // the item it gives back (set by the item that places it)
-}
-
 type entityModel struct {
 	model rl.Model
-	tok   token
-}
-
-// Item is carried in the inventory and placed as an entity.
-type Item struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Desc   string  `json:"desc"`
-	Icon   string  `json:"icon"`
-	Cost   float64 `json:"cost"`   // in the shop; 0 keeps it out of it
-	Places string  `json:"places"` // ID of the entity it becomes
+	tok   content.Token
 }
 
 // Placed is an entity standing in the world, saved.
@@ -78,8 +57,8 @@ func (g *Game) placeAt() vec3 {
 }
 
 // heldItem is the item F places, cycled with R, among those carried.
-func (g *Game) heldItem() (*Item, int) {
-	var owned []*Item
+func (g *Game) heldItem() (*content.Item, int) {
+	var owned []*content.Item
 	for _, it := range reg.Items.All() {
 		if g.st.Items[it.ID] > 0 {
 			owned = append(owned, it)
@@ -109,7 +88,7 @@ func (g *Game) updateItems() {
 	}
 	g.st.Items[it.ID]--
 	g.sfx.beep(0.02, 0.15, 0.12, 392, 523)
-	g.emit(Event{Name: evPlace, ID: qualify(it.Places), At: at})
+	g.emit(content.Event{Name: content.EvPlace, ID: content.Qualify(it.Places), At: at})
 }
 
 // entitiesNear lists the placed entities within dist of the player, with
@@ -217,19 +196,19 @@ func (g *Game) drawEntities() {
 		}
 		gfx.setLighting(lit, vec3{})
 		for _, m := range models {
-			gfx.setMat(m.tok.mat, m.tok.scale, false)
-			gfx.putBasis(m.model, pos, ax, up, az, m.tok.col, m.tok.spec, m.tok.emissive)
+			gfx.setMat(m.tok.Mat, m.tok.Scale, false)
+			gfx.putBasis(m.model, pos, ax, up, az, m.tok.Col, m.tok.Spec, m.tok.Emissive)
 		}
 	}
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
 }
 
 // buildEntity merges an entity's parts into one model per material, in
 // its own frame.
-func buildEntity(def *EntityDef, gfx *Graphics) []entityModel {
+func buildEntity(def *content.EntityDef, gfx *Graphics) []entityModel {
 	b := mesh.NewParts(vec3{})
-	kitJSON{Parts: def.Parts}.kit().build(b, vec3{}, 0)
+	content.KitJSON{Parts: def.Parts}.Kit().Build(b, vec3{}, 0)
 	var out []entityModel
 	for _, k := range b.Keys {
 		m := b.Mesh(k)

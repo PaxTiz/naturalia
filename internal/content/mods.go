@@ -1,4 +1,4 @@
-package main
+package content
 
 import (
 	"bytes"
@@ -29,15 +29,15 @@ type modFile struct {
 
 	Tools     []Tool               `json:"tools"`
 	Upgrades  []Upgrade            `json:"upgrades"`
-	Tokens    map[string]token     `json:"tokens"`
-	Kits      map[string]kitJSON   `json:"kits"`
+	Tokens    map[string]Token     `json:"tokens"`
+	Kits      map[string]KitJSON   `json:"kits"`
 	Buildings []Blueprint          `json:"buildings"`
-	Entities  map[string]EntityDef `json:"entities"` // things standing in the world (entities.go)
+	Entities  map[string]EntityDef `json:"entities"` // things standing in the world
 	Items     []Item               `json:"items"`    // carried, placed as entities with F
-	Vehicles  []Vehicle            `json:"vehicles"` // driven (vehicles.go)
-	Scripts   []string             `json:"scripts"`  // JavaScript files, run in order (script.go)
+	Vehicles  []Vehicle            `json:"vehicles"` // driven by the player
+	Scripts   []string             `json:"scripts"`  // JavaScript files, run in order (ScriptRunner)
 	// Terrain changes the generation: only the settings given, features
-	// added to those of other packs (terrain_mod.go).
+	// added to those of other packs (planet.Settings).
 	Terrain json.RawMessage `json:"terrain"`
 
 	// Patch changes some fields of existing entries, by ID; Remove takes
@@ -68,41 +68,9 @@ type modFile struct {
 // files of the mod's folder dir.
 type ScriptRunner func(c *Content, mod, dir string, names []string)
 
-// modDirs are where mods are looked for: mods/ in the current folder, then
-// in the game's settings folder, next to the save.
-func modDirs() []string {
-	dirs := []string{"mods"}
-	if d, err := saveDir(); err == nil {
-		dirs = append(dirs, filepath.Join(d, "mods"))
-	}
-	return dirs
-}
-
-// disabledMods lists the mods turned off in mods.json, in the settings
-// folder: {"disabled": ["serre"]}.
-func disabledMods() map[string]bool {
-	off := map[string]bool{}
-	d, err := saveDir()
-	if err != nil {
-		return off
-	}
-	var cfg struct {
-		Disabled []string `json:"disabled"`
-	}
-	if data, err := os.ReadFile(filepath.Join(d, "mods.json")); err == nil {
-		if err := json.Unmarshal(data, &cfg); err != nil {
-			log.Println("mods.json:", err)
-		}
-	}
-	for _, id := range cfg.Disabled {
-		off[id] = true
-	}
-	return off
-}
-
-// loadMods registers a pack for every mod found in dirs, but those turned
-// off, before loadContent.
-func loadMods(dirs []string, off map[string]bool, scripts ScriptRunner) {
+// LoadMods registers a pack for every mod found in dirs, but those turned
+// off, before Build.
+func LoadMods(dirs []string, off map[string]bool, scripts ScriptRunner) {
 	seen := map[string]bool{}
 	for _, root := range dirs {
 		entries, _ := os.ReadDir(root)
@@ -110,7 +78,7 @@ func loadMods(dirs []string, off map[string]bool, scripts ScriptRunner) {
 			if !e.IsDir() {
 				continue
 			}
-			m, err := readMod(filepath.Join(root, e.Name()), scripts)
+			m, err := ReadMod(filepath.Join(root, e.Name()), scripts)
 			switch {
 			case err != nil:
 				log.Printf("mod %s skipped: %v", e.Name(), err)
@@ -120,13 +88,13 @@ func loadMods(dirs []string, off map[string]bool, scripts ScriptRunner) {
 				log.Printf("mod %s: already loaded from another folder", m.ID)
 			default:
 				seen[m.ID] = true
-				RegisterPack(m.pack())
+				RegisterPack(m.Pack())
 			}
 		}
 	}
 }
 
-func readMod(dir string, scripts ScriptRunner) (*modFile, error) {
+func ReadMod(dir string, scripts ScriptRunner) (*modFile, error) {
 	data, err := os.ReadFile(filepath.Join(dir, "mod.json"))
 	if err != nil {
 		return nil, err
@@ -146,7 +114,7 @@ func readMod(dir string, scripts ScriptRunner) (*modFile, error) {
 	return m, nil
 }
 
-func (m *modFile) pack() Pack {
+func (m *modFile) Pack() Pack {
 	requires := m.Requires
 	if len(requires) == 0 {
 		requires = []string{"core"}
@@ -207,9 +175,9 @@ func (m *modFile) register(c *Content) {
 		for i := range k.Parts {
 			k.Parts[i].Token = m.ref(k.Parts[i].Token, isTok)
 		}
-		c.Kits.Add(m.own(name), k.kit())
+		c.Kits.Add(m.own(name), k.Kit())
 	}
-	refParts := func(parts []partJSON) {
+	refParts := func(parts []PartJSON) {
 		for i := range parts {
 			parts[i].Token = m.ref(parts[i].Token, isTok)
 		}
@@ -227,7 +195,7 @@ func (m *modFile) register(c *Content) {
 	}
 	for _, it := range m.Items {
 		it.ID = m.own(it.ID)
-		it.Places = m.ref(orDefault(it.Places, it.ID), isEnt)
+		it.Places = m.ref(OrDefault(it.Places, it.ID), isEnt)
 		c.Items.Add(it.ID, it)
 	}
 	for _, t := range m.Tools {
@@ -236,9 +204,9 @@ func (m *modFile) register(c *Content) {
 	}
 	for _, u := range m.Upgrades {
 		u.ID = m.own(u.ID)
-		u.Icon = orDefault(u.Icon, "power")
+		u.Icon = OrDefault(u.Icon, "power")
 		for _, e := range u.Effects {
-			if _, ok := stats[e.Stat]; !ok {
+			if _, ok := Stats[e.Stat]; !ok {
 				log.Printf("mod %s: upgrade %s acts on an unknown stat %q", m.ID, u.ID, e.Stat)
 			}
 		}
@@ -246,8 +214,8 @@ func (m *modFile) register(c *Content) {
 	}
 	for _, bp := range m.Buildings {
 		bp.ID = m.own(bp.ID)
-		bp.Style = m.ref(orDefault(bp.Style, "habitat.white"), isTok)
-		bp.Accent = m.ref(orDefault(bp.Accent, "neon.cyan"), isTok)
+		bp.Style = m.ref(OrDefault(bp.Style, "habitat.white"), isTok)
+		bp.Accent = m.ref(OrDefault(bp.Accent, "neon.cyan"), isTok)
 		if bp.Shape.Radius == 0 {
 			bp.Shape = Dome{Radius: 4, WallH: 2.6}
 		}
@@ -282,7 +250,7 @@ func (m *modFile) register(c *Content) {
 		return c.Upgrades.Patch(id, func(u *Upgrade) { unmarshal(raw, u) })
 	})
 	patch("token", m.Patch.Tokens, func(id string, raw json.RawMessage) bool {
-		return c.Tokens.Patch(id, func(t *token) { unmarshal(raw, t) })
+		return c.Tokens.Patch(id, func(t *Token) { unmarshal(raw, t) })
 	})
 	patch("building", m.Patch.Buildings, func(id string, raw json.RawMessage) bool {
 		return c.Buildings.Patch(id, func(b *Blueprint) { unmarshal(raw, b) })
@@ -306,17 +274,17 @@ func (m *modFile) register(c *Content) {
 	}
 }
 
-func orDefault(s, def string) string {
+func OrDefault(s, def string) string {
 	if s == "" {
 		return def
 	}
 	return s
 }
 
-// kitJSON is a piece of furniture made of kit shapes, in its own frame:
+// KitJSON is a piece of furniture made of kit shapes, in its own frame:
 // what it is made of, what the player bumps into, what E does.
-type kitJSON struct {
-	Parts     []partJSON `json:"parts"`
+type KitJSON struct {
+	Parts     []PartJSON `json:"parts"`
 	Obstacles []struct {
 		At     vec3    `json:"at"`
 		Radius float64 `json:"radius"`
@@ -326,9 +294,9 @@ type kitJSON struct {
 	Reach  float64 `json:"reach"`
 }
 
-// partJSON is one shape: a bevelled box, or a prism (a cylinder or a
+// PartJSON is one shape: a bevelled box, or a prism (a cylinder or a
 // truncated cone with that many sides) standing on At along Axis.
-type partJSON struct {
+type PartJSON struct {
 	Shape string  `json:"shape"` // "box" or "prism"
 	Token string  `json:"token"`
 	At    vec3    `json:"at"`
@@ -345,13 +313,13 @@ type partJSON struct {
 	Lit   string  `json:"lit"` // "indoor" (default) or "outdoor"
 }
 
-func (k kitJSON) kit() kitProp {
-	kp := kitProp{reach: orZero(k.Reach, 2.6), prompt: k.Prompt}
+func (k KitJSON) Kit() Kit {
+	kp := Kit{Reach: OrZero(k.Reach, 2.6), Prompt: k.Prompt}
 	for _, o := range k.Obstacles {
-		kp.obstacles = append(kp.obstacles, obstacle{o.At, o.Radius})
+		kp.Obstacles = append(kp.Obstacles, Obstacle{o.At, o.Radius})
 	}
 	parts := k.Parts
-	kp.build = func(b *mesh.Parts, at vec3, _ int) {
+	kp.Build = func(b *mesh.Parts, at vec3, _ int) {
 		for _, p := range parts {
 			lit := float32(mesh.LitIndoor)
 			if p.Lit == "outdoor" {
@@ -364,28 +332,28 @@ func (k kitJSON) kit() kitProp {
 				if axis == (vec3{}) {
 					axis = vec3{0, 1, 0}
 				}
-				m.Prism(at.Add(p.At), axis.Norm(), p.R0, orZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
+				m.Prism(at.Add(p.At), axis.Norm(), p.R0, OrZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
 			default:
 				a := p.Yaw * math.Pi / 180
 				m.Box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
 			}
 		}
 	}
-	use := map[string]func(g gameAPI, at vec3){
-		"map":     func(g gameAPI, _ vec3) { g.OpenMap() },
-		"shop":    func(g gameAPI, _ vec3) { g.OpenShop() },
-		"sleep":   func(g gameAPI, _ vec3) { g.Sleep() },
-		"deposit": gameAPI.Deposit,
+	use := map[string]func(g Game, at vec3){
+		"map":     func(g Game, _ vec3) { g.OpenMap() },
+		"shop":    func(g Game, _ vec3) { g.OpenShop() },
+		"sleep":   func(g Game, _ vec3) { g.Sleep() },
+		"deposit": Game.Deposit,
 	}
 	if f, ok := use[k.Use]; ok {
-		kp.use = f
+		kp.Use = f
 	} else if k.Use != "" || k.Prompt != "" {
-		kp.use = func(gameAPI, vec3) {} // only the "use" event, for scripts
+		kp.Use = func(Game, vec3) {} // only the "use" event, for scripts
 	}
 	return kp
 }
 
-func orZero(v, def float64) float64 {
+func OrZero(v, def float64) float64 {
 	if v == 0 {
 		return def
 	}
@@ -401,8 +369,8 @@ func orInt(v, def int) int {
 
 // JSON forms of the engine's types.
 
-// hexColor reads "#rrggbb" or "#rrggbbaa".
-func hexColor(s string) (color.RGBA, error) {
+// HexColor reads "#rrggbb" or "#rrggbbaa".
+func HexColor(s string) (color.RGBA, error) {
 	var c color.RGBA
 	c.A = 255
 	s = strings.TrimPrefix(s, "#")
@@ -418,7 +386,7 @@ func hexColor(s string) (color.RGBA, error) {
 	return c, err
 }
 
-var headShapes = map[string]headShape{"block": headBlock, "taper": headTaper, "flare": headFlare, "nozzle": headNozzle}
+var headShapes = map[string]headShape{"block": HeadBlock, "taper": HeadTaper, "flare": HeadFlare, "nozzle": HeadNozzle}
 
 // A look patched from JSON keeps the fields it doesn't mention.
 func (l *ToolLook) UnmarshalJSON(b []byte) error {
@@ -452,7 +420,7 @@ func (l *ToolLook) UnmarshalJSON(b []byte) error {
 		v   *string
 	}{{&l.HandleCol, j.HandleColor}, {&l.HeadCol, j.HeadColor}} {
 		if c.v != nil {
-			col, err := hexColor(*c.v)
+			col, err := HexColor(*c.v)
 			if err != nil {
 				return err
 			}
@@ -470,13 +438,13 @@ func (l *ToolLook) UnmarshalJSON(b []byte) error {
 }
 
 var materials = map[string]int{
-	"plain": mtPlain, "paint": mtPaint, "panel": mtPanel, "metal": mtMetal,
-	"fabric": mtFabric, "hazard": mtHazard,
+	"plain": MtPlain, "paint": MtPaint, "panel": MtPanel, "metal": MtMetal,
+	"fabric": MtFabric, "hazard": MtHazard,
 }
 
 // A token reads {"color": "#rrggbb", "material": "panel", "scale": 1,
 // "spec": 0.5, "emissive": 0}; patched, it keeps what isn't mentioned.
-func (t *token) UnmarshalJSON(b []byte) error {
+func (t *Token) UnmarshalJSON(b []byte) error {
 	var j struct {
 		Color    *string  `json:"color"`
 		Material *string  `json:"material"`
@@ -487,32 +455,32 @@ func (t *token) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &j); err != nil {
 		return err
 	}
-	if t.scale == 0 {
-		t.scale = 1 // a new token
+	if t.Scale == 0 {
+		t.Scale = 1 // a new token
 	}
 	if j.Color != nil {
-		c, err := hexColor(*j.Color)
+		c, err := HexColor(*j.Color)
 		if err != nil {
 			return err
 		}
-		t.col = c
+		t.Col = c
 	}
 	if j.Material != nil {
 		mt, ok := materials[*j.Material]
 		if !ok {
 			return fmt.Errorf("material %q: plain, paint, panel, metal, fabric or hazard", *j.Material)
 		}
-		t.mat = mt
-		if mt == mtFabric {
-			t.scale = 1 / fabricTile
-		} else if mt == mtPaint {
-			t.scale = 1 / paintTile
+		t.Mat = mt
+		if mt == MtFabric {
+			t.Scale = 1 / FabricTile
+		} else if mt == MtPaint {
+			t.Scale = 1 / PaintTile
 		}
 	}
 	for _, f := range []struct {
 		dst *float32
 		v   *float32
-	}{{&t.scale, j.Scale}, {&t.spec, j.Spec}, {&t.emissive, j.Emissive}} {
+	}{{&t.Scale, j.Scale}, {&t.Spec, j.Spec}, {&t.Emissive, j.Emissive}} {
 		if f.v != nil {
 			*f.dst = *f.v
 		}

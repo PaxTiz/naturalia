@@ -143,3 +143,35 @@ func migrateState(st *State) {
 		log.Printf("load: tool %s no longer exists (mod removed?), back to the first one", st.Tool)
 	}
 }
+
+// modDirs are where mods are looked for: mods/ in the current folder, then
+// in the game's settings folder, next to the save.
+func modDirs() []string {
+	dirs := []string{"mods"}
+	if d, err := saveDir(); err == nil {
+		dirs = append(dirs, filepath.Join(d, "mods"))
+	}
+	return dirs
+}
+
+// disabledMods lists the mods turned off in mods.json, in the settings
+// folder: {"disabled": ["serre"]}.
+func disabledMods() map[string]bool {
+	off := map[string]bool{}
+	d, err := saveDir()
+	if err != nil {
+		return off
+	}
+	var cfg struct {
+		Disabled []string `json:"disabled"`
+	}
+	if data, err := os.ReadFile(filepath.Join(d, "mods.json")); err == nil {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			log.Println("mods.json:", err)
+		}
+	}
+	for _, id := range cfg.Disabled {
+		off[id] = true
+	}
+	return off
+}

@@ -1,8 +1,10 @@
-package main
+package script
 
 import (
 	"fmt"
+	"image/color"
 	"log"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/planet"
 	"os"
 	"path/filepath"
@@ -26,12 +28,12 @@ const scriptBudget = 50 * time.Millisecond // per call
 type script struct {
 	mod    string
 	rt     *goja.Runtime
-	g      gameAPI // during a call
+	g      content.Game // during a call
 	errors int
 }
 
-// runScripts runs a mod's scripts while its pack registers (a ScriptRunner).
-func runScripts(c *Content, mod, dir string, names []string) {
+// Run runs a mod's scripts while its pack registers (a ScriptRunner).
+func Run(c *content.Content, mod, dir string, names []string) {
 	for _, name := range names {
 		src, err := os.ReadFile(filepath.Join(dir, filepath.Clean("/"+name)))
 		if err != nil {
@@ -49,7 +51,7 @@ func runScripts(c *Content, mod, dir string, names []string) {
 }
 
 // run calls into JS with the game at hand, within the time budget.
-func (s *script) run(g gameAPI, f func() (goja.Value, error)) (goja.Value, error) {
+func (s *script) run(g content.Game, f func() (goja.Value, error)) (goja.Value, error) {
 	s.g = g
 	s.rt.ClearInterrupt()
 	t := time.AfterFunc(scriptBudget, func() { s.rt.Interrupt("too slow: more than " + scriptBudget.String()) })
@@ -58,7 +60,7 @@ func (s *script) run(g gameAPI, f func() (goja.Value, error)) (goja.Value, error
 }
 
 // call runs a JS function; after a few errors, the mod's handler is muted.
-func (s *script) call(g gameAPI, fn goja.Callable, args ...any) goja.Value {
+func (s *script) call(g content.Game, fn goja.Callable, args ...any) goja.Value {
 	if s.errors >= 5 {
 		return goja.Undefined()
 	}
@@ -80,7 +82,7 @@ func (s *script) call(g gameAPI, fn goja.Callable, args ...any) goja.Value {
 
 // game is what g is during a call; outside of one (while loading), it
 // throws.
-func (s *script) game() gameAPI {
+func (s *script) game() content.Game {
 	if s.g == nil {
 		panic(s.rt.NewTypeError("the game isn't running yet: call this from a handler"))
 	}
@@ -101,12 +103,12 @@ type jsEvent struct {
 	Dt     float64 `json:"dt"`
 }
 
-func (s *script) api(c *Content) map[string]any {
+func (s *script) api(c *content.Content) map[string]any {
 	isEntity := func(id string) bool { _, ok := c.Entities.Get(id); return ok }
 	return map[string]any{
 		// Listening.
 		"on": func(name string, fn goja.Callable) {
-			c.On(name, func(g gameAPI, e *Event) {
+			c.On(name, func(g content.Game, e *content.Event) {
 				s.call(g, fn, jsEvent{e.Name, e.ID, jsVec(e.At), e.Amount, e.Dt})
 			})
 		},
@@ -119,9 +121,9 @@ func (s *script) api(c *Content) map[string]any {
 			if def.Run == nil || def.Every <= 0 {
 				panic(s.rt.NewTypeError("randomEvent needs every > 0 and run"))
 			}
-			ev := RandomEvent{Every: def.Every, Run: func(g gameAPI) { s.call(g, def.Run) }}
+			ev := content.RandomEvent{Every: def.Every, Run: func(g content.Game) { s.call(g, def.Run) }}
 			if def.When != nil {
-				ev.When = func(g gameAPI) bool { return s.call(g, def.When).ToBoolean() }
+				ev.When = func(g content.Game) bool { return s.call(g, def.When).ToBoolean() }
 			}
 			c.Events.Add(qualifyIn(s.mod, def.ID), ev)
 		},
@@ -146,9 +148,9 @@ func (s *script) api(c *Content) map[string]any {
 		"giveCredits": func(n float64) { s.game().GiveCredits(n) },
 		// burst throws sparks around the player: color "#rrggbb".
 		"burst": func(n int, col string) {
-			c, err := hexColor(col)
+			c, err := content.HexColor(col)
 			if err != nil {
-				c = colCyan
+				c = color.RGBA{120, 235, 245, 255} // cyan
 			}
 			s.game().Burst(n, c)
 		},
@@ -170,7 +172,7 @@ func (s *script) api(c *Content) map[string]any {
 		"driving": func() string { return s.game().Driving() },
 		// debugLine adds a line to the debug overlay (F3): fn returns it.
 		"debugLine": func(fn goja.Callable) {
-			c.Debug = append(c.Debug, func(g gameAPI) string { return s.call(g, fn).String() })
+			c.Debug = append(c.Debug, func(g content.Game) string { return s.call(g, fn).String() })
 		},
 
 		// Remembering, in the save: numbers, strings, lists, objects.
@@ -182,13 +184,13 @@ func (s *script) api(c *Content) map[string]any {
 // refIn resolves a name used by a mod's script: its own entry first, then
 // the core's.
 func refIn(mod, id string, exists func(string) bool) string {
-	if validID(id) {
+	if content.ValidID(id) {
 		return id
 	}
 	if own := mod + ":" + id; exists(own) {
 		return own
 	}
-	return qualify(id)
+	return content.Qualify(id)
 }
 
 // qualifyIn puts a bare name in the mod's namespace.
@@ -196,7 +198,7 @@ func qualifyIn(mod, id string) string {
 	if id == "" {
 		return mod + ":event"
 	}
-	if validID(id) {
+	if content.ValidID(id) {
 		return id
 	}
 	return fmt.Sprintf("%s:%s", mod, id)

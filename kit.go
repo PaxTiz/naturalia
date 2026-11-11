@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"math"
@@ -14,58 +15,16 @@ import (
 // data that put pieces together. A blueprint is described once: drawing,
 // collisions and interactions are deduced from it.
 
-// token is a material of the base: color, painted material, shine, glow.
-type token struct {
-	col      color.RGBA
-	mat      int
-	scale    float32 // texture tiles per meter
-	spec     float32
-	emissive float32
-}
-
 // tok is a material by ID; an unknown one shows up magenta.
-func tok(id string) token {
+func tok(id string) content.Token {
 	if t, ok := reg.Tokens.Get(id); ok {
 		return *t
 	}
-	return token{color.RGBA{255, 0, 255, 255}, mtPlain, 1, 0, 0.5}
+	return content.Token{color.RGBA{255, 0, 255, 255}, content.MtPlain, 1, 0, 0.5}
 }
-
-// Blueprint is a building as data.
-type Blueprint struct {
-	ID     string `json:"id"`
-	At     vec3   `json:"at"`   // local, center of the floor
-	Link   string `json:"link"` // building a corridor leads to; doors are added at both ends
-	Sign   string `json:"sign"` // painted over the door that leads here from the hub
-	Shape  Dome   `json:"shape"`
-	Style  string `json:"style"`  // token of the walls and roof
-	Accent string `json:"accent"` // token of the glowing stripes inside
-	Doors  []Door `json:"doors"`
-	Props  []Prop `json:"props"`
-}
-
-type Dome struct {
-	Radius float64 `json:"radius"`
-	WallH  float64 `json:"wall_height"`
-}
-
-type Door struct {
-	Facing float64 `json:"facing"` // angle, atan2(z, x)
-}
-
-// Prop is a kit piece placed in a building, relative to its center; Seed
-// varies pieces that are built by rules.
-type Prop struct {
-	Kit  string `json:"kit"`
-	At   vec3   `json:"at"`
-	Seed int    `json:"seed"`
-}
-
-// polar is the point at distance r from the center, at angle a.
-func polar(r, a float64) vec3 { return vec3{math.Cos(a) * r, 0, math.Sin(a) * r} }
 
 // roomOf is the room a blueprint lays out.
-func roomOf(bp *Blueprint) room {
+func roomOf(bp *content.Blueprint) room {
 	var openings []float64
 	for _, d := range bp.Doors {
 		openings = append(openings, d.Facing)
@@ -73,33 +32,12 @@ func roomOf(bp *Blueprint) room {
 	return room{bp.At, bp.Shape.Radius, bp.Shape.WallH, openings, bp}
 }
 
-// kitProp is a piece of furniture: what it adds to the merged meshes, how
-// the player bumps into it and uses it. Positions are local, relative to
-// the prop. What moves or glows is drawn each frame by kitDraws.
-type kitProp struct {
-	build     func(b *mesh.Parts, at vec3, seed int)
-	obstacles []obstacle
-	reach     float64
-	use       func(g gameAPI, at vec3) // what E does; at is the prop's local position
-	prompt    string
-}
-
 // kitBuild lets a kit piece use the base's building helpers.
 func kitBuild(f func(b *building, at vec3, seed int)) func(*mesh.Parts, vec3, int) {
 	return func(p *mesh.Parts, at vec3, seed int) { f(&building{Parts: p}, at, seed) }
 }
 
-// spot returns where the first prop of a kit sits in the base.
-func (bp *Blueprint) spot(kit string) vec3 {
-	for _, p := range bp.Props {
-		if p.Kit == kit {
-			return bp.At.Add(p.At)
-		}
-	}
-	return bp.At
-}
-
-func planObstacles() (out []obstacle) {
+func planObstacles() (out []content.Obstacle) {
 	out = yardObstacles()
 	for _, bp := range plans {
 		for _, p := range bp.Props {
@@ -107,8 +45,8 @@ func planObstacles() (out []obstacle) {
 			if k == nil {
 				continue
 			}
-			for _, o := range k.obstacles {
-				out = append(out, obstacle{bp.At.Add(p.At).Add(o.at), o.radius})
+			for _, o := range k.Obstacles {
+				out = append(out, content.Obstacle{bp.At.Add(p.At).Add(o.At), o.Radius})
 			}
 		}
 	}
@@ -118,9 +56,9 @@ func planObstacles() (out []obstacle) {
 func planInteractables() (out []interactable) {
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if k, _ := reg.Kits.Get(p.Kit); k != nil && k.use != nil {
-				use := k.use
-				out = append(out, interactable{qualify(p.Kit), bp.At.Add(p.At), k.reach, func(g *Game, at vec3) { use(g, at) }, k.prompt})
+			if k, _ := reg.Kits.Get(p.Kit); k != nil && k.Use != nil {
+				use := k.Use
+				out = append(out, interactable{content.Qualify(p.Kit), bp.At.Add(p.At), k.Reach, func(g *Game, at vec3) { use(g, at) }, k.Prompt})
 			}
 		}
 	}
@@ -131,7 +69,7 @@ func planInteractables() (out []interactable) {
 type building struct {
 	*mesh.Parts
 	models []rl.Model
-	toks   []token // of each model, looked up once
+	toks   []content.Token // of each model, looked up once
 }
 
 // buildBase builds every static piece of the base.
@@ -161,7 +99,7 @@ func buildBase(sh rl.Shader) *building {
 	return b
 }
 
-func (b *building) room(bp *Blueprint) {
+func (b *building) room(bp *content.Blueprint) {
 	r := roomOf(bp)
 	in := toWorld(r.center.Add(vec3{0, 1.2, 0}))
 	// Walls: bevelled panels, a dark plinth, a steel collar under the dome.
@@ -195,15 +133,15 @@ func (b *building) room(bp *Blueprint) {
 	}
 	b.interior(bp, r)
 	for _, p := range bp.Props {
-		if k, _ := reg.Kits.Get(p.Kit); k != nil && k.build != nil {
-			k.build(b.Parts, bp.At.Add(p.At), p.Seed)
+		if k, _ := reg.Kits.Get(p.Kit); k != nil && k.Build != nil {
+			k.Build(b.Parts, bp.At.Add(p.At), p.Seed)
 		}
 	}
 }
 
 // interior: a flat floor with a steel-ringed inlay, a glowing stripe along
 // the walls, steel ribs under the dome and a ceiling lamp.
-func (b *building) interior(bp *Blueprint, r room) {
+func (b *building) interior(bp *content.Blueprint, r room) {
 	up := vec3{0, 1, 0}
 	floor := r.center.Add(vec3{0, floorTop - 0.1, 0})
 	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Prism(floor, up, r.radius, r.radius, 0.1, 48, 0)
@@ -335,10 +273,10 @@ func (b *building) outside() {
 func (b *building) draw(gfx *Graphics) {
 	for i, k := range b.Keys {
 		t := b.toks[i]
-		gfx.setMat(t.mat, t.scale, false)
+		gfx.setMat(t.Mat, t.Scale, false)
 		gfx.setLighting(k.Lit, k.At)
-		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.spec, t.emissive}, rl.ShaderUniformVec2)
-		rl.DrawModel(b.models[i], rl.Vector3{}, 1, t.col)
+		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
+		rl.DrawModel(b.models[i], rl.Vector3{}, 1, t.Col)
 	}
 }
 
@@ -411,7 +349,7 @@ func buildIncinerator(b *building, in vec3, _ int) {
 func drawIncinerator(g *Game, in vec3) {
 	gfx := g.gfx
 	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	glow := float32(0.55 + 0.45*mathx.Clamp01(g.burn))
 	gfx.box(in.Add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, accentOrange, 0, glow)
 	gfx.drawScreen(in.Add(vec3{1.16, 1.1, 1.25}), vec3{1, 0, 0}, 0.38, 0.28, gfx.screens[3], 0.8)
@@ -432,13 +370,13 @@ func buildConsole(b *building, c vec3, _ int) {
 func drawConsole(g *Game, c vec3) {
 	gfx := g.gfx
 	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	for i, z := range []float64{-0.75, 0, 0.75} {
 		facing := vec3{-1, 0, z * 0.4}.Norm()
 		gfx.drawScreen(c.Add(vec3{0.1, 1.28, z}), facing, 0.66, 0.42, gfx.screens[i], 0.8)
 	}
 	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	for _, z := range []float64{-2.3, 2.3} {
 		for k := range 5 {
 			on := float32(0.3)
@@ -472,7 +410,7 @@ func buildBed(b *building, at vec3, _ int) {
 func drawBed(g *Game, at vec3) {
 	gfx := g.gfx
 	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	gfx.put(gfx.sphere, toWorld(at.Add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, lampWarm, 0, 1)
 }
 

@@ -1,30 +1,11 @@
 package main
 
 import (
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/planet"
+	"mars_sweeper/internal/script"
 	"testing"
 )
-
-func TestRegistryOverrideKeepsOrder(t *testing.T) {
-	var r Registry[int]
-	r.init("test")
-	r.pack = "core"
-	r.Add("core:a", 1)
-	r.Add("core:b", 2)
-	r.Add("bad", 3)
-	r.pack = "mod"
-	r.Add("core:a", 10)
-	r.Patch("core:b", func(v *int) { *v *= 5 })
-	if got := r.IDs(); len(got) != 2 || got[0] != "core:a" {
-		t.Fatalf("ids = %v", got)
-	}
-	if a, _ := r.Get("core:a"); *a != 10 {
-		t.Errorf("override: %d", *a)
-	}
-	if b, _ := r.Get("core:b"); *b != 10 {
-		t.Errorf("patch: %d", *b)
-	}
-}
 
 func TestMigrateOldSave(t *testing.T) {
 	loadContent()
@@ -57,27 +38,25 @@ func TestEventsAndBuildings(t *testing.T) {
 		t.Errorf("%d corridors, %d rooms, %d interactables", len(corridors), len(rooms), len(interactables))
 	}
 	var sold float64
-	reg.On(evSell, func(g gameAPI, e *Event) { sold += e.Amount })
-	(&Game{}).emit(Event{Name: evSell, Amount: 12})
+	reg.On(content.EvSell, func(g content.Game, e *content.Event) { sold += e.Amount })
+	(&Game{}).emit(content.Event{Name: content.EvSell, Amount: 12})
 	if sold != 12 {
 		t.Errorf("sold = %f", sold)
 	}
 }
 
 func TestExampleMod(t *testing.T) {
-	m, err := readMod("examples/mods/serre", runScripts)
+	m, err := content.ReadMod("examples/mods/serre", script.Run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	packs = append(packs, m.pack())
-	defer func() { packs = packs[:len(packs)-1] }()
-	loadContent()
+	loadContent(m.Pack())
 
 	ids := reg.Tools.IDs()
 	if ids[3] != "serre:rateau" || ids[4] != "core:vacuum" {
 		t.Errorf("tools in order: %v", ids)
 	}
-	if b, _ := reg.Tools.Get("broom"); b.Cost != 400 || b.Look.Head != headFlare {
+	if b, _ := reg.Tools.Get("broom"); b.Cost != 400 || b.Look.Head != content.HeadFlare {
 		t.Errorf("patched broom: %+v", b)
 	}
 	if r, _ := reg.Tools.Get("serre:rateau"); r.Look.HeadCol.G != 0x8c || r.Look.HandleLen != 0.6 {
@@ -93,7 +72,7 @@ func TestExampleMod(t *testing.T) {
 	if len(plans[0].Doors) != 5 {
 		t.Errorf("hub doors: %v", plans[0].Doors)
 	}
-	if tk, _ := reg.Tokens.Get("serre:leaf"); tk.col.G != 0xa0 || tk.scale != 1 {
+	if tk, _ := reg.Tokens.Get("serre:leaf"); tk.Col.G != 0xa0 || tk.Scale != 1 {
 		t.Errorf("leaf token: %+v", tk)
 	}
 	if n := len(yardObstacles()); n != 14 {

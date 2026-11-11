@@ -2,78 +2,14 @@ package main
 
 import (
 	"fmt"
-	"image/color"
+	"mars_sweeper/internal/content"
 	"math"
 	"slices"
 )
 
-type headShape int
-
-const (
-	headBlock  headShape = iota // straight block (toothbrush bristles)
-	headTaper                   // narrows to a point (paintbrush)
-	headFlare                   // widens toward the ground (broom)
-	headNozzle                  // motor bulb and nozzle (powered tools)
-)
-
-// ToolLook describes the model held in first person: a handle, a metal
-// collar, then the head.
-// In mods it reads (modjson.go):
-//
-//	{"handle_len": 0.5, "handle_r": 0.02, "handle_color": "#a57346",
-//	 "head_len": 0.24, "head_r": 0.12, "head_color": "#f0cd5f",
-//	 "head": "block|taper|flare|nozzle", "glow": 0}
-type ToolLook struct {
-	HandleLen, HandleR float64
-	HandleCol          color.RGBA
-	HeadLen, HeadR     float64
-	HeadCol            color.RGBA
-	Head               headShape
-	Glow               float32 // emissive strength of the nozzle ring
-}
-
-type Tool struct {
-	ID     string   `json:"id"`
-	Name   string   `json:"name"`
-	Radius float64  `json:"radius"` // brush radius in meters
-	Reach  float64  `json:"reach"`  // max aiming distance in meters
-	Rate   float64  `json:"rate"`   // grams per second removed from a cell at the brush center
-	Cost   float64  `json:"cost"`
-	Look   ToolLook `json:"look"`
-}
-
-// Upgrade is bought level after level; each level applies its effects to
-// the game's stats.
-type Upgrade struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Desc    string   `json:"desc"`
-	Icon    string   `json:"icon"`   // pictogram drawn by the shop (icon)
-	Base    float64  `json:"base"`   // price of the first level...
-	Growth  float64  `json:"growth"` // ...times this for each level bought
-	Max     int      `json:"max"`    // 0 means unlimited
-	Effects []Effect `json:"effects"`
-}
-
-// Effect changes a stat for each level: (base + Add×level) × Mult^level.
-type Effect struct {
-	Stat string  `json:"stat"`
-	Mult float64 `json:"mult"`
-	Add  float64 `json:"add"`
-}
-
-// stats are what upgrades act on, with their value before any upgrade.
-var stats = map[string]float64{
-	"tank":     50, // grams the tank holds
-	"power":    1,  // multiplies how fast tools and drones sweep
-	"price":    1,  // multiplies what dust and crystals sell for
-	"drones":   0,  // sweeping drones
-	"autosell": 0,  // above 0, the tank sells itself when full
-}
-
 // stat is a stat with every upgrade applied.
 func (g *Game) stat(name string) float64 {
-	v, mult := stats[name], 1.0
+	v, mult := content.Stats[name], 1.0
 	for _, u := range reg.Upgrades.All() {
 		lvl := float64(g.st.Levels[u.ID])
 		if lvl == 0 {
@@ -96,13 +32,13 @@ func (g *Game) stat(name string) float64 {
 // removed mod falls back to the first one.
 func (g *Game) toolTier() int { return max(0, slices.Index(reg.Tools.IDs(), g.st.Tool)) }
 
-func (g *Game) tool() *Tool        { return reg.Tools.All()[g.toolTier()] }
-func (g *Game) Capacity() float64  { return g.stat("tank") }
-func (g *Game) powerMult() float64 { return g.stat("power") }
-func (g *Game) priceMult() float64 { return g.stat("price") }
-func (g *Game) autoSell() bool     { return g.stat("autosell") > 0 }
-func (g *Game) space() float64     { return math.Max(0, g.Capacity()-g.st.Tank) }
-func (g *Game) tankFull() bool     { return g.space() <= 1e-6 }
+func (g *Game) tool() *content.Tool { return reg.Tools.All()[g.toolTier()] }
+func (g *Game) Capacity() float64   { return g.stat("tank") }
+func (g *Game) powerMult() float64  { return g.stat("power") }
+func (g *Game) priceMult() float64  { return g.stat("price") }
+func (g *Game) autoSell() bool      { return g.stat("autosell") > 0 }
+func (g *Game) space() float64      { return math.Max(0, g.Capacity()-g.st.Tank) }
+func (g *Game) tankFull() bool      { return g.space() <= 1e-6 }
 func (g *Game) gemValue() float64 {
 	return 20 * g.priceMult() * math.Pow(2.5, float64(g.toolTier()))
 }
@@ -173,7 +109,7 @@ func (g *Game) shopItems() []shopItem {
 			continue
 		}
 		items = append(items, shopItem{
-			id: o.ID, name: o.Name, desc: o.Desc, icon: orDefault(o.Icon, "flag"),
+			id: o.ID, name: o.Name, desc: o.Desc, icon: content.OrDefault(o.Icon, "flag"),
 			info: fmt.Sprintf("Objet · %d sur toi", g.st.Items[o.ID]), cost: o.Cost,
 			buy: func() {
 				if g.st.Items == nil {

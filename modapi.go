@@ -5,42 +5,6 @@ import (
 	"math"
 )
 
-// gameAPI is what packs see of the running game: their handlers, random
-// events, furniture and debug lines act through it, never on the game's
-// internals. Scripts get the same, in JavaScript (script.go).
-type gameAPI interface {
-	// Reading.
-	Credits() float64
-	Tank() float64     // grams carried
-	Capacity() float64 // grams the tank holds
-	ToolID() string
-	Level(id string) int      // of an upgrade, or 1 for a vehicle owned
-	SunHeight() float64       // sine of the sun's height over the player's horizon
-	Inside() string           // ID of the building the player is in
-	Clock() float64           // seconds played
-	PlayerPos() vec3          // from Mars' center
-	Driving() string          // ID of the vehicle driven
-	Entities(kind string) int // placed entities of a kind, all of them for ""
-	DustDevils() int
-	Random() float64
-
-	// Acting.
-	Say(text string)
-	GiveCredits(n float64) // negative takes them back, down to 0
-	GiveItem(id string, n int)
-	Burst(n int, c color.RGBA) // sparks around the player
-	Beep(freq float64)
-	Spawn(kind string) bool // an entity where the player aims, or right ahead
-	SpawnDustDevil()
-	OpenMap()
-	OpenShop()
-	Sleep()
-	Deposit(at vec3) // sells the tank at the incinerator standing at a local point
-
-	// ModData is what a pack keeps in the save, by key.
-	ModData(pack string) map[string]any
-}
-
 func (g *Game) Credits() float64       { return g.st.Credits }
 func (g *Game) Tank() float64          { return g.st.Tank }
 func (g *Game) ToolID() string         { return g.tool().ID }

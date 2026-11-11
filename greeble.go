@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"math"
@@ -22,7 +23,7 @@ func grnd(seed, k int) float64 {
 var yUp = vec3{0, 1, 0}
 
 // greebleRoom dresses one room, outside and inside.
-func (b *building) greebleRoom(bp *Blueprint, r room, seed int) {
+func (b *building) greebleRoom(bp *content.Blueprint, r room, seed int) {
 	panels := r.panels()
 	ladder := false
 	for i, p := range panels {
@@ -435,34 +436,34 @@ func yardFree(p vec3, r float64) bool {
 }
 
 // yardObstacles: what the player bumps into in the yard.
-func yardObstacles() []obstacle {
-	var out []obstacle
+func yardObstacles() []content.Obstacle {
+	var out []content.Obstacle
 	for _, cl := range yardBarrels {
 		if yardFree(cl, 1.2) {
-			out = append(out, obstacle{cl, 0.95})
+			out = append(out, content.Obstacle{cl, 0.95})
 		}
 	}
 	if yardFree(yardTanks, 2.6) {
 		for _, z := range []float64{-14.2, -12.4} {
 			for _, x := range []float64{-6.3, -5.0, -3.7} {
-				out = append(out, obstacle{vec3{x, 0, z}, 0.8})
+				out = append(out, content.Obstacle{vec3{x, 0, z}, 0.8})
 			}
 		}
 	}
 	if c, ax := yardContainer, (vec3{math.Cos(0.55), 0, math.Sin(0.55)}); yardFree(c, 2.5) {
 		for _, t := range []float64{-1.4, 0, 1.4} {
-			out = append(out, obstacle{c.Add(ax.Scale(t)), 1.15})
+			out = append(out, content.Obstacle{c.Add(ax.Scale(t)), 1.15})
 		}
 	}
 	for _, m := range yardMasts {
 		if yardFree(m, 0.5) {
-			out = append(out, obstacle{m, 0.35})
+			out = append(out, content.Obstacle{m, 0.35})
 		}
 	}
 	return out
 }
 
-// More furniture, as kit pieces (kitProps): a chair, a workbench, a
+// More furniture, as kit pieces (content.Kit): a chair, a workbench, a
 // hydroponic planter and a desk.
 
 // buildChair: a swivel chair facing toward -X (rotate with the seed: the
@@ -632,13 +633,13 @@ func (b *building) helmet(p vec3, a float64) {
 }
 
 // clutter dresses a room according to what it is.
-func (b *building) clutter(bp *Blueprint) {
+func (b *building) clutter(bp *content.Blueprint) {
 	at := func(v vec3) vec3 { return bp.At.Add(v) }
 	switch bp.ID {
 	case "core:hub":
 		b.coil(at(vec3{-4.3, floorTop, 2.6}), 0.26, "pipe.yellow")
 		b.toolbox(at(vec3{2.5, floorTop, 4.6}), 0.4)
-		b.helmet(at(polar(5.4, 0.8)).Add(vec3{0, 1.24, 0}), 3.9)
+		b.helmet(at(content.Polar(5.4, 0.8)).Add(vec3{0, 1.24, 0}), 3.9)
 		b.tablet(at(vec3{0.6, 0.94, 0.6}), 0.7)
 		b.mug(at(vec3{-0.75, 0.93, -0.45}), "pipe.blue", 1)
 	case "core:sale":

@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/planet"
 	"math"
@@ -288,7 +289,7 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	}
 	g.st.Tank += grams
 	g.st.TotalDust += grams
-	g.emit(Event{Name: evDust, At: at, Amount: grams})
+	g.emit(content.Event{Name: content.EvDust, At: at, Amount: grams})
 	n := min(8, int(grams*4+g.rng.Float64()))
 	up := at.Norm()
 	t1, t2 := mathx.TangentBasis(up)
@@ -310,7 +311,7 @@ func (g *Game) collectGem(gem planet.Gem) {
 	v := g.gemValue()
 	g.st.Credits += v
 	g.st.TotalEarned += v
-	g.emit(Event{Name: evGem, At: gem.Dir, Amount: v})
+	g.emit(content.Event{Name: content.EvGem, At: gem.Dir, Amount: v})
 	pos := g.terrain.Surface(gem.Dir).Add(gem.Dir.Scale(0.3))
 	g.floaters = append(g.floaters, Floater{Pos: pos.Add(gem.Dir.Scale(0.4)), Life: 1.5, Text: "+" + fmtNum(v) + " cr", C: colCyan})
 	g.sfx.beep(0.07, 0.3, 0.16, 880, 1175, 1568)
@@ -329,7 +330,7 @@ func (g *Game) sell() {
 	g.st.TotalEarned += earned
 	g.st.Tank = 0
 	g.sellPop, g.sellPopText = 1.5, "+"+fmtNum(earned)+" cr"
-	g.emit(Event{Name: evSell, Amount: earned})
+	g.emit(content.Event{Name: content.EvSell, Amount: earned})
 	g.sfx.beep(0.08, 0.22, 0.14, 660, 990)
 }
 
@@ -410,7 +411,7 @@ func (g *Game) updateBase(dt float64) {
 // use runs what the player activates with E.
 func (g *Game) use(it interactable) {
 	it.use(g, it.at)
-	g.emit(Event{Name: evUse, ID: it.kit, At: it.at})
+	g.emit(content.Event{Name: content.EvUse, ID: it.kit, At: it.at})
 }
 
 // Deposit feeds the tank's dust to the incinerator at the local point in,
@@ -452,7 +453,7 @@ func (g *Game) updateSleep(dt float64) {
 	}
 	if g.sleepT >= sleepEnd {
 		g.setMode(modePlay)
-		g.emit(Event{Name: evWake})
+		g.emit(content.Event{Name: content.EvWake})
 	}
 }
 
@@ -522,7 +523,7 @@ func (g *Game) updateShop() {
 		if it := items[g.hover]; it.affordable(g.st.Credits) {
 			g.st.Credits -= it.cost
 			it.buy()
-			g.emit(Event{Name: evBuy, ID: it.id, Amount: it.cost})
+			g.emit(content.Event{Name: content.EvBuy, ID: it.id, Amount: it.cost})
 			g.sfx.beep(0.06, 0.18, 0.14, 523, 784)
 		} else {
 			g.sfx.beep(0, 0.15, 0.1, 180)

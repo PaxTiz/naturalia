@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"math"
@@ -62,7 +63,7 @@ func (g *Game) drawBase() {
 	gfx.base.draw(gfx)
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if draw := kitDraws[qualify(p.Kit)]; draw != nil {
+			if draw := kitDraws[content.Qualify(p.Kit)]; draw != nil {
 				draw(g, bp.At.Add(p.At))
 			}
 		}
@@ -71,7 +72,7 @@ func (g *Game) drawBase() {
 	g.drawAirlock()
 	g.drawBeacon()
 	g.drawSigns()
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
 }
@@ -83,13 +84,13 @@ func (g *Game) drawAirlock() {
 	end := airlockEnd
 	gfx.setLighting(mesh.LitSun, vec3{})
 	steel := tok("steel")
-	gfx.setMat(steel.mat, steel.scale, false)
+	gfx.setMat(steel.Mat, steel.Scale, false)
 	w := (doorWidth + 0.2) / 2
 	for _, s := range []float64{-1, 1} {
 		at := end.Add(vec3{s * (w/2 + g.doorOpen*w), doorHeight / 2, 0})
-		gfx.put(gfx.doorPanel, toWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, 0, steel.col, steel.spec, 0)
+		gfx.put(gfx.doorPanel, toWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, 0, steel.Col, steel.Spec, 0)
 	}
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	lamp := colGreen
 	if g.doorOpen < 0.9 {
 		lamp = colGold
@@ -101,7 +102,7 @@ func (g *Game) drawAirlock() {
 func (g *Game) drawBeacon() {
 	if math.Mod(g.clock, 1.2) < 0.3 {
 		g.gfx.setLighting(mesh.LitSun, vec3{})
-		g.gfx.setMat(mtPlain, 1, false)
+		g.gfx.setMat(content.MtPlain, 1, false)
 		g.gfx.put(g.gfx.sphere, beaconTop(), vec3{0.09, 0.09, 0.09}, vec3{0, 1, 0}, 0, colRed, 0, 1)
 	}
 }
@@ -172,19 +173,6 @@ func rotationBetween(a, b vec3) rl.Matrix {
 		M15: 1,
 	}
 }
-
-// Painted materials of the object shader (the mat* names are colors).
-const (
-	mtPlain  = 0
-	mtPaint  = 1
-	mtPanel  = 2
-	mtMetal  = 3
-	mtFloor  = 4
-	mtFabric = 5
-	mtRock   = 6
-	mtHazard = 7
-	mtDecal  = 8 // the model's own texture, by UVs (signs)
-)
 
 // setMat selects the painted material of the next objects: scale is in
 // texture tiles per meter; objSpace makes the texture follow a moving object

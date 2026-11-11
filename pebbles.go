@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
@@ -101,7 +102,7 @@ func (g *Game) drawPebbles() {
 // call, tinted by tone(shape).
 func (gfx *Graphics) drawInstanced(models []rl.Model, mats [][]rl.Matrix, tone func(k int) color.RGBA) {
 	gfx.setLighting(mesh.LitSun, vec3{})
-	gfx.setMat(mtRock, float32(1/regolithTile), false)
+	gfx.setMat(content.MtRock, float32(1/regolithTile), false)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{0.1, 0}, rl.ShaderUniformVec2)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.instanced, []float32{1}, rl.ShaderUniformFloat)
 	for k, m := range models {
@@ -114,7 +115,7 @@ func (gfx *Graphics) drawInstanced(models []rl.Model, mats [][]rl.Matrix, tone f
 		mat.GetMap(rl.MapAlbedo).Color = rl.White
 	}
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.instanced, []float32{0}, rl.ShaderUniformFloat)
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 }
 
 // basisMatrix sends a model's X, Y and Z axes to ax, ay and az, at pos.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"math"
 
@@ -31,7 +32,7 @@ type Player struct {
 }
 
 func (p *Player) LocalUp() vec3 { return p.Pos.Norm() }
-func (p *Player) Eye() vec3     { return p.Pos.Add(p.LocalUp().Scale(orZero(p.eyeH, eyeHeight))) }
+func (p *Player) Eye() vec3     { return p.Pos.Add(p.LocalUp().Scale(content.OrZero(p.eyeH, eyeHeight))) }
 
 func (p *Player) Forward() vec3 {
 	return p.Heading.Scale(math.Cos(p.Pitch)).Add(p.LocalUp().Scale(math.Sin(p.Pitch)))
@@ -75,7 +76,7 @@ func (p *Player) Update(dt float64, t *Terrain, control bool) {
 		if rl.IsKeyDown(rl.KeyA) {
 			move = move.Sub(right)
 		}
-		move = move.Norm().Scale(orZero(p.speed, walkSpeed))
+		move = move.Norm().Scale(content.OrZero(p.speed, walkSpeed))
 		if rl.IsKeyDown(rl.KeyLeftShift) && p.speed == 0 {
 			move = move.Scale(sprintFactor)
 		}

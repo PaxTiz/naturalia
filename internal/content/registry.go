@@ -1,4 +1,4 @@
-package main
+package content
 
 import (
 	"fmt"
@@ -20,15 +20,15 @@ import (
 type Content struct {
 	Tools     Registry[Tool]
 	Upgrades  Registry[Upgrade]
-	Tokens    Registry[token]     // materials of the buildings
-	Kits      Registry[kitProp]   // furniture and other kit pieces
+	Tokens    Registry[Token]     // materials of the buildings
+	Kits      Registry[Kit]       // furniture and other kit pieces
 	Buildings Registry[Blueprint] // the first one is the hub
 	Events    Registry[RandomEvent]
 	Entities  Registry[EntityDef] // things standing in the world
 	Items     Registry[Item]      // carried, placed as entities
 	Vehicles  Registry[Vehicle]
 	// Debug adds lines to the debug overlay (F3).
-	Debug   []func(g gameAPI) string
+	Debug   []func(g Game) string
 	Terrain planet.Settings // one for the whole game, patched by packs
 
 	handlers map[string][]Handler // by event name (On)
@@ -49,7 +49,7 @@ func (r *Registry[T]) init(kind string) {
 
 // Add registers an entry, or overrides the one with the same ID.
 func (r *Registry[T]) Add(id string, v T) {
-	if !validID(id) {
+	if !ValidID(id) {
 		log.Printf("%s %q ignored: IDs are \"pack:name\"", r.kind, id)
 		return
 	}
@@ -63,7 +63,7 @@ func (r *Registry[T]) Add(id string, v T) {
 
 // Patch changes an entry registered earlier; it reports whether it exists.
 func (r *Registry[T]) Patch(id string, f func(*T)) bool {
-	id = qualify(id)
+	id = Qualify(id)
 	v, ok := r.items[id]
 	if ok {
 		f(v)
@@ -74,7 +74,7 @@ func (r *Registry[T]) Patch(id string, f func(*T)) bool {
 
 // Remove takes an entry out, for a mod that replaces part of the game.
 func (r *Registry[T]) Remove(id string) {
-	id = qualify(id)
+	id = Qualify(id)
 	if _, ok := r.items[id]; ok {
 		delete(r.items, id)
 		r.ids = slices.DeleteFunc(r.ids, func(s string) bool { return s == id })
@@ -82,7 +82,7 @@ func (r *Registry[T]) Remove(id string) {
 }
 
 func (r *Registry[T]) Get(id string) (*T, bool) {
-	v, ok := r.items[qualify(id)]
+	v, ok := r.items[Qualify(id)]
 	return v, ok
 }
 
@@ -100,15 +100,15 @@ func (r *Registry[T]) All() []*T {
 	return out
 }
 
-// qualify puts a bare name in the core pack.
-func qualify(id string) string {
+// Qualify puts a bare name in the core pack.
+func Qualify(id string) string {
 	if strings.Contains(id, ":") {
 		return id
 	}
 	return "core:" + id
 }
 
-func validID(id string) bool {
+func ValidID(id string) bool {
 	ns, name, ok := strings.Cut(id, ":")
 	return ok && ns != "" && name != "" && !strings.ContainsAny(id, " /\\")
 }
@@ -127,18 +127,9 @@ var packs []Pack
 
 func RegisterPack(p Pack) { packs = append(packs, p) }
 
-// reg is the game's content once every pack is loaded (loadContent).
-var reg *Content
-
-// loadContent loads the game's content, then lays out the base.
-func loadContent() {
-	reg = buildContent()
-	setupBase()
-}
-
-// buildContent runs the packs, dependencies first. A pack whose
-// requirements are missing is skipped.
-func buildContent() *Content {
+// Build runs the packs registered and the extra ones, dependencies
+// first. A pack whose requirements are missing is skipped.
+func Build(extra ...Pack) *Content {
 	c := &Content{}
 	c.Tools.init("tool")
 	c.Upgrades.init("upgrade")
@@ -151,8 +142,9 @@ func buildContent() *Content {
 	c.Vehicles.init("vehicle")
 	c.Terrain = planet.DefaultSettings()
 
+	all := append(slices.Clone(packs), extra...)
 	byID := map[string]Pack{}
-	for _, p := range packs {
+	for _, p := range all {
 		byID[p.ID] = p
 	}
 	state := map[string]int{} // 1 loading, 2 loaded, 3 failed
@@ -186,7 +178,7 @@ func buildContent() *Content {
 	}
 	// core first, then the others in the order they registered.
 	load("core")
-	for _, p := range packs {
+	for _, p := range all {
 		load(p.ID)
 	}
 	c.finish()
@@ -243,15 +235,15 @@ func (c *Content) finish() {
 	c.vehicleEntities()
 	for _, id := range c.Items.ids {
 		it := c.Items.items[id]
-		it.ID, it.Places = id, qualify(it.Places)
+		it.ID, it.Places = id, Qualify(it.Places)
 		if e, ok := c.Entities.Get(it.Places); ok && e.Item == "" {
 			e.Item = id // picked up, it comes back as this item
 		}
 	}
 }
 
-// packList describes the loaded packs, for the log.
-func packList() string {
+// PackList describes the loaded packs, for the log.
+func PackList() string {
 	var s []string
 	for _, p := range packs {
 		s = append(s, fmt.Sprintf("%s %s", p.ID, p.Version))

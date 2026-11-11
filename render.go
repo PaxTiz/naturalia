@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image/color"
+	"mars_sweeper/internal/content"
 	"mars_sweeper/internal/mathx"
 	"mars_sweeper/internal/mesh"
 	"mars_sweeper/internal/planet"
@@ -317,7 +318,7 @@ func (g *Game) setUniforms(cam rl.Camera3D) {
 	}
 	var blobs []float32
 	for _, ob := range baseObstacles[:min(len(baseObstacles), 48)] {
-		blobs = append(blobs, float32(ob.at.X), float32(ob.at.Z), float32(ob.radius), 0)
+		blobs = append(blobs, float32(ob.At.X), float32(ob.At.Z), float32(ob.Radius), 0)
 	}
 	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
@@ -446,20 +447,20 @@ func (g *Game) drawDrones() {
 		downAxis, downAngle := mathx.Orient(up.Scale(-1))
 		t1, t2 := mathx.TangentBasis(up)
 		p := d.Pos.Add(up.Scale(math.Sin(d.phase*3) * 0.08))
-		gfx.setMat(mtPaint, 2, true)
+		gfx.setMat(content.MtPaint, 2, true)
 		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, matWhite, 0.8, 0)
 		gfx.put(gfx.sphere, p.Add(up.Scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, accentOrange, 0.6, 0)
-		gfx.setMat(mtMetal, 3, true)
+		gfx.setMat(content.MtMetal, 3, true)
 		gfx.put(gfx.hemi, p.Sub(up.Scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, matDark, 1, 0)
 		for i := range 4 {
 			a := math.Pi/4 + float64(i)*math.Pi/2
 			arm := p.Add(t1.Scale(math.Cos(a) * 0.45)).Add(t2.Scale(math.Sin(a) * 0.45)).Add(up.Scale(0.05))
 			gfx.segment(gfx.cyl, p, arm, 0.025, matSteel, 0.4, 0)
-			gfx.setMat(mtPlain, 1, false)
+			gfx.setMat(content.MtPlain, 1, false)
 			gfx.segment(gfx.cyl, arm.Add(up.Scale(0.04)), arm.Add(up.Scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
-			gfx.setMat(mtMetal, 3, true)
+			gfx.setMat(content.MtMetal, 3, true)
 		}
-		gfx.setMat(mtPlain, 1, false)
+		gfx.setMat(content.MtPlain, 1, false)
 		light := colGreen
 		if g.tankFull() {
 			light = colRed
@@ -514,19 +515,19 @@ func (g *Game) drawTool() {
 	tip := neck.Add(dir.Scale(look.HeadLen * k))
 	hr, r := look.HandleR*k, look.HeadR*k
 
-	gfx.setMat(mtPaint, 8, true)
+	gfx.setMat(content.MtPaint, 8, true)
 	gfx.segment(gfx.cyl, base, neck, hr, look.HandleCol, 0.5, 0)
 	// A dark rubber grip where the hand holds it, with a cyan ring.
 	grip := base.Add(dir.Scale(look.HandleLen * 0.35 * k))
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 	gfx.segment(gfx.cyl, base.Sub(dir.Scale(0.01*k)), grip, hr*1.3, matDark, 0.2, 0)
 	gfx.segment(gfx.cyl, grip, grip.Add(dir.Scale(0.012*k)), hr*1.32, accentCyan, 0.3, 0)
-	gfx.setMat(mtMetal, 6, true)
+	gfx.setMat(content.MtMetal, 6, true)
 	collar := math.Max(hr, r) * 1.15
-	if look.Head == headFlare || look.Head == headBlock {
+	if look.Head == content.HeadFlare || look.Head == content.HeadBlock {
 		collar = hr * 1.5 // flat heads: a slim collar
 	}
-	if look.Head != headNozzle {
+	if look.Head != content.HeadNozzle {
 		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), neck.Add(dir.Scale(0.02*k)), collar, matSteel, 0.8, 0)
 	}
 	right := g.player.Right()
@@ -536,58 +537,58 @@ func (g *Game) drawTool() {
 		top = top.Scale(-1)
 	}
 	switch look.Head {
-	case headBlock:
+	case content.HeadBlock:
 		// A toothbrush: a flat plastic head, a white tuft of bristles
 		// standing under it.
 		at := neck.Add(dir.Scale(look.HeadLen * 0.5 * k))
-		gfx.setMat(mtPaint, 8, true)
+		gfx.setMat(content.MtPaint, 8, true)
 		gfx.putBasis(gfx.cube, at, across.Scale(r*2.2), dir.Scale(look.HeadLen*k), top.Scale(r*0.9), look.HandleCol, 0.5, 0)
-		gfx.setMat(mtFabric, 12, true)
+		gfx.setMat(content.MtFabric, 12, true)
 		gfx.putBasis(gfx.cube, at.Sub(top.Scale(r*0.9)), across.Scale(r*1.9), dir.Scale(look.HeadLen*0.85*k), top.Scale(r*1.2), look.HeadCol, 0.1, 0)
-		gfx.setMat(mtPlain, 1, false)
+		gfx.setMat(content.MtPlain, 1, false)
 		gfx.putBasis(gfx.cube, at.Add(top.Scale(r*0.46)), across.Scale(r*0.5), dir.Scale(look.HeadLen*0.6*k), top.Scale(0.004*k), accentCyan, 0, 0.3)
-	case headTaper:
+	case content.HeadTaper:
 		// A paintbrush: a steel ferrule, then a tuft of bristles narrowing
 		// to a tip dipped in paint.
 		ferrule := neck.Add(dir.Scale(look.HeadLen * 0.3 * k))
 		body := ferrule.Add(dir.Scale(look.HeadLen * 0.35 * k))
 		gfx.segment(gfx.cyl, neck, ferrule, r*0.85, matSteel, 0.9, 0)
-		gfx.setMat(mtFabric, 12, true)
+		gfx.setMat(content.MtFabric, 12, true)
 		gfx.segment(gfx.cyl, ferrule, body, r, look.HeadCol, 0.2, 0)
 		gfx.segment(gfx.cone, body, tip, r, look.HeadCol, 0.2, 0)
-		gfx.setMat(mtPlain, 1, false)
+		gfx.setMat(content.MtPlain, 1, false)
 		gfx.segment(gfx.cone, body.Lerp(tip, 0.55), tip.Add(dir.Scale(0.002*k)), r*0.45, accentOrange, 0.4, 0)
-	case headFlare:
+	case content.HeadFlare:
 		// A push broom: a painted head across the handle with steel end
 		// brackets and a hazard band, a thick row of bristles below.
 		width := look.HeadR * 3.2 * k
 		at := neck.Add(dir.Scale(0.03 * k))
-		gfx.setMat(mtPaint, 8, true)
+		gfx.setMat(content.MtPaint, 8, true)
 		gfx.putBasis(gfx.cube, at, across.Scale(width), dir.Scale(0.06*k), depth(across, dir).Scale(0.09*k), look.HandleCol, 0.3, 0)
-		gfx.setMat(mtHazard, 12, false)
+		gfx.setMat(content.MtHazard, 12, false)
 		gfx.putBasis(gfx.cube, at.Add(top.Scale(0.046*k)), across.Scale(width*0.6), dir.Scale(0.05*k), depth(across, dir).Scale(0.004*k), colWhite, 0.3, 0)
-		gfx.setMat(mtMetal, 6, true)
+		gfx.setMat(content.MtMetal, 6, true)
 		for _, sd := range []float64{-1, 1} {
 			gfx.putBasis(gfx.cube, at.Add(across.Scale(sd*width*0.5)), across.Scale(0.02*k), dir.Scale(0.08*k), depth(across, dir).Scale(0.1*k), matSteel, 0.8, 0)
 		}
-		gfx.setMat(mtFabric, 10, true)
+		gfx.setMat(content.MtFabric, 10, true)
 		gfx.putBasis(gfx.cube, neck.Add(dir.Scale(0.12*k)), across.Scale(width*0.96), dir.Scale(0.13*k), depth(across, dir).Scale(0.07*k), look.HeadCol, 0.1, 0)
-	case headNozzle:
+	case content.HeadNozzle:
 		// A blower in the kit's language: a painted body with a dark rear
 		// cap and a hazard band, a steel nozzle in two steps, a glowing ring
 		// at the mouth and a status light on top.
 		body := neck.Add(dir.Scale(look.HeadLen * 0.5 * k))
 		mid := body.Add(dir.Scale(look.HeadLen * 0.28 * k))
-		gfx.setMat(mtPlain, 1, false)
+		gfx.setMat(content.MtPlain, 1, false)
 		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.04*k)), neck.Sub(dir.Scale(0.02*k)), r*0.9, matDark, 0.3, 0)
-		gfx.setMat(mtPaint, 6, true)
+		gfx.setMat(content.MtPaint, 6, true)
 		gfx.segment(gfx.cyl, neck.Sub(dir.Scale(0.02*k)), body, r, look.HeadCol, 0.6, 0)
-		gfx.setMat(mtHazard, 3, true)
+		gfx.setMat(content.MtHazard, 3, true)
 		gfx.segment(gfx.cyl, body.Sub(dir.Scale(0.04*k)), body.Sub(dir.Scale(0.01*k)), r*1.03, colWhite, 0.3, 0)
-		gfx.setMat(mtMetal, 6, true)
+		gfx.setMat(content.MtMetal, 6, true)
 		gfx.segment(gfx.cyl, body, mid, r*0.74, matSteel, 0.8, 0)
 		gfx.segment(gfx.cyl, mid, tip, r*0.54, matSteel, 0.8, 0)
-		gfx.setMat(mtPlain, 1, false)
+		gfx.setMat(content.MtPlain, 1, false)
 		gfx.segment(gfx.cyl, mid.Sub(dir.Scale(0.008*k)), mid, r*0.8, matDark, 0.3, 0)
 		gfx.segment(gfx.cyl, tip.Sub(dir.Scale(0.012*k)), tip.Add(dir.Scale(0.002*k)), r*0.58, colCyan, 0, look.Glow)
 		light := colGreen
@@ -596,7 +597,7 @@ func (g *Game) drawTool() {
 		}
 		gfx.putBasis(gfx.cube, neck.Add(dir.Scale(look.HeadLen*0.22*k)).Add(top.Scale(r)), across.Scale(r*0.45), dir.Scale(look.HeadLen*0.22*k), top.Scale(0.012*k), light, 0, 0.9)
 	}
-	gfx.setMat(mtPlain, 1, false)
+	gfx.setMat(content.MtPlain, 1, false)
 }
 
 // depth is the third axis of a flat head lying across the handle.
