@@ -38,6 +38,13 @@ func (gfx *Graphics) box(c, size, across vec3, col color.RGBA, spec, emissive fl
 	gfx.put(gfx.cube, toWorld(c), size, vec3{0, 1, 0}, yawFor(across)*180/math.Pi, col, spec, emissive)
 }
 
+// kitDraws draw the moving and glowing parts of kit pieces, each frame.
+var kitDraws = map[string]func(g *Game, at vec3){
+	"core:incinerator": drawIncinerator,
+	"core:console":     drawConsole,
+	"core:bed":         drawBed,
+}
+
 func (g *Game) drawBase() {
 	gfx := g.gfx
 	rl.DisableBackfaceCulling()
@@ -55,8 +62,8 @@ func (g *Game) drawBase() {
 	gfx.base.draw(gfx)
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if k, _ := content.Kits.Get(p.Kit); k != nil && k.draw != nil {
-				k.draw(g, bp.At.Add(p.At))
+			if draw := kitDraws[qualify(p.Kit)]; draw != nil {
+				draw(g, bp.At.Add(p.At))
 			}
 		}
 	}

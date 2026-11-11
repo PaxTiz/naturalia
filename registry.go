@@ -28,7 +28,7 @@ type Content struct {
 	Items     Registry[Item]      // carried, placed as entities
 	Vehicles  Registry[Vehicle]
 	// Debug adds lines to the debug overlay (F3).
-	Debug   []func(g *Game) string
+	Debug   []func(g gameAPI) string
 	Terrain planet.Settings // one for the whole game, patched by packs
 
 	handlers map[string][]Handler // by event name (On)
@@ -127,12 +127,18 @@ var packs []Pack
 
 func RegisterPack(p Pack) { packs = append(packs, p) }
 
-// content is the game's content once every pack is loaded (loadContent).
-var content *Content
+// reg is the game's content once every pack is loaded (loadContent).
+var reg *Content
 
-// loadContent runs the packs, dependencies first. A pack whose requirements
-// are missing is skipped.
+// loadContent loads the game's content, then lays out the base.
 func loadContent() {
+	reg = buildContent()
+	setupBase()
+}
+
+// buildContent runs the packs, dependencies first. A pack whose
+// requirements are missing is skipped.
+func buildContent() *Content {
 	c := &Content{}
 	c.Tools.init("tool")
 	c.Upgrades.init("upgrade")
@@ -184,8 +190,7 @@ func loadContent() {
 		load(p.ID)
 	}
 	c.finish()
-	content = c
-	setupBase()
+	return c
 }
 
 func (c *Content) setPack(id string) {

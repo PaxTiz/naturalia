@@ -74,7 +74,7 @@ var stats = map[string]float64{
 // stat is a stat with every upgrade applied.
 func (g *Game) stat(name string) float64 {
 	v, mult := stats[name], 1.0
-	for _, u := range content.Upgrades.All() {
+	for _, u := range reg.Upgrades.All() {
 		lvl := float64(g.st.Levels[u.ID])
 		if lvl == 0 {
 			continue
@@ -94,14 +94,14 @@ func (g *Game) stat(name string) float64 {
 
 // toolTier is the held tool's rank, 0 being the cheapest. A tool from a
 // removed mod falls back to the first one.
-func (g *Game) toolTier() int { return max(0, slices.Index(content.Tools.IDs(), g.st.Tool)) }
+func (g *Game) toolTier() int { return max(0, slices.Index(reg.Tools.IDs(), g.st.Tool)) }
 
-func (g *Game) tool() *Tool        { return content.Tools.All()[g.toolTier()] }
-func (g *Game) capacity() float64  { return g.stat("tank") }
+func (g *Game) tool() *Tool        { return reg.Tools.All()[g.toolTier()] }
+func (g *Game) Capacity() float64  { return g.stat("tank") }
 func (g *Game) powerMult() float64 { return g.stat("power") }
 func (g *Game) priceMult() float64 { return g.stat("price") }
 func (g *Game) autoSell() bool     { return g.stat("autosell") > 0 }
-func (g *Game) space() float64     { return math.Max(0, g.capacity()-g.st.Tank) }
+func (g *Game) space() float64     { return math.Max(0, g.Capacity()-g.st.Tank) }
 func (g *Game) tankFull() bool     { return g.space() <= 1e-6 }
 func (g *Game) gemValue() float64 {
 	return 20 * g.priceMult() * math.Pow(2.5, float64(g.toolTier()))
@@ -119,8 +119,8 @@ type shopItem struct {
 func (it shopItem) affordable(credits float64) bool { return !it.maxed && credits >= it.cost }
 
 func (g *Game) shopItems() []shopItem {
-	tools := content.Tools.All()
-	items := make([]shopItem, 0, 1+content.Upgrades.Len())
+	tools := reg.Tools.All()
+	items := make([]shopItem, 0, 1+reg.Upgrades.Len())
 
 	if next := g.toolTier() + 1; next < len(tools) {
 		t := tools[next]
@@ -137,7 +137,7 @@ func (g *Game) shopItems() []shopItem {
 		items = append(items, shopItem{name: "Outil : " + g.tool().Name, desc: "Le meilleur outil de la galaxie", info: "Outil max", icon: "tool", maxed: true})
 	}
 
-	for _, u := range content.Upgrades.All() {
+	for _, u := range reg.Upgrades.All() {
 		lvl := g.st.Levels[u.ID]
 		it := shopItem{
 			id:   u.ID,
@@ -157,7 +157,7 @@ func (g *Game) shopItems() []shopItem {
 		items = append(items, it)
 	}
 
-	for _, v := range content.Vehicles.All() {
+	for _, v := range reg.Vehicles.All() {
 		it := shopItem{
 			id: v.ID, name: "Véhicule : " + v.Name, desc: v.Desc, icon: "vehicle",
 			info: fmt.Sprintf("%.0f km/h", v.Speed*3.6), cost: v.Cost,
@@ -168,7 +168,7 @@ func (g *Game) shopItems() []shopItem {
 		}
 		items = append(items, it)
 	}
-	for _, o := range content.Items.All() {
+	for _, o := range reg.Items.All() {
 		if o.Cost <= 0 {
 			continue
 		}

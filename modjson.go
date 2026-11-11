@@ -60,8 +60,13 @@ type modFile struct {
 		Vehicles  []string `json:"vehicles"`
 	} `json:"remove"`
 
-	dir string
+	dir     string
+	scripts ScriptRunner
 }
+
+// ScriptRunner runs a mod's scripts while its pack registers: names are
+// files of the mod's folder dir.
+type ScriptRunner func(c *Content, mod, dir string, names []string)
 
 // modDirs are where mods are looked for: mods/ in the current folder, then
 // in the game's settings folder, next to the save.
@@ -95,17 +100,17 @@ func disabledMods() map[string]bool {
 	return off
 }
 
-// loadMods registers a pack for every mod found, before loadContent.
-func loadMods() {
-	off := disabledMods()
+// loadMods registers a pack for every mod found in dirs, but those turned
+// off, before loadContent.
+func loadMods(dirs []string, off map[string]bool, scripts ScriptRunner) {
 	seen := map[string]bool{}
-	for _, root := range modDirs() {
+	for _, root := range dirs {
 		entries, _ := os.ReadDir(root)
 		for _, e := range entries {
 			if !e.IsDir() {
 				continue
 			}
-			m, err := readMod(filepath.Join(root, e.Name()))
+			m, err := readMod(filepath.Join(root, e.Name()), scripts)
 			switch {
 			case err != nil:
 				log.Printf("mod %s skipped: %v", e.Name(), err)
@@ -121,12 +126,12 @@ func loadMods() {
 	}
 }
 
-func readMod(dir string) (*modFile, error) {
+func readMod(dir string, scripts ScriptRunner) (*modFile, error) {
 	data, err := os.ReadFile(filepath.Join(dir, "mod.json"))
 	if err != nil {
 		return nil, err
 	}
-	m := &modFile{dir: dir}
+	m := &modFile{dir: dir, scripts: scripts}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields() // a typo in a field name says so
 	if err := dec.Decode(m); err != nil {
@@ -296,7 +301,9 @@ func (m *modFile) register(c *Content) {
 		c.Terrain.Features = append(before, c.Terrain.Features...)
 	}
 
-	m.loadScripts(c)
+	if m.scripts != nil && len(m.Scripts) > 0 {
+		m.scripts(c, m.ID, m.dir, m.Scripts)
+	}
 }
 
 func orDefault(s, def string) string {
@@ -344,7 +351,7 @@ func (k kitJSON) kit() kitProp {
 		kp.obstacles = append(kp.obstacles, obstacle{o.At, o.Radius})
 	}
 	parts := k.Parts
-	kp.build = func(b *building, at vec3, _ int) {
+	kp.build = func(b *mesh.Parts, at vec3, _ int) {
 		for _, p := range parts {
 			lit := float32(mesh.LitIndoor)
 			if p.Lit == "outdoor" {
@@ -364,16 +371,16 @@ func (k kitJSON) kit() kitProp {
 			}
 		}
 	}
-	use := map[string]func(g *Game, at vec3){
-		"map":     func(g *Game, _ vec3) { g.setMode(modeMap) },
-		"shop":    func(g *Game, _ vec3) { g.setMode(modeShop) },
-		"sleep":   func(g *Game, _ vec3) { g.mode, g.sleepT = modeSleep, 0 },
-		"deposit": (*Game).deposit,
+	use := map[string]func(g gameAPI, at vec3){
+		"map":     func(g gameAPI, _ vec3) { g.OpenMap() },
+		"shop":    func(g gameAPI, _ vec3) { g.OpenShop() },
+		"sleep":   func(g gameAPI, _ vec3) { g.Sleep() },
+		"deposit": gameAPI.Deposit,
 	}
 	if f, ok := use[k.Use]; ok {
 		kp.use = f
 	} else if k.Use != "" || k.Prompt != "" {
-		kp.use = func(*Game, vec3) {} // only the "use" event, for scripts
+		kp.use = func(gameAPI, vec3) {} // only the "use" event, for scripts
 	}
 	return kp
 }

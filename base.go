@@ -68,7 +68,7 @@ const maxRooms = 8
 // setupBase lays the base out from the buildings: rooms, doors and
 // corridors along the links, what blocks the player, what they can use.
 func setupBase() {
-	plans = content.Buildings.All()
+	plans = reg.Buildings.All()
 	if len(plans) > maxRooms {
 		log.Printf("base: %d buildings, only the first %d are built", len(plans), maxRooms)
 		plans = plans[:maxRooms]
@@ -78,7 +78,7 @@ func setupBase() {
 		if bp.Link == "" {
 			continue
 		}
-		to, ok := content.Buildings.Get(bp.Link)
+		to, ok := reg.Buildings.Get(bp.Link)
 		if !ok || !slices.Contains(plans, to) {
 			log.Printf("base: %s links to %s, which isn't built", bp.ID, bp.Link)
 			continue
@@ -94,7 +94,7 @@ func setupBase() {
 	corridors = append(corridors, corridor{vec3{0, 0, -(plans[0].Shape.Radius - 0.2)}, airlockEnd, doorWidth + 0.2, 2.6})
 	rooms = nil
 	for _, bp := range plans {
-		rooms = append(rooms, bp.room())
+		rooms = append(rooms, roomOf(bp))
 	}
 	hubRoom = rooms[0]
 	tableSpot = vec3{0, 0, 0}

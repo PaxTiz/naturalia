@@ -62,7 +62,7 @@ func (g *Game) drawDebug() {
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
 		fmt.Sprintf("packs %s   entités %d", packList(), len(g.st.Entities)),
 	}
-	for _, line := range content.Debug { // added by packs
+	for _, line := range reg.Debug { // added by packs
 		lines = append(lines, line(g))
 	}
 	size, step := 15*u, 20*u
@@ -102,7 +102,7 @@ func newShotRun(g *Game) *shotRun {
 	// MS_SHOT_TOOL=n holds tool n (0 is the toothbrush) for the shot.
 	var tool int
 	if _, err := fmt.Sscanf(os.Getenv("MS_SHOT_TOOL"), "%d", &tool); err == nil && s.file != "" {
-		g.st.Tool = content.Tools.IDs()[max(0, min(content.Tools.Len()-1, tool))]
+		g.st.Tool = reg.Tools.IDs()[max(0, min(reg.Tools.Len()-1, tool))]
 	}
 	if v := os.Getenv("MS_SHOT_UP"); s.file != "" && v != "" {
 		var d vec3

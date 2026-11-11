@@ -408,7 +408,7 @@ func (g *Game) drawStatus() {
 	// Tool, with its tier as pips.
 	gfx.capsRight("OUTIL", right, y+12*u, 13*u, visorDim)
 	gfx.textRight(g.tool().Name, right, y+29*u, 17*u, uiWhite)
-	n := content.Tools.Len()
+	n := reg.Tools.Len()
 	for i := range n {
 		c := uiTrack
 		if i <= g.toolTier() {
@@ -421,10 +421,10 @@ func (g *Game) drawStatus() {
 	// Tank: a gauge with quarter ticks.
 	ty := y + 70*u
 	gfx.caps("RÉSERVOIR", left, ty, 13*u, visorDim)
-	gfx.monoRight(fmtNum(g.st.Tank)+" / "+fmtNum(g.capacity())+" g", right, ty-1*u, 14*u, uiWhite)
+	gfx.monoRight(fmtNum(g.st.Tank)+" / "+fmtNum(g.Capacity())+" g", right, ty-1*u, 14*u, uiWhite)
 	bar := rl.NewRectangle(left, ty+19*u, right-left, 9*u)
 	fillCut(bar, 3*u, uiTrack)
-	fill := float32(mathx.Clamp01(g.st.Tank / g.capacity()))
+	fill := float32(mathx.Clamp01(g.st.Tank / g.Capacity()))
 	c := visorCyan
 	if fill > 0.8 {
 		c = visorAmber

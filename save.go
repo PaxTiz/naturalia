@@ -105,7 +105,7 @@ func (g *Game) load() {
 		return
 	}
 	g.player = sf.Player
-	g.world = planet.NewWorld(sf.Seed, &content.Terrain)
+	g.world = planet.NewWorld(sf.Seed, &reg.Terrain)
 	g.world.SetTileBytes(sf.Tiles)
 	g.world.SetCollected(sf.Collected)
 }
@@ -139,7 +139,7 @@ func migrateState(st *State) {
 			st.Levels["core:"+k] = v
 		}
 	}
-	if _, ok := content.Tools.Get(st.Tool); !ok {
+	if _, ok := reg.Tools.Get(st.Tool); !ok {
 		log.Printf("load: tool %s no longer exists (mod removed?), back to the first one", st.Tool)
 	}
 }

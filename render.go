@@ -66,6 +66,7 @@ type Graphics struct {
 	dust                                              dustGPU // the dust tiles near the player, on the GPU
 	base                                              *building
 	doorPanel                                         rl.Model
+	entities                                          map[string][]entityModel // by entity ID, built on first draw
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -95,7 +96,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 }
 
 func NewGraphics() *Graphics {
-	gfx := &Graphics{}
+	gfx := &Graphics{entities: map[string][]entityModel{}}
 	gfx.post = newPostFX()
 	gfx.terrainSh, gfx.tLoc = loadShaderVS(glsl("terrain.vert"), glsl("terrain.frag"))
 	gfx.objectSh, gfx.oLoc = loadShaderVS(glsl("object.vert"), glsl("object.frag"))

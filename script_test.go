@@ -16,7 +16,7 @@ func TestScripts(t *testing.T) {
 		game.randomEvent({id: "pluie", every: 10, run: () => game.giveCredits(-1)});
 		try { game.credits(); throw "no"; } catch (e) { if (e === "no") throw "credits() should throw while loading"; }
 	`), 0o644)
-	m, err := readMod(dir)
+	m, err := readMod(dir, runScripts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestScripts(t *testing.T) {
 	if d := time.Since(start); d > time.Second {
 		t.Errorf("the loop ran %v", d)
 	}
-	ev, ok := content.Events.Get("essai:pluie")
+	ev, ok := reg.Events.Get("essai:pluie")
 	if !ok {
 		t.Fatal("random event not registered")
 	}

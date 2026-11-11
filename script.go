@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"mars_sweeper/internal/planet"
-	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -27,30 +26,30 @@ const scriptBudget = 50 * time.Millisecond // per call
 type script struct {
 	mod    string
 	rt     *goja.Runtime
-	g      *Game // during a call
+	g      gameAPI // during a call
 	errors int
 }
 
-// loadScripts runs a mod's scripts while its pack registers.
-func (m *modFile) loadScripts(c *Content) {
-	for _, name := range m.Scripts {
-		src, err := os.ReadFile(filepath.Join(m.dir, filepath.Clean("/"+name)))
+// runScripts runs a mod's scripts while its pack registers (a ScriptRunner).
+func runScripts(c *Content, mod, dir string, names []string) {
+	for _, name := range names {
+		src, err := os.ReadFile(filepath.Join(dir, filepath.Clean("/"+name)))
 		if err != nil {
-			log.Printf("mod %s: %v", m.ID, err)
+			log.Printf("mod %s: %v", mod, err)
 			continue
 		}
-		s := &script{mod: m.ID, rt: goja.New()}
+		s := &script{mod: mod, rt: goja.New()}
 		s.rt.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 		s.rt.Set("game", s.api(c))
-		s.rt.Set("console", map[string]any{"log": func(args ...any) { log.Println(append([]any{"mod " + m.ID + ":"}, args...)...) }})
+		s.rt.Set("console", map[string]any{"log": func(args ...any) { log.Println(append([]any{"mod " + mod + ":"}, args...)...) }})
 		if _, err := s.run(nil, func() (goja.Value, error) { return s.rt.RunScript(name, string(src)) }); err != nil {
-			log.Printf("mod %s: %s: %v", m.ID, name, err)
+			log.Printf("mod %s: %s: %v", mod, name, err)
 		}
 	}
 }
 
 // run calls into JS with the game at hand, within the time budget.
-func (s *script) run(g *Game, f func() (goja.Value, error)) (goja.Value, error) {
+func (s *script) run(g gameAPI, f func() (goja.Value, error)) (goja.Value, error) {
 	s.g = g
 	s.rt.ClearInterrupt()
 	t := time.AfterFunc(scriptBudget, func() { s.rt.Interrupt("too slow: more than " + scriptBudget.String()) })
@@ -59,7 +58,7 @@ func (s *script) run(g *Game, f func() (goja.Value, error)) (goja.Value, error) 
 }
 
 // call runs a JS function; after a few errors, the mod's handler is muted.
-func (s *script) call(g *Game, fn goja.Callable, args ...any) goja.Value {
+func (s *script) call(g gameAPI, fn goja.Callable, args ...any) goja.Value {
 	if s.errors >= 5 {
 		return goja.Undefined()
 	}
@@ -81,7 +80,7 @@ func (s *script) call(g *Game, fn goja.Callable, args ...any) goja.Value {
 
 // game is what g is during a call; outside of one (while loading), it
 // throws.
-func (s *script) game() *Game {
+func (s *script) game() gameAPI {
 	if s.g == nil {
 		panic(s.rt.NewTypeError("the game isn't running yet: call this from a handler"))
 	}
@@ -103,10 +102,11 @@ type jsEvent struct {
 }
 
 func (s *script) api(c *Content) map[string]any {
+	isEntity := func(id string) bool { _, ok := c.Entities.Get(id); return ok }
 	return map[string]any{
 		// Listening.
 		"on": func(name string, fn goja.Callable) {
-			c.On(name, func(g *Game, e *Event) {
+			c.On(name, func(g gameAPI, e *Event) {
 				s.call(g, fn, jsEvent{e.Name, e.ID, jsVec(e.At), e.Amount, e.Dt})
 			})
 		},
@@ -119,109 +119,65 @@ func (s *script) api(c *Content) map[string]any {
 			if def.Run == nil || def.Every <= 0 {
 				panic(s.rt.NewTypeError("randomEvent needs every > 0 and run"))
 			}
-			ev := RandomEvent{Every: def.Every, Run: func(g *Game) { s.call(g, def.Run) }}
+			ev := RandomEvent{Every: def.Every, Run: func(g gameAPI) { s.call(g, def.Run) }}
 			if def.When != nil {
-				ev.When = func(g *Game) bool { return s.call(g, def.When).ToBoolean() }
+				ev.When = func(g gameAPI) bool { return s.call(g, def.When).ToBoolean() }
 			}
 			c.Events.Add(qualifyIn(s.mod, def.ID), ev)
 		},
 
 		// Reading.
-		"credits":  func() float64 { return s.game().st.Credits },
-		"tank":     func() float64 { return s.game().st.Tank },
-		"capacity": func() float64 { return s.game().capacity() },
-		"tool":     func() string { return s.game().tool().ID },
+		"credits":  func() float64 { return s.game().Credits() },
+		"tank":     func() float64 { return s.game().Tank() },
+		"capacity": func() float64 { return s.game().Capacity() },
+		"tool":     func() string { return s.game().ToolID() },
 		"level": func(id string) int {
-			return s.game().st.Levels[refIn(s.mod, id, func(id string) bool { _, ok := content.Upgrades.Get(id); return ok })]
+			return s.game().Level(refIn(s.mod, id, func(id string) bool { _, ok := c.Upgrades.Get(id); return ok }))
 		},
-		"isDay":  func() bool { return sunDir.Dot(s.game().player.LocalUp()) > 0.05 },
-		"inside": func() string { return s.game().inside },
-		"clock":  func() float64 { return s.game().clock },
+		"isDay":  func() bool { return s.game().SunHeight() > 0.05 },
+		"inside": func() string { return s.game().Inside() },
+		"clock":  func() float64 { return s.game().Clock() },
 		// distanceToBase: in meters along the ground.
-		"distanceToBase": func() float64 { return planet.ArcDist(s.game().player.LocalUp(), planet.BaseUp) },
-		"player": func() jsVec {
-			return jsVec(s.game().player.Pos)
-		},
+		"distanceToBase": func() float64 { return planet.ArcDist(s.game().PlayerPos().Norm(), planet.BaseUp) },
+		"player":         func() jsVec { return jsVec(s.game().PlayerPos()) },
 
 		// Acting.
-		"say": func(text string) { s.game().say(text) },
-		"giveCredits": func(n float64) {
-			g := s.game()
-			if math.IsNaN(n) || math.IsInf(n, 0) {
-				return
-			}
-			g.st.Credits = math.Max(0, g.st.Credits+n)
-			if n > 0 {
-				g.st.TotalEarned += n
-				g.floaters = append(g.floaters, Floater{Pos: g.player.Eye().Add(g.player.Forward().Scale(2)), Life: 2, Text: "+" + fmtNum(n) + " cr", C: colGold})
-			}
-		},
+		"say":         func(text string) { s.game().Say(text) },
+		"giveCredits": func(n float64) { s.game().GiveCredits(n) },
 		// burst throws sparks around the player: color "#rrggbb".
 		"burst": func(n int, col string) {
-			g := s.game()
 			c, err := hexColor(col)
 			if err != nil {
 				c = colCyan
 			}
-			at := g.player.Eye().Add(g.player.Forward().Scale(2))
-			for range min(n, 200) {
-				vel := vec3{g.rng.Float64() - 0.5, g.rng.Float64() - 0.5, g.rng.Float64() - 0.5}.Add(g.player.LocalUp().Scale(0.6)).Scale(4)
-				g.addParticle(Particle{Pos: at, Vel: vel, MaxLife: 0.9, Size: 0.06, C: c, Falls: true, Additive: true})
-			}
+			s.game().Burst(n, c)
 		},
-		"beep":      func(freq float64) { s.game().sfx.beep(0.05, 0.25, 0.14, freq) },
-		"dustDevil": func() { spawnDevil(s.game()) },
-		"random":    func() float64 { return s.game().rng.Float64() },
+		"beep":      func(freq float64) { s.game().Beep(freq) },
+		"dustDevil": func() { s.game().SpawnDustDevil() },
+		"random":    func() float64 { return s.game().Random() },
 		// spawn sets an entity where the player aims (or right ahead).
-		"spawn": func(kind string) bool {
-			g := s.game()
-			return g.spawn(refIn(s.mod, kind, isEntity), g.placeAt())
-		},
+		"spawn": func(kind string) bool { return s.game().Spawn(refIn(s.mod, kind, isEntity)) },
 		// entities counts the placed entities of a kind, all of them for "".
 		"entities": func(kind string) int {
-			n := 0
-			for _, e := range s.game().st.Entities {
-				if kind == "" || e.Kind == refIn(s.mod, kind, isEntity) {
-					n++
-				}
+			if kind != "" {
+				kind = refIn(s.mod, kind, isEntity)
 			}
-			return n
+			return s.game().Entities(kind)
 		},
 		"giveItem": func(id string, n int) {
-			g := s.game()
-			if g.st.Items == nil {
-				g.st.Items = map[string]int{}
-			}
-			id = refIn(s.mod, id, func(id string) bool { _, ok := content.Items.Get(id); return ok })
-			g.st.Items[id] = max(0, g.st.Items[id]+n)
+			s.game().GiveItem(refIn(s.mod, id, func(id string) bool { _, ok := c.Items.Get(id); return ok }), n)
 		},
-		"driving": func() string {
-			if v, ok := s.game().driven(); ok {
-				return v.ID
-			}
-			return ""
-		},
+		"driving": func() string { return s.game().Driving() },
 		// debugLine adds a line to the debug overlay (F3): fn returns it.
 		"debugLine": func(fn goja.Callable) {
-			c.Debug = append(c.Debug, func(g *Game) string { return s.call(g, fn).String() })
+			c.Debug = append(c.Debug, func(g gameAPI) string { return s.call(g, fn).String() })
 		},
 
 		// Remembering, in the save: numbers, strings, lists, objects.
-		"get": func(key string) any { return s.game().st.Mods[s.mod][key] },
-		"set": func(key string, v any) {
-			g := s.game()
-			if g.st.Mods == nil {
-				g.st.Mods = map[string]map[string]any{}
-			}
-			if g.st.Mods[s.mod] == nil {
-				g.st.Mods[s.mod] = map[string]any{}
-			}
-			g.st.Mods[s.mod][key] = v
-		},
+		"get": func(key string) any { return s.game().ModData(s.mod)[key] },
+		"set": func(key string, v any) { s.game().ModData(s.mod)[key] = v },
 	}
 }
-
-func isEntity(id string) bool { _, ok := content.Entities.Get(id); return ok }
 
 // refIn resolves a name used by a mod's script: its own entry first, then
 // the core's.

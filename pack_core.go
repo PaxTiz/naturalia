@@ -94,8 +94,10 @@ func registerCore(c *Content) {
 		),
 	})
 
-	c.Events.Add("core:dust-devil", RandomEvent{Every: 15, When: devilWeather, Run: spawnDevil})
-	c.On(evTick, moveDevils)
+	// Dust devils rise in daytime, a few at once.
+	c.Events.Add("core:dust-devil", RandomEvent{Every: 15,
+		When: func(g gameAPI) bool { return g.DustDevils() < maxDevils && g.SunHeight() > 0.2 },
+		Run:  gameAPI.SpawnDustDevil})
 }
 
 // Off-whites, steel greys, cyan and yellow/black accents: they stand out
@@ -212,18 +214,18 @@ var coreBuildings = []Blueprint{
 }
 
 var coreKits = map[string]kitProp{
-	"maptable": {build: buildMapTable, obstacles: []obstacle{{vec3{}, 1.25}},
-		reach: 2.6, use: func(g *Game, _ vec3) { g.setMode(modeMap) }, prompt: "[E] Consulter l'état de Mars"},
-	"incinerator": {build: buildIncinerator, draw: drawIncinerator, obstacles: []obstacle{{vec3{}, 1.4}},
-		reach: 2.8, use: (*Game).deposit, prompt: "[E] Déposer la poussière dans l'incinérateur"},
-	"console": {build: buildConsole, draw: drawConsole,
+	"maptable": {build: kitBuild(buildMapTable), obstacles: []obstacle{{vec3{}, 1.25}},
+		reach: 2.6, use: func(g gameAPI, _ vec3) { g.OpenMap() }, prompt: "[E] Consulter l'état de Mars"},
+	"incinerator": {build: kitBuild(buildIncinerator), obstacles: []obstacle{{vec3{}, 1.4}},
+		reach: 2.8, use: gameAPI.Deposit, prompt: "[E] Déposer la poussière dans l'incinérateur"},
+	"console": {build: kitBuild(buildConsole),
 		obstacles: []obstacle{{vec3{-0.3, 0, 0}, 1.0}, {vec3{0, 0, 2.3}, 0.6}, {vec3{0, 0, -2.3}, 0.6}},
-		reach:     2.8, use: func(g *Game, _ vec3) { g.setMode(modeShop) }, prompt: "[E] Ouvrir le laboratoire de recherche"},
-	"bed": {build: buildBed, draw: drawBed, obstacles: []obstacle{{vec3{-0.55, 0, 0}, 0.6}, {vec3{0.55, 0, 0}, 0.6}},
-		reach: 2.6, use: func(g *Game, _ vec3) { g.mode, g.sleepT = modeSleep, 0 }, prompt: "[E] Dormir"},
-	"crate.stack": {build: buildCrates, obstacles: []obstacle{{vec3{}, 0.55}}},
-	"chair":       {build: buildChair, obstacles: []obstacle{{vec3{}, 0.35}}},
-	"workbench":   {build: buildWorkbench, obstacles: []obstacle{{vec3{}, 0.8}}},
-	"planter":     {build: buildPlanter, obstacles: []obstacle{{vec3{}, 0.85}}},
-	"desk":        {build: buildDesk, obstacles: []obstacle{{vec3{}, 0.65}}},
+		reach:     2.8, use: func(g gameAPI, _ vec3) { g.OpenShop() }, prompt: "[E] Ouvrir le laboratoire de recherche"},
+	"bed": {build: kitBuild(buildBed), obstacles: []obstacle{{vec3{-0.55, 0, 0}, 0.6}, {vec3{0.55, 0, 0}, 0.6}},
+		reach: 2.6, use: func(g gameAPI, _ vec3) { g.Sleep() }, prompt: "[E] Dormir"},
+	"crate.stack": {build: kitBuild(buildCrates), obstacles: []obstacle{{vec3{}, 0.55}}},
+	"chair":       {build: kitBuild(buildChair), obstacles: []obstacle{{vec3{}, 0.35}}},
+	"workbench":   {build: kitBuild(buildWorkbench), obstacles: []obstacle{{vec3{}, 0.8}}},
+	"planter":     {build: kitBuild(buildPlanter), obstacles: []obstacle{{vec3{}, 0.85}}},
+	"desk":        {build: kitBuild(buildDesk), obstacles: []obstacle{{vec3{}, 0.65}}},
 }

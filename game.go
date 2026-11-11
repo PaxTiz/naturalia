@@ -136,11 +136,11 @@ func NewGame() *Game {
 		g.st.Levels = map[string]int{}
 	}
 	if g.st.Tool == "" {
-		g.st.Tool = content.Tools.IDs()[0]
+		g.st.Tool = reg.Tools.IDs()[0]
 	}
 	fresh := g.world == nil
 	if fresh {
-		g.world = planet.NewWorld(g.rng.Uint64(), &content.Terrain)
+		g.world = planet.NewWorld(g.rng.Uint64(), &reg.Terrain)
 	}
 	basePos = planet.BaseUp.Scale(planet.Radius + g.world.Relief.BaseHeight())
 	g.terrain = NewTerrain(g.world.Relief)
@@ -413,9 +413,9 @@ func (g *Game) use(it interactable) {
 	g.emit(Event{Name: evUse, ID: it.kit, At: it.at})
 }
 
-// deposit feeds the tank's dust to the incinerator at the local point in,
+// Deposit feeds the tank's dust to the incinerator at the local point in,
 // which turns it into credits.
-func (g *Game) deposit(in vec3) {
+func (g *Game) Deposit(in vec3) {
 	hopper := toWorld(in.Add(vec3{0, 2.6, 0}))
 	if g.st.Tank < 1 {
 		g.floaters = append(g.floaters, Floater{Pos: hopper.Add(vec3{0, 0.5, 0}), Life: 1.5, Text: "Réservoir vide", C: colGray})
@@ -464,8 +464,8 @@ func (g *Game) addParticle(p Particle) {
 	g.particles = append(g.particles, p)
 }
 
-// say shows a message on the visor for a few seconds.
-func (g *Game) say(text string) {
+// Say shows a message on the visor for a few seconds.
+func (g *Game) Say(text string) {
 	g.message, g.messageT = text, 4.5
 	g.sfx.beep(0.03, 0.12, 0.1, 740, 988)
 }

@@ -37,7 +37,7 @@ func TestMigrateOldSave(t *testing.T) {
 		t.Errorf("levels = %v", st.Levels)
 	}
 	g := &Game{st: st}
-	if c := g.capacity(); c < 50*4.09 || c > 50*4.1 {
+	if c := g.Capacity(); c < 50*4.09 || c > 50*4.1 {
 		t.Errorf("capacity = %f", c)
 	}
 }
@@ -57,7 +57,7 @@ func TestEventsAndBuildings(t *testing.T) {
 		t.Errorf("%d corridors, %d rooms, %d interactables", len(corridors), len(rooms), len(interactables))
 	}
 	var sold float64
-	content.On(evSell, func(g *Game, e *Event) { sold += e.Amount })
+	reg.On(evSell, func(g gameAPI, e *Event) { sold += e.Amount })
 	(&Game{}).emit(Event{Name: evSell, Amount: 12})
 	if sold != 12 {
 		t.Errorf("sold = %f", sold)
@@ -65,7 +65,7 @@ func TestEventsAndBuildings(t *testing.T) {
 }
 
 func TestExampleMod(t *testing.T) {
-	m, err := readMod("examples/mods/serre")
+	m, err := readMod("examples/mods/serre", runScripts)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,14 +73,14 @@ func TestExampleMod(t *testing.T) {
 	defer func() { packs = packs[:len(packs)-1] }()
 	loadContent()
 
-	ids := content.Tools.IDs()
+	ids := reg.Tools.IDs()
 	if ids[3] != "serre:rateau" || ids[4] != "core:vacuum" {
 		t.Errorf("tools in order: %v", ids)
 	}
-	if b, _ := content.Tools.Get("broom"); b.Cost != 400 || b.Look.Head != headFlare {
+	if b, _ := reg.Tools.Get("broom"); b.Cost != 400 || b.Look.Head != headFlare {
 		t.Errorf("patched broom: %+v", b)
 	}
-	if r, _ := content.Tools.Get("serre:rateau"); r.Look.HeadCol.G != 0x8c || r.Look.HandleLen != 0.6 {
+	if r, _ := reg.Tools.Get("serre:rateau"); r.Look.HeadCol.G != 0x8c || r.Look.HandleLen != 0.6 {
 		t.Errorf("rake look: %+v", r.Look)
 	}
 	if len(rooms) != 5 || len(corridors) != 5 {
@@ -93,30 +93,30 @@ func TestExampleMod(t *testing.T) {
 	if len(plans[0].Doors) != 5 {
 		t.Errorf("hub doors: %v", plans[0].Doors)
 	}
-	if tk, _ := content.Tokens.Get("serre:leaf"); tk.col.G != 0xa0 || tk.scale != 1 {
+	if tk, _ := reg.Tokens.Get("serre:leaf"); tk.col.G != 0xa0 || tk.scale != 1 {
 		t.Errorf("leaf token: %+v", tk)
 	}
 	if n := len(yardObstacles()); n != 14 {
 		t.Errorf("the greenhouse should push the barrels away: %d yard obstacles", n)
 	}
-	if tr := content.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {
+	if tr := reg.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {
 		t.Errorf("terrain: %+v", tr)
 	}
 	mesa := planet.Toward(vec3{1, 0, 1}, 320)
-	if h := content.Terrain.FeatureHeight(mesa); h != 45 {
+	if h := reg.Terrain.FeatureHeight(mesa); h != 45 {
 		t.Errorf("on the mesa: %f", h)
 	}
-	if it, _ := content.Items.Get("serre:pousse"); it == nil || it.Places != "serre:pousse" {
+	if it, _ := reg.Items.Get("serre:pousse"); it == nil || it.Places != "serre:pousse" {
 		t.Errorf("item: %+v", it)
 	}
-	if e, _ := content.Entities.Get("serre:pousse"); e == nil || e.Item != "serre:pousse" {
+	if e, _ := reg.Entities.Get("serre:pousse"); e == nil || e.Item != "serre:pousse" {
 		t.Errorf("entity: %+v", e)
 	}
-	if e, _ := content.Entities.Get("serre:brouette"); e == nil || e.Parts[1].Token != "serre:leaf" {
+	if e, _ := reg.Entities.Get("serre:brouette"); e == nil || e.Parts[1].Token != "serre:leaf" {
 		t.Errorf("vehicle's entity: %+v", e)
 	}
-	if len(content.Debug) != 1 {
-		t.Errorf("%d debug lines", len(content.Debug))
+	if len(reg.Debug) != 1 {
+		t.Errorf("%d debug lines", len(reg.Debug))
 	}
 	if got := buildingAt(vec3{-10, 1, 10}); got != "serre:serre" {
 		t.Errorf("in the greenhouse: %q", got)

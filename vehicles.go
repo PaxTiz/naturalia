@@ -50,7 +50,7 @@ func (g *Game) driven() (*Vehicle, bool) {
 	if g.driving < 0 || g.driving >= len(g.st.Entities) {
 		return nil, false
 	}
-	return content.Vehicles.Get(g.st.Entities[g.driving].Kind)
+	return reg.Vehicles.Get(g.st.Entities[g.driving].Kind)
 }
 
 // getIn or out of the vehicle standing as entity i.

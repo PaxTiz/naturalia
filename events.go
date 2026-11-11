@@ -6,7 +6,7 @@ import (
 
 // The event bus (docs/MODS.md): the game says what happens, packs listen.
 // The base game listens like any mod does: its dust devils are a random
-// event and move on "tick".
+// event.
 
 // Events the game emits, and what they carry.
 const (
@@ -31,15 +31,15 @@ type Event struct {
 	Dt     float64
 }
 
-type Handler func(g *Game, e *Event)
+type Handler func(g gameAPI, e *Event)
 
 // RandomEvent happens now and then, while its condition holds: on average
 // once every Every seconds.
 type RandomEvent struct {
 	ID    string
 	Every float64
-	When  func(g *Game) bool // nil: always
-	Run   func(g *Game)
+	When  func(g gameAPI) bool // nil: always
+	Run   func(g gameAPI)
 }
 
 // On registers a handler for an event, for the pack being loaded.
@@ -52,7 +52,7 @@ func (c *Content) On(name string, h Handler) {
 
 // emit runs the handlers of an event, in the order packs registered them.
 func (g *Game) emit(e Event) {
-	for _, h := range content.handlers[e.Name] {
+	for _, h := range reg.handlers[e.Name] {
 		h(g, &e)
 	}
 }
@@ -63,8 +63,9 @@ func (g *Game) updateEvents(dt float64) {
 	if g.mode != modePlay {
 		return
 	}
+	g.moveDevils(dt)
 	g.emit(Event{Name: evTick, Dt: dt})
-	for _, ev := range content.Events.All() {
+	for _, ev := range reg.Events.All() {
 		if ev.Every <= 0 || (ev.When != nil && !ev.When(g)) {
 			continue
 		}

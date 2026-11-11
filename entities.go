@@ -25,8 +25,6 @@ type EntityDef struct {
 	Prompt string     `json:"prompt"` // what E says; empty: nothing to do
 	Pickup bool       `json:"pickup"` // E puts it back in the inventory
 	Item   string     `json:"item"`   // the item it gives back (set by the item that places it)
-
-	models []entityModel // built on first draw
 }
 
 type entityModel struct {
@@ -59,7 +57,7 @@ const (
 // spawn sets an entity on the ground at world position at, facing the
 // player.
 func (g *Game) spawn(kind string, at vec3) bool {
-	def, ok := content.Entities.Get(kind)
+	def, ok := reg.Entities.Get(kind)
 	if !ok {
 		return false
 	}
@@ -82,7 +80,7 @@ func (g *Game) placeAt() vec3 {
 // heldItem is the item F places, cycled with R, among those carried.
 func (g *Game) heldItem() (*Item, int) {
 	var owned []*Item
-	for _, it := range content.Items.All() {
+	for _, it := range reg.Items.All() {
 		if g.st.Items[it.ID] > 0 {
 			owned = append(owned, it)
 		}
@@ -133,7 +131,7 @@ func (g *Game) collideEntities() {
 			continue
 		}
 		e := g.st.Entities[i]
-		if def, ok := content.Entities.Get(e.Kind); ok && def.Radius > 0 {
+		if def, ok := reg.Entities.Get(e.Kind); ok && def.Radius > 0 {
 			g.player.pushOut(g.terrain.Surface(e.Dir), def.Radius)
 		}
 	}
@@ -147,7 +145,7 @@ func (g *Game) nearbyEntity() (int, float64) {
 			continue
 		}
 		e := g.st.Entities[i]
-		def, ok := content.Entities.Get(e.Kind)
+		def, ok := reg.Entities.Get(e.Kind)
 		if !ok || (def.Prompt == "" && !def.Pickup) {
 			continue
 		}
@@ -165,12 +163,12 @@ func (g *Game) nearbyEntity() (int, float64) {
 // entityUse turns an entity into something E can use.
 func (g *Game) entityUse(i int) interactable {
 	e := g.st.Entities[i]
-	def, _ := content.Entities.Get(e.Kind)
+	def, _ := reg.Entities.Get(e.Kind)
 	prompt := def.Prompt
 	if prompt == "" {
 		prompt = "Ramasser : " + def.Name
 	}
-	if _, ok := content.Vehicles.Get(e.Kind); ok {
+	if _, ok := reg.Vehicles.Get(e.Kind); ok {
 		return interactable{kit: def.ID, at: toLocal(g.terrain.Surface(e.Dir)), prompt: prompt,
 			use: func(g *Game, _ vec3) { g.getIn(i) }}
 	}
@@ -199,12 +197,14 @@ func (g *Game) drawEntities() {
 	gfx := g.gfx
 	for _, i := range g.entitiesNear(entityDrawDist) {
 		e := g.st.Entities[i]
-		def, ok := content.Entities.Get(e.Kind)
+		def, ok := reg.Entities.Get(e.Kind)
 		if !ok {
 			continue // its mod was removed: it stays in the save
 		}
-		if def.models == nil {
-			def.models = buildEntity(def, gfx)
+		models, ok := gfx.entities[def.ID]
+		if !ok {
+			models = buildEntity(def, gfx)
+			gfx.entities[def.ID] = models
 		}
 		pos := g.terrain.Surface(e.Dir)
 		up := e.Dir
@@ -216,7 +216,7 @@ func (g *Game) drawEntities() {
 			lit = mesh.LitIndoor
 		}
 		gfx.setLighting(lit, vec3{})
-		for _, m := range def.models {
+		for _, m := range models {
 			gfx.setMat(m.tok.mat, m.tok.scale, false)
 			gfx.putBasis(m.model, pos, ax, up, az, m.tok.col, m.tok.spec, m.tok.emissive)
 		}
@@ -228,7 +228,7 @@ func (g *Game) drawEntities() {
 // buildEntity merges an entity's parts into one model per material, in
 // its own frame.
 func buildEntity(def *EntityDef, gfx *Graphics) []entityModel {
-	b := &building{Parts: mesh.NewParts(vec3{})}
+	b := mesh.NewParts(vec3{})
 	kitJSON{Parts: def.Parts}.kit().build(b, vec3{}, 0)
 	var out []entityModel
 	for _, k := range b.Keys {
@@ -239,9 +239,6 @@ func buildEntity(def *EntityDef, gfx *Graphics) []entityModel {
 		model := upload(m, gfx.objectSh)
 		gfx.bindMaps(model)
 		out = append(out, entityModel{model, tok(k.Tok)})
-	}
-	if out == nil {
-		out = []entityModel{} // nothing to draw, but built
 	}
 	return out
 }

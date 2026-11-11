@@ -31,9 +31,8 @@ func (d *dustDevil) strength() float64 {
 	return mathx.Smoothstep(0, 6, d.age) * mathx.Smoothstep(d.life, d.life-6, d.age)
 }
 
-// moveDevils drifts the devils and lets them die down (on "tick").
-func moveDevils(g *Game, e *Event) {
-	dt := e.Dt
+// moveDevils drifts the devils and lets them die down.
+func (g *Game) moveDevils(dt float64) {
 	up := g.player.LocalUp()
 	kept := g.devils[:0]
 	for _, d := range g.devils {
@@ -48,11 +47,6 @@ func moveDevils(g *Game, e *Event) {
 		}
 	}
 	g.devils = kept
-}
-
-// devilWeather: in daytime, and not too many at once.
-func devilWeather(g *Game) bool {
-	return len(g.devils) < maxDevils && sunDir.Dot(g.player.LocalUp()) > 0.2
 }
 
 // spawnDevil raises a devil somewhere around the player, on warm bare

@@ -25,7 +25,7 @@ type token struct {
 
 // tok is a material by ID; an unknown one shows up magenta.
 func tok(id string) token {
-	if t, ok := content.Tokens.Get(id); ok {
+	if t, ok := reg.Tokens.Get(id); ok {
 		return *t
 	}
 	return token{color.RGBA{255, 0, 255, 255}, mtPlain, 1, 0, 0.5}
@@ -64,7 +64,8 @@ type Prop struct {
 // polar is the point at distance r from the center, at angle a.
 func polar(r, a float64) vec3 { return vec3{math.Cos(a) * r, 0, math.Sin(a) * r} }
 
-func (bp *Blueprint) room() room {
+// roomOf is the room a blueprint lays out.
+func roomOf(bp *Blueprint) room {
 	var openings []float64
 	for _, d := range bp.Doors {
 		openings = append(openings, d.Facing)
@@ -72,16 +73,20 @@ func (bp *Blueprint) room() room {
 	return room{bp.At, bp.Shape.Radius, bp.Shape.WallH, openings, bp}
 }
 
-// kitProp is a piece of furniture: what it adds to the merged meshes, what
-// it draws each frame (moving or glowing parts), how the player bumps into
-// it and uses it. Positions are local, relative to the prop.
+// kitProp is a piece of furniture: what it adds to the merged meshes, how
+// the player bumps into it and uses it. Positions are local, relative to
+// the prop. What moves or glows is drawn each frame by kitDraws.
 type kitProp struct {
-	build     func(b *building, at vec3, seed int)
-	draw      func(g *Game, at vec3)
+	build     func(b *mesh.Parts, at vec3, seed int)
 	obstacles []obstacle
 	reach     float64
-	use       func(g *Game, at vec3) // what E does; at is the prop's local position
+	use       func(g gameAPI, at vec3) // what E does; at is the prop's local position
 	prompt    string
+}
+
+// kitBuild lets a kit piece use the base's building helpers.
+func kitBuild(f func(b *building, at vec3, seed int)) func(*mesh.Parts, vec3, int) {
+	return func(p *mesh.Parts, at vec3, seed int) { f(&building{Parts: p}, at, seed) }
 }
 
 // spot returns where the first prop of a kit sits in the base.
@@ -98,7 +103,7 @@ func planObstacles() (out []obstacle) {
 	out = yardObstacles()
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			k, _ := content.Kits.Get(p.Kit)
+			k, _ := reg.Kits.Get(p.Kit)
 			if k == nil {
 				continue
 			}
@@ -113,8 +118,9 @@ func planObstacles() (out []obstacle) {
 func planInteractables() (out []interactable) {
 	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if k, _ := content.Kits.Get(p.Kit); k != nil && k.use != nil {
-				out = append(out, interactable{qualify(p.Kit), bp.At.Add(p.At), k.reach, k.use, k.prompt})
+			if k, _ := reg.Kits.Get(p.Kit); k != nil && k.use != nil {
+				use := k.use
+				out = append(out, interactable{qualify(p.Kit), bp.At.Add(p.At), k.reach, func(g *Game, at vec3) { use(g, at) }, k.prompt})
 			}
 		}
 	}
@@ -133,7 +139,7 @@ func buildBase(sh rl.Shader) *building {
 	b := &building{Parts: mesh.NewParts(basePos)}
 	for i, bp := range plans {
 		b.room(bp)
-		b.greebleRoom(bp, bp.room(), i*97+3)
+		b.greebleRoom(bp, roomOf(bp), i*97+3)
 		b.clutter(bp)
 	}
 	for i, c := range corridors {
@@ -156,7 +162,7 @@ func buildBase(sh rl.Shader) *building {
 }
 
 func (b *building) room(bp *Blueprint) {
-	r := bp.room()
+	r := roomOf(bp)
 	in := toWorld(r.center.Add(vec3{0, 1.2, 0}))
 	// Walls: bevelled panels, a dark plinth, a steel collar under the dome.
 	for i, p := range r.panels() {
@@ -189,8 +195,8 @@ func (b *building) room(bp *Blueprint) {
 	}
 	b.interior(bp, r)
 	for _, p := range bp.Props {
-		if k, _ := content.Kits.Get(p.Kit); k != nil && k.build != nil {
-			k.build(b, bp.At.Add(p.At), p.Seed)
+		if k, _ := reg.Kits.Get(p.Kit); k != nil && k.build != nil {
+			k.build(b.Parts, bp.At.Add(p.At), p.Seed)
 		}
 	}
 }
