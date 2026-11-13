@@ -227,6 +227,9 @@ func (g *Game) Frame(e *Placed) (pos, ax, up, az vec3) {
 
 // move drives the vehicle for dt.
 func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
+	if dt <= 0 { // the first frame: speeds are divided by dt
+		return
+	}
 	d := &g.drive
 	up := g.Player.LocalUp()
 	d.fwd = planet.TangentAt(up, d.fwd)
@@ -585,11 +588,11 @@ func (g *Game) exhaust(v *content.Vehicle, e *Placed) {
 	at := pos.Add(ax.Scale(v.Flame.X)).Add(up.Scale(v.Flame.Y)).Add(az.Scale(v.Flame.Z))
 	r := content.OrZero(v.FlameR, 0.3)
 	cols := []color.RGBA{palette.AccentOrange, {255, 210, 120, 255}, {255, 120, 60, 255}}
-	for range int(1 + burn*5) {
+	for range int(1 + burn*2) {
 		jit := vec3{g.Rng.Float64() - 0.5, g.Rng.Float64() - 0.5, g.Rng.Float64() - 0.5}.Scale(r)
-		life := 0.15 + g.Rng.Float64()*0.25*burn
-		g.addParticle(Particle{Pos: at.Add(jit), Vel: d.vel.Add(out.Scale(8 + 25*burn*g.Rng.Float64())),
-			MaxLife: life, Size: r * (0.6 + g.Rng.Float64()*0.6), C: cols[g.Rng.IntN(len(cols))], Additive: true})
+		life := 0.08 + g.Rng.Float64()*0.2*burn
+		g.addParticle(Particle{Pos: at.Add(jit), Vel: d.vel.Add(out.Scale(6 + 14*burn*g.Rng.Float64())),
+			MaxLife: life, Size: r * (0.3 + g.Rng.Float64()*0.4), C: cols[g.Rng.IntN(len(cols))], Additive: true})
 	}
 }
 
@@ -610,4 +613,14 @@ func (g *Game) ChaseCam() (eye, at vec3, ok bool) {
 		eye = eye.Add(eye.Norm().Scale(0.8 - a))
 	}
 	return eye, at, true
+}
+
+// Lift sets the driven vehicle alt m up, going speed m/s, with the chase
+// camera on or off: for screenshots.
+func (g *Game) Lift(alt, speed float64, chase bool) {
+	d := &g.drive
+	d.r = g.groundAt(g.Player.Pos) + alt
+	d.vel = d.fwd.Scale(speed)
+	d.air = alt > airAbove
+	g.chase = chase
 }

@@ -76,12 +76,19 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}
 	// NA_SHOT_FLEET=1 lines up every vehicle ahead; NA_SHOT_DRIVE=id
-	// sits in one.
+	// sits in one, NA_SHOT_LIFT=alt,speed lifts it, NA_SHOT_CHASE=1 looks
+	// at it from behind. NA_SHOT_RAMP=id sets that entity 15 m ahead.
 	if s.file != "" && os.Getenv("NA_SHOT_FLEET") != "" {
 		g.LineUp()
 	}
+	if id := os.Getenv("NA_SHOT_RAMP"); s.file != "" && id != "" {
+		g.SpawnAhead(id, 15)
+	}
 	if id := os.Getenv("NA_SHOT_DRIVE"); s.file != "" && id != "" {
 		g.Board(id)
+		var alt, speed float64
+		fmt.Sscanf(os.Getenv("NA_SHOT_LIFT"), "%f,%f", &alt, &speed)
+		g.Lift(alt, speed, os.Getenv("NA_SHOT_CHASE") != "")
 		s.heading = g.Player.Heading
 	}
 	// NA_SHOT_AT=x,z,yaw stands in the base (local coordinates, yaw in

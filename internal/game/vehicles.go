@@ -235,3 +235,9 @@ func (g *Game) Board(id string) {
 		g.updateVehicle(0)
 	}
 }
+
+// SpawnAhead sets an entity of kind id dist m ahead of the player, facing
+// away like a ramp, for screenshots.
+func (g *Game) SpawnAhead(id string, dist float64) {
+	g.spawn(id, g.World.Relief.Surface(g.Player.Pos.Add(g.Player.Heading.Scale(dist))))
+}
