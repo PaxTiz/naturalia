@@ -329,6 +329,9 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 				line += fmt.Sprintf(" · altitude %.0f m", g.DriveAlt())
 			}
 			hud.prompt("E", line, h*0.64, visorCyan)
+			if g.CanDock() {
+				hud.prompt("G", "Garer à sa place", h*0.64-34*uiScale(), visorAmber)
+			}
 			hud.drawBoost(g, h*0.64+30*uiScale())
 		case g.State.TotalDust < 5:
 			hud.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)

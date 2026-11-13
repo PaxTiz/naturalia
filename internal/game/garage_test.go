@@ -31,6 +31,73 @@ func TestBays(t *testing.T) {
 	if base.Covered(vec3{0, 0, 0}) || !base.Covered(vec3{39, 0, 0}) {
 		t.Error("only the hangar is covered")
 	}
+	// The harvester's header fits between the lines.
+	v, _ := c.Vehicles.Get("core:harvester")
+	bay, _ := base.BayOf(v.ID)
+	lo, hi := v.Footprint()
+	if hi.Z-lo.Z < 6.4 || bay.Width < hi.Z-lo.Z+2 || math.Abs(bay.Spot.Z-bay.At.Z) > 0.5 {
+		t.Errorf("harvester %v..%v in a bay %+v", lo, hi, bay)
+	}
+}
+
+func TestDriveOutOfBay(t *testing.T) {
+	c := LoadContent()
+	g := fleetGame(t, c, map[string]int{"core:harvester": 1, "core:drone": 4})
+	g.walls = base.Walls()
+	g.syncFleet()
+	h := -1
+	for i, e := range g.State.Entities {
+		if e.Kind == "core:harvester" {
+			h = i
+		}
+	}
+	g.getIn(h)
+	// Drones hang around, right over it: it drives through them.
+	for i := range g.State.Entities {
+		if i != h {
+			g.State.Entities[i].Dir = g.Player.Pos.Norm()
+		}
+	}
+	v, _ := g.Driven()
+	start := g.Player.Pos
+	for range 120 {
+		g.move(v, controls{throttle: 1}, 1.0/60)
+		g.Player.Pos = base.Collide(g.Player.Pos, g.wallsNow(), g.DriveAlt())
+		g.updateVehicle(1.0 / 60)
+		g.collideEntities()
+	}
+	if d := planet.ArcDist(start.Norm(), g.Player.Pos.Norm()); d < 6 {
+		t.Errorf("the harvester left its bay by %.1f m only", d)
+	}
+}
+
+func TestDock(t *testing.T) {
+	c := LoadContent()
+	g := fleetGame(t, c, map[string]int{"core:rover": 1})
+	g.syncFleet()
+	g.getIn(0)
+	bay, _ := base.BayOf("core:rover")
+	// Askew, 4 m off its bay, turned away from the door.
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.Spot.Add(vec3{3, 0, 2.5})))
+	g.drive.fwd = vec3{-0.6, 0, 0.8}
+	if !g.CanDock() {
+		t.Fatal("can't park next to its bay")
+	}
+	g.startDock()
+	v, _ := g.Driven()
+	for range 3 * 60 {
+		g.driveVehicle(1.0 / 60)
+		g.updateVehicle(1.0 / 60)
+	}
+	at := base.ToLocal(g.Player.Pos)
+	if math.Hypot(at.X-bay.Spot.X, at.Z-bay.Spot.Z) > 0.05 || g.drive.fwd.X < 0.999 || g.drive.dock != nil || g.Riding != 0 {
+		t.Errorf("%s parked at %v, facing %v", v.ID, at, g.drive.fwd)
+	}
+	// Far out, no.
+	g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{1, 0, 0}, 200))
+	if g.CanDock() {
+		t.Error("parks from afar")
+	}
 }
 
 func TestGarage(t *testing.T) {
@@ -74,6 +141,14 @@ func TestHangarDoor(t *testing.T) {
 	i := base.Halls()[0]
 	mid, _ := base.HallDoor(i)
 	outside := base.ToWorld(mid.Add(vec3{3, base.FloorTop, 0}))
+
+	// Open, the leaves stand within the hangar's ends.
+	_, hz := base.Rooms[i].Hall.Size[0], base.Rooms[i].Hall.Size[1]/2
+	for _, l := range base.HallLeaves(i, 1) {
+		if d := math.Abs(l.At.Z-base.Rooms[i].Center.Z) + l.Size.Z/2; d > hz {
+			t.Errorf("a leaf sticks out %.1f m", d-hz)
+		}
+	}
 
 	// Far away it stays shut, and walls the hangar off.
 	g.updateHallDoors(1)

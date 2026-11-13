@@ -117,6 +117,9 @@ func (g *Game) collideEntities() {
 			continue
 		}
 		e := g.State.Entities[i]
+		if v, ok := g.Content.Vehicles.Get(e.Kind); ok && v.Auto() && g.Riding >= 0 {
+			continue // a vehicle drives through the drones and robots
+		}
 		if def, ok := g.Content.Entities.Get(e.Kind); ok && def.Radius > 0 {
 			g.Player.pushOut(g.World.Relief.Surface(e.Dir), def.Radius)
 		}

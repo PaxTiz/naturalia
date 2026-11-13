@@ -72,10 +72,16 @@ func yawOf(up, fwd vec3) float64 {
 	return math.Atan2(fwd.Dot(t2), fwd.Dot(t1))
 }
 
+// offLimits tells whether the ground at dir is the base's, with no dust to
+// sweep: around the domes, and under the halls' floors.
+func offLimits(dir vec3) bool {
+	return planet.ArcDist(dir, planet.BaseUp) < base.Reach+2 || base.Covered(base.ToLocal(dir.Scale(planet.Radius)))
+}
+
 // sweepUnder cleans the dust under a vehicle into the tank, away from the
 // base's ground.
 func (g *Game) sweepUnder(v *content.Vehicle, e *Placed, dt float64) {
-	if v.Sweep <= 0 || planet.ArcDist(e.Dir, planet.BaseUp) < base.Reach || base.Covered(base.ToLocal(g.World.Relief.Surface(e.Dir))) {
+	if v.Sweep <= 0 || offLimits(e.Dir) {
 		return
 	}
 	at := g.World.Relief.Surface(e.Dir)
@@ -92,7 +98,8 @@ func (g *Game) updateFleet(dt float64) {
 	if g.fleetHeld {
 		return
 	}
-	docked := planet.ArcDist(g.Player.LocalUp(), planet.BaseUp) < base.Reach+15
+	// In the hangar too, they wait over the hub.
+	docked := planet.ArcDist(g.Player.LocalUp(), planet.BaseUp) < base.Reach+15 || base.Covered(base.ToLocal(g.Player.Pos))
 	nth := map[string]int{} // followers of each kind so far, to share the circle above the hub
 	for i := range g.State.Entities {
 		e := &g.State.Entities[i]
@@ -144,7 +151,7 @@ func (g *Game) follow(v *content.Vehicle, e *Placed, dt float64, docked bool, i,
 	default:
 		e.retarget -= dt
 		arrived := planet.ArcDist(e.Dir, e.target) < 0.3
-		if e.target == (vec3{}) || e.retarget <= 0 || (arrived && g.World.DustAt(e.target) < 0.05) || planet.ArcDist(e.target, planet.BaseUp) < base.Reach {
+		if e.target == (vec3{}) || e.retarget <= 0 || (arrived && g.World.DustAt(e.target) < 0.05) || offLimits(e.target) {
 			e.target = g.World.FindDusty(g.Rng, g.Player.Pos, spread)
 			e.retarget = 8 + g.Rng.Float64()*5
 		}
@@ -170,7 +177,7 @@ func (g *Game) patrol(v *content.Vehicle, e *Placed, dt float64) {
 	if e.target == (vec3{}) || e.retarget <= 0 || (arrived && g.World.DustAt(e.target) < 0.05) {
 		e.target = g.World.FindDusty(g.Rng, e.Home.Scale(planet.Radius), content.OrZero(v.Range, 30))
 		e.retarget = 10 + g.Rng.Float64()*6
-		if planet.ArcDist(e.target, planet.BaseUp) < base.Reach+2 {
+		if offLimits(e.target) {
 			e.target = e.Dir // try again next time
 			e.retarget = 0.5
 		}

@@ -34,13 +34,14 @@ type drive struct {
 	jumps    int     // jumps made since then
 	fuel     float64 // seconds of boost left
 	boosting bool
-	pitch    float64 // nose up, radians: the slope, or the jump's arc
-	roll     float64 // right side down
-	shake    float64 // camera shake, 0 to 1, fading
-	kicked   int     // the boost pad being crossed, +1 (0: none)
-	flip     float64 // a second jump's somersault so far, radians (0: none)
-	cruise   float64 // flying: the height over the ground set with Space and Ctrl
-	climbing bool    // Space or Ctrl held last frame
+	pitch    float64  // nose up, radians: the slope, or the jump's arc
+	roll     float64  // right side down
+	shake    float64  // camera shake, 0 to 1, fading
+	kicked   int      // the boost pad being crossed, +1 (0: none)
+	flip     float64  // a second jump's somersault so far, radians (0: none)
+	cruise   float64  // flying: the height over the ground set with Space and Ctrl
+	climbing bool     // Space or Ctrl held last frame
+	dock     *docking // gliding into its bay (G), the controls left aside
 }
 
 // controls is what the player asks of the vehicle this frame.
@@ -138,7 +139,7 @@ func (g *Game) getOut() {
 	// aisle in front of it.
 	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r >= 0 && base.Rooms[r].Hall != nil && g.park(v, i) {
 		bay, _ := base.BayOf(v.ID)
-		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(vec3{content.OrZero(v.Radius, 1.2) + 2.5, 0, 0})))
+		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(vec3{bay.Length/2 + 1.5, 0, 0})))
 		g.Say(v.Name + " rangé au garage")
 	} else {
 		side := g.Player.Right().Scale(content.OrZero(v.Radius, 1.2) + 0.6)
@@ -169,6 +170,14 @@ func (g *Game) driveVehicle(dt float64) {
 		}
 	}
 	d.boarded = false
+	if d.dock != nil {
+		g.glideDock(v, dt)
+		return
+	}
+	if g.Mode == ModePlay && rl.IsKeyPressed(rl.KeyG) && g.CanDock() {
+		g.startDock()
+		return
+	}
 	var in controls
 	if g.Mode == ModePlay {
 		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.

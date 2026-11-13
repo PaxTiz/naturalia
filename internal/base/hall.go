@@ -9,17 +9,17 @@ import (
 // Halls are the big rectangular buildings (content.Hall), like the
 // vehicles' hangar: straight walls around a slate floor, a barrel vault
 // along Z, and a giant door in the east wall (+X) whose leaves slide away
-// on rails, three on each side, into pockets past the ends of the hall.
+// on rails, each on its own, and stack up in front of the wall on both
+// sides of the opening: there are as many as it takes for them to fit
+// there, so nothing sticks out past the ends of the hall.
 //
-//	        pocket ║                              ║ pocket
-//	   ┌───────────╨──────────────────────────────╨──────────┐
-//	   │  west wall          bays, nose to the door   ═════  │ east wall
+//	   ┌─────────────────────────────────────────────────────┐
+//	   │  west wall          bays, nose to the door      ▐▐▐ │ east wall
 //	   │                      ▭  ▭  ▭  ▭  ▭  ▭       door    │ (+X)
 //	   └─────────────────────────────────────────────────────┘
 
 const (
 	hallWall     = 0.3 // the walls' thickness
-	leavesSide   = 3   // door leaves on each side
 	hallLampDrop = 1.2 // how far the lamps hang under the vault
 )
 
@@ -39,7 +39,20 @@ func (r Room) reach() float64 {
 		return r.Radius
 	}
 	hx, hz := r.half()
-	return math.Hypot(hx, hz+r.Hall.Door[0]/leavesSide/2)
+	return math.Hypot(hx+2, hz)
+}
+
+// leaves is how many leaves the door has on each side, and how wide they
+// are: few enough to stack between the opening and the end of the hall.
+func (r Room) leaves() (n int, width float64) {
+	_, hz := r.half()
+	half := r.Hall.Door[0] / 2
+	room := hz - half - 0.6
+	n = 8
+	if room > 0 {
+		n = min(8, max(2, int(math.Ceil(half/room))))
+	}
+	return n, half / float64(n)
 }
 
 // inHall tells whether a local point is inside the hall's walls, grown by
@@ -102,13 +115,13 @@ func HallLeaves(i int, open float64) []Leaf {
 	r := Rooms[i]
 	hx, hz := r.half()
 	dw, dh := r.Hall.Door[0], r.Hall.Door[1]
-	lw := dw / (2 * leavesSide)
+	n, lw := r.leaves()
 	var out []Leaf
 	for _, s := range []float64{-1, 1} {
-		for k := range leavesSide {
+		for k := range n {
 			shut := s * (dw/2 - (float64(k)+0.5)*lw)
-			away := s * (hz + 0.5 + lw/2)
-			x := hx + hallWall/2 + 0.3 + 0.32*float64(leavesSide-1-k)
+			away := s * math.Max(dw/2+lw/2+0.3, hz-0.3-lw/2)
+			x := hx + hallWall/2 + 0.3 + 0.32*float64(n-1-k)
 			z := shut + (away-shut)*smooth(open)
 			out = append(out, Leaf{r.Center.Add(vec3{x, dh / 2, z}), vec3{0.22, dh, lw + 0.15}})
 		}
@@ -148,16 +161,23 @@ func (r Room) hallLamps() []Lamp {
 	return lamps
 }
 
-// Bay is where a driven vehicle parks in the garage: its spot on the floor
-// (local), nose toward the door (+X), and the width marked for it.
+// Bay is where a driven vehicle parks in the garage: the rectangle marked
+// on the floor around it (its middle, local, and its size along X and Z),
+// and its spot, where the vehicle stands in the middle of it, nose toward
+// the door (+X).
 type Bay struct {
-	ID    string
-	At    vec3
-	Width float64
+	ID            string
+	At            vec3
+	Length, Width float64
+	Spot          vec3
 }
 
-// layBays gives each driven vehicle a bay in the first garage, side by
-// side along the back wall, a second row in front if they don't fit.
+// bayMargin is the room around a vehicle in its bay, on each side.
+const bayMargin = 1.2
+
+// layBays gives each driven vehicle a bay in the first garage, sized to
+// it, side by side along the back wall, a second row in front if they
+// don't fit.
 func layBays(c *content.Content) []Bay {
 	var r *Room
 	for i := range Rooms {
@@ -177,27 +197,33 @@ func layBays(c *content.Content) []Bay {
 		if v.Auto() {
 			continue
 		}
-		w := 2*content.OrZero(v.Radius, 1.2) + 3
-		if width+w > 2*hz-2 && len(row) > 0 {
+		lo, hi := v.Footprint()
+		b := Bay{ID: v.ID, Length: hi.X - lo.X + 2*bayMargin, Width: hi.Z - lo.Z + 2*bayMargin,
+			Spot: lo.Add(hi).Scale(-0.5)} // from the bay's middle for now
+		if width+b.Width > 2*hz-2 && len(row) > 0 {
 			rows, row, width = append(rows, row), nil, 0
 		}
-		row = append(row, Bay{ID: v.ID, Width: w})
-		width += w
+		row = append(row, b)
+		width += b.Width
 	}
 	rows = append(rows, row)
 	var out []Bay
-	for k, row := range rows {
-		width := 0.0
+	back := -hx + 1.5 // the row's back line
+	for _, row := range rows {
+		width, depth := 0.0, 0.0
 		for _, b := range row {
 			width += b.Width
+			depth = math.Max(depth, b.Length)
 		}
 		z := -width / 2
-		x := -hx + 7 + float64(k)*12
 		for _, b := range row {
-			b.At = r.Center.Add(vec3{x, 0, z + b.Width/2})
+			b.At = r.Center.Add(vec3{back + b.Length/2, 0, z + b.Width/2})
+			b.Spot = b.Spot.Add(b.At)
+			b.Spot.Y = 0
 			z += b.Width
 			out = append(out, b)
 		}
+		back += depth + 6 // and an aisle
 	}
 	return out
 }
@@ -336,31 +362,30 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 	for _, s := range []float64{-1, 1} {
 		sun("steel").Box(p(hx+0.25, dh/2, s*(dw/2+0.2)), vec3{0.6, dh, 0.4}, X, 0.04)
 	}
-	lw := dw / (2 * leavesSide)
-	reach := hz + 0.8 + lw
+	n, _ := r.leaves()
+	reach := hz - 0.1
 	railX := hx + hallWall/2 + 0.3
-	for k := range leavesSide {
+	for k := range n {
 		x := railX + 0.32*float64(k)
 		sun("steel.dark").Box(p(x, 0.04, 0), vec3{0.12, 0.08, 2 * reach}, X, 0.01)
 	}
-	gantry := p(railX+0.32, dh+0.45, 0)
-	sun("steel").Box(gantry, vec3{1.2, 0.5, 2*reach + 0.4}, X, 0.04)
-	sun("hazard").Box(gantry.Add(vec3{0.61, 0, 0}), vec3{0.02, 0.3, 2 * reach}, X, 0)
+	deep := 0.32*float64(n-1) + 0.6 // the rails' depth, under the gantry
+	gantry := p(railX+deep/2-0.3, dh+0.45, 0)
+	sun("steel").Box(gantry, vec3{deep + 0.4, 0.5, 2 * reach}, X, 0.04)
+	sun("hazard").Box(gantry.Add(vec3{deep/2 + 0.21, 0, 0}), vec3{0.02, 0.3, 2*reach - 0.4}, X, 0)
 	for _, s := range []float64{-1, 1} {
-		for _, z := range []float64{hz + 0.4, reach} {
-			sun("steel").Box(p(railX+0.32, (dh+0.7)/2, s*z), vec3{1.2, dh + 0.7, 0.35}, X, 0.04)
-		}
+		sun("steel").Box(p(railX+deep/2-0.3, (dh+0.7)/2, s*(reach-0.2)), vec3{deep + 0.4, dh + 0.7, 0.35}, X, 0.04)
 		sun("lamp.warm").Box(p(hx+0.5, dh+0.05, s*(dw/2-1)), vec3{0.3, 0.06, 1.2}, X, 0)
 	}
 
 	// The bays: yellow lines on the floor, and a stop bar at the back.
 	for _, bay := range Bays {
-		w := bay.Width - 0.6
+		w, l := bay.Width-0.3, bay.Length
 		at := bay.At.Add(vec3{0, FloorTop + 0.005, 0})
 		for _, s := range []float64{-1, 1} {
-			inside("pipe.yellow").Box(at.Add(vec3{0, 0, s * w / 2}), vec3{11, 0.012, 0.15}, X, 0)
+			inside("pipe.yellow").Box(at.Add(vec3{0, 0, s * w / 2}), vec3{l, 0.012, 0.15}, X, 0)
 		}
-		inside("pipe.yellow").Box(at.Add(vec3{5.5, 0, 0}), vec3{0.15, 0.012, w}, X, 0)
-		inside("hazard").Box(at.Add(vec3{-5.6, 0.1, 0}), vec3{0.3, 0.2, w * 0.6}, X, 0.03)
+		inside("pipe.yellow").Box(at.Add(vec3{l / 2, 0, 0}), vec3{0.15, 0.012, w}, X, 0)
+		inside("hazard").Box(at.Add(vec3{-l/2 + 0.2, 0.1, 0}), vec3{0.3, 0.2, w * 0.6}, X, 0.03)
 	}
 }

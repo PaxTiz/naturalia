@@ -248,6 +248,34 @@ type VehicleState struct {
 func (v *Vehicle) Auto() bool   { return v.Drive == "auto" }
 func (v *Vehicle) Patrol() bool { return v.Auto() && v.AI == "patrol" }
 
+// Footprint is the ground its parts cover, front toward +X: the corners of
+// a box around them, seen from above, never smaller than its radius.
+func (v *Vehicle) Footprint() (lo, hi vec3) {
+	r := OrZero(v.Radius, 1.2)
+	lo, hi = vec3{-r, 0, -r}, vec3{r, 0, r}
+	grow := func(c vec3, ex, ez float64) {
+		lo.X, hi.X = math.Min(lo.X, c.X-ex), math.Max(hi.X, c.X+ex)
+		lo.Z, hi.Z = math.Min(lo.Z, c.Z-ez), math.Max(hi.Z, c.Z+ez)
+	}
+	for _, p := range v.Parts {
+		switch p.Shape {
+		case "prism":
+			axis := p.Axis
+			if axis == (vec3{}) {
+				axis = vec3{0, 1, 0}
+			}
+			rr := math.Max(p.R0, OrZero(p.R1, p.R0))
+			grow(p.At, rr, rr)
+			grow(p.At.Add(axis.Norm().Scale(p.H)), rr, rr)
+		default: // a box or a wedge, maybe turned
+			a := p.Yaw * math.Pi / 180
+			c, s := math.Abs(math.Cos(a)), math.Abs(math.Sin(a))
+			grow(p.At, (p.Size.X*c+p.Size.Z*s)/2, (p.Size.X*s+p.Size.Z*c)/2)
+		}
+	}
+	return lo, hi
+}
+
 // vehicleEntities gives each vehicle its entity, for drawing and E, and
 // patrolling ones the item they are carried as.
 func (c *Content) vehicleEntities() {
