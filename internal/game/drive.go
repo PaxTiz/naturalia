@@ -49,10 +49,10 @@ type controls struct {
 }
 
 const (
-	coyoteTime = 0.2  // a jump still works this long after rolling off an edge
-	airAbove   = 0.3  // m over the ground: in the air, no longer a bump
-	padReach   = 1.8  // m: a boost pad kicks what passes this close
-	aloft      = 3.0  // m over the ground: what flies that high goes over walls and rocks
+	coyoteTime = 0.2 // a jump still works this long after rolling off an edge
+	airAbove   = 0.3 // m over the ground: in the air, no longer a bump
+	padReach   = 1.8 // m: a boost pad kicks what passes this close
+	aloft      = 3.0 // m over the ground: what flies that high goes over walls and rocks
 )
 
 // Driven is the vehicle the player drives, if any.
