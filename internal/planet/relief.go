@@ -9,7 +9,8 @@ import (
 
 const (
 	Radius      = 3389.5 // the real planet at 1/1 000 scale
-	padRadius   = 22.0   // the ground is flat under the whole base
+	padRadius   = 66.0   // the ground is a plane under the whole base, hangar included
+	clearRadius = 24.0   // and clean around its domes: no dust nor crystals
 	MaxMountain = 420.0  // upper bound of the relief, for horizon culling
 	plainRadius = 160.0  // around the base, only gentle plains
 )
@@ -77,8 +78,15 @@ func (r Relief) BaseHeight() float64 { return r.baseH }
 // Altitude of the ground above the mean radius in direction d (unit).
 func (r Relief) Height(d vec3) float64 {
 	h := r.raw(d)
-	// Blend to a flat pad around the base.
-	return r.baseH + (h-r.baseH)*mathx.Smoothstep(padRadius, padRadius+35, ArcDist(d, BaseUp))
+	// Blend to a flat pad around the base: a true plane, tangent to Mars
+	// at the base, so that big floors lie on it (60 m away, the curve would
+	// sink half a meter).
+	k := mathx.Smoothstep(padRadius, padRadius+35, ArcDist(d, BaseUp))
+	if k >= 1 {
+		return h
+	}
+	flat := (Radius+r.baseH)/d.Dot(BaseUp) - Radius
+	return flat + (h-flat)*k
 }
 
 func (r Relief) raw(d vec3) float64 {

@@ -17,6 +17,11 @@ func TestReliefSettings(t *testing.T) {
 	if d := math.Abs(w.Relief.Height(BaseUp) - w.Relief.BaseHeight()); d > 1e-9 {
 		t.Errorf("the pad under the base isn't flat: %f", d)
 	}
+	// A plane: 60 m out, still at the base's level along its up.
+	far := w.Relief.Surface(Toward(vec3{1, 0, 0.4}, 60))
+	if d := far.Dot(BaseUp) - (Radius + w.Relief.BaseHeight()); math.Abs(d) > 1e-3 {
+		t.Errorf("the pad 60 m out is %f m off the plane", d)
+	}
 	flat := DefaultSettings()
 	flat.Plains, flat.Hills, flat.Dunes, flat.Mountains, flat.Craters = 0, 0, 0, 0, 0
 	flat.Volcano, flat.Canyon, flat.IceCap = 0, 0, 0
