@@ -172,6 +172,19 @@ func TestHangarDoor(t *testing.T) {
 		t.Fatalf("door far: open %f, walked in", g.HallOpen[0])
 	}
 
+	// From inside, only close to it: not from the middle of the hangar.
+	g.Player.Pos = base.ToWorld(mid.Add(vec3{-15, base.FloorTop, 0}))
+	g.updateHallDoors(1)
+	if g.HallOpen[0] != 0 {
+		t.Errorf("opens from 15 m inside: %f", g.HallOpen[0])
+	}
+	g.Player.Pos = base.ToWorld(mid.Add(vec3{-8, base.FloorTop, 0}))
+	g.updateHallDoors(1)
+	if g.HallOpen[0] == 0 {
+		t.Error("doesn't open from 8 m inside")
+	}
+	g.HallOpen[0] = 0
+
 	// Near it, it opens slowly; a second later, the player already goes
 	// through the middle, though not past its sides.
 	g.Player.Pos = outside

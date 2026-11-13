@@ -263,13 +263,21 @@ func HallLeaves(i int, open float64) []Leaf {
 	dw, dh := r.Hall.Door[0], r.Hall.Door[1]
 	n, lw := r.leaves()
 	var out []Leaf
+	// The leaves rise behind the header, and the outer ones reach behind
+	// the jambs: no light comes through at their edges.
+	const over, rise = 0.5, 0.4
 	for _, s := range []float64{-1, 1} {
 		for k := range n {
+			w := lw + 0.15
 			shut := s * (dw/2 - (float64(k)+0.5)*lw)
-			away := s * math.Max(dw/2+lw/2+0.3, hz-0.3-lw/2)
-			x := hx + hallWall/2 + 0.3 + 0.32*float64(n-1-k)
+			if k == 0 {
+				w += over
+				shut += s * over / 2
+			}
+			away := s * math.Min(math.Max(dw/2+w/2+0.3, hz-0.3-lw/2), hz-0.1-w/2)
+			x := hx + hallWall/2 + 0.3 + 0.32*float64(k) // the outer ones against the wall, behind the jambs
 			z := shut + (away-shut)*smooth(open)
-			out = append(out, Leaf{r.Center.Add(vec3{x, dh / 2, z}), vec3{0.22, dh, lw + 0.15}})
+			out = append(out, Leaf{r.Center.Add(vec3{x, (dh + rise) / 2, z}), vec3{0.22, dh + rise, w}})
 		}
 	}
 	return out
@@ -594,10 +602,14 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 
 	// The door: a hazard header over the opening, jambs, rails on the
 	// ground, a gantry over the leaves' path and the pockets' posts.
-	sun("hazard").Box(p(hx+0.2, dh+0.25, 0), vec3{0.5, 0.5, dw + 0.6}, X, 0.04)
+	// The header and jambs stop short of the leaves' rails; their faces
+	// turned to the hall are lit by its lamps, the others by the sun.
+	wall("hazard").Box(p(hx+0.05, dh+0.25, 0), vec3{0.5, 0.5, dw + 0.6}, X, 0.04)
 	for _, s := range []float64{-1, 1} {
-		sun("steel").Box(p(hx+0.25, dh/2, s*(dw/2+0.2)), vec3{0.6, dh, 0.4}, X, 0.04)
+		wall("steel").Box(p(hx-0.05, dh/2, s*(dw/2+0.2)), vec3{0.7, dh, 0.4}, X, 0.04)
 	}
+	inside("steel.dark").Box(p(hx-0.25, dh+0.3, 0), vec3{0.3, 0.6, dw + 1.1}, X, 0.04)
+	inside("hazard").Box(p(hx-0.41, dh+0.3, 0), vec3{0.02, 0.3, dw + 0.4}, X, 0)
 	n, _ := r.leaves()
 	reach := hz - 0.1
 	railX := hx + hallWall/2 + 0.3

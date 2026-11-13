@@ -128,8 +128,8 @@ func (gfx *Graphics) drawAirlock(g *game.Game) {
 // drawHallDoors draws the leaves of the halls' big doors where they stand,
 // lit from inside on their inner face.
 func (gfx *Graphics) drawHallDoors(g *game.Game) {
-	tok := gfx.tok("habitat.white2")
-	gfx.setMat(tok.Mat, tok.Scale, false)
+	plates := [2]content.Token{gfx.tok("door.plate"), gfx.tok("door.plate2")}
+	dark := gfx.tok("steel.dark")
 	for k, i := range base.Halls() {
 		open := 0.0
 		if k < len(g.HallOpen) {
@@ -138,12 +138,16 @@ func (gfx *Graphics) drawHallDoors(g *game.Game) {
 		r := base.Rooms[i]
 		gfx.setLighting(mesh.LitTowards, base.ToWorld(r.Center.Add(vec3{0, 1.2, 0})))
 		for j, l := range base.HallLeaves(i, open) {
-			c := tok.Col
-			if j%2 == 1 {
-				c = gfx.tok("habitat.white").Col
-			}
+			tok := plates[j%2]
 			gfx.setMat(tok.Mat, tok.Scale, false)
-			gfx.put(gfx.hallLeaf, base.ToWorld(l.At), l.Size, vec3{0, 1, 0}, 0, c, tok.Spec, 0)
+			gfx.put(gfx.hallLeaf, base.ToWorld(l.At), l.Size, vec3{0, 1, 0}, 0, tok.Col, tok.Spec, 0)
+			// Stiffeners across both faces every 2.5 m, and a dark stile
+			// on one edge: the seams between the leaves show.
+			gfx.setMat(dark.Mat, dark.Scale, false)
+			for y := 2.5; y < l.Size.Y-0.5; y += 2.5 {
+				gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + y, 0}), vec3{l.Size.X + 0.08, 0.14, l.Size.Z - 0.3}, vec3{1, 0, 0}, dark.Col, dark.Spec, 0)
+			}
+			gfx.box(l.At.Add(vec3{0, 0, l.Size.Z/2 - 0.1}), vec3{l.Size.X + 0.05, l.Size.Y, 0.14}, vec3{1, 0, 0}, dark.Col, dark.Spec, 0)
 			// Hazard stripes along its foot.
 			gfx.setMat(content.MtHazard, 2.5, false)
 			gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + 0.4, 0}), vec3{l.Size.X + 0.02, 0.5, l.Size.Z - 0.1}, vec3{1, 0, 0}, palette.White, 0.2, 0)

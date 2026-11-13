@@ -15,7 +15,8 @@ import (
 // foot or driving, comes near it, from inside or out.
 
 const (
-	hallDoorReach = 24.0 // m from the door's middle where it opens
+	hallDoorReach = 24.0 // m from the door's middle where it opens, coming from outside
+	hallDoorInner = 10.0 // m from the door where it opens, from inside the hall
 	hallDoorSpeed = 0.35 // share of its travel per second: a giant door is slow
 	dockReach     = 6.0  // m from its bay's edge where G parks a vehicle
 	dockTime      = 1.6  // seconds it takes, gliding in
@@ -63,9 +64,13 @@ func (g *Game) updateHallDoors(dt float64) {
 	}
 	at := base.ToLocal(g.Player.Pos)
 	for k, i := range halls {
-		mid, _ := base.HallDoor(i)
+		mid, closed := base.HallDoor(i)
 		want := 0.0
-		if math.Hypot(at.X-mid.X, at.Z-mid.Z) < hallDoorReach {
+		inside := base.RoomAt(vec3{at.X, 1, at.Z}) == i
+		switch {
+		case inside && math.Abs(at.X-mid.X) < hallDoorInner && math.Abs(at.Z-mid.Z) < closed.Half()+4:
+			want = 1 // walking or driving up to it
+		case !inside && math.Hypot(at.X-mid.X, at.Z-mid.Z) < hallDoorReach:
 			want = 1
 		}
 		was := g.HallOpen[k]

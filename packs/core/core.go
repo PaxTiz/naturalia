@@ -88,6 +88,8 @@ var coreTokens = map[string]content.Token{
 	"habitat.white2": {color.RGBA{218, 217, 212, 255}, content.MtPanel, 1, 0.55, 0},
 	"steel":          {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
 	"steel.dark":     {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
+	"door.plate":     {color.RGBA{168, 172, 178, 255}, content.MtMetal, 1.2, 0.45, 0}, // the hangar's door leaves
+	"door.plate2":    {color.RGBA{154, 159, 166, 255}, content.MtMetal, 1.2, 0.45, 0},
 	"rack.slate":     {color.RGBA{58, 64, 80, 255}, content.MtPanel, 1, 0.4, 0},
 	"hazard":         {palette.White, content.MtHazard, 2.5, 0.3, 0},
 	"neon.cyan":      {palette.AccentCyan, content.MtPlain, 1, 0, 0.8},
