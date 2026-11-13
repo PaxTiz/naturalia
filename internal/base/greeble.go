@@ -421,6 +421,15 @@ func yardFree(p vec3, r float64) bool {
 	const margin = 0.6
 	flat := vec3{p.X, 0, p.Z}
 	for _, rm := range Rooms {
+		if rm.Hall != nil {
+			// The hall, and the door's pockets past its ends.
+			hx, hz := rm.half()
+			d := flat.Sub(rm.Center)
+			if math.Abs(d.X) < hx+r+margin+1.5 && math.Abs(d.Z) < hz+r+margin+rm.Hall.Door[0]/(2*leavesSide)+1 {
+				return false
+			}
+			continue
+		}
 		if flat.Sub(rm.Center).Length() < rm.Radius+r+margin {
 			return false
 		}

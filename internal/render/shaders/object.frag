@@ -8,7 +8,8 @@ uniform vec4 colDiffuse;
 uniform vec2 surface;     // x: specular strength, y: emissive (0..1)
 uniform float lighting;   // 0 sun, 1 lamps, 2 lamps on back faces, 3 lamps on faces turned toward room
 uniform vec3 room;
-uniform vec4 lights[16];  // ceiling lamps: xyz position, w intensity
+uniform vec4 lights[24];  // ceiling lamps: xyz position, w intensity
+uniform float lightRange[24]; // how far each reaches: its room's walls are in the way
 uniform float lightCount;
 uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a cell of a grid each (shadow.go)
 uniform vec4 lampVP[32];         // their cameras about origin, four columns each
@@ -24,7 +25,8 @@ out vec4 finalColor;
 #include "common.glsl"
 #include "texture.glsl"
 // Indoor lighting, the same model as outside: each ceiling lamp lights by
-// the inverse square of its distance (softened near it, faded out by 14 m),
+// the inverse square of its distance (softened near it, faded out by its
+// range: 10 m in the domes, more in the halls),
 // and its light bounces once off the floor and the walls. The floor is
 // dark slate and the walls white, so faces turned down get less of it:
 // ceilings and undersides sit in a deeper, cooler shade.
@@ -36,14 +38,15 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
     vec3 diff = albedo * (1.0 - metal);
     vec3 col = vec3(0.0);
     float bounce = 0.0;
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 24; i++) {
         if (float(i) >= lightCount) break;
         vec3 l = (lights[i].xyz - origin) - fragRel;
         float d = length(l);
-        // A lamp lights its own room: beyond 10 m its walls are in the way.
-        if (d > 10.0) continue;
+        // A lamp lights its own room: beyond its range, walls are in the way.
+        float range = lightRange[i];
+        if (d > range) continue;
         l /= d;
-        float win = clamp(1.0 - pow(d / 10.0, 4.0), 0.0, 1.0);
+        float win = clamp(1.0 - pow(d / range, 4.0), 0.0, 1.0);
         float att = lights[i].w * win * win / (d * d + 1.2);
         bounce += lights[i].w * win * win / (d * d * 0.3 + 5.0);
         float lit = 1.0;

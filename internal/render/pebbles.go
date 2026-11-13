@@ -39,7 +39,7 @@ func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 		a := (float64(tx*planet.TileCells) + mathx.Hash3(f, tx, ty, s)*planet.TileCells) / planet.FaceCells * 2
 		b := (float64(ty*planet.TileCells) + mathx.Hash3(f, tx, ty, s+1)*planet.TileCells) / planet.FaceCells * 2
 		d := mathx.FaceDir(f, a-1, b-1)
-		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || gfx.Terrain.Ice(d) > 0.3 {
+		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || base.Covered(base.ToLocal(d.Scale(planet.Radius))) || gfx.Terrain.Ice(d) > 0.3 {
 			continue
 		}
 		t1, t2 := mathx.TangentBasis(d)

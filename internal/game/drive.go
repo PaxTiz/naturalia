@@ -3,6 +3,7 @@ package game
 import (
 	"image/color"
 	"math"
+	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/mathx"
 	"naturalia/internal/palette"
@@ -121,9 +122,10 @@ func (g *Game) getIn(i int) {
 
 func (g *Game) getOut() {
 	v, ok := g.Driven()
-	if ok && g.Riding < len(g.State.Entities) {
+	i := g.Riding
+	if ok {
 		// Getting out up high leaves it standing on the ground below.
-		e := &g.State.Entities[g.Riding]
+		e := &g.State.Entities[i]
 		e.Alt, e.Pitch, e.Roll = v.Hover, 0, 0
 	}
 	g.Riding = -1
@@ -132,8 +134,16 @@ func (g *Game) getOut() {
 	if !ok {
 		return
 	}
-	side := g.Player.Right().Scale(content.OrZero(v.Radius, 1.2) + 0.6)
-	g.Player.Pos = g.World.Relief.Surface(g.Player.Pos.Add(side))
+	// In a garage, it goes to its bay; the player steps out into the
+	// aisle in front of it.
+	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r >= 0 && base.Rooms[r].Hall != nil && g.park(v, i) {
+		bay, _ := base.BayOf(v.ID)
+		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(vec3{content.OrZero(v.Radius, 1.2) + 2.5, 0, 0})))
+		g.Say(v.Name + " rangé au garage")
+	} else {
+		side := g.Player.Right().Scale(content.OrZero(v.Radius, 1.2) + 0.6)
+		g.Player.Pos = g.World.Relief.Surface(g.Player.Pos.Add(side))
+	}
 	g.sfx.Beep(0.02, 0.2, 0.12, 330, 220)
 	g.emit(content.Event{Name: content.EvDrive, ID: ""})
 }

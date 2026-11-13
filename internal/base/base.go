@@ -19,11 +19,13 @@ import (
 //	                  ║
 //	              [ Airlock ] → outside
 
-// Room is a round building: panel walls with openings, under a dome roof.
+// Room is a round building: panel walls with openings, under a dome roof;
+// or, with Hall set, a big rectangular one (hall.go).
 type Room struct {
 	Center   vec3 // local, on the floor
 	Radius   float64
 	WallH    float64
+	Hall     *content.Hall
 	openings []float64          // angles (radians, atan2(z, x)) of the doorways
 	plan     *content.Blueprint // drawn from the kit when set
 }
@@ -60,6 +62,8 @@ var (
 	TableSpot     vec3       // the map table, under the hologram
 	Obstacles     []content.Obstacle
 	Interactables []Interactable
+	Bays          []Bay   // where each driven vehicle parks in the garage
+	extent        float64 // how far from the origin the buildings reach, in m
 )
 
 // The shaders hold this many rooms, and as many corridors (baseAO, lamps):
@@ -108,6 +112,11 @@ func Setup(c *content.Content) {
 	}
 	Obstacles = planObstacles(&c.Kits)
 	Interactables = planInteractables(&c.Kits)
+	extent = Reach
+	for _, r := range Rooms {
+		extent = math.Max(extent, math.Hypot(r.Center.X, r.Center.Z)+r.reach())
+	}
+	Bays = layBays(c)
 }
 
 // addDoor opens a door of bp facing angle a, unless there is one already.
@@ -137,6 +146,9 @@ type panel struct {
 }
 
 func (r Room) panels() []panel {
+	if r.Hall != nil {
+		return nil // its walls are straight: hall.go
+	}
 	n := int(math.Ceil(2 * math.Pi * r.Radius / panelSize))
 	width := 2 * r.Radius * math.Sin(math.Pi/float64(n)) * 1.02
 	var out []panel
@@ -174,6 +186,9 @@ func junctionPlates() []plate {
 		axis := c.To.Sub(c.From).Norm()
 		side := c.side()
 		for _, r := range Rooms {
+			if r.Hall != nil {
+				continue
+			}
 			for _, end := range []vec3{c.From, c.To} {
 				if math.Abs(end.Sub(r.Center).Length()-r.Radius) > 0.6 {
 					continue // this end doesn't open into this room
@@ -224,8 +239,12 @@ func nearestPanelEdge(r Room, p vec3) vec3 {
 	return best
 }
 
-// Segment is a wall seen from above, for collisions (x, z of local coords).
-type Segment struct{ a, b vec3 }
+// Segment is a wall seen from above, for collisions (x, z of local coords),
+// and how high it stands: what flies over it isn't stopped.
+type Segment struct {
+	a, b vec3
+	top  float64
+}
 
 // Walls lists every wall the player bumps into.
 func Walls() []Segment {
@@ -236,19 +255,21 @@ func Walls() []Segment {
 				continue // doorway
 			}
 			t := vec3{-math.Sin(p.angle), 0, math.Cos(p.angle)}.Scale(p.width / 2)
-			walls = append(walls, Segment{p.mid.Sub(t), p.mid.Add(t)})
+			walls = append(walls, Segment{p.mid.Sub(t), p.mid.Add(t), r.WallH + r.Radius*0.55})
 		}
+		walls = append(walls, r.hallWalls()...)
 	}
 	for _, c := range Corridors {
 		side := c.side().Scale(c.Width/2 + WallThick/2)
-		walls = append(walls, Segment{c.From.Add(side), c.To.Add(side)}, Segment{c.From.Sub(side), c.To.Sub(side)})
+		top := c.Height + 0.2
+		walls = append(walls, Segment{c.From.Add(side), c.To.Add(side), top}, Segment{c.From.Sub(side), c.To.Sub(side), top})
 	}
 	for _, p := range junctionPlates() {
 		if p.y0 > 0 {
 			continue // above the corridor
 		}
 		across := vec3{-p.normal.Z, 0, p.normal.X}.Scale(p.width / 2)
-		walls = append(walls, Segment{p.mid.Sub(across), p.mid.Add(across)})
+		walls = append(walls, Segment{p.mid.Sub(across), p.mid.Add(across), p.y1})
 	}
 	return walls
 }
@@ -259,16 +280,20 @@ func (c Corridor) side() vec3 {
 	return vec3{-d.Z, 0, d.X}
 }
 
-// Collide keeps the player standing at pos out of walls and
-// furniture: where they end up.
-func Collide(pos vec3, walls []Segment) vec3 {
+// Collide keeps the player standing at pos out of walls and furniture:
+// where they end up. Flying h m over the ground, they pass over what
+// stands lower.
+func Collide(pos vec3, walls []Segment, h float64) vec3 {
 	const radius = 0.35
 	local := ToLocal(pos)
-	if math.Hypot(local.X, local.Z) > Reach+2 || local.Y > 6 {
+	if math.Hypot(local.X, local.Z) > extent+2 || local.Y > 6 {
 		return pos
 	}
 	flat := vec3{local.X, 0, local.Z}
 	for _, w := range walls {
+		if h >= w.top {
+			continue
+		}
 		ab := w.b.Sub(w.a)
 		t := mathx.Clamp01(flat.Sub(w.a).Dot(ab) / ab.Dot(ab))
 		closest := w.a.Add(ab.Scale(t))
@@ -278,6 +303,9 @@ func Collide(pos vec3, walls []Segment) vec3 {
 		}
 	}
 	for _, o := range Obstacles {
+		if h > 2 {
+			break
+		}
 		d := flat.Sub(vec3{o.At.X, 0, o.At.Z})
 		if l := d.Length(); l < radius+o.Radius && l > 1e-9 {
 			flat = vec3{o.At.X, 0, o.At.Z}.Add(d.Scale((radius + o.Radius) / l))
@@ -288,13 +316,11 @@ func Collide(pos vec3, walls []Segment) vec3 {
 
 // Indoors tells whether a local point is inside a room or a corridor.
 func Indoors(local vec3) bool {
+	if RoomAt(local) >= 0 {
+		return true
+	}
 	if local.Y > 3.5 {
 		return false
-	}
-	for _, r := range Rooms {
-		if math.Hypot(local.X-r.Center.X, local.Z-r.Center.Z) < r.Radius {
-			return true
-		}
 	}
 	for _, c := range Corridors {
 		d := c.To.Sub(c.From)
@@ -307,16 +333,60 @@ func Indoors(local vec3) bool {
 	return false
 }
 
-// Lights are the ceiling lamps: local position and intensity.
-func Lights() []vec3 {
-	lights := []vec3{{0, 2.7, 0}}
+// RoomAt is the index of the room holding a local point, or -1.
+func RoomAt(local vec3) int {
+	for i, r := range Rooms {
+		if r.Hall != nil {
+			if r.inHall(local, 0) && local.Y < r.WallH+r.Hall.Rise {
+				return i
+			}
+			continue
+		}
+		if local.Y < 3.5 && math.Hypot(local.X-r.Center.X, local.Z-r.Center.Z) < r.Radius {
+			return i
+		}
+	}
+	return -1
+}
+
+// Covered tells whether a local point of the ground is under a building
+// beyond the base's round footprint: its floor hides the dust.
+func Covered(local vec3) bool {
+	for _, r := range Rooms {
+		if r.Hall != nil && r.inHall(local, 0.5) {
+			return true
+		}
+	}
+	return false
+}
+
+// Lamp is a ceiling lamp: where it hangs, how bright it is, how far it
+// reaches.
+type Lamp struct {
+	At           vec3 // local
+	Power, Range float64
+}
+
+// Lamps lists the ceiling lamps: one per room first (they cast shadows),
+// then one per corridor, then the halls' others.
+func Lamps() []Lamp {
+	lamps := []Lamp{{vec3{0, 2.7, 0}, 1.4, 10}}
 	for _, r := range Rooms[1:] {
-		lights = append(lights, r.Center.Add(vec3{0, 2.3, 0}))
+		if r.Hall != nil {
+			lamps = append(lamps, r.hallLamps()[0])
+			continue
+		}
+		lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
 	}
 	for _, c := range Corridors {
-		lights = append(lights, c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}))
+		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10})
 	}
-	return lights
+	for _, r := range Rooms {
+		if r.Hall != nil {
+			lamps = append(lamps, r.hallLamps()[1:]...)
+		}
+	}
+	return lamps
 }
 
 // Interactable is something the player can use with E.

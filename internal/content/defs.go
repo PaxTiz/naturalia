@@ -22,10 +22,23 @@ type Blueprint struct {
 	Link   string `json:"link"` // building a corridor leads to; doors are added at both ends
 	Sign   string `json:"sign"` // painted over the door that leads here from the hub
 	Shape  Dome   `json:"shape"`
+	Hall   *Hall  `json:"hall"`   // a big rectangular hall instead of a dome
+	Garage bool   `json:"garage"` // its floor has a parking bay for each driven vehicle
 	Style  string `json:"style"`  // token of the walls and roof
 	Accent string `json:"accent"` // token of the glowing stripes inside
 	Doors  []Door `json:"doors"`
 	Props  []Prop `json:"props"`
+}
+
+// Hall is a rectangular building, like an aircraft hangar: walls around
+// its floor, a barrel vault along Z over them, and a giant sliding door
+// in the middle of its east wall (+X), whose leaves slide away into
+// pockets past the ends.
+type Hall struct {
+	Size  [2]float64 `json:"size"`        // along X and Z, in m
+	WallH float64    `json:"wall_height"` // up to where the vault starts
+	Rise  float64    `json:"rise"`        // the vault's height over the walls
+	Door  [2]float64 `json:"door"`        // the big door's width and height
 }
 
 type Dome struct {

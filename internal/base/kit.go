@@ -17,7 +17,10 @@ func roomOf(bp *content.Blueprint) Room {
 	for _, d := range bp.Doors {
 		openings = append(openings, d.Facing)
 	}
-	return Room{bp.At, bp.Shape.Radius, bp.Shape.WallH, openings, bp}
+	if bp.Hall != nil {
+		return Room{Center: bp.At, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, plan: bp}
+	}
+	return Room{bp.At, bp.Shape.Radius, bp.Shape.WallH, nil, openings, bp}
 }
 
 // KitBuild lets a kit piece use the base's building helpers.
@@ -63,6 +66,10 @@ type building struct {
 func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	b := &building{Parts: mesh.NewParts(Origin), kits: kits}
 	for i, bp := range Plans {
+		if bp.Hall != nil {
+			b.hall(bp, roomOf(bp))
+			continue
+		}
 		b.room(bp)
 		b.greebleRoom(bp, roomOf(bp), i*97+3)
 		b.clutter(bp)

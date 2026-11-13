@@ -9,6 +9,7 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 	"naturalia/internal/palette"
+	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -18,6 +19,7 @@ type sign struct {
 	at     vec3 // local, center of the sign
 	facing vec3 // horizontal direction the text faces
 	width  float64
+	height float64 // signHeight if 0
 	text   string
 	accent color.RGBA
 	tex    rl.Texture2D
@@ -39,17 +41,40 @@ func (gfx *Graphics) baseSigns() []sign {
 			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, gfx.tok(bp.Accent).Col))
 		}
 	}
+	// On the halls: their name outside, and over each bay of a garage the
+	// name of the vehicle that parks there.
+	for _, i := range base.Halls() {
+		r, bp := base.Rooms[i], base.Plans[i]
+		hx := r.Hall.Size[0] / 2
+		if bp.Sign != "" {
+			signs = append(signs, sign{at: r.Center.Add(vec3{-hx - 0.17, 7.5, 0}), facing: vec3{-1, 0, 0}, width: 11, height: 1.8,
+				text: bp.Sign, accent: gfx.tok(bp.Accent).Col})
+		}
+	}
+	for _, bay := range base.Bays {
+		i := base.RoomAt(bay.At.Add(vec3{0, 1, 0}))
+		v, ok := gfx.content.Vehicles.Get(bay.ID)
+		if i < 0 || !ok {
+			continue
+		}
+		hx := base.Rooms[i].Hall.Size[0] / 2
+		at := vec3{base.Rooms[i].Center.X - hx + 0.17, 3.4, bay.At.Z}
+		signs = append(signs, sign{at: at, facing: vec3{1, 0, 0}, width: math.Min(bay.Width-1.2, 4.2), height: 0.55,
+			text: strings.ToUpper(v.Name), accent: gfx.tok(base.Plans[i].Accent).Col})
+	}
 	return append(signs,
 		inHub(base.South, "SAS 01 - SORTIE", palette.Gold),
 		sign{at: base.AirlockEnd.Add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: palette.Gold},
 	)
 }
 
+func (s sign) tall() float64 { return content.OrZero(s.height, signHeight) }
+
 // paintSign draws a sign's texture in flat colors: a dark steel plate, an
 // accent tab on the left with a hazard notch, and the text in small capitals.
 func paintSign(s sign, font rl.Font) rl.Texture2D {
 	const h = 128
-	w := int(math.Round(s.width / signHeight * h))
+	w := int(math.Round(s.width / s.tall() * h))
 	img := rl.GenImageColor(w, h, color.RGBA{44, 48, 60, 255})
 	rl.ImageDrawRectangle(img, 0, 0, int32(w), 6, color.RGBA{64, 70, 86, 255})
 	rl.ImageDrawRectangle(img, 0, h-6, int32(w), 6, color.RGBA{30, 33, 42, 255})
@@ -75,13 +100,13 @@ func (gfx *Graphics) drawSigns(g *game.Game) {
 	gfx.setMat(content.MtDecal, 1, false)
 	for _, s := range gfx.signs {
 		rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, s.tex)
-		if base.Indoors(s.at.Sub(s.facing.Scale(0.3))) {
+		if base.Indoors(s.at.Add(s.facing.Scale(0.3))) { // in front of it
 			gfx.setLighting(mesh.LitIndoor, vec3{})
 		} else {
 			gfx.setLighting(mesh.LitSun, vec3{})
 		}
 		yaw := math.Atan2(s.facing.X, s.facing.Z) * 180 / math.Pi
-		gfx.put(gfx.signBox, base.ToWorld(s.at), vec3{s.width, signHeight, 0.03}, vec3{0, 1, 0}, yaw, color.RGBA{255, 255, 255, 255}, 0.2, 0.25)
+		gfx.put(gfx.signBox, base.ToWorld(s.at), vec3{s.width, s.tall(), 0.03}, vec3{0, 1, 0}, yaw, color.RGBA{255, 255, 255, 255}, 0.2, 0.25)
 	}
 	gfx.setMat(content.MtPlain, 1, false)
 }

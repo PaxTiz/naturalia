@@ -103,6 +103,7 @@ type Game struct {
 
 	walls    []base.Segment // the base's walls, for collisions
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
+	HallOpen []float64      // the halls' big doors, in the order of base.Halls
 	Burn     float64        // incinerator glow after a deposit
 	SleepT   float64        // time into the sleep sequence
 	wakeUp   bool           // a new game starts by waking up in bed
@@ -143,6 +144,7 @@ func New(c *content.Content) *Game {
 	g.Player.Pos = g.World.Relief.Surface(g.Player.Pos)
 	g.walls = base.Walls()
 	g.syncFleet()
+	g.garageYard()
 	return g
 }
 
@@ -208,14 +210,16 @@ func (g *Game) Update(dt float64) {
 	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)
 	g.sfx.Update()
 	g.updateFov(dt)
-	// Creative flight goes through everything, a flying vehicle over it.
-	solid := !g.Player.Fly && g.DriveAlt() < aloft
-	if solid {
-		g.Player.Pos = base.Collide(g.Player.Pos, g.walls)
-		g.collideRocks()
+	// Creative flight goes through everything, a flying vehicle over what
+	// stands lower.
+	if !g.Player.Fly {
+		g.Player.Pos = base.Collide(g.Player.Pos, g.wallsNow(), g.DriveAlt())
+		if g.DriveAlt() < aloft {
+			g.collideRocks()
+		}
 	}
 	g.updateVehicle(dt)
-	if solid {
+	if !g.Player.Fly && g.DriveAlt() < aloft {
 		g.collideEntities()
 	}
 	g.updateItems()
@@ -240,7 +244,7 @@ func (g *Game) updateAim() {
 	p := &g.Player
 	eye, fwd := p.Eye(), p.Forward()
 	g.Aim, g.AimOK = g.World.Relief.Raycast(eye, fwd, g.Tool().Reach)
-	if g.AimOK && planet.ArcDist(g.Aim.Norm(), planet.BaseUp) < base.Reach {
+	if g.AimOK && (planet.ArcDist(g.Aim.Norm(), planet.BaseUp) < base.Reach || base.Covered(base.ToLocal(g.Aim))) {
 		g.AimOK = false // the ground under the base isn't swept
 	}
 
@@ -343,6 +347,7 @@ func (g *Game) updateBase(dt float64) {
 		open = 1
 	}
 	g.DoorOpen += (open - g.DoorOpen) * math.Min(1, dt*4)
+	g.updateHallDoors(dt)
 	g.Burn = math.Max(0, g.Burn-dt*0.5)
 }
 

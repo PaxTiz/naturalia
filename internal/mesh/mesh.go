@@ -185,6 +185,25 @@ func (m *Builder) BoxBasis(c vec3, ax [3]vec3, size vec3, bevel float64) {
 	}
 }
 
+// Slab extrudes the convex polygon pts, given in order on a plane, by
+// depth along that plane's normal n: a gable end, any flat odd shape.
+func (m *Builder) Slab(pts []vec3, n vec3, depth float64) {
+	n = n.Norm().Scale(depth / 2)
+	var mid vec3
+	for _, p := range pts {
+		mid = mid.Add(p)
+	}
+	mid = mid.Scale(1 / float64(len(pts)))
+	for i := range pts {
+		a, b := pts[i], pts[(i+1)%len(pts)]
+		if i > 0 && i < len(pts)-1 {
+			m.tri(pts[0].Add(n), a.Add(n), b.Add(n), mid)
+			m.tri(pts[0].Sub(n), a.Sub(n), b.Sub(n), mid)
+		}
+		m.quad(a.Add(n), b.Add(n), b.Sub(n), a.Sub(n), mid)
+	}
+}
+
 // Wedge adds a ramp standing on the local point c: size.X long along the
 // horizontal direction across, size.Z wide, rising from nothing to size.Y.
 func (m *Builder) Wedge(c, size, across vec3) {

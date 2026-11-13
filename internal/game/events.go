@@ -43,13 +43,8 @@ func (g *Game) updateEvents(dt float64) {
 
 // buildingAt is the ID of the building whose room holds a local point.
 func buildingAt(local vec3) string {
-	if local.Y > 3.5 {
-		return ""
-	}
-	for i, r := range base.Rooms {
-		if math.Hypot(local.X-r.Center.X, local.Z-r.Center.Z) < r.Radius {
-			return base.Plans[i].ID
-		}
+	if i := base.RoomAt(local); i >= 0 {
+		return base.Plans[i].ID
 	}
 	return ""
 }

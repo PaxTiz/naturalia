@@ -128,8 +128,8 @@ var coreTokens = map[string]content.Token{
 	"visor.gold":    {color.RGBA{200, 150, 60, 255}, content.MtPlain, 1, 1.2, 0},
 }
 
-// coreBuildings: the hub first, the rooms around it. The hub's south door
-// leads to the airlock.
+// coreBuildings: the hub first, the rooms around it, then the hangar. The
+// hub's south door leads to the airlock.
 var coreBuildings = []content.Blueprint{
 	content.Blueprint{
 		ID:     "core:hub",
@@ -191,6 +191,16 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "chair", At: vec3{2.0, 0, 0.6}, Seed: 4},
 			{Kit: "planter", At: vec3{-2.8, 0, 0.6}, Seed: 2},
 		},
+	},
+	// The vehicles' hangar, east of the base, its door facing away.
+	content.Blueprint{
+		ID:     "core:hangar",
+		Sign:   "HANGAR 01",
+		Accent: "neon.orange",
+		At:     vec3{39, 0, 0},
+		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
+		Garage: true,
+		Style:  "habitat.white",
 	},
 }
 

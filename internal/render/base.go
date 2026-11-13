@@ -43,7 +43,8 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	if gfx.base == nil {
 		gfx.base = gfx.uploadBase(base.Build(&g.Content.Kits), gfx.objectSh)
 		gfx.doorPanel = doorPanelModel(gfx.objectSh)
-		for _, m := range append(gfx.base.models, gfx.doorPanel) {
+		gfx.hallLeaf = upload(base.LeafModel(), gfx.objectSh)
+		for _, m := range append(gfx.base.models, gfx.doorPanel, gfx.hallLeaf) {
 			gfx.bindMaps(m)
 		}
 	}
@@ -60,6 +61,7 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	}
 
 	gfx.drawAirlock(g)
+	gfx.drawHallDoors(g)
 	gfx.drawBeacon(g)
 	gfx.drawSigns(g)
 	gfx.setMat(content.MtPlain, 1, false)
@@ -85,6 +87,34 @@ func (gfx *Graphics) drawAirlock(g *game.Game) {
 		lamp = palette.Gold
 	}
 	gfx.box(end.Add(vec3{0, 2.6, -0.2}), vec3{1.2, 0.08, 0.04}, vec3{1, 0, 0}, lamp, 0, 1)
+}
+
+// drawHallDoors draws the leaves of the halls' big doors where they stand,
+// lit from inside on their inner face.
+func (gfx *Graphics) drawHallDoors(g *game.Game) {
+	tok := gfx.tok("habitat.white2")
+	gfx.setMat(tok.Mat, tok.Scale, false)
+	for k, i := range base.Halls() {
+		open := 0.0
+		if k < len(g.HallOpen) {
+			open = g.HallOpen[k]
+		}
+		r := base.Rooms[i]
+		gfx.setLighting(mesh.LitTowards, base.ToWorld(r.Center.Add(vec3{0, 1.2, 0})))
+		for j, l := range base.HallLeaves(i, open) {
+			c := tok.Col
+			if j%2 == 1 {
+				c = gfx.tok("habitat.white").Col
+			}
+			gfx.setMat(tok.Mat, tok.Scale, false)
+			gfx.put(gfx.hallLeaf, base.ToWorld(l.At), l.Size, vec3{0, 1, 0}, 0, c, tok.Spec, 0)
+			// Hazard stripes along its foot.
+			gfx.setMat(content.MtHazard, 2.5, false)
+			gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + 0.4, 0}), vec3{l.Size.X + 0.02, 0.5, l.Size.Z - 0.1}, vec3{1, 0, 0}, palette.White, 0.2, 0)
+		}
+	}
+	gfx.setMat(content.MtPlain, 1, false)
+	gfx.setLighting(mesh.LitSun, vec3{})
 }
 
 // drawBeacon blinks the red light on top of the hub's antenna.

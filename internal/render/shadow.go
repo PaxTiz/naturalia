@@ -118,7 +118,7 @@ type lampShadow struct {
 }
 
 const (
-	lampShadowCell = 1024 // each lamp's view; the rooms' lamps are the first lights of base.Lights
+	lampShadowCell = 1024 // each lamp's view; the rooms' lamps are the first lights of base.Lamps
 	lampFov        = 150.0
 )
 

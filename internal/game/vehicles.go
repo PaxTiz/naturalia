@@ -35,9 +35,9 @@ func (g *Game) owned(v *content.Vehicle) int {
 	return g.Entities(v.ID) + g.State.Items[v.ID]
 }
 
-// syncFleet brings every vehicle bought into the world: driven ones on the
-// landing pad, followers next to the player, patrolling ones into the
-// inventory. It also brings back the drones of saves where they were an
+// syncFleet brings every vehicle bought into the world: driven ones into
+// their bay in the garage (or on the landing pad without one), followers
+// next to the player, patrolling ones into the inventory. It also brings back the drones of saves where they were an
 // upgrade, under the same ID.
 func (g *Game) syncFleet() {
 	parked := 0 // driven kinds so far: each has its spot on the pad
@@ -52,6 +52,7 @@ func (g *Game) syncFleet() {
 			case v.Auto():
 				g.spawn(v.ID, g.Player.Pos)
 				g.State.Entities[len(g.State.Entities)-1].Alt = v.Hover
+			case g.park(v, -1):
 			default:
 				off := float64(n%4) * 0.8
 				spot := vec3{float64(parked%3)*6 - 6, 0, float64(parked/3) * -6}
@@ -74,7 +75,7 @@ func yawOf(up, fwd vec3) float64 {
 // sweepUnder cleans the dust under a vehicle into the tank, away from the
 // base's ground.
 func (g *Game) sweepUnder(v *content.Vehicle, e *Placed, dt float64) {
-	if v.Sweep <= 0 || planet.ArcDist(e.Dir, planet.BaseUp) < base.Reach {
+	if v.Sweep <= 0 || planet.ArcDist(e.Dir, planet.BaseUp) < base.Reach || base.Covered(base.ToLocal(g.World.Relief.Surface(e.Dir))) {
 		return
 	}
 	at := g.World.Relief.Surface(e.Dir)

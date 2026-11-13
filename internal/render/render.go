@@ -19,6 +19,7 @@ import (
 
 const (
 	maxCasters = 16
+	maxLamps   = 24 // lights in object.frag
 )
 
 type shaderLocs struct {
@@ -55,6 +56,7 @@ type Graphics struct {
 	dust                                              dustGPU // the dust tiles near the player, on the GPU
 	base                                              *baseModels
 	doorPanel                                         rl.Model
+	hallLeaf                                          rl.Model                 // a door leaf of the halls, scaled to size
 	entities                                          map[string][]entityModel // by entity ID, built on first draw
 	screens                                           []rl.Texture2D
 	signs                                             []sign
@@ -184,12 +186,13 @@ func New(g *game.Game) *Graphics {
 	rl.SetClipPlanes(gfx.near, gfx.far)
 
 	// The base's ceiling lamps never move.
-	var lights []float32
-	for _, l := range base.Lights() {
-		p := base.ToWorld(l)
-		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), 1)
+	var lights, ranges []float32
+	for _, l := range base.Lamps()[:min(len(base.Lamps()), maxLamps)] {
+		p := base.ToWorld(l.At)
+		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
+		ranges = append(ranges, float32(l.Range))
 	}
-	lights[3] = 1.4 // the hub is bigger
+	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(len(base.Rooms))}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampGrid"), []float32{float32(gfx.lampShadow.grid)}, rl.ShaderUniformFloat)
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
@@ -298,7 +301,9 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	// The base's shapes, for its ambient occlusion (baseAO).
 	var rms, crs, csz []float32
 	for _, r := range base.Rooms {
-		rms = append(rms, float32(r.Center.X), float32(r.Center.Z), float32(r.Radius), float32(r.WallH))
+		if r.Hall == nil { // halls aren't round: no occlusion from them
+			rms = append(rms, float32(r.Center.X), float32(r.Center.Z), float32(r.Radius), float32(r.WallH))
+		}
 	}
 	for _, c := range base.Corridors {
 		crs = append(crs, float32(c.From.X), float32(c.From.Z), float32(c.To.X), float32(c.To.Z))
@@ -338,7 +343,11 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	var casters []float32
 	for _, r := range base.Rooms {
 		c := base.ToWorld(r.Center.Add(vec3{0, r.WallH * 0.7, 0}))
-		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(r.Radius*1.05))
+		radius := r.Radius * 1.05
+		if r.Hall != nil {
+			radius = r.Hall.Size[0] * 0.55
+		}
+		casters = append(casters, float32(c.X), float32(c.Y), float32(c.Z), float32(radius))
 	}
 	n := min(len(casters)/4, maxCasters)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
@@ -370,8 +379,8 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.setUniforms(g, cam)
 	if gfx.base != nil {
 		var lamps []vec3
-		for _, l := range base.Lights()[:len(base.Rooms)] {
-			lamps = append(lamps, base.ToWorld(l).Sub(vec3{0, 0.12, 0}))
+		for _, l := range base.Lamps()[:len(base.Rooms)] {
+			lamps = append(lamps, base.ToWorld(l.At).Sub(vec3{0, 0.12, 0}))
 		}
 		gfx.lampShadow.render(gfx, lamps, func() { gfx.drawBase(g) })
 		vp := gfx.lampShadow.cols(gfx.origin)
