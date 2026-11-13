@@ -103,3 +103,46 @@ func TestExampleMod(t *testing.T) {
 		t.Errorf("in the greenhouse: %q", got)
 	}
 }
+
+func TestStuntMod(t *testing.T) {
+	m, err := content.ReadMod("../../examples/mods/cascadeur", script.Run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := LoadContent(m.Pack())
+	if e, _ := c.Entities.Get("cascadeur:mega-tremplin"); e == nil || e.Ramp == nil || e.Ramp.Height != 5 || e.Parts[0].Shape != "wedge" {
+		t.Errorf("ramp: %+v", e)
+	}
+	if v, _ := c.Vehicles.Get("core:rover"); v.Jumps != 2 || v.Jump != 5.5 {
+		t.Errorf("patched rover: jump %f, %d jumps", v.Jump, v.Jumps)
+	}
+	g := fleetGame(t, c, map[string]int{})
+	g.Mode = ModePlay
+	v, _ := c.Vehicles.Get("cascadeur:moto")
+	g.Board(v.ID)
+	if !g.Chase() {
+		t.Error("the bike starts in the chase view")
+	}
+	// Two jumps landed in a row make a combo: the script pushes the
+	// bike and pays.
+	before := g.State.Credits
+	for range 2 {
+		step(g, v, controls{throttle: 1}, 30)
+		step(g, v, controls{throttle: 1, jump: true}, 1)
+		for i := 0; i < 600 && (g.drive.air || i < 10); i++ {
+			step(g, v, controls{throttle: 1}, 1)
+		}
+	}
+	if g.State.Credits-before < 400 {
+		t.Errorf("combo paid %.0f cr", g.State.Credits-before)
+	}
+	if rec, _ := g.ModData("cascadeur")["record"].(float64); rec < 1 {
+		t.Errorf("record %v", g.ModData("cascadeur")["record"])
+	}
+	if len(c.Debug) != 1 {
+		t.Fatalf("%d debug lines", len(c.Debug))
+	}
+	if line := c.Debug[0](g); line == "" {
+		t.Error("empty debug line")
+	}
+}

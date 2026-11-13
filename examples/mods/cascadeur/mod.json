@@ -1,0 +1,52 @@
+{
+  "id": "cascadeur",
+  "name": "Cascadeur",
+  "version": "1.0",
+  "scripts": ["main.js"],
+
+  "tokens": {
+    "carbone": {"color": "#22252c", "material": "plain", "spec": 0.6},
+    "fluo": {"color": "#c6ff3a", "material": "plain", "emissive": 0.8}
+  },
+
+  "vehicles": [
+    {
+      "id": "moto", "name": "Moto à réaction",
+      "desc": "Triple saut, énorme boost, combos récompensés : faite pour voler, pas pour balayer",
+      "cost": 40000, "speed": 24, "turn": 2.2, "grip": 5, "sweep": 1.5, "rate": 1, "seat": 1.4, "radius": 0.9,
+      "jump": 6.5, "jumps": 3, "boost": 2, "fuel": 5, "air": 1, "gravity": 1.5, "bounce": 0.5,
+      "view": "chase", "chase": 7, "flame": [-1.15, 0.55, 0], "flame_r": 0.2,
+      "parts": [
+        {"shape": "prism", "token": "rubber", "at": [0.8, 0.4, -0.1], "axis": [0, 0, 1], "r0": 0.4, "h": 0.2, "sides": 14, "lit": "outdoor"},
+        {"shape": "prism", "token": "rubber", "at": [-0.75, 0.4, -0.12], "axis": [0, 0, 1], "r0": 0.4, "h": 0.24, "sides": 14, "lit": "outdoor"},
+        {"shape": "box", "token": "carbone", "at": [0, 0.75, 0], "size": [1.5, 0.35, 0.4], "bevel": 0.08, "lit": "outdoor"},
+        {"shape": "box", "token": "fluo", "at": [0.35, 0.95, 0], "size": [0.7, 0.12, 0.42], "bevel": 0.04, "lit": "outdoor"},
+        {"shape": "box", "token": "core:fabric.seat", "at": [-0.35, 0.98, 0], "size": [0.6, 0.12, 0.34], "bevel": 0.04, "lit": "outdoor"},
+        {"shape": "box", "token": "core:steel", "at": [0.75, 1.15, 0], "size": [0.06, 0.06, 0.7], "lit": "outdoor"},
+        {"shape": "prism", "token": "core:steel.dark", "at": [-0.8, 0.55, 0], "axis": [-1, 0, 0], "r0": 0.14, "r1": 0.18, "h": 0.35, "sides": 10, "lit": "outdoor"},
+        {"shape": "prism", "token": "core:neon.orange", "at": [-1.15, 0.55, 0], "axis": [-1, 0, 0], "r0": 0.13, "h": 0.01, "sides": 10, "lit": "outdoor"}
+      ]
+    }
+  ],
+
+  "entities": {
+    "mega-tremplin": {
+      "name": "Méga tremplin", "pickup": true, "prompt": "Ramasser : Méga tremplin",
+      "ramp": {"length": 14, "width": 6, "height": 5},
+      "parts": [
+        {"shape": "wedge", "token": "carbone", "size": [14, 5, 6], "lit": "outdoor"},
+        {"shape": "box", "token": "fluo", "at": [6.9, 5, 0], "size": [0.2, 0.1, 6.02], "lit": "outdoor"},
+        {"shape": "box", "token": "core:hazard", "at": [0, 0.05, -3.05], "size": [14, 0.1, 0.1], "lit": "outdoor"},
+        {"shape": "box", "token": "core:hazard", "at": [0, 0.05, 3.05], "size": [14, 0.1, 0.1], "lit": "outdoor"}
+      ]
+    }
+  },
+
+  "items": [
+    {"id": "mega-tremplin", "name": "Méga tremplin", "desc": "5 m de haut : prends de l'élan (F pour le poser)", "icon": "ramp", "cost": 15000}
+  ],
+
+  "patch": {
+    "vehicles": {"core:rover": {"jumps": 2}}
+  }
+}

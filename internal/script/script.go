@@ -103,6 +103,16 @@ type jsEvent struct {
 	Dt     float64 `json:"dt"`
 }
 
+type jsVehicle struct {
+	ID       string  `json:"id"`
+	Speed    float64 `json:"speed"`
+	Air      bool    `json:"air"`
+	Alt      float64 `json:"alt"`
+	Airtime  float64 `json:"airtime"`
+	Fuel     float64 `json:"fuel"`
+	Boosting bool    `json:"boosting"`
+}
+
 func (s *script) api(c *content.Content) map[string]any {
 	isEntity := func(id string) bool { _, ok := c.Entities.Get(id); return ok }
 	return map[string]any{
@@ -170,6 +180,18 @@ func (s *script) api(c *content.Content) map[string]any {
 			s.game().GiveItem(refIn(s.mod, id, func(id string) bool { _, ok := c.Items.Get(id); return ok }), n)
 		},
 		"driving": func() string { return s.game().Driving() },
+		// vehicle is the driven vehicle, or null: {id, speed (m/s), air,
+		// alt (m), airtime (s), fuel (0 to 1), boosting}.
+		"vehicle": func() any {
+			v, ok := s.game().Vehicle()
+			if !ok {
+				return nil
+			}
+			return jsVehicle{v.ID, v.Speed, v.Air, v.Alt, v.Airtime, v.Fuel, v.Boosting}
+		},
+		// push adds speed to the driven vehicle, in m/s: along its nose,
+		// and up.
+		"push": func(forward, up float64) { s.game().Push(forward, up) },
 		// debugLine adds a line to the debug overlay (F3): fn returns it.
 		"debugLine": func(fn goja.Callable) {
 			c.Debug = append(c.Debug, func(g content.Game) string { return s.call(g, fn).String() })

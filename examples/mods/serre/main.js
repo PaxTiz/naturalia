@@ -1,13 +1,15 @@
 // La serre : comportements en JavaScript (voir script.go pour l'API).
 //
 // game.on(évènement, fn)       tick, dust_collected, gem_collected, sell, buy,
-//                              use, enter_building, leave_building, wake
+//                              use, enter_building, leave_building, wake,
+//                              place, drive, jump, land, boost
 // game.randomEvent({id, every, when, run})
 // lire  : credits(), tank(), capacity(), tool(), level(id), isDay(),
 //         inside(), clock(), distanceToBase(), player()
 // agir  : say(texte), giveCredits(n), burst(n, "#rrggbb"), beep(Hz),
 //         dustDevil(), random()
 //         spawn(entité), entities(entité), giveItem(objet, n), driving()
+// véhicule : vehicle(), push(avant, haut) (voir examples/mods/cascadeur)
 // garder dans la sauvegarde : get(clé), set(clé, valeur)
 // mode debug (F3) : debugLine(() => "texte")
 
