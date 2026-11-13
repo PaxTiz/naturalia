@@ -77,6 +77,17 @@
         {"shape": "box", "token": "steel", "at": [-0.9, 0.7, -0.35], "size": [0.8, 0.05, 0.05], "lit": "outdoor"},
         {"shape": "box", "token": "steel.dark", "at": [-0.35, 0.25, 0], "size": [0.1, 0.5, 0.8], "lit": "outdoor"}
       ]
+    },
+    {
+      "id": "abeille", "name": "Abeille", "desc": "Petit drone pollinisateur : il te suit et époussette au passage",
+      "icon": "drone", "cost": 900, "growth": 1.6, "drive": "auto", "ai": "follow",
+      "speed": 6, "hover": 2.2, "sweep": 1.2, "rate": 0.5, "range": 18, "light": [0, 0.16, 0],
+      "parts": [
+        {"shape": "prism", "token": "planter.lime", "at": [-0.2, 0, 0], "axis": [1, 0, 0], "r0": 0.1, "r1": 0.14, "h": 0.4, "sides": 8, "lit": "outdoor"},
+        {"shape": "box", "token": "steel.dark", "at": [0, 0, 0], "size": [0.06, 0.2, 0.3], "lit": "outdoor"},
+        {"shape": "box", "token": "glass.dark", "at": [0, 0.13, 0.3], "size": [0.2, 0.01, 0.4], "lit": "outdoor"},
+        {"shape": "box", "token": "glass.dark", "at": [0, 0.13, -0.3], "size": [0.2, 0.01, 0.4], "lit": "outdoor"}
+      ]
     }
   ],
 
