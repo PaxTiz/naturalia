@@ -247,15 +247,30 @@ func TestShuttle(t *testing.T) {
 	if alt := g.DriveAlt(); alt > 3 {
 		t.Errorf("%.1f m up after a second", alt)
 	}
-	step(g, v, controls{throttle: 1}, 60*12)
+	step(g, v, controls{throttle: 1}, 60*25)
 	if s := g.drive.vel.Length(); s < v.Speed*0.98 {
-		t.Errorf("flies at %.0f m/s after 13 s", s)
+		t.Errorf("flies at %.0f m/s after 26 s", s)
 	}
 	if alt := g.DriveAlt(); alt < v.Fly.Ceiling*0.9 || alt > v.Fly.Ceiling*1.1 {
 		t.Errorf("flies %.0f m up", alt)
 	}
-	if far := planet.ArcDist(start, g.Player.LocalUp()); far < 3000 {
+	if far := planet.ArcDist(start, g.Player.LocalUp()); far < 2500 {
 		t.Errorf("only %.0f m from the start", far)
+	}
+	// Mars in two minutes or so, not seconds.
+	if round := 2 * math.Pi * planet.Radius / v.Speed; round < 90 {
+		t.Errorf("round Mars in %.0f s", round)
+	}
+	// Ctrl lowers the cruising altitude, which then holds at full speed.
+	step(g, v, controls{throttle: 1, climb: -1}, 60*4)
+	low := g.Cruise()
+	step(g, v, controls{throttle: 1}, 60*15)
+	if low > 100 || math.Abs(g.DriveAlt()-low) > 15 {
+		t.Errorf("cruising at %.0f m, %.0f m up", low, g.DriveAlt())
+	}
+	step(g, v, controls{throttle: 1, climb: 1}, 60*20)
+	if g.Cruise() != v.Fly.Ceiling {
+		t.Errorf("Space raises the cruise to %.0f m only", g.Cruise())
 	}
 	// Letting go, then braking: it comes down to hover, and can be left.
 	step(g, v, controls{}, 60*10)

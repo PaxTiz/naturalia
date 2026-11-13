@@ -326,7 +326,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 			v, _ := g.Driven()
 			line := fmt.Sprintf("Descendre · %s · %.0f km/h", v.Name, g.DriveSpeed()*3.6)
 			if v.Fly != nil {
-				line += fmt.Sprintf(" · %.0f m", g.DriveAlt())
+				line += fmt.Sprintf(" · %.0f m (croisière %.0f m)", g.DriveAlt(), g.Cruise())
 			}
 			hud.prompt("E", line, h*0.64, visorCyan)
 			hud.drawBoost(g, h*0.64+30*uiScale())
@@ -401,7 +401,10 @@ func (hud *HUD) drawHints(g *game.Game) {
 	}
 	if v, ok := g.Driven(); ok {
 		hints = [][2]string{{"Z", "accélérer"}, {"S", "freiner"}, {"QD", "tourner"}}
-		if v.Jump > 0 {
+		switch {
+		case v.Fly != nil:
+			hints = append(hints, [2]string{"ESPACE/CTRL", "altitude"})
+		case v.Jump > 0:
 			hints = append(hints, [2]string{"ESPACE", "sauter"})
 		}
 		if v.Boost > 0 {
