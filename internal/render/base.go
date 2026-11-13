@@ -243,9 +243,11 @@ func drawBed(gfx *Graphics, g *game.Game, at vec3) {
 	gfx.put(gfx.sphere, base.ToWorld(at.Add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, palette.LampWarm, 0, 1)
 }
 
-// upload sends the triangles to the GPU. The slices stay referenced by the builder:
-// the mesh is never unloaded.
+// upload sends the triangles to the GPU. raylib keeps pointers to the slices in C
+// memory, out of the GC's sight: the builder is held in keep, and the mesh is never
+// unloaded.
 func upload(m *mesh.Builder, sh rl.Shader) rl.Model {
+	keep = append(keep, m)
 	mesh := rl.Mesh{VertexCount: int32(len(m.V) / 3), TriangleCount: int32(len(m.V) / 9)}
 	mesh.Vertices, mesh.Normals, mesh.Texcoords = &m.V[0], &m.N[0], &m.UV[0]
 	rl.UploadMesh(&mesh, false)
@@ -256,9 +258,7 @@ func upload(m *mesh.Builder, sh rl.Shader) rl.Model {
 
 // doorPanelModel is one sliding leaf of the airlock.
 func doorPanelModel(sh rl.Shader) rl.Model {
-	m := base.DoorPanel()
-	keep = append(keep, m)
-	return upload(m, sh)
+	return upload(base.DoorPanel(), sh)
 }
 
 // keep holds builders whose slices back GPU meshes.
