@@ -93,6 +93,16 @@ func TestDock(t *testing.T) {
 	if math.Hypot(at.X-bay.Spot.X, at.Z-bay.Spot.Z) > 0.05 || g.drive.fwd.X < 0.999 || g.drive.dock != nil || g.Riding != 0 {
 		t.Errorf("%s parked at %v, facing %v", v.ID, at, g.drive.fwd)
 	}
+	// And it drives off again: the base's ground is a plane, rising a
+	// little away from its middle, which used to hold it there.
+	start := g.Player.Pos
+	for range 120 {
+		g.move(v, controls{throttle: 1}, 1.0/60)
+		g.updateVehicle(1.0 / 60)
+	}
+	if d := g.Player.Pos.Sub(start).Length(); d < 8 {
+		t.Errorf("it left its bay by %.2f m only", d)
+	}
 	// Far out, no.
 	g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{1, 0, 0}, 200))
 	if g.CanDock() {

@@ -295,7 +295,9 @@ func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
 	side := d.vel.Sub(d.fwd.Scale(s))
 	if !d.air || v.Fly != nil {
 		switch {
-		case in.throttle > 0 && s < 0, in.throttle < 0 && s > 0:
+		// A crawl the other way, like rolling back down a slight slope,
+		// isn't braked: that would stop it there for good.
+		case in.throttle > 0 && s < -0.2, in.throttle < 0 && s > 0.2:
 			s = approach(s, 0, brake*dt)
 		case s > top && in.throttle >= 0:
 			s = approach(s, top, coast*dt) // coming down from a boost or a pad
