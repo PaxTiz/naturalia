@@ -33,7 +33,7 @@ type Mode int
 const (
 	ModePaused Mode = iota
 	ModePlay
-	ModeShop  // research lab: upgrades
+	ModeShop  // research lab: upgrades; or the garage's terminal (Garage)
 	ModeMap   // map table: state of Mars
 	ModeSleep // fading out, sleeping, waking up
 	ModePhoto // free camera, no interface (photo.go)
@@ -106,6 +106,7 @@ type Game struct {
 	HallOpen []float64      // the halls' big doors, in the order of base.Halls
 	// The halls' corridor doors (base.InnerDoors), like the airlock's.
 	InnerOpen []float64
+	Garage    bool    // the shop open is the garage's: vehicles to drive
 	Burn      float64 // incinerator glow after a deposit
 	SleepT    float64 // time into the sleep sequence
 	wakeUp    bool    // a new game starts by waking up in bed

@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"math"
+	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"slices"
 )
@@ -55,11 +56,20 @@ type ShopItem struct {
 	Cost             float64
 	Maxed            bool
 	buy              func()
+	// A vehicle owned, at the garage: what selling it back gives.
+	Refund float64
+	sell   func()
 }
+
+// resale is the share of its price a vehicle sells back for.
+const resale = 0.5
 
 func (it ShopItem) Affordable(credits float64) bool { return !it.Maxed && credits >= it.Cost }
 
 func (g *Game) ShopItems() []ShopItem {
+	if g.Garage {
+		return g.garageItems()
+	}
 	tools := g.Content.Tools.All()
 	items := make([]ShopItem, 0, 1+g.Content.Upgrades.Len())
 
@@ -96,6 +106,9 @@ func (g *Game) ShopItems() []ShopItem {
 	}
 
 	for _, v := range g.Content.Vehicles.All() {
+		if !v.Auto() {
+			continue // at the garage
+		}
 		bought := g.State.Levels[v.ID]
 		it := ShopItem{
 			id: v.ID, Name: v.Name, Desc: v.Desc, Icon: content.OrDefault(v.Icon, "vehicle"),
@@ -103,9 +116,6 @@ func (g *Game) ShopItems() []ShopItem {
 			buy:  func() { g.buyVehicle(v) },
 		}
 		switch {
-		case !v.Auto():
-			it.Name = "Véhicule : " + v.Name
-			it.Info = fmt.Sprintf("%.0f km/h · rayon %.0f m", v.Speed*3.6, v.Sweep)
 		case v.Patrol():
 			it.Info = fmt.Sprintf("Robot · %d en service, %d sur toi", g.Entities(v.ID), g.State.Items[v.ID])
 		default:
@@ -113,9 +123,6 @@ func (g *Game) ShopItems() []ShopItem {
 		}
 		if v.Max > 0 && bought >= v.Max {
 			it.Maxed, it.Info = true, "Acquis"
-			if !v.Auto() {
-				it.Info = "Sur l'aire d'atterrissage"
-			}
 		}
 		items = append(items, it)
 	}
@@ -135,6 +142,42 @@ func (g *Game) ShopItems() []ShopItem {
 		})
 	}
 	return items
+}
+
+// garageItems are the vehicles to drive: those to buy, and those owned,
+// to sell back.
+func (g *Game) garageItems() []ShopItem {
+	var items []ShopItem
+	for _, v := range g.Content.Vehicles.All() {
+		if v.Auto() {
+			continue
+		}
+		it := ShopItem{
+			id: v.ID, Name: v.Name, Desc: v.Desc, Icon: content.OrDefault(v.Icon, "vehicle"), Cost: v.Cost,
+			Info: fmt.Sprintf("%.0f km/h · rayon %.0f m", v.Speed*3.6, v.Sweep),
+			buy:  func() { g.buyVehicle(v) },
+		}
+		if g.State.Levels[v.ID] > 0 {
+			it.Maxed, it.Refund = true, math.Floor(v.Cost*resale)
+			it.Info = "Au garage"
+			if i := g.entityOf(v.ID); i >= 0 && !base.Covered(base.ToLocal(g.World.Relief.Surface(g.State.Entities[i].Dir))) {
+				it.Info = "Sorti"
+			}
+			if i := g.entityOf(v.ID); i >= 0 && i == g.Riding {
+				it.Info = "Conduit"
+			}
+			it.sell = func() { g.sellVehicle(v, it.Refund) }
+		}
+		items = append(items, it)
+	}
+	return items
+}
+
+// Sell sells back a vehicle owned, at the garage.
+func (g *Game) Sell(it ShopItem) {
+	if it.sell != nil {
+		it.sell()
+	}
 }
 
 // FmtNum formats big incremental-game numbers: 950, 1.2K, 3.4M...

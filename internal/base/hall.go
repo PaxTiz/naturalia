@@ -626,6 +626,8 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 		sun("lamp.warm").Box(p(hx+0.5, dh+0.05, s*(dw/2-1)), vec3{0.3, 0.06, 1.2}, X, 0)
 	}
 
+	b.props(bp)
+
 	// The bays: yellow lines on the floor, and a stop bar at the back.
 	for _, bay := range Bays {
 		w, l := bay.Width-0.3, bay.Length

@@ -33,10 +33,12 @@ type shotRun struct {
 
 func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	s := &shotRun{file: os.Getenv("NA_SHOT"), mode: game.ModePlay}
-	// NA_SHOT_MODE opens a screen for the shot: shop, map or pause.
+	// NA_SHOT_MODE opens a screen for the shot: shop, garage, map or pause.
 	switch os.Getenv("NA_SHOT_MODE") {
 	case "shop":
 		s.mode = game.ModeShop
+	case "garage":
+		s.mode, g.Garage = game.ModeShop, true
 	case "map":
 		s.mode = game.ModeMap
 	case "pause":

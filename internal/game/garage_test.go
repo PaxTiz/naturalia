@@ -244,3 +244,84 @@ func TestCorridorToHangar(t *testing.T) {
 		}
 	}
 }
+
+func TestGarageShop(t *testing.T) {
+	c := LoadContent()
+	g := fleetGame(t, c, map[string]int{"core:drone": 1})
+	g.State.Credits = 1e9
+	item := func(id string) ShopItem {
+		for _, it := range g.ShopItems() {
+			if it.id == id {
+				return it
+			}
+		}
+		t.Fatalf("no %s in the shop (garage %v)", id, g.Garage)
+		return ShopItem{}
+	}
+	// The garage sells the vehicles to drive, the lab the rest.
+	g.Garage = true
+	for _, it := range g.ShopItems() {
+		if v, ok := c.Vehicles.Get(it.id); !ok || v.Auto() {
+			t.Errorf("the garage sells %s", it.id)
+		}
+	}
+	g.Buy(item("core:rover"))
+	g.Buy(item("core:buggy"))
+	if g.Entities("core:rover") != 1 || g.Entities("core:buggy") != 1 {
+		t.Fatal("bought vehicles missing")
+	}
+
+	// Sold back while driving the buggy, which comes after it.
+	g.getIn(g.entityOf("core:buggy"))
+	before := g.State.Credits
+	rover := item("core:rover")
+	g.Sell(rover)
+	if g.Entities("core:rover") != 0 || g.State.Levels["core:rover"] != 0 || g.State.Credits != before+rover.Refund || rover.Refund != 7500 {
+		t.Errorf("sold rover: %d left, credits +%f", g.Entities("core:rover"), g.State.Credits-before)
+	}
+	if g.State.Entities[g.Riding].Kind != "core:buggy" {
+		t.Error("lost track of the buggy driven")
+	}
+	// Not the one driven.
+	g.Sell(item("core:buggy"))
+	if g.Entities("core:buggy") != 1 {
+		t.Error("sold the buggy from under the player")
+	}
+	// And it can be bought again.
+	if it := item("core:rover"); it.Maxed || it.Refund != 0 {
+		t.Errorf("rover after selling: %+v", it)
+	}
+
+	g.Garage = false
+	item("core:drone")
+	for _, it := range g.ShopItems() {
+		if v, ok := c.Vehicles.Get(it.id); ok && !v.Auto() {
+			t.Errorf("the lab sells %s", it.id)
+		}
+	}
+}
+
+func TestGarageTerminal(t *testing.T) {
+	c := LoadContent()
+	levels := map[string]int{}
+	for _, v := range c.Vehicles.All() {
+		if !v.Auto() {
+			levels[v.ID] = 1
+		}
+	}
+	g := fleetGame(t, c, levels)
+	g.syncFleet()
+	// In front of it, facing it, every vehicle in its bay: E opens the
+	// garage, not a vehicle.
+	var at vec3
+	for _, it := range base.Interactables {
+		if it.Kit == "core:garage.terminal" {
+			at = it.At
+		}
+	}
+	g.Player.Pos = base.ToWorld(at.Add(vec3{1.4, base.FloorTop, 0}))
+	g.Player.Heading = vec3{-1, 0, 0}
+	if it, ok := g.NearbyUse(); !ok || it.Kit != "core:garage.terminal" {
+		t.Errorf("E in front of the terminal: %q", it.Kit)
+	}
+}

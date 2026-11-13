@@ -43,9 +43,10 @@ func (k kitSpot) dir(d vec3) vec3  { return content.Turn(d, k.yaw) }
 
 // kitDraws draw the moving and glowing parts of kit pieces, each frame.
 var kitDraws = map[string]func(gfx *Graphics, g *game.Game, k kitSpot){
-	"core:incinerator": drawIncinerator,
-	"core:console":     drawConsole,
-	"core:bed":         drawBed,
+	"core:incinerator":     drawIncinerator,
+	"core:console":         drawConsole,
+	"core:bed":             drawBed,
+	"core:garage.terminal": drawGarageTerminal,
 }
 
 func (gfx *Graphics) drawBase(g *game.Game) {
@@ -305,6 +306,12 @@ func drawConsole(gfx *Graphics, g *game.Game, c kitSpot) {
 			gfx.box(c.pt(vec3{-0.36, 0.4 + float64(k)*0.3, z}), vec3{0.5, 0.04, 0.02}, c.dir(vec3{0, 0, 1}), palette.Green, 0, on)
 		}
 	}
+}
+
+// drawGarageTerminal: its screen, glowing orange like the hangar's accent.
+func drawGarageTerminal(gfx *Graphics, g *game.Game, t kitSpot) {
+	gfx.setLighting(mesh.LitIndoor, vec3{})
+	gfx.drawScreen(t.pt(vec3{0.06, 1.4, 0}), t.dir(vec3{1, 0, 0}), 0.95, 0.6, gfx.screens[3], 0.9)
 }
 
 func drawBed(gfx *Graphics, g *game.Game, at kitSpot) {

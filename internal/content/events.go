@@ -6,20 +6,21 @@ package content
 
 // Events the game emits, and what they carry.
 const (
-	EvTick  = "tick"           // every frame of play: Dt
-	EvDust  = "dust_collected" // Amount grams, At where it was swept
-	EvGem   = "gem_collected"  // Amount credits, At
-	EvSell  = "sell"           // Amount credits
-	EvBuy   = "buy"            // ID of the tool or upgrade, Amount its price
-	EvUse   = "use"            // ID of the kit used, At (local)
-	EvEnter = "enter_building" // ID of the building
-	EvLeave = "leave_building" // ID of the building
-	EvWake  = "wake"           // the player gets up after sleeping
-	EvPlace = "place"          // ID of the entity placed with an item, At
-	EvDrive = "drive"          // ID of the vehicle the player gets in; empty when getting out
-	EvJump  = "jump"           // ID of the vehicle driven, Amount its upward speed
-	EvLand  = "land"           // ID of the vehicle driven, Amount seconds in the air, At where
-	EvBoost = "boost"          // ID of the vehicle driven, when its boost starts
+	EvTick   = "tick"           // every frame of play: Dt
+	EvDust   = "dust_collected" // Amount grams, At where it was swept
+	EvGem    = "gem_collected"  // Amount credits, At
+	EvSell   = "sell"           // Amount credits
+	EvBuy    = "buy"            // ID of the tool, upgrade or vehicle, Amount its price
+	EvResell = "resell"         // ID of the vehicle sold back at the garage, Amount the credits
+	EvUse    = "use"            // ID of the kit used, At (local)
+	EvEnter  = "enter_building" // ID of the building
+	EvLeave  = "leave_building" // ID of the building
+	EvWake   = "wake"           // the player gets up after sleeping
+	EvPlace  = "place"          // ID of the entity placed with an item, At
+	EvDrive  = "drive"          // ID of the vehicle the player gets in; empty when getting out
+	EvJump   = "jump"           // ID of the vehicle driven, Amount its upward speed
+	EvLand   = "land"           // ID of the vehicle driven, Amount seconds in the air, At where
+	EvBoost  = "boost"          // ID of the vehicle driven, when its boost starts
 )
 
 type Event struct {

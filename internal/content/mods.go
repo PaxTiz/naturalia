@@ -289,7 +289,7 @@ type KitJSON struct {
 		At     vec3    `json:"at"`
 		Radius float64 `json:"radius"`
 	} `json:"obstacles"`
-	Use    string  `json:"use"` // "map", "shop", "sleep", "deposit"; any other only sends "use"
+	Use    string  `json:"use"` // "map", "shop", "garage", "sleep", "deposit"; any other only sends "use"
 	Prompt string  `json:"prompt"`
 	Reach  float64 `json:"reach"`
 }
@@ -345,6 +345,7 @@ func (k KitJSON) Kit() Kit {
 	use := map[string]func(g Game, at vec3){
 		"map":     func(g Game, _ vec3) { g.OpenMap() },
 		"shop":    func(g Game, _ vec3) { g.OpenShop() },
+		"garage":  func(g Game, _ vec3) { g.OpenGarage() },
 		"sleep":   func(g Game, _ vec3) { g.Sleep() },
 		"deposit": Game.Deposit,
 	}

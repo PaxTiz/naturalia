@@ -62,6 +62,18 @@ func (hud *HUD) width(s string, size float32) float32 {
 	return rl.MeasureTextEx(hud.font, s, size, 0).X
 }
 
+// fit shortens s with an ellipsis until it is at most w wide.
+func (hud *HUD) fit(s string, size, w float32) string {
+	if hud.width(s, size) <= w {
+		return s
+	}
+	r := []rune(s)
+	for len(r) > 0 && hud.width(string(r)+"…", size) > w {
+		r = r[:len(r)-1]
+	}
+	return strings.TrimRight(string(r), " ;,") + "…"
+}
+
 func (hud *HUD) textRight(s string, right, y, size float32, c color.RGBA) {
 	hud.text(s, right-hud.width(s, size), y, size, c)
 }
@@ -682,7 +694,11 @@ func (hud *HUD) terminal(g *game.Game, p rl.Rectangle, title string, accent colo
 func (hud *HUD) drawShop(g *game.Game) {
 	u := uiScale()
 	p := shopPanel()
-	hud.terminal(g, p, "LABORATOIRE DE RECHERCHE", visorCyan)
+	title := "LABORATOIRE DE RECHERCHE"
+	if g.Garage {
+		title = "GARAGE · VÉHICULES"
+	}
+	hud.terminal(g, p, title, visorCyan)
 	right := p.X + p.Width - 72*u
 	vw := rl.MeasureTextEx(hud.mono, game.FmtNum(g.State.Credits)+" cr", 24*u, 0).X
 	coin := rl.NewVector2(right-vw-16*u, p.Y+26*u)
@@ -715,16 +731,27 @@ func (hud *HUD) drawShop(g *game.Game) {
 		fillCut(tile, 6*u, uiInk)
 		icon(it.Icon, tile.X+22*u, tile.Y+22*u, 14*u, state)
 		hud.text(it.Name, r.X+66*u, r.Y+7*u, 20*u, uiWhite)
-		hud.text(it.Desc, r.X+66*u, r.Y+32*u, 15*u, uiMuted)
 		right := r.X + r.Width - 16*u
-		if it.Maxed {
+		info := strings.ToUpper(it.Info)
+		hud.text(hud.fit(it.Desc, 15*u, right-hud.capsWidth(info, 12*u)-16*u-(r.X+66*u)), r.X+66*u, r.Y+32*u, 15*u, uiMuted)
+		switch {
+		case it.Refund > 0:
+			// Owned: sold back with a second click.
+			label, col := "REVENDRE +"+game.FmtNum(it.Refund)+" CR", palette.Gold
+			if i == hud.confirm {
+				label, col = "CLIQUE ENCORE POUR REVENDRE", color.RGBA{235, 90, 70, 255}
+			}
+			cw := hud.capsWidth(label, 15*u)
+			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, col)
+			hud.caps(label, right-cw-7*u, r.Y+11*u, 15*u, uiInk)
+		case it.Maxed:
 			cw := hud.capsWidth("MAX", 15*u)
 			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, palette.Gold)
 			hud.caps("MAX", right-cw-7*u, r.Y+11*u, 15*u, uiInk)
-		} else {
+		default:
 			hud.monoRight(game.FmtNum(it.Cost)+" cr", right, r.Y+8*u, 20*u, costCol)
 		}
-		hud.capsRight(strings.ToUpper(it.Info), right, r.Y+35*u, 12*u, visorDim)
+		hud.capsRight(info, right, r.Y+35*u, 12*u, visorDim)
 	}
 	// A scroll bar when everything doesn't fit.
 	if len(items) > shopRows {
@@ -846,11 +873,20 @@ func (hud *HUD) updateShop(g *game.Game) {
 			hud.hover = i
 		}
 	}
-	if !rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+	if hud.hover != hud.confirm {
+		hud.confirm = -1 // moving off a vehicle cancels its sale
+	}
+	if !rl.IsMouseButtonPressed(rl.MouseButtonLeft) || hud.hover < 0 {
 		return
 	}
-	if hud.hover >= 0 {
-		g.Buy(items[hud.hover])
+	switch it := items[hud.hover]; {
+	case it.Refund > 0 && hud.confirm == hud.hover:
+		g.Sell(it)
+		hud.confirm = -1
+	case it.Refund > 0:
+		hud.confirm = hud.hover
+	default:
+		g.Buy(it)
 	}
 }
 
@@ -860,6 +896,7 @@ type HUD struct {
 	font, bold, smallcaps, mono rl.Font
 	visor                       rl.Texture2D
 	hover                       int // shop row under the mouse
+	confirm                     int // vehicle row clicked once to sell it back, or -1
 	shopScroll                  int // first row shown in the shop
 	dbg                         debugInfo
 	photo                       photoUI
@@ -873,5 +910,6 @@ func New() *HUD {
 		mono:      render.LoadFont(gomonobold.TTF, 64),
 		visor:     render.GenVisor(),
 		hover:     -1,
+		confirm:   -1,
 	}
 }

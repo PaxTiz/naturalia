@@ -36,7 +36,7 @@ func TestEventsAndBuildings(t *testing.T) {
 	if n := len(base.YardObstacles()); n != 15 {
 		t.Errorf("the core base leaves out yard objects: %d obstacles", n)
 	}
-	if len(base.Corridors) != 5 || len(base.Rooms) != 5 || len(base.Interactables) != 4 {
+	if len(base.Corridors) != 5 || len(base.Rooms) != 5 || len(base.Interactables) != 5 {
 		t.Errorf("%d corridors, %d rooms, %d interactables", len(base.Corridors), len(base.Rooms), len(base.Interactables))
 	}
 	var sold float64

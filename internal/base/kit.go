@@ -130,6 +130,11 @@ func (b *building) room(bp *content.Blueprint) {
 		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(w.Add(vec3{0, DoorHeight + 0.12, 0}).Sub(out.Scale(0.22)), vec3{DoorWidth * 0.6, 0.05, 0.02}, tangent, 0)
 	}
 	b.interior(bp, r)
+	b.props(bp)
+}
+
+// props builds the furniture of a building, turned as each piece is.
+func (b *building) props(bp *content.Blueprint) {
 	for _, p := range bp.Props {
 		k, _ := b.kits.Get(p.Kit)
 		if k == nil || k.Build == nil {
@@ -352,6 +357,17 @@ func BuildConsole(b *building, c vec3, _ int) {
 	for _, z := range []float64{-2.3, 2.3} {
 		b.Part("rack.slate", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{0, 0.95, z}), vec3{0.7, 1.9, 0.7}, vec3{1, 0, 0}, 0.05)
 	}
+}
+
+// BuildGarageTerminal: a kiosk standing on a plinth, its screen facing
+// +X, a hazard band at its foot.
+func BuildGarageTerminal(b *building, c vec3, _ int) {
+	x := vec3{1, 0, 0}
+	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{0, 0.05, 0}), vec3{0.9, 0.1, 1.2}, x, 0.02)
+	b.Part("steel", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.05, 0.6, 0}), vec3{0.45, 1.0, 0.8}, x, 0.04)
+	b.Part("hazard", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.05, 0.25, 0}), vec3{0.47, 0.18, 0.82}, x, 0)
+	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.05, 1.4, 0}), vec3{0.2, 0.75, 1.1}, x, 0.04)
+	b.Part("pipe.yellow", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.05, 1.82, 0}), vec3{0.3, 0.08, 1.2}, x, 0.02)
 }
 
 // BuildBed: a bed against the far wall, a bedside table and a rug.

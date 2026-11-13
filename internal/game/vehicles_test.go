@@ -46,9 +46,13 @@ func TestFleetFromOldDrones(t *testing.T) {
 				t.Errorf("4th drone costs %f, want %f", it.Cost, want)
 			}
 		case "core:rover":
-			if !it.Maxed {
-				t.Error("a second rover is for sale")
-			}
+			t.Error("the lab sells vehicles to drive")
+		}
+	}
+	g.Garage = true
+	for _, it := range g.ShopItems() {
+		if it.id == "core:rover" && (!it.Maxed || it.Refund == 0) {
+			t.Error("a second rover is for sale, or the first can't be sold back")
 		}
 	}
 }

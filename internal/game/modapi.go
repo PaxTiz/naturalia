@@ -20,7 +20,8 @@ func (g *Game) Random() float64        { return g.Rng.Float64() }
 func (g *Game) Beep(freq float64)      { g.sfx.Beep(0.05, 0.25, 0.14, freq) }
 func (g *Game) SpawnDustDevil()        { spawnDevil(g) }
 func (g *Game) OpenMap()               { g.setMode(ModeMap) }
-func (g *Game) OpenShop()              { g.setMode(ModeShop) }
+func (g *Game) OpenShop()              { g.Garage = false; g.setMode(ModeShop) }
+func (g *Game) OpenGarage()            { g.Garage = true; g.setMode(ModeShop) }
 func (g *Game) Sleep()                 { g.Mode, g.SleepT = ModeSleep, 0 }
 func (g *Game) Spawn(kind string) bool { return g.spawn(kind, g.placeAt()) }
 

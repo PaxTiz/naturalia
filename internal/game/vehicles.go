@@ -1,11 +1,13 @@
 package game
 
 import (
+	"fmt"
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
+	"slices"
 )
 
 // Vehicles (content.Vehicle) are entities that sweep. The ones the player
@@ -28,6 +30,38 @@ const (
 func (g *Game) buyVehicle(v *content.Vehicle) {
 	g.State.Levels[v.ID]++
 	g.syncFleet()
+}
+
+// entityOf is the first entity of a kind, or -1.
+func (g *Game) entityOf(kind string) int {
+	for i, e := range g.State.Entities {
+		if e.Kind == kind {
+			return i
+		}
+	}
+	return -1
+}
+
+// sellVehicle sells a driven vehicle back for refund credits: it leaves,
+// wherever it is, unless the player is in it.
+func (g *Game) sellVehicle(v *content.Vehicle, refund float64) {
+	i := g.entityOf(v.ID)
+	if i >= 0 && i == g.Riding {
+		g.Say("Descends d'abord du véhicule")
+		g.sfx.Beep(0, 0.15, 0.1, 180)
+		return
+	}
+	if i >= 0 {
+		g.State.Entities = slices.Delete(g.State.Entities, i, i+1)
+		if g.Riding > i {
+			g.Riding--
+		}
+	}
+	g.State.Levels[v.ID] = max(0, g.State.Levels[v.ID]-1)
+	g.State.Credits += refund
+	g.emit(content.Event{Name: content.EvResell, ID: v.ID, Amount: refund})
+	g.Say(fmt.Sprintf("%s revendu : +%s cr", v.Name, FmtNum(refund)))
+	g.sfx.Beep(0.06, 0.18, 0.14, 784, 523)
 }
 
 // owned counts the vehicles of a kind standing in the world or carried.

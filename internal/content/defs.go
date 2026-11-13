@@ -365,7 +365,8 @@ type Game interface {
 	Spawn(kind string) bool // an entity where the player aims, or right ahead
 	SpawnDustDevil()
 	OpenMap()
-	OpenShop()
+	OpenShop()   // the research lab: tools, upgrades, drones and robots, items
+	OpenGarage() // the garage's terminal: the vehicles to drive, bought and sold back
 	Sleep()
 	Deposit(at vec3) // sells the tank at the incinerator standing at a local point
 

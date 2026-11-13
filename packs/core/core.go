@@ -207,6 +207,8 @@ var coreBuildings = []content.Blueprint{
 		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
 		Garage: true,
 		Style:  "habitat.white",
+		// By the corridor's door, the terminal to buy and sell vehicles.
+		Props: []content.Prop{{Kit: "garage.terminal", At: vec3{-12.4, 0, -2.25}}},
 	},
 }
 
@@ -218,6 +220,8 @@ var coreKits = map[string]content.Kit{
 	"console": {Build: base.KitBuild(base.BuildConsole),
 		Obstacles: []content.Obstacle{{vec3{-0.3, 0, 0}, 1.0}, {vec3{0, 0, 2.3}, 0.6}, {vec3{0, 0, -2.3}, 0.6}},
 		Reach:     2.8, Use: func(g content.Game, _ vec3) { g.OpenShop() }, Prompt: "[E] Ouvrir le laboratoire de recherche"},
+	"garage.terminal": {Build: base.KitBuild(base.BuildGarageTerminal), Obstacles: []content.Obstacle{{vec3{}, 0.6}},
+		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.OpenGarage() }, Prompt: "[E] Acheter ou revendre un véhicule"},
 	"bed": {Build: base.KitBuild(base.BuildBed), Obstacles: []content.Obstacle{{vec3{-0.55, 0, 0}, 0.6}, {vec3{0.55, 0, 0}, 0.6}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.Sleep() }, Prompt: "[E] Dormir"},
 	"crate.stack": {Build: base.KitBuild(base.BuildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
