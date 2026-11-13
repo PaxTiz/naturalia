@@ -104,6 +104,7 @@ type Game struct {
 	Photo       Photo   // the photo mode's camera and settings
 
 	walls    []base.Segment // the base's walls, for collisions
+	phys     *phys          // the collisions' plane (physics.go)
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
 	HallOpen []float64      // the halls' big doors, in the order of base.Halls
 	// The halls' corridor doors (base.InnerDoors), like the airlock's.
@@ -211,6 +212,8 @@ func (g *Game) Update(dt float64) {
 	g.NearRocks = g.World.RocksNear(g.Player.Pos, RockDrawDist)
 	g.Player.Update(dt, g.World.Relief, g.Mode == ModePlay)
 	g.driveVehicle(dt)
+	g.stepPhysics(dt)
+	g.Player.fall(dt, g.World.Relief)
 	if g.Steps.update(&g.Player) {
 		g.sfx.Step()
 	}
@@ -221,14 +224,14 @@ func (g *Game) Update(dt float64) {
 	g.updateFov(dt)
 	// Creative flight goes through everything, a flying vehicle over what
 	// stands lower.
-	if !g.Player.Fly {
+	if g.Riding != 0 && !g.Player.Fly {
 		g.Player.Pos = base.Collide(g.Player.Pos, g.wallsNow(), g.DriveAlt())
 		if g.DriveAlt() < aloft {
 			g.collideRocks()
 		}
 	}
 	g.updateVehicle(dt)
-	if !g.Player.Fly && g.DriveAlt() < aloft {
+	if g.Riding != 0 && !g.Player.Fly && g.DriveAlt() < aloft {
 		g.collideEntities()
 	}
 	g.updateItems()

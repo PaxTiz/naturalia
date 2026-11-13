@@ -265,6 +265,9 @@ type Segment struct {
 // Half is half the length of a straight wall.
 func (s Segment) Half() float64 { return s.b.Sub(s.a).Length() / 2 }
 
+// Ends are the wall's ends (local, on the floor) and how high it stands.
+func (s Segment) Ends() (a, b vec3, top float64) { return s.a, s.b, s.top }
+
 // Walls lists every wall the player bumps into.
 func Walls() []Segment {
 	var walls []Segment

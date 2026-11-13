@@ -30,6 +30,8 @@ type Player struct {
 	WalkPhase  float64
 	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 	seated     bool    // driving: the vehicle moves the player, who only looks around
+	want       vec3    // walking: the speed asked along the ground...
+	vel        vec3    // ...and the one the collisions left
 	eyeH       float64 // driving: the seat's height
 	// Fly is the debug creative mode: no gravity nor collisions, Space
 	// climbs, Ctrl descends, the wheel sets FlyBoost.
@@ -72,7 +74,9 @@ func (p *Player) tangentHeading() {
 	p.Heading = h.Norm()
 }
 
-// Update moves the player. With control false (menus) only gravity applies.
+// Update turns the view and sets where the player walks: the collisions
+// (stepPhysics) carry them along the ground, then fall moves them up and
+// down. With control false (menus), they stand still.
 func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 	if p.Fly {
 		p.fly(dt, t, control)
@@ -87,13 +91,13 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 		p.Heading = p.Heading.Scale(math.Cos(turn)).Add(up.Cross(p.Heading).Scale(math.Sin(turn)))
 		p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*mouseSens))
 	}
+	p.want = vec3{}
 	if p.seated {
-		p.vr, p.onGround, p.MoveAmount = 0, true, 0
+		p.vr, p.onGround, p.MoveAmount, p.vel = 0, true, 0, vec3{}
 		p.tangentHeading()
 		return
 	}
 	if control {
-
 		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.
 		right := p.Right()
 		if rl.IsKeyDown(rl.KeyW) {
@@ -117,8 +121,14 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 			p.onGround = false
 		}
 	}
+	p.want = move
+}
 
-	p.Pos = p.Pos.Add(move.Scale(dt))
+// fall moves the walking player up and down: jumps, gravity, the ground.
+func (p *Player) fall(dt float64, t planet.Relief) {
+	if p.Fly || p.seated {
+		return
+	}
 	p.vr -= marsGravity * dt
 	p.Pos = p.Pos.Add(p.LocalUp().Scale(p.vr * dt))
 
@@ -134,7 +144,7 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 	}
 	p.tangentHeading()
 
-	speed := move.Length()
+	speed := p.want.Length()
 	target := 0.0
 	if p.onGround && speed > 0 {
 		target = 1

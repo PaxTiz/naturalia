@@ -6,6 +6,7 @@ import (
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
+	"naturalia/internal/physics"
 	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -24,12 +25,14 @@ type Ents struct {
 	*ecs.World
 	Kind      *ecs.Store[string] // its EntityDef's ID, and its Vehicle's
 	Transform *ecs.Store[Transform]
-	Roam      *ecs.Store[Roam] // automatic vehicles
+	Roam      *ecs.Store[Roam]          // automatic vehicles
+	Body      *ecs.Store[*physics.Body] // near the player, what takes room (physics.go)
 }
 
 func newEnts() *Ents {
 	w := ecs.NewWorld()
-	return &Ents{World: w, Kind: ecs.NewStore[string](w), Transform: ecs.NewStore[Transform](w), Roam: ecs.NewStore[Roam](w)}
+	return &Ents{World: w, Kind: ecs.NewStore[string](w), Transform: ecs.NewStore[Transform](w), Roam: ecs.NewStore[Roam](w),
+		Body: ecs.NewStore[*physics.Body](w)}
 }
 
 // Transform is where an entity stands.
