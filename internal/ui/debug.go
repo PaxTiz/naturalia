@@ -23,7 +23,7 @@ type debugInfo struct {
 }
 
 // updateDebug toggles the overlay, and with it on the creative flight
-// (F4), and refreshes its slower measures.
+// (F4) and 50M credits (F5), and refreshes its slower measures.
 func (hud *HUD) updateDebug(g *game.Game, dt float64) {
 	d := &hud.dbg
 	if rl.IsKeyPressed(rl.KeyF3) {
@@ -31,6 +31,10 @@ func (hud *HUD) updateDebug(g *game.Game, dt float64) {
 	}
 	if d.on && rl.IsKeyPressed(rl.KeyF4) && g.Riding < 0 {
 		g.Player.SetFly(!g.Player.Fly, g.World.Relief)
+	}
+	if d.on && rl.IsKeyPressed(rl.KeyF5) { // not counted as earned
+		g.State.Credits += 50e6
+		g.Say("+50M cr (debug)")
 	}
 	ms := dt * 1000
 	d.frameMs += (ms - d.frameMs) * 0.1
@@ -71,6 +75,7 @@ func (hud *HUD) drawDebug(g *game.Game, rs render.Stats) {
 	} else {
 		lines = append(lines, "F4 vol libre")
 	}
+	lines = append(lines, "F5 +50M crédits")
 	for _, line := range g.Content.Debug { // added by packs
 		lines = append(lines, line(g))
 	}
