@@ -1,7 +1,9 @@
 package game
 
 import (
+	"math"
 	"naturalia/internal/base"
+	"naturalia/internal/content"
 	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/physics"
@@ -24,6 +26,16 @@ const (
 	layerStatic uint32 = 1 << iota
 	layerPlayer
 	layerEntity
+	layerVehicle // the one driven
+	layerRobot   // automatic vehicles: the one driven goes through
+)
+
+// What things are made of: how they rub and bounce. A contact takes the
+// geometric mean of the frictions and the larger bounce.
+const (
+	frictionWall, bounceWall     = 0.6, 0.0
+	frictionCar, bounceCar       = 0.6, 0.35
+	frictionPerson, bouncePerson = 0.0, 0.0
 )
 
 const (
@@ -41,6 +53,9 @@ type phys struct {
 	up, t1, t2 vec3    // the plane: its normal, then its x and y
 	r0         float64 // the anchor's ground, from Mars' center
 	player     *physics.Body
+	car        *physics.Body // the driven vehicle's
+	carKind    string
+	side       float64 // +1 if a vehicle's right side (+Z) is the plane's left of its nose
 	doorSegs   []base.Segment
 	doors      []*physics.Body
 }
@@ -78,8 +93,8 @@ func (p *phys) slice(pos vec3, h float64) (bottom, top float64) {
 	return g - bodyFeet, g + h
 }
 
-// stepPhysics moves the walking player along the ground, out of walls,
-// rocks and entities.
+// stepPhysics moves the walking player, or the vehicle they drive, along
+// the ground, out of walls, rocks and entities.
 func (g *Game) stepPhysics(dt float64) {
 	pl := &g.Player
 	if g.phys == nil || planet.ArcDist(pl.LocalUp(), g.phys.up) > reanchor {
@@ -90,27 +105,111 @@ func (g *Game) stepPhysics(dt float64) {
 	g.syncEntities()
 
 	b := p.player
-	walking := !pl.Fly && !pl.seated
-	if !walking {
-		b.Layer, b.Mask, b.Vel = 0, 0, physics.V2{}
-		p.w.Step(dt)
+	b.Layer, b.Mask, b.Vel = 0, 0, physics.V2{} // in a vehicle, or flying through everything
+	if !pl.Fly && !pl.seated {
+		b.Layer, b.Mask = layerPlayer, layerStatic|layerEntity|layerRobot|layerVehicle
+		b.Pos = p.plane(pl.Pos)
+		b.Bottom = p.height(pl.Pos) + 0.3 // steps and pebbles
+		b.Top = b.Bottom + personH - 0.3
+		// The speed asked, reached quickly: what pushed the player fades.
+		vel, want := p.vecPlane(pl.Pos, pl.vel), p.vecPlane(pl.Pos, pl.want)
+		d := want.Sub(vel)
+		if l := d.Len(); l > walkAccel*dt {
+			d = d.Scale(walkAccel * dt / l)
+		}
+		b.Vel = vel.Add(d)
+	}
+	v, driving := g.Driven()
+	if driving {
+		g.carBefore(v)
+	} else if p.car != nil {
+		p.w.Remove(p.car)
+		p.car = nil
+	}
+
+	p.w.Step(dt)
+
+	r := pl.Pos.Length()
+	switch {
+	case driving:
+		g.carAfter(v)
+	case b.Mask != 0:
+		pl.Pos = p.dir(b.Pos).Scale(r)
+		pl.vel = p.vecWorld(pl.Pos, b.Vel)
+	}
+}
+
+// carBefore sets the driven vehicle's body where it stands, going at the
+// speed move set.
+func (g *Game) carBefore(v *content.Vehicle) {
+	p, d, pl := g.phys, &g.drive, &g.Player
+	if p.car == nil || p.carKind != v.ID {
+		if p.car != nil {
+			p.w.Remove(p.car)
+		}
+		lo, hi := v.Footprint()
+		const round = 0.15
+		mid := physics.V2{X: (lo.X + hi.X) / 2, Y: p.side * (lo.Z + hi.Z) / 2}
+		p.car = p.w.Add(&physics.Body{Kind: physics.Dynamic, Mass: v.Weight(), SpinDamping: 1.5,
+			Shape:    physics.OffsetBox((hi.X-lo.X)/2-round, (hi.Z-lo.Z)/2-round, mid, 0, round),
+			Friction: frictionCar, Restitution: bounceCar})
+		p.carKind = v.ID
+	}
+	c := p.car
+	c.Layer, c.Mask = layerVehicle, layerStatic|layerEntity|layerPlayer
+	if d.dock != nil {
+		c.Layer, c.Mask = 0, 0 // gliding into its bay
+	}
+	c.Pos = p.plane(pl.Pos)
+	f := p.vecPlane(pl.Pos, d.fwd)
+	c.Angle = math.Atan2(f.Y, f.X)
+	c.Vel, c.Spin = p.vecPlane(pl.Pos, d.vel), d.spin
+	bottom := p.height(pl.Pos)
+	if d.r != 0 {
+		bottom = d.r - p.r0
+	}
+	c.Bottom = bottom + v.Hover + 0.25 // over pebbles and kerbs
+	c.Top = bottom + v.Hover + math.Max(1.2, content.OrZero(v.Seat, 2.4))
+}
+
+// carAfter moves the player where the collisions left the vehicle: a knock
+// changes its speed, and turns it, the view with it.
+func (g *Game) carAfter(v *content.Vehicle) {
+	p, d, pl := g.phys, &g.drive, &g.Player
+	c := p.car
+	pl.Pos = p.dir(c.Pos).Scale(pl.Pos.Length())
+	up := pl.LocalUp()
+	d.vel = p.vecWorld(pl.Pos, c.Vel)
+	d.spin = c.Spin
+	old := planet.TangentAt(up, d.fwd)
+	fwd := p.vecWorld(pl.Pos, physics.V2{X: math.Cos(c.Angle), Y: math.Sin(c.Angle)}).Norm()
+	if a := math.Atan2(up.Dot(old.Cross(fwd)), old.Dot(fwd)); a != 0 {
+		pl.Heading = pl.Heading.Scale(math.Cos(a)).Add(up.Cross(pl.Heading).Scale(math.Sin(a)))
+	}
+	d.fwd = fwd
+	for _, hit := range p.w.Impacts {
+		if hit.A == c || hit.B == c {
+			g.knock(v, hit)
+		}
+	}
+}
+
+// knock: the driven vehicle hit something, or was hit.
+func (g *Game) knock(v *content.Vehicle, hit physics.Impact) {
+	const felt = 2.5 // m/s: slower is a nudge
+	if hit.Speed < felt {
 		return
 	}
-	b.Layer, b.Mask = layerPlayer, layerStatic|layerEntity
-	b.Pos = p.plane(pl.Pos)
-	b.Bottom = p.height(pl.Pos) + 0.3 // steps and pebbles
-	b.Top = b.Bottom + personH - 0.3
-	// The speed asked, reached quickly: what pushed the player fades.
-	vel, want := p.vecPlane(pl.Pos, pl.vel), p.vecPlane(pl.Pos, pl.want)
-	d := want.Sub(vel)
-	if l := d.Len(); l > walkAccel*dt {
-		d = d.Scale(walkAccel * dt / l)
+	p, d := g.phys, &g.drive
+	at := g.World.Relief.Surface(p.dir(hit.Point))
+	d.shake = math.Max(d.shake, math.Min(1, hit.Speed/14))
+	g.sfx.Beep(0, 0.2, math.Min(0.3, hit.Speed*0.02), 90, 60)
+	g.dustBurst(at, int(math.Min(30, hit.Speed*2)))
+	other := hit.B
+	if other == p.car {
+		other = hit.A
 	}
-	b.Vel = vel.Add(d)
-	p.w.Step(dt)
-	r := pl.Pos.Length()
-	pl.Pos = p.dir(b.Pos).Scale(r)
-	pl.vel = p.vecWorld(pl.Pos, b.Vel)
+	g.emit(content.Event{Name: content.EvImpact, ID: g.kind(ecs.ID(other.ID)), Amount: hit.Speed, At: at})
 }
 
 // layPlane lays the plane under the player, with the base and the rocks
@@ -119,13 +218,15 @@ func (g *Game) layPlane() {
 	up := g.Player.LocalUp()
 	t1, t2 := mathx.TangentBasis(up)
 	p := &phys{w: physics.NewWorld(), up: up, t1: t1, t2: t2, r0: g.World.Relief.Surface(up).Length()}
+	p.side = t1.Cross(up).Dot(t2)
 	g.phys = p
 	for id := range g.Ents.Body.All() {
 		g.Ents.Body.Remove(id)
 	}
-	p.player = p.w.Add(&physics.Body{Kind: physics.Dynamic, Shape: physics.Circle(0.35), Mass: 80, FixedRotation: true})
+	p.player = p.w.Add(&physics.Body{Kind: physics.Dynamic, Shape: physics.Circle(0.35), Mass: 80, FixedRotation: true,
+		Friction: frictionPerson, Restitution: bouncePerson})
 
-	if planet.ArcDist(up, planet.BaseUp) < physReach+base.Reach+60 {
+	if planet.ArcDist(up, planet.BaseUp) < physReach+base.Extent {
 		for _, s := range g.walls {
 			g.addWall(s)
 		}
@@ -133,7 +234,7 @@ func (g *Game) layPlane() {
 			at := base.ToWorld(o.At)
 			bottom, top := p.slice(at, thingH)
 			p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(o.Radius), Pos: p.plane(at),
-				Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0)})
+				Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
 		}
 	}
 	p.doorSegs, p.doors = nil, nil
@@ -144,7 +245,7 @@ func (g *Game) layPlane() {
 		at := g.World.Relief.Surface(r.Dir)
 		bottom, top := p.slice(at, r.Size*0.8)
 		p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(r.Size * 0.75), Pos: p.plane(at),
-			Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0)})
+			Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
 	}
 }
 
@@ -155,13 +256,14 @@ func (g *Game) addWall(s base.Segment) *physics.Body {
 	pa, pb := p.plane(base.ToWorld(a)), p.plane(base.ToWorld(b))
 	mid := pa.Lerp(pb, 0.5)
 	return p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Capsule(pa.Sub(mid), pb.Sub(mid), base.WallThick/2), Pos: mid,
-		Bottom: p.height(base.ToWorld(a)) - bodyFeet, Top: p.height(base.ToWorld(a.Add(vec3{0, top, 0}))), Layer: layerStatic, Mask: ^uint32(0)})
+		Bottom: p.height(base.ToWorld(a)) - bodyFeet, Top: p.height(base.ToWorld(a.Add(vec3{0, top, 0}))), Layer: layerStatic, Mask: ^uint32(0),
+		Friction: frictionWall, Restitution: bounceWall})
 }
 
 // syncDoors sets the doors' walls where the leaves stand.
 func (g *Game) syncDoors() {
 	p := g.phys
-	if planet.ArcDist(p.up, planet.BaseUp) > physReach+base.Reach+60 {
+	if planet.ArcDist(p.up, planet.BaseUp) > physReach+base.Extent {
 		return
 	}
 	segs := g.wallsNow()[len(g.walls):]
@@ -202,8 +304,12 @@ func (g *Game) syncEntities() {
 		e := g.Ents.Transform.Get(id)
 		b := g.Ents.Body.Get(id)
 		if b == nil {
+			layer := layerEntity
+			if v, ok := g.vehicleOf(id); ok && v.Auto() {
+				layer = layerRobot
+			}
 			b = g.Ents.Body.Set(id, p.w.Add(&physics.Body{Kind: physics.Kinematic, Shape: physics.Circle(def.Radius),
-				Layer: layerEntity, Mask: ^uint32(0), ID: uint32(id)}))
+				Layer: layer, Mask: ^uint32(0), ID: uint32(id), Friction: frictionWall, Restitution: bounceWall}))
 		}
 		at := g.World.Relief.Surface(e.Dir)
 		(*b).Pos, (*b).Angle = p.plane(at), 0

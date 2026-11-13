@@ -166,7 +166,7 @@ func (g *Game) glideDock(v *content.Vehicle, dt float64) {
 	up := g.Player.LocalUp()
 	d.fwd = planet.TangentAt(up, vec3{math.Cos(yaw), 0, math.Sin(yaw)})
 	g.Player.Heading = d.fwd
-	d.vel, d.want = vec3{}, g.Player.Pos
+	d.vel, d.spin = vec3{}, 0
 	if d.dock.t >= 1 {
 		d.dock = nil
 		g.Say(v.Name + " garé")

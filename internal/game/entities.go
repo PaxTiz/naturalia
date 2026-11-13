@@ -178,20 +178,6 @@ func (g *Game) EntitiesNear(dist float64) []ecs.ID {
 	return out
 }
 
-func (g *Game) collideEntities() {
-	for _, id := range g.EntitiesNear(10) {
-		if id == g.Riding {
-			continue
-		}
-		if v, ok := g.vehicleOf(id); ok && v.Auto() && g.Riding != 0 {
-			continue // a vehicle drives through the drones and robots
-		}
-		if def, ok := g.Content.Entities.Get(g.kind(id)); ok && def.Radius > 0 {
-			g.Player.pushOut(g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir), def.Radius)
-		}
-	}
-}
-
 // nearbyEntity is the closest entity with something to do, within reach.
 func (g *Game) nearbyEntity() (ecs.ID, float64) {
 	best, bestDist := ecs.ID(0), math.Inf(1)

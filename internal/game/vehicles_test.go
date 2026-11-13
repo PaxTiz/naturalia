@@ -13,11 +13,11 @@ import (
 )
 
 // fleetGame is a game on a Mars without crystals (picking one up beeps,
-// and tests have no sound), the player 200 m from the base.
+// and tests have no sound) nor rocks, the player 200 m from the base.
 func fleetGame(t *testing.T, c *content.Content, levels map[string]int) *Game {
 	t.Helper()
 	set := c.Terrain
-	set.Gems = 0
+	set.Gems, set.Rocks = 0, 0
 	g := &Game{Content: c, Ents: newEnts(), Rng: rand.New(rand.NewPCG(1, 2)), State: State{Levels: levels}}
 	g.World = planet.NewWorld(7, &set)
 	g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{1, 0, 0}, 200))
@@ -106,15 +106,10 @@ func TestModVehicles(t *testing.T) {
 }
 
 func TestDriving(t *testing.T) {
-	c := LoadContent()
 	for _, id := range []string{"core:rover", "core:hover"} {
-		g := fleetGame(t, c, map[string]int{})
-		v, _ := c.Vehicles.Get(id)
-		g.drive.fwd = g.Player.Heading
+		g, v := ride(t, id)
 		start := g.Player.Pos
-		for range 5 * 60 { // full throttle for 5 s
-			g.move(v, controls{throttle: 1}, 1.0/60)
-		}
+		step(g, v, controls{throttle: 1}, 5*60) // full throttle for 5 s
 		if s := g.drive.vel.Length(); math.Abs(s-v.Speed) > 0.01 {
 			t.Errorf("%s: top speed %.2f, want %.2f", id, s, v.Speed)
 		}
@@ -123,20 +118,14 @@ func TestDriving(t *testing.T) {
 		}
 		// Steering at speed, then letting go: wheels keep no sideways
 		// speed, a hovercraft drifts on.
-		for range 30 {
-			g.move(v, controls{throttle: 1, steer: 1}, 1.0/60)
-		}
-		for range 10 {
-			g.move(v, controls{}, 1.0/60)
-		}
+		step(g, v, controls{throttle: 1, steer: 1}, 30)
+		step(g, v, controls{}, 10)
 		fwd := g.drive.vel.Dot(g.drive.fwd)
 		side := g.drive.vel.Sub(g.drive.fwd.Scale(fwd)).Length()
 		if drift := side / g.drive.vel.Length(); (v.Hover > 0) != (drift > 0.05) {
 			t.Errorf("%s: drifts %.3f of its speed", id, drift)
 		}
-		for range 10 * 60 {
-			g.move(v, controls{throttle: -1}, 1.0/60)
-		}
+		step(g, v, controls{throttle: -1}, 10*60)
 		if s := g.drive.vel.Dot(g.drive.fwd); math.Abs(s+v.Speed*0.35) > 0.01 {
 			t.Errorf("%s: backs up at %.2f", id, s)
 		}
@@ -157,10 +146,13 @@ func ride(t *testing.T, id string) (*Game, *content.Vehicle) {
 	return g, v
 }
 
-// step drives for n frames as the game does: move, then set the vehicle.
+// step drives for n frames as the game does: speeds, collisions, up and
+// down, then set the vehicle.
 func step(g *Game, v *content.Vehicle, in controls, n int) {
 	for range n {
 		g.move(v, in, 1.0/60)
+		g.stepPhysics(1.0 / 60)
+		g.liftVehicle(1.0 / 60)
 		g.updateVehicle(1.0 / 60)
 		in.jump = false
 	}

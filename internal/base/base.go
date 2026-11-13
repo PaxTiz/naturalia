@@ -4,7 +4,6 @@ import (
 	"log"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
 	"slices"
 )
@@ -63,7 +62,7 @@ var (
 	Obstacles     []content.Obstacle
 	Interactables []Interactable
 	Bays          []Bay   // where each driven vehicle parks in the garage
-	extent        float64 // how far from the origin the buildings reach, in m
+	Extent        float64 // how far from the origin the buildings reach, in m
 )
 
 // The shaders hold this many rooms, and as many corridors (baseAO, lamps):
@@ -112,9 +111,9 @@ func Setup(c *content.Content) {
 	}
 	Obstacles = planObstacles(&c.Kits)
 	Interactables = planInteractables(&c.Kits)
-	extent = Reach
+	Extent = Reach
 	for _, r := range Rooms {
-		extent = math.Max(extent, math.Hypot(r.Center.X, r.Center.Z)+r.reach())
+		Extent = math.Max(Extent, math.Hypot(r.Center.X, r.Center.Z)+r.reach())
 	}
 	Bays = layBays(c)
 }
@@ -300,40 +299,6 @@ func Walls() []Segment {
 func (c Corridor) side() vec3 {
 	d := c.To.Sub(c.From).Norm()
 	return vec3{-d.Z, 0, d.X}
-}
-
-// Collide keeps the player standing at pos out of walls and furniture:
-// where they end up. Flying h m over the ground, they pass over what
-// stands lower.
-func Collide(pos vec3, walls []Segment, h float64) vec3 {
-	const radius = 0.35
-	local := ToLocal(pos)
-	if math.Hypot(local.X, local.Z) > extent+2 || local.Y > 6 {
-		return pos
-	}
-	flat := vec3{local.X, 0, local.Z}
-	for _, w := range walls {
-		if h >= w.top {
-			continue
-		}
-		ab := w.b.Sub(w.a)
-		t := mathx.Clamp01(flat.Sub(w.a).Dot(ab) / ab.Dot(ab))
-		closest := w.a.Add(ab.Scale(t))
-		d := flat.Sub(closest)
-		if l := d.Length(); l < radius+WallThick/2 && l > 1e-9 {
-			flat = closest.Add(d.Scale((radius + WallThick/2) / l))
-		}
-	}
-	for _, o := range Obstacles {
-		if h > 2 {
-			break
-		}
-		d := flat.Sub(vec3{o.At.X, 0, o.At.Z})
-		if l := d.Length(); l < radius+o.Radius && l > 1e-9 {
-			flat = vec3{o.At.X, 0, o.At.Z}.Add(d.Scale((radius + o.Radius) / l))
-		}
-	}
-	return ToWorld(vec3{flat.X, local.Y, flat.Z})
 }
 
 // Indoors tells whether a local point is inside a room or a corridor.

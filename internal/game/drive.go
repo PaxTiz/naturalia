@@ -21,9 +21,10 @@ import (
 // drive is the driven vehicle's motion. The player's position stays on
 // the ground under it; r says how high the vehicle is.
 type drive struct {
-	fwd  vec3 // where its nose points
-	vel  vec3 // along the ground
-	want vec3 // where it went before walls and rocks pushed it back
+	fwd  vec3     // where its nose points
+	vel  vec3     // along the ground
+	spin float64  // what a knock turns it by, radians per second on the collisions' plane
+	in   controls // this frame's, for liftVehicle
 	// boarded is set on the frame the player gets in, whose E press must
 	// not get them out again.
 	boarded bool
@@ -58,7 +59,7 @@ const (
 	coyoteTime = 0.2 // a jump still works this long after rolling off an edge
 	airAbove   = 0.3 // m over the ground: in the air, no longer a bump
 	padReach   = 1.8 // m: a boost pad kicks what passes this close
-	aloft      = 3.0 // m over the ground: what flies that high goes over walls and rocks
+	aloft      = 3.0 // m over the ground: what flies that high can't be left
 )
 
 // Driven is the vehicle the player drives, if any.
@@ -147,8 +148,8 @@ func (g *Game) getOut() {
 	g.emit(content.Event{Name: content.EvDrive, ID: ""})
 }
 
-// driveVehicle moves the driven vehicle, with the player in it, before the
-// collisions: Z/S throttle and brake, Q/D steer, Space jumps (or climbs),
+// driveVehicle sets the driven vehicle's speed, before the collisions
+// move it with the player in it (stepPhysics): Z/S throttle and brake, Q/D steer, Space jumps (or climbs),
 // Ctrl descends, Shift boosts, V switches the camera.
 func (g *Game) driveVehicle(dt float64) {
 	v, ok := g.Driven()
@@ -244,7 +245,8 @@ func (g *Game) Frame(e *Transform) (pos, ax, up, az vec3) {
 	return pos, ax, up, az
 }
 
-// move drives the vehicle for dt.
+// move sets the vehicle's speed along the ground for dt, and where it
+// points; stepPhysics then moves it, liftVehicle up and down.
 func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
 	if dt <= 0 { // the first frame: speeds are divided by dt
 		return
@@ -335,14 +337,23 @@ func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
 		d.fwd = d.fwd.Scale(math.Cos(a)).Add(up.Cross(d.fwd).Scale(math.Sin(a)))
 		g.Player.Heading = g.Player.Heading.Scale(math.Cos(a)).Add(up.Cross(g.Player.Heading).Scale(math.Sin(a)))
 	}
-	d.want = g.World.Relief.Surface(g.Player.Pos.Add(d.vel.Scale(dt)))
-	g.Player.Pos = d.want
+	d.in = in
+}
 
-	if v.Fly != nil {
-		g.climb(v, in, dt)
-	} else {
-		g.fall(v, in, gravity, dt)
+// liftVehicle moves the driven vehicle up and down, once the collisions
+// moved it along the ground.
+func (g *Game) liftVehicle(dt float64) {
+	v, ok := g.Driven()
+	d := &g.drive
+	if !ok || d.dock != nil || dt <= 0 || d.r == 0 {
+		return
 	}
+	if v.Fly != nil {
+		g.climb(v, d.in, dt)
+	} else {
+		g.fall(v, d.in, marsGravity*content.OrZero(v.Gravity, 2), dt)
+	}
+	d.in.jump = false
 }
 
 // fall moves a rolling vehicle up and down: it follows the ground, which
@@ -493,13 +504,6 @@ func (g *Game) updateVehicle(dt float64) {
 	}
 	d := &g.drive
 	d.shake = math.Max(0, d.shake-dt*2.5)
-	// Walls and rocks stop the motion that goes into them.
-	if push := g.Player.Pos.Sub(d.want); push.Length() > 1e-4 {
-		n := push.Norm()
-		if into := d.vel.Dot(n); into < 0 {
-			d.vel = d.vel.Sub(n.Scale(into))
-		}
-	}
 	e := g.Ents.Transform.Get(g.Riding)
 	e.Dir = g.Player.Pos.Norm()
 	e.Yaw = yawOf(e.Dir, d.fwd)

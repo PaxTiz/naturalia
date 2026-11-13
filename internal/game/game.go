@@ -213,6 +213,7 @@ func (g *Game) Update(dt float64) {
 	g.Player.Update(dt, g.World.Relief, g.Mode == ModePlay)
 	g.driveVehicle(dt)
 	g.stepPhysics(dt)
+	g.liftVehicle(dt)
 	g.Player.fall(dt, g.World.Relief)
 	if g.Steps.update(&g.Player) {
 		g.sfx.Step()
@@ -222,18 +223,7 @@ func (g *Game) Update(dt float64) {
 	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)
 	g.sfx.Update()
 	g.updateFov(dt)
-	// Creative flight goes through everything, a flying vehicle over what
-	// stands lower.
-	if g.Riding != 0 && !g.Player.Fly {
-		g.Player.Pos = base.Collide(g.Player.Pos, g.wallsNow(), g.DriveAlt())
-		if g.DriveAlt() < aloft {
-			g.collideRocks()
-		}
-	}
 	g.updateVehicle(dt)
-	if g.Riding != 0 && !g.Player.Fly && g.DriveAlt() < aloft {
-		g.collideEntities()
-	}
 	g.updateItems()
 	g.updateBase(dt)
 	g.updateAim()

@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/base"
+	"naturalia/internal/content"
 	"naturalia/internal/planet"
 	"testing"
 )
@@ -126,5 +127,89 @@ func BenchmarkWalkAtBase(b *testing.B) {
 		g.Player.want = planet.TangentAt(g.Player.LocalUp(), vec3{math.Cos(a), 0, math.Sin(a)}).Scale(walkSpeed)
 		g.stepPhysics(1.0 / 60)
 		g.Player.fall(1.0/60, g.World.Relief)
+	}
+}
+
+// clearRun finds a long wall of the base and a spot 25 m out from it,
+// with nothing in between: the wall's end a, its outward normal n, and the
+// spot (local).
+func clearRun(t *testing.T, g *Game) (a, n, start vec3) {
+	crosses := func(p, q, a, b vec3) bool {
+		side := func(o, u, v vec3) float64 { return (u.X-o.X)*(v.Z-o.Z) - (u.Z-o.Z)*(v.X-o.X) }
+		return side(p, q, a)*side(p, q, b) < 0 && side(a, b, p)*side(a, b, q) < 0
+	}
+	for i, s := range g.walls {
+		a, b, _ := s.Ends()
+		if s.Half() < 5 {
+			continue
+		}
+		along := b.Sub(a).Norm()
+		mid := a.Lerp(b, 0.5)
+		for _, n := range []vec3{{-along.Z, 0, along.X}, {along.Z, 0, -along.X}} {
+			start := mid.Add(n.Scale(25))
+			if base.Indoors(vec3{start.X, 1, start.Z}) || base.Covered(start) {
+				continue
+			}
+			clear := true
+			for j, o := range g.walls {
+				oa, ob, _ := o.Ends()
+				// A lane 5 m wide.
+				for _, off := range []float64{-2.5, 0, 2.5} {
+					p, q := start.Add(along.Scale(off)), mid.Add(n.Scale(0.5)).Add(along.Scale(off))
+					if j != i && crosses(p, q, oa, ob) {
+						clear = false
+					}
+				}
+			}
+			for _, o := range base.Obstacles {
+				if d := o.At.Sub(mid); math.Abs(d.Dot(along)) < 4 && d.Dot(n) > 0 && d.Dot(n) < 26 {
+					clear = false
+				}
+			}
+			if clear {
+				return a, n, start
+			}
+		}
+	}
+	t.Fatal("no wall to drive into")
+	return
+}
+
+func TestCrashIntoWall(t *testing.T) {
+	g := baseGame(t)
+	g.Mode = ModePlay
+	a, n, start := clearRun(t, g)
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(start.Add(vec3{0, 1, 0})))
+	// Not quite square to the wall: it glances off turning.
+	along := vec3{n.Z, 0, -n.X}
+	g.Player.Heading = planet.TangentAt(g.Player.LocalUp(), n.Scale(-1).Add(along.Scale(0.25)).Norm())
+	g.Board("core:rover")
+	var hits []float64
+	g.Content.On(content.EvImpact, func(_ content.Game, e *content.Event) { hits = append(hits, e.Amount) })
+	v, _ := g.Driven()
+	heading := g.drive.fwd
+	lo, _ := v.Footprint()
+	closest, after := math.Inf(1), -1
+	for i := range 3 * 60 {
+		step(g, v, controls{throttle: 1, boost: true}, 1)
+		closest = math.Min(closest, base.ToLocal(g.Player.Pos).Sub(a).Dot(n))
+		if len(hits) > 0 && after < 0 {
+			after = i
+		}
+		if after >= 0 && i == after+3 {
+			// Thrown back off the wall.
+			if into := g.drive.vel.Dot(n.Scale(-1)); into > 0 {
+				t.Errorf("still going into the wall at %.1f m/s after the knock", into)
+			}
+			if turned := math.Acos(math.Min(1, heading.Dot(g.drive.fwd))); turned < 0.05 {
+				t.Errorf("turned by %.2f rad only", turned)
+			}
+		}
+	}
+	if closest < -lo.X*0.8 {
+		t.Errorf("the rover's middle came %.2f m from the wall, through it", closest)
+	}
+	if len(hits) == 0 || hits[0] < 10 {
+		t.Errorf("impacts %v", hits)
 	}
 }

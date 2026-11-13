@@ -191,16 +191,3 @@ func (p *Player) fly(dt float64, t planet.Relief, control bool) {
 	}
 	p.tangentHeading()
 }
-
-// pushOut keeps the player outside a vertical cylinder around center.
-func (p *Player) pushOut(center vec3, radius float64) {
-	up := center.Norm()
-	d := p.Pos.Sub(center)
-	d = d.Sub(up.Scale(d.Dot(up)))
-	if l := d.Length(); l < radius {
-		if l < 1e-6 {
-			d, l = p.Heading.Scale(-1), 1
-		}
-		p.Pos = p.Pos.Add(d.Scale((radius - l) / l))
-	}
-}

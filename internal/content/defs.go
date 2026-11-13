@@ -211,6 +211,7 @@ type Vehicle struct {
 	Hopper float64    `json:"hopper"` // driven: grams it adds to the tank while driven
 	Seat   float64    `json:"seat"`   // driven: eye height, over the hover height
 	Radius float64    `json:"radius"` // what the player bumps into on foot
+	Mass   float64    `json:"mass"`   // kg: how hard it hits and is hit (from its size if left out)
 	Light  vec3       `json:"light"`  // a status light, blinking green (red when the tank is full); 0,0,0 has none
 	Parts  []PartJSON `json:"parts"`  // its shape, front toward +X
 
@@ -257,6 +258,15 @@ type VehicleState struct {
 
 func (v *Vehicle) Auto() bool   { return v.Drive == "auto" }
 func (v *Vehicle) Patrol() bool { return v.Auto() && v.AI == "patrol" }
+
+// Weight is its mass in kg: Mass, or from the ground it covers.
+func (v *Vehicle) Weight() float64 {
+	if v.Mass > 0 {
+		return v.Mass
+	}
+	lo, hi := v.Footprint()
+	return 350 * (hi.X - lo.X) * (hi.Z - lo.Z)
+}
 
 // Footprint is the ground its parts cover, front toward +X: the corners of
 // a box around them, seen from above, never smaller than its radius.
