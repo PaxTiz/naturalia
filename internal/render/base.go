@@ -73,11 +73,36 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 
 	gfx.drawAirlock(g)
 	gfx.drawHallDoors(g)
+	gfx.drawInnerDoors(g)
 	gfx.drawBeacon(g)
 	gfx.drawSigns(g)
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
+}
+
+// drawInnerDoors draws the halls' corridor doors: two leaves sliding into
+// the wall, like the airlock's, and a light over them on the hall's side.
+func (gfx *Graphics) drawInnerDoors(g *game.Game) {
+	steel := gfx.tok("steel")
+	for k, d := range base.InnerDoors() {
+		open := 0.0
+		if k < len(g.InnerOpen) {
+			open = g.InnerOpen[k]
+		}
+		gfx.setLighting(mesh.LitIndoor, vec3{})
+		gfx.setMat(steel.Mat, steel.Scale, false)
+		for _, s := range []float64{-1, 1} {
+			at := d.Mid.Add(d.Along.Scale(s * (base.InnerLeaf/2 + open*base.InnerLeaf))).Add(vec3{0, base.DoorHeight / 2, 0})
+			gfx.put(gfx.doorPanel, base.ToWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, yawFor(d.Along)*180/math.Pi, steel.Col, steel.Spec, 0)
+		}
+		gfx.setMat(content.MtPlain, 1, false)
+		lamp := palette.Green
+		if open < 0.9 {
+			lamp = palette.Gold
+		}
+		gfx.box(d.Mid.Sub(d.Out.Scale(0.32)).Add(vec3{0, 3.25, 0}), vec3{1.2, 0.08, 0.04}, d.Along, lamp, 0, 1)
+	}
 }
 
 // drawAirlock draws the moving parts of the outer door: two leaves sliding

@@ -58,8 +58,11 @@ func (gfx *Graphics) baseSigns() []sign {
 			continue
 		}
 		hx := base.Rooms[i].Hall.Size[0] / 2
-		at := vec3{base.Rooms[i].Center.X - hx + 0.17, 3.4, bay.At.Z}
-		signs = append(signs, sign{at: at, facing: vec3{1, 0, 0}, width: math.Min(bay.Width-1.2, 4.2), height: 0.55,
+		if bay.SignW < 1 {
+			continue // no room between the arches
+		}
+		at := vec3{base.Rooms[i].Center.X - hx + 0.17, 3.4, bay.SignZ}
+		signs = append(signs, sign{at: at, facing: vec3{1, 0, 0}, width: bay.SignW, height: 0.55,
 			text: strings.ToUpper(v.Name), accent: gfx.tok(base.Plans[i].Accent).Col})
 	}
 	return append(signs,

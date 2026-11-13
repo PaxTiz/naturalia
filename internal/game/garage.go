@@ -76,6 +76,25 @@ func (g *Game) updateHallDoors(dt float64) {
 	}
 }
 
+// innerReach is how close to a hall's corridor door it opens, in m.
+const innerReach = 3.5
+
+// updateInnerDoors opens the halls' corridor doors as the player comes.
+func (g *Game) updateInnerDoors(dt float64) {
+	doors := base.InnerDoors()
+	if len(g.InnerOpen) != len(doors) {
+		g.InnerOpen = make([]float64, len(doors))
+	}
+	at := base.ToLocal(g.Player.Pos)
+	for k, d := range doors {
+		want := 0.0
+		if math.Hypot(at.X-d.Mid.X, at.Z-d.Mid.Z) < innerReach {
+			want = 1
+		}
+		g.InnerOpen[k] += (want - g.InnerOpen[k]) * math.Min(1, dt*4)
+	}
+}
+
 // wallsNow are the base's walls, with the halls' door leaves where they
 // stand: the player goes through as soon as the opening lets them.
 func (g *Game) wallsNow() []base.Segment {
@@ -86,6 +105,13 @@ func (g *Game) wallsNow() []base.Segment {
 			open = g.HallOpen[k]
 		}
 		walls = append(walls, base.HallDoorWalls(i, open)...)
+	}
+	for k, d := range base.InnerDoors() {
+		open := 0.0
+		if k < len(g.InnerOpen) {
+			open = g.InnerOpen[k]
+		}
+		walls = append(walls, d.Walls(open)...)
 	}
 	return walls
 }

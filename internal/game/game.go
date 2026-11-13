@@ -104,9 +104,11 @@ type Game struct {
 	walls    []base.Segment // the base's walls, for collisions
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
 	HallOpen []float64      // the halls' big doors, in the order of base.Halls
-	Burn     float64        // incinerator glow after a deposit
-	SleepT   float64        // time into the sleep sequence
-	wakeUp   bool           // a new game starts by waking up in bed
+	// The halls' corridor doors (base.InnerDoors), like the airlock's.
+	InnerOpen []float64
+	Burn      float64 // incinerator glow after a deposit
+	SleepT    float64 // time into the sleep sequence
+	wakeUp    bool    // a new game starts by waking up in bed
 
 	Aim       vec3 // where the tool points on the ground
 	AimOK     bool
@@ -348,6 +350,7 @@ func (g *Game) updateBase(dt float64) {
 	}
 	g.DoorOpen += (open - g.DoorOpen) * math.Min(1, dt*4)
 	g.updateHallDoors(dt)
+	g.updateInnerDoors(dt)
 	g.Burn = math.Max(0, g.Burn-dt*0.5)
 }
 

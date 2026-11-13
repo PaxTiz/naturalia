@@ -188,7 +188,7 @@ func TestHangarDoor(t *testing.T) {
 	for range 5 {
 		g.updateHallDoors(1)
 	}
-	if g.HallOpen[0] != 1 || len(g.wallsNow()) != len(g.walls) {
+	if g.HallOpen[0] != 1 || len(g.wallsNow()) != len(g.walls)+2*len(base.InnerDoors()) { // the corridor's door is shut
 		t.Errorf("door near: open %f", g.HallOpen[0])
 	}
 }
@@ -199,15 +199,30 @@ func TestCorridorToHangar(t *testing.T) {
 	g.walls = base.Walls()
 	// From the research room, east through the corridor, into the hangar,
 	// indoors all the way.
-	pos := base.ToWorld(vec3{13, base.FloorTop, 0})
-	for x := 13.0; x < 34; x += 0.05 {
-		pos = base.Collide(base.ToWorld(vec3{x, base.FloorTop, base.ToLocal(pos).Z}), g.wallsNow(), 0)
-		if at := base.ToLocal(pos); !base.Indoors(vec3{at.X, 1, at.Z}) {
-			t.Fatalf("outdoors at %v", at)
+	// Its door at the hangar's end opens as they come, walking at 4 m/s.
+	walk := func(steps int) vec3 {
+		for range steps {
+			g.updateInnerDoors(0.0125)
+			g.Player.Pos = base.Collide(g.Player.Pos.Add(vec3{0.05, 0, 0}), g.wallsNow(), 0)
+			if at := base.ToLocal(g.Player.Pos); !base.Indoors(vec3{at.X, 1, at.Z}) {
+				t.Fatalf("outdoors at %v", at)
+			}
 		}
+		return base.ToLocal(g.Player.Pos)
 	}
-	if at := base.ToLocal(pos); at.X < 33.9 {
+	g.Player.Pos = base.ToWorld(vec3{13, base.FloorTop, 0})
+	if at := walk(420); at.X < 33.9 {
 		t.Errorf("stopped at %v", at)
+	}
+	// Shut, it stops them.
+	g.Player.Pos = base.ToWorld(vec3{25, base.FloorTop, 0})
+	g.InnerOpen = []float64{0}
+	walls := g.wallsNow()
+	for range 40 {
+		g.Player.Pos = base.Collide(g.Player.Pos.Add(vec3{0.05, 0, 0}), walls, 0)
+	}
+	if at := base.ToLocal(g.Player.Pos); at.X > 26 {
+		t.Errorf("went through the shut door: %v", at)
 	}
 	// The bays leave the aisle from the doorway free.
 	for _, b := range base.Bays {

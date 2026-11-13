@@ -137,6 +137,67 @@ func (r Room) spans(a, b vec3) [][2]vec3 {
 	return out
 }
 
+// InnerDoor is a sliding door where a corridor opens into a hall, keeping
+// the base's air in when the hall's big door is open: its middle on the
+// floor (local), the way its two leaves slide (along the wall) and the
+// way out of the hall.
+type InnerDoor struct {
+	Mid, Along, Out vec3
+}
+
+// InnerLeaf is the width of each of an inner door's two leaves.
+const InnerLeaf = (DoorWidth + 0.2) / 2
+
+// InnerDoors are the halls' corridor doors.
+func InnerDoors() []InnerDoor {
+	var out []InnerDoor
+	for _, r := range Rooms {
+		if r.Hall == nil {
+			continue
+		}
+		for _, w := range r.doorways() {
+			o := r.wallOut(w)
+			out = append(out, InnerDoor{w, vec3{-o.Z, 0, o.X}, o})
+		}
+	}
+	return out
+}
+
+// Walls are what an inner door, open from 0 to 1, stops: its leaves, the
+// opening between them left free.
+func (d InnerDoor) Walls(open float64) []Segment {
+	gap := open * InnerLeaf
+	if gap >= hallGap {
+		return nil
+	}
+	return []Segment{
+		{d.Mid.Add(d.Along.Scale(gap)), d.Mid.Add(d.Along.Scale(hallGap)), DoorHeight},
+		{d.Mid.Sub(d.Along.Scale(gap)), d.Mid.Sub(d.Along.Scale(hallGap)), DoorHeight},
+	}
+}
+
+// wallOut is the way out of the hall through the wall at local point w.
+func (r Room) wallOut(w vec3) vec3 {
+	hx, hz := r.half()
+	d := w.Sub(r.Center)
+	if math.Abs(d.X/hx) > math.Abs(d.Z/hz) {
+		return vec3{math.Copysign(1, d.X), 0, 0}
+	}
+	return vec3{0, 0, math.Copysign(1, d.Z)}
+}
+
+// pillars are where the arches stand along the long walls: z from the
+// hall's middle, the end ones against the gables.
+func (r Room) pillars() []float64 {
+	_, hz := r.half()
+	ribs := int(math.Round(2 * hz / 8))
+	var out []float64
+	for k := 0; k <= ribs; k++ {
+		out = append(out, math.Max(-hz+0.3, math.Min(hz-0.3, -hz+2*hz*float64(k)/float64(ribs))))
+	}
+	return out
+}
+
 // nearDoorway tells if a local point stands within m of a doorway's sides.
 func (r Room) nearDoorway(p vec3, m float64) bool {
 	for _, w := range r.doorways() {
@@ -255,6 +316,9 @@ type Bay struct {
 	At            vec3
 	Length, Width float64
 	Spot          vec3
+	// Its name on the wall behind it, between the arches: the middle of
+	// the sign along the wall (z, local) and its width.
+	SignZ, SignW float64
 }
 
 // bayMargin is the room around a vehicle in its bay, on each side.
@@ -330,11 +394,41 @@ func layBays(c *content.Content) []Bay {
 			b.At = r.Center.Add(vec3{back + b.Length/2, 0, b.At.Z})
 			b.Spot = b.Spot.Add(b.At)
 			b.Spot.Y = 0
+			b.SignZ, b.SignW = r.signSpot(b.At.Z-r.Center.Z, b.Width)
+			b.SignZ += r.Center.Z
 			out = append(out, b)
 		}
 		back += depth + 6 // and an aisle
 	}
 	return out
+}
+
+// signSpot fits a bay's sign on the back wall between the arches: the
+// widest stretch free of pillars over the bay (z from the hall's middle,
+// its width), at most 4.2 m wide, as close to the bay's middle as it goes.
+func (r Room) signSpot(z, width float64) (float64, float64) {
+	const clear = 0.25 + 0.2 // half a pillar, and a margin
+	lo, hi := z-width/2+0.6, z+width/2-0.6
+	edges := []float64{lo}
+	for _, p := range r.pillars() {
+		if p > lo && p < hi {
+			edges = append(edges, p-clear, p+clear)
+		}
+	}
+	edges = append(edges, hi)
+	bestZ, bestW := z, 0.0
+	for i := 0; i+1 < len(edges); i += 2 {
+		a, b := edges[i], edges[i+1]
+		w := math.Min(b-a, 4.2)
+		if w <= 0 {
+			continue
+		}
+		mid := math.Max(a+w/2, math.Min(b-w/2, z))
+		if w > bestW+0.01 || (math.Abs(w-bestW) < 0.01 && math.Abs(mid-z) < math.Abs(bestZ-z)) {
+			bestZ, bestW = mid, w
+		}
+	}
+	return bestZ, bestW
 }
 
 // BayOf is the bay of vehicle id.
@@ -391,13 +485,7 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 	// The corridors' doorways: a lintel above, a steel frame on both
 	// faces, hazard stripes over it.
 	for _, w := range r.doorways() {
-		out := w.Sub(c)
-		out = vec3{out.X, 0, out.Z}
-		if math.Abs(out.X/hx) > math.Abs(out.Z/hz) {
-			out = vec3{math.Copysign(1, out.X), 0, 0}
-		} else {
-			out = vec3{0, 0, math.Copysign(1, out.Z)}
-		}
+		out := r.wallOut(w)
 		along := vec3{-out.Z, 0, out.X}
 		panels(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), DoorHeight+0.1, r.WallH)
 		for _, f := range []float64{-1, 1} {
@@ -454,8 +542,7 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 
 	// Pilasters at every arch, inside and out, and around the outside a
 	// dark plinth.
-	for k := 0; k <= ribs; k++ {
-		z := math.Max(-hz+0.3, math.Min(hz-0.3, -hz+2*hz*float64(k)/float64(ribs)))
+	for _, z := range r.pillars() {
 		for _, s := range []float64{-1, 1} {
 			if s > 0 && math.Abs(z) < dw/2+0.5 {
 				continue // the door
