@@ -53,9 +53,19 @@ type Door struct {
 // Prop is a kit piece placed in a building, relative to its center; Seed
 // varies pieces that are built by rules.
 type Prop struct {
-	Kit  string `json:"kit"`
-	At   vec3   `json:"at"`
-	Seed int    `json:"seed"`
+	Kit  string  `json:"kit"`
+	At   vec3    `json:"at"`
+	Seed int     `json:"seed"`
+	Yaw  float64 `json:"yaw"` // degrees, turning the kit's X toward Z
+}
+
+// Turn is p turned by yaw degrees around the vertical, X toward Z.
+func Turn(p vec3, yaw float64) vec3 {
+	if yaw == 0 {
+		return p
+	}
+	c, s := math.Cos(yaw*math.Pi/180), math.Sin(yaw*math.Pi/180)
+	return vec3{p.X*c - p.Z*s, p.Y, p.X*s + p.Z*c}
 }
 
 // Polar is the point at distance r from the center, at angle a.

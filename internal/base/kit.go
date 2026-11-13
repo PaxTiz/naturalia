@@ -37,7 +37,7 @@ func planObstacles(kits *content.Registry[content.Kit]) (out []content.Obstacle)
 				continue
 			}
 			for _, o := range k.Obstacles {
-				out = append(out, content.Obstacle{bp.At.Add(p.At).Add(o.At), o.Radius})
+				out = append(out, content.Obstacle{bp.At.Add(p.At).Add(content.Turn(o.At, p.Yaw)), o.Radius})
 			}
 		}
 	}
@@ -131,9 +131,19 @@ func (b *building) room(bp *content.Blueprint) {
 	}
 	b.interior(bp, r)
 	for _, p := range bp.Props {
-		if k, _ := b.kits.Get(p.Kit); k != nil && k.Build != nil {
-			k.Build(b.Parts, bp.At.Add(p.At), p.Seed)
+		k, _ := b.kits.Get(p.Kit)
+		if k == nil || k.Build == nil {
+			continue
 		}
+		at := bp.At.Add(p.At)
+		if p.Yaw == 0 {
+			k.Build(b.Parts, at, p.Seed)
+			continue
+		}
+		// Turned: built apart, then turned around its spot.
+		alone := mesh.NewParts(vec3{})
+		k.Build(alone, at, p.Seed)
+		b.MergeTurned(alone, func(q vec3) vec3 { return at.Add(content.Turn(q.Sub(at), p.Yaw)) })
 	}
 }
 

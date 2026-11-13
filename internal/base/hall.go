@@ -4,6 +4,7 @@ import (
 	"math"
 	"naturalia/internal/content"
 	"naturalia/internal/mesh"
+	"slices"
 )
 
 // Halls are the big rectangular buildings (content.Hall), like the
@@ -69,18 +70,81 @@ func (r Room) hallWalls() []Segment {
 	if r.Hall == nil {
 		return nil
 	}
-	hx, hz := r.half()
-	c := r.Center
 	top := r.WallH + r.Hall.Rise
-	p := func(x, z float64) vec3 { return c.Add(vec3{x, 0, z}) }
-	dw := r.Hall.Door[0] / 2
-	return []Segment{
-		{p(-hx, -hz), p(-hx, hz), top},
-		{p(-hx, -hz), p(hx, -hz), top},
-		{p(-hx, hz), p(hx, hz), top},
-		{p(hx, -hz), p(hx, -dw), top},
-		{p(hx, dw), p(hx, hz), top},
+	var out []Segment
+	for _, w := range r.straightWalls() {
+		for _, s := range r.spans(w[0], w[1]) {
+			out = append(out, Segment{s[0], s[1], top})
+		}
 	}
+	return out
+}
+
+// straightWalls are the hall's walls from end to end at floor level
+// (local), the big door left out.
+func (r Room) straightWalls() [][2]vec3 {
+	hx, hz := r.half()
+	p := func(x, z float64) vec3 { return r.Center.Add(vec3{x, 0, z}) }
+	dw := r.Hall.Door[0] / 2
+	return [][2]vec3{
+		{p(-hx, -hz), p(-hx, hz)},
+		{p(-hx, -hz), p(hx, -hz)},
+		{p(-hx, hz), p(hx, hz)},
+		{p(hx, -hz), p(hx, -dw)},
+		{p(hx, dw), p(hx, hz)},
+	}
+}
+
+// hallGap is half the width of a corridor's doorway in a hall's wall.
+const hallGap = DoorWidth/2 + WallThick + 0.05
+
+// doorways are where corridors open into the hall: on its walls, at floor
+// level (local).
+func (r Room) doorways() []vec3 {
+	var out []vec3
+	for _, a := range r.openings {
+		d := vec3{math.Cos(a), 0, math.Sin(a)}
+		out = append(out, r.Center.Add(d.Scale(edge(r.plan, d))))
+	}
+	return out
+}
+
+// spans are the stretches of the wall from a to b left standing between
+// the doorways, as their ends.
+func (r Room) spans(a, b vec3) [][2]vec3 {
+	along := b.Sub(a)
+	l := along.Length()
+	along = along.Scale(1 / l)
+	t0 := 0.0
+	var out [][2]vec3
+	var gaps []float64
+	for _, w := range r.doorways() {
+		t := w.Sub(a).Dot(along)
+		if off := w.Sub(a.Add(along.Scale(t))).Length(); off < 0.1 && t > 0 && t < l {
+			gaps = append(gaps, t)
+		}
+	}
+	slices.Sort(gaps)
+	for _, t := range gaps {
+		if t-hallGap > t0 {
+			out = append(out, [2]vec3{a.Add(along.Scale(t0)), a.Add(along.Scale(t - hallGap))})
+		}
+		t0 = t + hallGap
+	}
+	if t0 < l {
+		out = append(out, [2]vec3{a.Add(along.Scale(t0)), b})
+	}
+	return out
+}
+
+// nearDoorway tells if a local point stands within m of a doorway's sides.
+func (r Room) nearDoorway(p vec3, m float64) bool {
+	for _, w := range r.doorways() {
+		if math.Hypot(p.X-w.X, p.Z-w.Z) < hallGap+m {
+			return true
+		}
+	}
+	return false
 }
 
 // HallDoor is the big door of hall room i: its middle on the floor (local),
@@ -198,7 +262,8 @@ const bayMargin = 1.2
 
 // layBays gives each driven vehicle a bay in the first garage, sized to
 // it, side by side along the back wall, a second row in front if they
-// don't fit.
+// don't fit. An aisle runs between them from a corridor's doorway in the
+// back wall to the big door.
 func layBays(c *content.Content) []Bay {
 	var r *Room
 	for i := range Rooms {
@@ -211,9 +276,21 @@ func layBays(c *content.Content) []Bay {
 		return nil
 	}
 	hx, hz := r.half()
-	var rows [][]Bay
-	var row []Bay
-	width := 0.0
+	aisle, half := 0.0, 0.0 // z of the aisle from the hall's middle, half its width
+	for _, w := range r.doorways() {
+		if w.X-r.Center.X < -hx+0.5 {
+			aisle, half = w.Z-r.Center.Z, hallGap+1.5
+			break
+		}
+	}
+	// Each row fills both sides of the aisle, the vehicle going where
+	// there is less so far.
+	type row struct {
+		bays        []Bay
+		left, right float64 // widths taken on each side
+	}
+	room := [2]float64{aisle - half - (-hz + 1), hz - 1 - (aisle + half)}
+	rows := []*row{{}}
 	for _, v := range c.Vehicles.All() {
 		if v.Auto() {
 			continue
@@ -221,27 +298,38 @@ func layBays(c *content.Content) []Bay {
 		lo, hi := v.Footprint()
 		b := Bay{ID: v.ID, Length: hi.X - lo.X + 2*bayMargin, Width: hi.Z - lo.Z + 2*bayMargin,
 			Spot: lo.Add(hi).Scale(-0.5)} // from the bay's middle for now
-		if width+b.Width > 2*hz-2 && len(row) > 0 {
-			rows, row, width = append(rows, row), nil, 0
+		rw := rows[len(rows)-1]
+		left := rw.left <= rw.right
+		if (left && rw.left+b.Width > room[0]) || (!left && rw.right+b.Width > room[1]) {
+			left = !left
 		}
-		row = append(row, b)
-		width += b.Width
+		if (left && rw.left+b.Width > room[0]) || (!left && rw.right+b.Width > room[1]) {
+			if len(rw.bays) > 0 {
+				rw = &row{}
+				rows = append(rows, rw)
+			}
+			left = true
+		}
+		if left {
+			rw.left += b.Width
+			b.At.Z = aisle - half - rw.left + b.Width/2
+		} else {
+			rw.right += b.Width
+			b.At.Z = aisle + half + rw.right - b.Width/2
+		}
+		rw.bays = append(rw.bays, b)
 	}
-	rows = append(rows, row)
 	var out []Bay
 	back := -hx + 1.5 // the row's back line
-	for _, row := range rows {
-		width, depth := 0.0, 0.0
-		for _, b := range row {
-			width += b.Width
+	for _, rw := range rows {
+		depth := 0.0
+		for _, b := range rw.bays {
 			depth = math.Max(depth, b.Length)
 		}
-		z := -width / 2
-		for _, b := range row {
-			b.At = r.Center.Add(vec3{back + b.Length/2, 0, z + b.Width/2})
+		for _, b := range rw.bays {
+			b.At = r.Center.Add(vec3{back + b.Length/2, 0, b.At.Z})
 			b.Spot = b.Spot.Add(b.At)
 			b.Spot.Y = 0
-			z += b.Width
 			out = append(out, b)
 		}
 		back += depth + 6 // and an aisle
@@ -294,12 +382,38 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 			wall(style(i)).Box(mid.Add(vec3{0, (y0 + y1) / 2, 0}), vec3{l / float64(n) * 1.005, y1 - y0, hallWall}, d, 0.03)
 		}
 	}
-	panels(p(-hx, 0, -hz), p(-hx, 0, hz), 0, r.WallH)
-	panels(p(-hx, 0, -hz), p(hx, 0, -hz), 0, r.WallH)
-	panels(p(-hx, 0, hz), p(hx, 0, hz), 0, r.WallH)
-	panels(p(hx, 0, -hz), p(hx, 0, -dw/2), 0, r.WallH)
-	panels(p(hx, 0, dw/2), p(hx, 0, hz), 0, r.WallH)
+	for _, w := range r.straightWalls() {
+		for _, s := range r.spans(w[0], w[1]) {
+			panels(s[0], s[1], 0, r.WallH)
+		}
+	}
 	panels(p(hx, 0, -dw/2), p(hx, 0, dw/2), dh, r.WallH)
+	// The corridors' doorways: a lintel above, a steel frame on both
+	// faces, hazard stripes over it.
+	for _, w := range r.doorways() {
+		out := w.Sub(c)
+		out = vec3{out.X, 0, out.Z}
+		if math.Abs(out.X/hx) > math.Abs(out.Z/hz) {
+			out = vec3{math.Copysign(1, out.X), 0, 0}
+		} else {
+			out = vec3{0, 0, math.Copysign(1, out.Z)}
+		}
+		along := vec3{-out.Z, 0, out.X}
+		panels(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), DoorHeight+0.1, r.WallH)
+		for _, f := range []float64{-1, 1} {
+			face := w.Add(out.Scale(f * (hallWall/2 + 0.06)))
+			lit := wall("steel")
+			if f > 0 {
+				lit = sun("steel")
+			}
+			for _, s := range []float64{-1, 1} {
+				lit.Box(face.Add(along.Scale(s*(hallGap-0.1))).Add(vec3{0, (DoorHeight + 0.1) / 2, 0}), vec3{0.24, DoorHeight + 0.1, 0.14}, along, 0.03)
+			}
+			lit.Box(face.Add(vec3{0, DoorHeight + 0.22, 0}), vec3{2*hallGap + 0.04, 0.24, 0.14}, along, 0.03)
+		}
+		wall("hazard").Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.5, 0}), vec3{2 * hallGap, 0.25, 0.04}, along, 0)
+		wall(bp.Accent).Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.75, 0}), vec3{2 * hallGap, 0.06, 0.03}, along, 0)
+	}
 
 	// The gables, up under the vault.
 	const steps = 24
@@ -347,13 +461,26 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 				continue // the door
 			}
 			x := s * hx
+			if r.nearDoorway(p(x, 0, z), 0.5) {
+				continue
+			}
 			sun("steel").Box(p(x+s*0.3, r.WallH/2, z), vec3{0.3, r.WallH, 0.6}, X, 0.04)
 			inside("steel").Box(p(x-s*0.35, r.WallH/2, z), vec3{0.4, r.WallH, 0.45}, X, 0.04)
 		}
 	}
-	for _, s := range []float64{-1, 1} {
-		sun("steel.dark").Box(p(-hx-0.05, 0.2, 0), vec3{0.42, 0.4, 2*hz + 0.4}, X, 0.03)
-		sun("steel.dark").Box(p(0, 0.2, s*(hz+0.05)), vec3{2*hx + 0.4, 0.4, 0.42}, X, 0.03)
+	for _, w := range r.straightWalls()[:3] { // the west, north and south ones
+		for _, s := range r.spans(w[0], w[1]) {
+			d := s[1].Sub(s[0])
+			mid := s[0].Lerp(s[1], 0.5)
+			out := mid.Sub(c)
+			out = vec3{out.X, 0, out.Z}
+			if d.X != 0 {
+				out = vec3{0, 0, math.Copysign(0.05, out.Z)}
+			} else {
+				out = vec3{math.Copysign(0.05, out.X), 0, 0}
+			}
+			sun("steel.dark").Box(mid.Add(out).Add(vec3{0, 0.2, 0}), vec3{d.Length() + 0.4, 0.4, 0.42}, d, 0.03)
+		}
 	}
 
 	// Inside: the two-tone base of the walls and the accent strip.
@@ -363,11 +490,12 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 		inside("wall.lower").Box(mid.Add(vec3{0, 0.6, 0}), vec3{d.Length(), 1.2, 0.05}, d, 0.01)
 		inside(bp.Accent).Box(mid.Add(vec3{0, 1.24, 0}).Add(nrm.Scale(0.02)), vec3{d.Length(), 0.08, 0.04}, d, 0)
 	}
-	strip(p(-hx, 0, -hz), p(-hx, 0, hz), X)
-	strip(p(-hx, 0, -hz), p(hx, 0, -hz), Z)
-	strip(p(-hx, 0, hz), p(hx, 0, hz), Z.Scale(-1))
-	strip(p(hx, 0, -hz), p(hx, 0, -dw/2), X.Scale(-1))
-	strip(p(hx, 0, dw/2), p(hx, 0, hz), X.Scale(-1))
+	for k, w := range r.straightWalls() {
+		nrm := []vec3{X, Z, Z.Scale(-1), X.Scale(-1), X.Scale(-1)}[k]
+		for _, s := range r.spans(w[0], w[1]) {
+			strip(s[0], s[1], nrm)
+		}
+	}
 
 	// The lamps: a housing on a rod from the vault.
 	for _, l := range r.hallLamps() {

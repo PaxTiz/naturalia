@@ -47,6 +47,28 @@ func (s *Parts) Part(tok string, lit float32, at vec3) *Builder {
 	return s.byKey[k]
 }
 
+// MergeTurned adds the meshes of o, built in local coordinates (o's
+// origin zero), turned by turn around the vertical: turn maps a local
+// point, and a direction from zero. The lamps' points of LitTowards
+// pieces, world points, are turned too.
+func (s *Parts) MergeTurned(o *Parts, turn func(p vec3) vec3) {
+	for _, k := range o.Keys {
+		at := k.At
+		if at != (vec3{}) {
+			at = s.origin.Add(turn(at.Sub(s.origin)))
+		}
+		src, dst := o.byKey[k], s.Part(k.Tok, k.Lit, at)
+		dir := func(x, y, z float32) vec3 { return turn(vec3{float64(x), float64(y), float64(z)}).Sub(turn(vec3{})) }
+		for i := 0; i+2 < len(src.V); i += 3 {
+			p := s.origin.Add(turn(vec3{float64(src.V[i]), float64(src.V[i+1]), float64(src.V[i+2])}))
+			n := dir(src.N[i], src.N[i+1], src.N[i+2])
+			dst.V = append(dst.V, float32(p.X), float32(p.Y), float32(p.Z))
+			dst.N = append(dst.N, float32(n.X), float32(n.Y), float32(n.Z))
+		}
+		dst.UV = append(dst.UV, src.UV...)
+	}
+}
+
 // Mesh is the mesh of a piece already built.
 func (s *Parts) Mesh(k Key) *Builder { return s.byKey[k] }
 

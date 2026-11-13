@@ -36,7 +36,7 @@ func TestEventsAndBuildings(t *testing.T) {
 	if n := len(base.YardObstacles()); n != 15 {
 		t.Errorf("the core base leaves out yard objects: %d obstacles", n)
 	}
-	if len(base.Corridors) != 4 || len(base.Rooms) != 5 || len(base.Interactables) != 4 {
+	if len(base.Corridors) != 5 || len(base.Rooms) != 5 || len(base.Interactables) != 4 {
 		t.Errorf("%d corridors, %d rooms, %d interactables", len(base.Corridors), len(base.Rooms), len(base.Interactables))
 	}
 	var sold float64
@@ -64,7 +64,7 @@ func TestExampleMod(t *testing.T) {
 	if r, _ := c.Tools.Get("serre:rateau"); r.Look.HeadCol.G != 0x8c || r.Look.HandleLen != 0.6 {
 		t.Errorf("rake look: %+v", r.Look)
 	}
-	if len(base.Rooms) != 6 || len(base.Corridors) != 5 {
+	if len(base.Rooms) != 6 || len(base.Corridors) != 6 {
 		t.Fatalf("%d rooms, %d corridors", len(base.Rooms), len(base.Corridors))
 	}
 	bp := base.Plans[5]

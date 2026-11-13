@@ -169,11 +169,13 @@ var coreBuildings = []content.Blueprint{
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []content.Door{{base.West}},
+		// The console against the south wall, facing north: the way from
+		// the hub to the hangar runs across the room.
 		Props: []content.Prop{
-			{Kit: "console", At: vec3{2.3, 0, 0}},
-			{Kit: "chair", At: vec3{1.2, 0, 0.5}, Seed: 0},
+			{Kit: "console", At: vec3{0, 0, -2.3}, Yaw: -90},
+			{Kit: "chair", At: vec3{0.5, 0, -1.2}, Seed: 0, Yaw: -90},
 			{Kit: "workbench", At: vec3{-0.6, 0, 3.0}, Seed: 6},
-			{Kit: "planter", At: vec3{-0.6, 0, -3.0}, Seed: 2},
+			{Kit: "planter", At: vec3{2.3, 0, 2.6}, Seed: 2},
 		},
 	},
 	content.Blueprint{
@@ -192,9 +194,11 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "planter", At: vec3{-2.8, 0, 0.6}, Seed: 2},
 		},
 	},
-	// The vehicles' hangar, east of the base, its door facing away.
+	// The vehicles' hangar, east of the base, its door facing away; a
+	// corridor leads there from the research room.
 	content.Blueprint{
 		ID:     "core:hangar",
+		Link:   "core:research",
 		Sign:   "HANGAR 01",
 		Accent: "neon.orange",
 		At:     vec3{39, 0, 0},

@@ -656,15 +656,17 @@ func (b *building) clutter(bp *content.Blueprint) {
 		b.toolbox(at(vec3{0.4, FloorTop, 1.3}), 2.1)
 		b.papers(at(vec3{0.6, 0, -2.7}).Add(vec3{0, 1.35, 0}), 0.4, 3)
 	case "core:research":
-		c := at(vec3{2.3, 0, 0})
-		b.mug(c.Add(vec3{-0.4, 0.81, 0.85}), "habitat.white", 2.5)
-		b.papers(c.Add(vec3{-0.35, 0.81, -0.75}), 0.2, 4)
-		b.tablet(c.Add(vec3{-0.45, 0.81, 0.35}), 1.4)
+		// On the console's desk, turned like it.
+		c := at(vec3{0, 0, -2.3})
+		desk := func(v vec3) vec3 { return c.Add(content.Turn(v, -90)) }
+		b.mug(desk(vec3{-0.4, 0.81, 0.85}), "habitat.white", 2.5)
+		b.papers(desk(vec3{-0.35, 0.81, -0.75}), 0.2-math.Pi/2, 4)
+		b.tablet(desk(vec3{-0.45, 0.81, 0.35}), 1.4-math.Pi/2)
 		wb := at(vec3{-0.6, 0, 3.0})
 		b.mug(wb.Add(vec3{0.65, 0.93, 0.1}), "barrel.ochre", 0.3)
 		b.papers(wb.Add(vec3{0.2, 0.93, 0.15}), 1.2, 2)
 		b.coil(at(vec3{-2.4, FloorTop, 0.4}), 0.28, "pipe.blue")
-		b.helmet(at(vec3{3.0, FloorTop, -2.9}), 3.5)
+		b.helmet(at(vec3{-2.9, FloorTop, 2.0}), 3.5)
 	case "core:sleep":
 		b.mug(at(vec3{1.4, 0.63, 2.0}), "fabric.purple", 4)
 		desk := at(vec3{2.75, 0, 0.6})

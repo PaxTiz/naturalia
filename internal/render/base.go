@@ -30,8 +30,19 @@ func (gfx *Graphics) box(c, size, across vec3, col color.RGBA, spec, emissive fl
 	gfx.put(gfx.cube, base.ToWorld(c), size, vec3{0, 1, 0}, yawFor(across)*180/math.Pi, col, spec, emissive)
 }
 
+// kitSpot is where a kit piece stands (local) and how it is turned
+// (content.Prop.Yaw): pt places a point given from its spot as if it
+// weren't, dir turns a direction.
+type kitSpot struct {
+	at  vec3
+	yaw float64
+}
+
+func (k kitSpot) pt(off vec3) vec3 { return k.at.Add(content.Turn(off, k.yaw)) }
+func (k kitSpot) dir(d vec3) vec3  { return content.Turn(d, k.yaw) }
+
 // kitDraws draw the moving and glowing parts of kit pieces, each frame.
-var kitDraws = map[string]func(gfx *Graphics, g *game.Game, at vec3){
+var kitDraws = map[string]func(gfx *Graphics, g *game.Game, k kitSpot){
 	"core:incinerator": drawIncinerator,
 	"core:console":     drawConsole,
 	"core:bed":         drawBed,
@@ -55,7 +66,7 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	for _, bp := range base.Plans {
 		for _, p := range bp.Props {
 			if draw := kitDraws[content.Qualify(p.Kit)]; draw != nil {
-				draw(gfx, g, bp.At.Add(p.At))
+				draw(gfx, g, kitSpot{bp.At.Add(p.At), p.Yaw})
 			}
 		}
 	}
@@ -238,21 +249,21 @@ func (b *baseModels) draw(gfx *Graphics) {
 }
 
 // drawIncinerator: the window glows harder while it burns dust.
-func drawIncinerator(gfx *Graphics, g *game.Game, in vec3) {
+func drawIncinerator(gfx *Graphics, g *game.Game, in kitSpot) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
 	glow := float32(0.55 + 0.45*mathx.Clamp01(g.Burn))
-	gfx.box(in.Add(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, vec3{0, 0, 1}, palette.AccentOrange, 0, glow)
-	gfx.drawScreen(in.Add(vec3{1.16, 1.1, 1.25}), vec3{1, 0, 0}, 0.38, 0.28, gfx.screens[3], 0.8)
+	gfx.box(in.pt(vec3{1.08, 0.95, 0}), vec3{0.8, 0.55, 0.06}, in.dir(vec3{0, 0, 1}), palette.AccentOrange, 0, glow)
+	gfx.drawScreen(in.pt(vec3{1.16, 1.1, 1.25}), in.dir(vec3{1, 0, 0}), 0.38, 0.28, gfx.screens[3], 0.8)
 }
 
 // drawConsole: three screens and the blinking lights of the racks.
-func drawConsole(gfx *Graphics, g *game.Game, c vec3) {
+func drawConsole(gfx *Graphics, g *game.Game, c kitSpot) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
 	for i, z := range []float64{-0.75, 0, 0.75} {
 		facing := vec3{-1, 0, z * 0.4}.Norm()
-		gfx.drawScreen(c.Add(vec3{0.1, 1.28, z}), facing, 0.66, 0.42, gfx.screens[i], 0.8)
+		gfx.drawScreen(c.pt(vec3{0.1, 1.28, z}), c.dir(facing), 0.66, 0.42, gfx.screens[i], 0.8)
 	}
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
@@ -262,15 +273,15 @@ func drawConsole(gfx *Graphics, g *game.Game, c vec3) {
 			if math.Sin(g.Elapsed*3+float64(k)*1.7+z) > 0 {
 				on = 1
 			}
-			gfx.box(c.Add(vec3{-0.36, 0.4 + float64(k)*0.3, z}), vec3{0.5, 0.04, 0.02}, vec3{0, 0, 1}, palette.Green, 0, on)
+			gfx.box(c.pt(vec3{-0.36, 0.4 + float64(k)*0.3, z}), vec3{0.5, 0.04, 0.02}, c.dir(vec3{0, 0, 1}), palette.Green, 0, on)
 		}
 	}
 }
 
-func drawBed(gfx *Graphics, g *game.Game, at vec3) {
+func drawBed(gfx *Graphics, g *game.Game, at kitSpot) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
-	gfx.put(gfx.sphere, base.ToWorld(at.Add(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, palette.LampWarm, 0, 1)
+	gfx.put(gfx.sphere, base.ToWorld(at.pt(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, palette.LampWarm, 0, 1)
 }
 
 // upload sends the triangles to the GPU. raylib keeps pointers to the slices in C

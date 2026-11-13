@@ -192,3 +192,27 @@ func TestHangarDoor(t *testing.T) {
 		t.Errorf("door near: open %f", g.HallOpen[0])
 	}
 }
+
+func TestCorridorToHangar(t *testing.T) {
+	c := LoadContent()
+	g := fleetGame(t, c, map[string]int{})
+	g.walls = base.Walls()
+	// From the research room, east through the corridor, into the hangar,
+	// indoors all the way.
+	pos := base.ToWorld(vec3{13, base.FloorTop, 0})
+	for x := 13.0; x < 34; x += 0.05 {
+		pos = base.Collide(base.ToWorld(vec3{x, base.FloorTop, base.ToLocal(pos).Z}), g.wallsNow(), 0)
+		if at := base.ToLocal(pos); !base.Indoors(vec3{at.X, 1, at.Z}) {
+			t.Fatalf("outdoors at %v", at)
+		}
+	}
+	if at := base.ToLocal(pos); at.X < 33.9 {
+		t.Errorf("stopped at %v", at)
+	}
+	// The bays leave the aisle from the doorway free.
+	for _, b := range base.Bays {
+		if math.Abs(b.At.Z) < b.Width/2+1.5 {
+			t.Errorf("bay %s at %v blocks the aisle", b.ID, b.At)
+		}
+	}
+}

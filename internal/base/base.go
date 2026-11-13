@@ -93,7 +93,7 @@ func Setup(c *content.Content) {
 		addDoor(bp, math.Atan2(d.Z, d.X))
 		addDoor(to, math.Atan2(-d.Z, -d.X))
 		Corridors = append(Corridors, Corridor{
-			to.At.Sub(d.Scale(to.Shape.Radius - 0.2)), bp.At.Add(d.Scale(bp.Shape.Radius - 0.2)), DoorWidth, 2.4,
+			to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), bp.At.Add(d.Scale(edge(bp, d))), DoorWidth, 2.4,
 		})
 	}
 	Corridors = append(Corridors, Corridor{vec3{0, 0, -(Plans[0].Shape.Radius - 0.2)}, AirlockEnd, DoorWidth + 0.2, 2.6})
@@ -117,6 +117,22 @@ func Setup(c *content.Content) {
 		extent = math.Max(extent, math.Hypot(r.Center.X, r.Center.Z)+r.reach())
 	}
 	Bays = layBays(c)
+}
+
+// edge is how far from its middle a corridor leaving bp along d starts:
+// just inside a dome's round wall, in the middle of a hall's straight one.
+func edge(bp *content.Blueprint, d vec3) float64 {
+	if bp.Hall == nil {
+		return bp.Shape.Radius - 0.2
+	}
+	t := math.Inf(1)
+	if d.X != 0 {
+		t = bp.Hall.Size[0] / 2 / math.Abs(d.X)
+	}
+	if d.Z != 0 {
+		t = math.Min(t, bp.Hall.Size[1]/2/math.Abs(d.Z))
+	}
+	return t
 }
 
 // addDoor opens a door of bp facing angle a, unless there is one already.
