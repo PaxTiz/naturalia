@@ -50,17 +50,8 @@ const (
 const (
 	maxParticles  = 900
 	saveInterval  = 30.0
-	droneSpeed    = 5.0
-	droneHover    = 1.4
 	ToolViewScale = 0.6 // the held tool is drawn smaller so it doesn't hide the brush
 )
-
-type Drone struct {
-	Pos      vec3
-	Target   vec3
-	retarget float64
-	Phase    float64
-}
 
 type Particle struct {
 	Pos, Vel      vec3
@@ -87,7 +78,6 @@ type Game struct {
 	Player    Player
 	World     *planet.World
 	Rng       *rand.Rand
-	Drones    []*Drone
 	Particles []Particle
 	Floaters  []Floater
 	NearRocks []planet.Rock // boulders around the player
@@ -106,6 +96,8 @@ type Game struct {
 	MessageT    float64 // ...for this long still
 	itemSel     int     // which carried item F places (R cycles)
 	Riding      int     // index in State.Entities of the vehicle driven, -1 on foot
+	drive       drive   // the driven vehicle's motion
+	fleetHeld   bool    // automatic vehicles stand still (LineUp)
 	Photo       Photo   // the photo mode's camera and settings
 
 	walls    []base.Segment // the base's walls, for collisions
@@ -149,7 +141,7 @@ func New(c *content.Content) *Game {
 	}
 	g.Player.Pos = g.World.Relief.Surface(g.Player.Pos)
 	g.walls = base.Walls()
-	g.syncDrones()
+	g.syncFleet()
 	return g
 }
 
@@ -206,6 +198,7 @@ func (g *Game) Update(dt float64) {
 
 	g.NearRocks = g.World.RocksNear(g.Player.Pos, RockDrawDist)
 	g.Player.Update(dt, g.World.Relief, g.Mode == ModePlay)
+	g.driveVehicle(dt)
 	if g.Steps.update(&g.Player) {
 		g.sfx.Step()
 	}
@@ -226,7 +219,7 @@ func (g *Game) Update(dt float64) {
 	g.updateBase(dt)
 	g.updateAim()
 	g.updateSweeping(dt)
-	g.updateDrones(dt)
+	g.updateFleet(dt)
 	g.updateEffects(dt)
 	g.updateEvents(dt)
 	if g.TankFull() && g.AutoSell() {
@@ -285,7 +278,7 @@ func (g *Game) updateSweeping(dt float64) {
 }
 
 // collect adds dust to the tank, with particles sucked from the ground
-// toward sink (the tool or a drone).
+// toward sink (the tool or a vehicle); far from the player, without.
 func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	if grams <= 0 {
 		return
@@ -294,6 +287,9 @@ func (g *Game) collect(grams float64, at vec3, radius float64, sink vec3) {
 	g.State.TotalDust += grams
 	g.emit(content.Event{Name: content.EvDust, At: at, Amount: grams})
 	n := min(8, int(grams*4+g.Rng.Float64()))
+	if at.Sub(g.Player.Pos).Length() > 150 {
+		n = 0
+	}
 	up := at.Norm()
 	t1, t2 := mathx.TangentBasis(up)
 	for range n {
@@ -335,70 +331,6 @@ func (g *Game) sell() {
 	g.SellPop, g.SellPopText = 1.5, "+"+FmtNum(earned)+" cr"
 	g.emit(content.Event{Name: content.EvSell, Amount: earned})
 	g.sfx.Beep(0.08, 0.22, 0.14, 660, 990)
-}
-
-func (g *Game) syncDrones() {
-	for len(g.Drones) < int(g.stat("drones")) {
-		p := base.ToWorld(vec3{0, 8, 0})
-		g.Drones = append(g.Drones, &Drone{Pos: p, Target: base.Origin, Phase: g.Rng.Float64() * 10})
-	}
-}
-
-const (
-	// droneRange is how far from the player drones look for dust: they
-	// follow you around Mars.
-	droneRange = 25.0
-	// While the player is at the base, drones circle above the hub.
-	dockAltitude = 7.5
-	dockRadius   = 3.5
-)
-
-func (g *Game) updateDrones(dt float64) {
-	radius := 0.8 + float64(g.ToolTier())*0.5
-	amount := 0.6 * g.powerMult() * dt
-	docked := planet.ArcDist(g.Player.LocalUp(), planet.BaseUp) < base.Reach+15
-	for i, d := range g.Drones {
-		d.Phase += dt
-		up := d.Pos.Norm()
-		hover := droneHover
-		switch {
-		case docked:
-			a := float64(i)/float64(len(g.Drones))*2*math.Pi + g.Elapsed*0.2
-			d.Target = base.ToWorld(vec3{math.Cos(a) * dockRadius, 0, math.Sin(a) * dockRadius})
-			hover = dockAltitude
-		case g.TankFull():
-			hover += 0.5 // tank full: drones hover in place, waiting
-		default:
-			d.retarget -= dt
-			arrived := up.Sub(d.Target.Norm()).Length()*planet.Radius < 0.3
-			if d.retarget <= 0 || (arrived && g.World.DustAt(d.Target) < 0.05) || planet.ArcDist(d.Target.Norm(), planet.BaseUp) < base.Reach {
-				d.Target = g.World.Relief.Surface(g.World.FindDusty(g.Rng, g.Player.Pos, droneRange))
-				d.retarget = 8 + g.Rng.Float64()*5
-			}
-		}
-		if g.TankFull() && !docked {
-			d.Target = d.Pos
-		}
-		delta := d.Target.Sub(d.Pos)
-		delta = delta.Sub(up.Scale(delta.Dot(up))) // stay along the ground
-		if delta.Length() > 0.05 {
-			d.Pos = d.Pos.Add(delta.Norm().Scale(math.Min(delta.Length(), droneSpeed*dt)))
-			up = d.Pos.Norm()
-		}
-		if planet.ArcDist(up, planet.BaseUp) < base.Reach+6 {
-			hover = math.Max(hover, dockAltitude) // fly over the domes, not through them
-		}
-		r := d.Pos.Length()
-		r += (g.World.Relief.SurfaceRadius(up) + hover - r) * math.Min(1, dt*3)
-		d.Pos = up.Scale(r)
-		if docked || g.TankFull() || planet.ArcDist(up, planet.BaseUp) < base.Reach {
-			continue
-		}
-		g.collect(g.World.Clean(up, radius, amount, g.space()), g.World.Relief.Surface(up), radius, d.Pos)
-		for _, gem := range g.World.CollectGems(up, radius) {
-			g.collectGem(gem)
-		}
-	}
 }
 
 // updateBase animates the airlock doors and the incinerator glow.
@@ -512,6 +444,8 @@ func (g *Game) updateFov(dt float64) {
 		target = 67
 	case rl.IsKeyDown(rl.KeyLeftShift) && g.Player.MoveAmount > 0.5:
 		target = 76
+	case g.Riding >= 0:
+		target += math.Min(10, g.DriveSpeed()*0.4) // speed widens the view
 	}
 	if g.Fov == 0 {
 		g.Fov = target

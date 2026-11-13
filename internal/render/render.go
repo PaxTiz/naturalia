@@ -355,7 +355,6 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.shadow.render(gfx, g.Player.Pos, func() {
 		gfx.drawRocks(g)
 		gfx.drawBase(g)
-		gfx.drawDrones(g)
 		gfx.drawEntities(g)
 	})
 	// The rooms' lamps cast shadows too, drawn once.
@@ -388,7 +387,6 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	// The base first: the terrain it hides then fails the depth test before
 	// its costly shader runs (most of the screen, indoors).
 	gfx.drawBase(g)
-	gfx.drawDrones(g)
 	gfx.drawEntities(g)
 	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
@@ -414,37 +412,6 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.post.finish(cam, sunUp, g.Elapsed, gfx.look(g))
 	overlay(cam)
 	rl.EndDrawing()
-}
-
-func (gfx *Graphics) drawDrones(g *game.Game) {
-	for _, d := range g.Drones {
-		up := d.Pos.Norm()
-		axis, angle := mathx.Orient(up)
-		downAxis, downAngle := mathx.Orient(up.Scale(-1))
-		t1, t2 := mathx.TangentBasis(up)
-		p := d.Pos.Add(up.Scale(math.Sin(d.Phase*3) * 0.08))
-		gfx.setMat(content.MtPaint, 2, true)
-		gfx.put(gfx.sphere, p, vec3{0.32, 0.15, 0.32}, axis, angle, palette.MatWhite, 0.8, 0)
-		gfx.put(gfx.sphere, p.Add(up.Scale(0.05)), vec3{0.2, 0.09, 0.2}, axis, angle, palette.AccentOrange, 0.6, 0)
-		gfx.setMat(content.MtMetal, 3, true)
-		gfx.put(gfx.hemi, p.Sub(up.Scale(0.06)), vec3{0.15, 0.12, 0.15}, downAxis, downAngle, palette.MatDark, 1, 0)
-		for i := range 4 {
-			a := math.Pi/4 + float64(i)*math.Pi/2
-			arm := p.Add(t1.Scale(math.Cos(a) * 0.45)).Add(t2.Scale(math.Sin(a) * 0.45)).Add(up.Scale(0.05))
-			gfx.segment(gfx.cyl, p, arm, 0.025, palette.MatSteel, 0.4, 0)
-			gfx.setMat(content.MtPlain, 1, false)
-			gfx.segment(gfx.cyl, arm.Add(up.Scale(0.04)), arm.Add(up.Scale(0.052)), 0.19, color.RGBA{60, 64, 80, 150}, 0.2, 0)
-			gfx.setMat(content.MtMetal, 3, true)
-		}
-		gfx.setMat(content.MtPlain, 1, false)
-		light := palette.Green
-		if g.TankFull() {
-			light = palette.Red
-		}
-		if math.Sin(d.Phase*6) > 0 {
-			gfx.put(gfx.sphere, p.Add(up.Scale(0.15)), vec3{0.045, 0.045, 0.045}, axis, angle, light, 0, 1)
-		}
-	}
 }
 
 // gemDrawDist: crystals are only drawn this close; they are tiny anyway.

@@ -33,12 +33,17 @@ func (g *Game) stat(name string) float64 {
 func (g *Game) ToolTier() int { return max(0, slices.Index(g.Content.Tools.IDs(), g.State.Tool)) }
 
 func (g *Game) Tool() *content.Tool { return g.Content.Tools.All()[g.ToolTier()] }
-func (g *Game) Capacity() float64   { return g.stat("tank") }
-func (g *Game) powerMult() float64  { return g.stat("power") }
-func (g *Game) priceMult() float64  { return g.stat("price") }
-func (g *Game) AutoSell() bool      { return g.stat("autosell") > 0 }
-func (g *Game) space() float64      { return math.Max(0, g.Capacity()-g.State.Tank) }
-func (g *Game) TankFull() bool      { return g.space() <= 1e-6 }
+func (g *Game) Capacity() float64 {
+	if v, ok := g.Driven(); ok {
+		return g.stat("tank") + v.Hopper
+	}
+	return g.stat("tank")
+}
+func (g *Game) powerMult() float64 { return g.stat("power") }
+func (g *Game) priceMult() float64 { return g.stat("price") }
+func (g *Game) AutoSell() bool     { return g.stat("autosell") > 0 }
+func (g *Game) space() float64     { return math.Max(0, g.Capacity()-g.State.Tank) }
+func (g *Game) TankFull() bool     { return g.space() <= 1e-6 }
 func (g *Game) gemValue() float64 {
 	return 20 * g.priceMult() * math.Pow(2.5, float64(g.ToolTier()))
 }
@@ -82,10 +87,7 @@ func (g *Game) ShopItems() []ShopItem {
 			Icon: u.Icon,
 			Info: fmt.Sprintf("Niv %d", lvl),
 			Cost: u.Base * math.Pow(u.Growth, float64(lvl)),
-			buy: func() {
-				g.State.Levels[u.ID]++
-				g.syncDrones()
-			},
+			buy:  func() { g.State.Levels[u.ID]++ },
 		}
 		if u.Max > 0 && lvl >= u.Max {
 			it.Maxed, it.Info = true, "Acquis"
@@ -94,13 +96,26 @@ func (g *Game) ShopItems() []ShopItem {
 	}
 
 	for _, v := range g.Content.Vehicles.All() {
+		bought := g.State.Levels[v.ID]
 		it := ShopItem{
-			id: v.ID, Name: "Véhicule : " + v.Name, Desc: v.Desc, Icon: "vehicle",
-			Info: fmt.Sprintf("%.0f km/h", v.Speed*3.6), Cost: v.Cost,
-			buy: func() { g.buyVehicle(v) },
+			id: v.ID, Name: v.Name, Desc: v.Desc, Icon: content.OrDefault(v.Icon, "vehicle"),
+			Cost: v.Cost * math.Pow(content.OrZero(v.Growth, 1), float64(bought)),
+			buy:  func() { g.buyVehicle(v) },
 		}
-		if g.State.Levels[v.ID] > 0 {
-			it.Maxed, it.Info = true, "Sur l'aire d'atterrissage"
+		switch {
+		case !v.Auto():
+			it.Name = "Véhicule : " + v.Name
+			it.Info = fmt.Sprintf("%.0f km/h · rayon %.0f m", v.Speed*3.6, v.Sweep)
+		case v.Patrol():
+			it.Info = fmt.Sprintf("Robot · %d en service, %d sur toi", g.Entities(v.ID), g.State.Items[v.ID])
+		default:
+			it.Info = fmt.Sprintf("Drone · %d en service", bought)
+		}
+		if v.Max > 0 && bought >= v.Max {
+			it.Maxed, it.Info = true, "Acquis"
+			if !v.Auto() {
+				it.Info = "Sur l'aire d'atterrissage"
+			}
 		}
 		items = append(items, it)
 	}

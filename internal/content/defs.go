@@ -117,9 +117,8 @@ type Effect struct {
 // Stats are what upgrades act on, with their value before any upgrade.
 var Stats = map[string]float64{
 	"tank":     50, // grams the tank holds
-	"power":    1,  // multiplies how fast tools and drones sweep
+	"power":    1,  // multiplies how fast tools and vehicles sweep
 	"price":    1,  // multiplies what dust and crystals sell for
-	"drones":   0,  // sweeping drones
 	"autosell": 0,  // above 0, the tank sells itself when full
 }
 
@@ -145,30 +144,66 @@ type Item struct {
 	Places string  `json:"places"` // ID of the entity it becomes
 }
 
-// Vehicles are entities the player drives: bought in the shop, they wait
-// on the landing pad. E gets in and out; driving, the player goes faster,
-// sits higher, and the vehicle sweeps the dust it rolls over.
+// Vehicles are entities that sweep the dust: bought in the shop, they come
+// in two kinds.
+//
+// Driven ones ("drive": "manual") wait on the landing pad; E gets in and
+// out. Z/S throttle and brake, Q/D steer, the mouse looks around; they
+// sweep the dust they roll over into the tank, plus their own hopper.
+//
+// Automatic ones ("drive": "auto") sweep on their own, into the tank too
+// (it is teleported). Their "ai" is "follow" (they stay around the player,
+// like the drones) or "patrol" (they go into the inventory, are set down
+// with F and sweep around that spot, until E picks them back up).
 type Vehicle struct {
 	ID     string     `json:"id"`
 	Name   string     `json:"name"`
 	Desc   string     `json:"desc"`
-	Cost   float64    `json:"cost"`
+	Icon   string     `json:"icon"`   // in the shop: "vehicle" if left out
+	Cost   float64    `json:"cost"`   // the first one...
+	Growth float64    `json:"growth"` // ...times this for each one owned (automatic ones)
+	Max    int        `json:"max"`    // how many can be owned: 1 for driven ones, 0 unlimited
+	Drive  string     `json:"drive"`  // "manual" (default) or "auto"
+	AI     string     `json:"ai"`     // automatic: "follow" (default) or "patrol"
+	Range  float64    `json:"range"`  // automatic: how far from the player, or its spot, it looks for dust
 	Speed  float64    `json:"speed"`  // m/s
+	Turn   float64    `json:"turn"`   // driven: steering, radians per second at full speed
+	Grip   float64    `json:"grip"`   // driven: how fast sideways sliding stops; low drifts (hover)
+	Hover  float64    `json:"hover"`  // height it floats or flies at; 0 rolls on the ground
 	Sweep  float64    `json:"sweep"`  // radius it sweeps under it; 0 doesn't
 	Rate   float64    `json:"rate"`   // grams per second, like a tool's
-	Seat   float64    `json:"seat"`   // eye height when driving
+	Hopper float64    `json:"hopper"` // driven: grams it adds to the tank while driven
+	Seat   float64    `json:"seat"`   // driven: eye height, over the hover height
 	Radius float64    `json:"radius"` // what the player bumps into on foot
+	Light  vec3       `json:"light"`  // a status light, blinking green (red when the tank is full); 0,0,0 has none
 	Parts  []PartJSON `json:"parts"`  // its shape, front toward +X
 }
 
-// vehicleEntities gives each vehicle its entity, for drawing and E.
+func (v *Vehicle) Auto() bool   { return v.Drive == "auto" }
+func (v *Vehicle) Patrol() bool { return v.Auto() && v.AI == "patrol" }
+
+// vehicleEntities gives each vehicle its entity, for drawing and E, and
+// patrolling ones the item they are carried as.
 func (c *Content) vehicleEntities() {
 	for _, v := range c.Vehicles.All() {
-		if _, ok := c.Entities.Get(v.ID); ok {
-			continue
+		if v.Max == 0 && !v.Auto() {
+			v.Max = 1
 		}
-		c.Entities.pack = c.Vehicles.owner[v.ID]
-		c.Entities.Add(v.ID, EntityDef{ID: v.ID, Name: v.Name, Parts: v.Parts, Radius: OrZero(v.Radius, 1.2), Prompt: "Conduire : " + v.Name})
+		if _, ok := c.Entities.Get(v.ID); !ok {
+			e := EntityDef{ID: v.ID, Name: v.Name, Parts: v.Parts, Radius: OrZero(v.Radius, 1.2), Prompt: "Conduire : " + v.Name}
+			if v.Auto() {
+				e.Radius, e.Prompt = v.Radius, ""
+			}
+			if v.Patrol() {
+				e.Prompt, e.Pickup = "Ramasser : "+v.Name, true
+			}
+			c.Entities.pack = c.Vehicles.owner[v.ID]
+			c.Entities.Add(v.ID, e)
+		}
+		if _, ok := c.Items.Get(v.ID); v.Patrol() && !ok {
+			c.Items.pack = c.Vehicles.owner[v.ID]
+			c.Items.Add(v.ID, Item{Name: v.Name, Desc: v.Desc, Icon: OrDefault(v.Icon, "vehicle"), Places: v.ID})
+		}
 	}
 }
 

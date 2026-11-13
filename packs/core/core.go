@@ -5,7 +5,6 @@ package core
 import (
 	"image/color"
 	"maps"
-	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/palette"
@@ -42,12 +41,10 @@ func registerCore(c *content.Content) {
 	for _, u := range []content.Upgrade{
 		{ID: "core:tank", Name: "Réservoir", Desc: "Stocke 60% de poussière en plus avant de devoir rentrer vendre",
 			Icon: "tank", Base: 25, Growth: 1.75, Effects: []content.Effect{{Stat: "tank", Mult: 1.6}}},
-		{ID: "core:power", Name: "Turbo", Desc: "Outils et drones aspirent 30% plus vite",
+		{ID: "core:power", Name: "Turbo", Desc: "Outils et véhicules aspirent 30% plus vite",
 			Icon: "power", Base: 40, Growth: 1.85, Effects: []content.Effect{{Stat: "power", Mult: 1.3}}},
 		{ID: "core:price", Name: "Négociation", Desc: "La poussière et les cristaux se vendent 20% plus cher",
 			Icon: "price", Base: 150, Growth: 2.1, Effects: []content.Effect{{Stat: "price", Mult: 1.2}}},
-		{ID: "core:drone", Name: "Drone balayeur", Desc: "Un drone autonome qui nettoie à ta place",
-			Icon: "drone", Base: 300, Growth: 1.9, Effects: []content.Effect{{Stat: "drones", Add: 1}}},
 		{ID: "core:auto", Name: "Téléporteur", Desc: "Vend à distance dès que le réservoir est plein",
 			Icon: "auto", Base: 1_500, Growth: 1, Max: 1, Effects: []content.Effect{{Stat: "autosell", Add: 1}}},
 	} {
@@ -74,29 +71,7 @@ func registerCore(c *content.Content) {
 	c.Items.Add("core:flag", content.Item{Name: "Drapeau", Desc: "À planter où tu veux : un repère visible de loin (F)",
 		Icon: "flag", Cost: 40, Places: "core:flag"})
 
-	wheels := []content.PartJSON{}
-	for _, x := range []float64{-0.85, 0.85} {
-		for _, z := range []float64{-0.8, 0.8} {
-			wheels = append(wheels,
-				content.PartJSON{Shape: "prism", Token: "rubber", At: vec3{x, 0.4, z - 0.15}, Axis: vec3{0, 0, 1}, R0: 0.4, H: 0.3, Sides: 12, Bevel: 0.04, Lit: "outdoor"},
-				content.PartJSON{Shape: "prism", Token: "steel", At: vec3{x, 0.4, z + 0.16*math.Copysign(1, z) - 0.01}, Axis: vec3{0, 0, 1}, R0: 0.18, H: 0.02, Sides: 8, Lit: "outdoor"})
-		}
-	}
-	c.Vehicles.Add("core:rover", content.Vehicle{
-		Name: "Rover balayeur", Desc: "Roule à 45 km/h et aspire la poussière sous ses roues",
-		Cost: 15_000, Speed: 12.5, Sweep: 2.2, Rate: 2.5, Seat: 2.3, Radius: 1.5,
-		Parts: append(wheels,
-			content.PartJSON{Shape: "box", Token: "steel.dark", At: vec3{0, 0.55, 0}, Size: vec3{2.3, 0.25, 1.3}, Bevel: 0.04, Lit: "outdoor"},
-			content.PartJSON{Shape: "box", Token: "habitat.white", At: vec3{-0.25, 0.9, 0}, Size: vec3{1.7, 0.5, 1.4}, Bevel: 0.08, Lit: "outdoor"},
-			content.PartJSON{Shape: "box", Token: "hazard", At: vec3{-0.25, 0.72, 0}, Size: vec3{1.72, 0.12, 1.42}, Lit: "outdoor"},
-			content.PartJSON{Shape: "box", Token: "habitat.white2", At: vec3{0.75, 1.15, 0}, Size: vec3{0.7, 0.75, 1.2}, Bevel: 0.08, Lit: "outdoor"},
-			content.PartJSON{Shape: "box", Token: "glass.dark", At: vec3{1.1, 1.3, 0}, Size: vec3{0.04, 0.4, 1.0}, Lit: "outdoor"},
-			content.PartJSON{Shape: "box", Token: "steel", At: vec3{1.3, 0.3, 0}, Size: vec3{0.35, 0.2, 1.6}, Bevel: 0.04, Lit: "outdoor"},
-			content.PartJSON{Shape: "box", Token: "neon.cyan", At: vec3{1.45, 0.28, 0}, Size: vec3{0.03, 0.05, 1.4}, Lit: "outdoor"},
-			content.PartJSON{Shape: "prism", Token: "steel", At: vec3{-0.8, 1.15, 0.45}, R0: 0.02, H: 1.1, Sides: 5, Lit: "outdoor"},
-			content.PartJSON{Shape: "prism", Token: "led.green", At: vec3{-0.8, 2.25, 0.45}, R0: 0.04, H: 0.06, Sides: 6, Lit: "outdoor"},
-		),
-	})
+	registerVehicles(c)
 
 	// Dust devils rise in daytime, a few at once.
 	const maxDevils = 3

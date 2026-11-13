@@ -7,6 +7,7 @@ import (
 	"naturalia/internal/game"
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
+	"naturalia/internal/palette"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -30,8 +31,8 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 			models = buildEntity(def, gfx)
 			gfx.entities[def.ID] = models
 		}
-		pos := g.World.Relief.Surface(e.Dir)
 		up := e.Dir
+		pos := g.World.Relief.Surface(e.Dir).Add(up.Scale(e.Alt))
 		t1, t2 := mathx.TangentBasis(up)
 		ax := t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw)))
 		az := ax.Cross(up)
@@ -43,6 +44,16 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 		for _, m := range models {
 			gfx.setMat(m.tok.Mat, m.tok.Scale, false)
 			gfx.putBasis(m.model, pos, ax, up, az, m.tok.Col, m.tok.Spec, m.tok.Emissive)
+		}
+		if v, ok := g.Content.Vehicles.Get(e.Kind); ok && v.Light != (vec3{}) && math.Sin(g.Elapsed*6+float64(i)) > 0 {
+			light := palette.Green
+			if g.TankFull() {
+				light = palette.Red
+			}
+			at := pos.Add(ax.Scale(v.Light.X)).Add(up.Scale(v.Light.Y)).Add(az.Scale(v.Light.Z))
+			axis, angle := mathx.Orient(up)
+			gfx.setMat(content.MtPlain, 1, false)
+			gfx.put(gfx.sphere, at, vec3{0.045, 0.045, 0.045}, axis, angle, light, 0, 1)
 		}
 	}
 	gfx.setMat(content.MtPlain, 1, false)

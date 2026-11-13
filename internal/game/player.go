@@ -29,7 +29,7 @@ type Player struct {
 	onGround   bool
 	WalkPhase  float64
 	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
-	speed      float64 // driving: the vehicle's speed, no sprint nor jump
+	seated     bool    // driving: the vehicle moves the player, who only looks around
 	eyeH       float64 // driving: the seat's height
 	// Fly is the debug creative mode: no gravity nor collisions, Space
 	// climbs, Ctrl descends, the wheel sets FlyBoost.
@@ -86,6 +86,13 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 		turn := -float64(d.X) * mouseSens
 		p.Heading = p.Heading.Scale(math.Cos(turn)).Add(up.Cross(p.Heading).Scale(math.Sin(turn)))
 		p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*mouseSens))
+	}
+	if p.seated {
+		p.vr, p.onGround, p.MoveAmount = 0, true, 0
+		p.tangentHeading()
+		return
+	}
+	if control {
 
 		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.
 		right := p.Right()
@@ -101,11 +108,11 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 		if rl.IsKeyDown(rl.KeyA) {
 			move = move.Sub(right)
 		}
-		move = move.Norm().Scale(content.OrZero(p.speed, walkSpeed))
-		if rl.IsKeyDown(rl.KeyLeftShift) && p.speed == 0 {
+		move = move.Norm().Scale(walkSpeed)
+		if rl.IsKeyDown(rl.KeyLeftShift) {
 			move = move.Scale(sprintFactor)
 		}
-		if p.onGround && rl.IsKeyPressed(rl.KeySpace) && p.speed == 0 {
+		if p.onGround && rl.IsKeyPressed(rl.KeySpace) {
 			p.vr = jumpSpeed
 			p.onGround = false
 		}

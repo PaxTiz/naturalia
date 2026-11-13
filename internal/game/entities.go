@@ -21,6 +21,11 @@ type Placed struct {
 	Kind string  `json:"kind"`
 	Dir  vec3    `json:"dir"` // from Mars' center, unit
 	Yaw  float64 `json:"yaw"`
+	Alt  float64 `json:"alt,omitempty"`  // over the ground: what flies or hovers
+	Home vec3    `json:"home,omitempty"` // a patrolling vehicle's spot
+
+	target   vec3 // an automatic vehicle's next dusty spot...
+	retarget float64
 }
 
 const (
@@ -142,7 +147,7 @@ func (g *Game) entityUse(i int) base.Interactable {
 	if prompt == "" {
 		prompt = "Ramasser : " + def.Name
 	}
-	if _, ok := g.Content.Vehicles.Get(e.Kind); ok {
+	if v, ok := g.Content.Vehicles.Get(e.Kind); ok && !v.Auto() {
 		return base.Interactable{Kit: def.ID, At: base.ToLocal(g.World.Relief.Surface(e.Dir)), Prompt: prompt,
 			Use: func(content.Game, vec3) { g.getIn(i) }}
 	}
