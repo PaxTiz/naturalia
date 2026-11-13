@@ -24,20 +24,17 @@ uniform vec4 lightVP[4]; // the sun's shadow camera about origin, by columns
 out vec4 finalColor;
 #include "common.glsl"
 #include "texture.glsl"
-// Indoor lighting, the same model as outside: each ceiling lamp lights by
-// the inverse square of its distance (softened near it, faded out by its
-// range: 10 m in the domes, more in the halls),
-// and its light bounces once off the floor and the walls. The floor is
-// dark slate and the walls white, so faces turned down get less of it:
-// ceilings and undersides sit in a deeper, cooler shade.
-const vec3 lampCol = vec3(1.0, 0.9, 0.78);
+// Indoor lighting, painted like outside: each ceiling lamp lays a warm
+// pool that fades softly with distance (faded out by its range: 10 m in
+// the domes, more in the halls), with the same soft-edged ramp as the sun.
+// The shade is a cool blue bounce, lighter on faces turned up to the white
+// walls and dome, deeper on ceilings and under things.
+const vec3 lampCol = vec3(1.0, 0.86, 0.68);
+const vec3 roomShade = vec3(0.40, 0.42, 0.62);
 
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
-    float rough = mix(0.85, 0.2, spec);
-    vec3 f0 = mix(vec3(0.04), albedo, metal);
-    vec3 diff = albedo * (1.0 - metal);
-    vec3 col = vec3(0.0);
-    float bounce = 0.0;
+    vec3 light = vec3(0.0);
+    float glints = 0.0, bounce = 0.0;
     for (int i = 0; i < 24; i++) {
         if (float(i) >= lightCount) break;
         vec3 l = (lights[i].xyz - origin) - fragRel;
@@ -47,7 +44,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
         if (d > range) continue;
         l /= d;
         float win = clamp(1.0 - pow(d / range, 4.0), 0.0, 1.0);
-        float att = lights[i].w * win * win / (d * d + 1.2);
+        float att = lights[i].w * win * win * 7.0 / (d * d * 0.5 + 3.0);
         bounce += lights[i].w * win * win / (d * d * 0.3 + 5.0);
         float lit = 1.0;
         if (float(i) < lampCount && att > 0.01) {
@@ -71,14 +68,16 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
                 lit = mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
             }
         }
-        col += direct(diff, f0, rough, n, v, l, lampCol * att * 11.0 * lit);
+        light += lampCol * att * lightRamp(dot(n, l)) * lit;
+        glints += glint(n, v, l, max(spec, metal)) * att * lit;
     }
-    // The bounce: warm off the white walls and the dome above, dim off the
-    // slate floor below.
-    vec3 above = lampCol * vec3(0.92, 0.9, 0.95) * bounce * 1.5;
-    vec3 below = vec3(0.45, 0.43, 0.48) * lampCol * bounce;
-    vec3 env = mix(below, above, smoothstep(-0.3, 0.3, reflect(-v, n).y)) * 0.8;
-    return col + ambient(diff, f0, rough, n, v, vec3(0, 1, 0), above, below, env, ao);
+    vec3 above = mix(roomShade, lampCol, 0.2) * bounce * 1.2;
+    vec3 below = roomShade * 0.5 * bounce;
+    vec3 amb = mix(below, above, smoothstep(-0.6, 0.6, n.y)) * ao;
+    vec3 col = albedo * (1.0 - 0.45 * metal) * (light + amb);
+    col += lampCol * glints * mix(vec3(0.45), albedo * 1.4, metal);
+    vec3 env = mix(below, above, smoothstep(-0.3, 0.3, reflect(-v, n).y));
+    return col + env * albedo * metal * 0.5 * ao;
 }
 
 // sunShadow is how much sun reaches the fragment past the base and the

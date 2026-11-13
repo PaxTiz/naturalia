@@ -106,10 +106,16 @@ vec3 rays; // light shafts, computed once per pixel in main
 
 vec3 image(vec2 uv) {
     vec3 c = sceneColor(uv) + texture(bloom, uv).rgb * ${bloomStrength} + rays;
-    // Filmic curve (ACES, Narkowicz's fit): deeper shadows and a soft
-    // shoulder. The 0.53 keeps the mid-tones where the old curve had them.
+    // Painted tone curve: the filmic curve's contrast (ACES, Narkowicz's
+    // fit) taken on the brightest channel and applied to all three, so
+    // colors keep their hue and richness where the curve per channel
+    // bleaches them. Only what is far past white (the sun, lamps,
+    // emissives) turns white. The 0.53 keeps the mid-tones in place.
     c *= exposure * 0.53;
-    c = clamp(c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
+    float m = max(max(c.r, c.g), c.b);
+    float t = m * (2.51 * m + 0.03) / (m * (2.43 * m + 0.59) + 0.14);
+    c = mix(c * t / max(m, 1e-4), vec3(t), smoothstep(1.0, 4.0, m));
+    c = clamp(c, 0.0, 1.0);
 
     // Grading by time of day: warm and rich in the day, cool shadows and
     // warm highlights in the blue dusk, cold and greyer at night.

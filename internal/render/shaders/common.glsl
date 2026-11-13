@@ -43,15 +43,15 @@ float fbm3(vec3 p) {
 float daylight(vec3 up) { return smoothstep(-0.12, 0.18, dot(sunDir, up)); }
 
 // skyColor is the color of the sky seen along d: three flat bands softly
-// blended (peach horizon, dusty rose, deep wine overhead), a small bluish
+// blended (golden peach horizon, dusty rose, deep violet overhead), a small bluish
 // halo around the sun, a blue glow at sunset. At night the horizon keeps a
 // faint violet glow so the relief stands out as a silhouette.
 vec3 skyColor(vec3 d, vec3 up) {
     float h = dot(d, up);
     float s = max(dot(d, sunDir), 0.0);
     float day = daylight(up);
-    vec3 col = mix(vec3(1.00, 0.58, 0.36), vec3(0.78, 0.36, 0.28), smoothstep(-0.02, 0.16, h));
-    col = mix(col, vec3(0.34, 0.13, 0.16), smoothstep(0.12, 0.75, h));
+    vec3 col = mix(vec3(1.00, 0.70, 0.46), vec3(0.82, 0.42, 0.38), smoothstep(-0.02, 0.18, h));
+    col = mix(col, vec3(0.30, 0.17, 0.34), smoothstep(0.14, 0.8, h));
     col = mix(col, vec3(0.78, 0.86, 1.05), pow(s, 48.0) * 0.5);
     col += vec3(1.0, 0.72, 0.48) * pow(s, 10.0) * 0.07;
     vec3 night = mix(vec3(0.075, 0.07, 0.14), vec3(0.010, 0.012, 0.035), smoothstep(-0.05, 0.4, h));
@@ -61,74 +61,67 @@ vec3 skyColor(vec3 d, vec3 up) {
     return col;
 }
 
-// Light, one model for everything, slightly physical: diffuse that keeps
-// the energy the gloss reflects, GGX highlights with Fresnel, metals that
-// tint their reflections. The ambient comes from the sky itself and the
-// ground it lights, so shade always matches the sky above it. The colors
-// stay the style's: a warm sun, a dusty rose sky, cool deep shade.
-const float PI = 3.14159265;
+// Light, painted rather than measured, as in Firewatch: a face is in the
+// light or in the shade, with a soft edge between and a gentle gradient on
+// the lit side to keep forms round. The shade is a color of its own, cool
+// and rich (plum by day, blue at dusk, deep blue at night), warmed from
+// below by the lit ground. Highlights are rare soft spots; metals take a
+// flat tint of what they mirror; silhouettes catch a little sky.
 
-vec3 fresnel(vec3 f0, float c) { return f0 + (1.0 - f0) * pow(1.0 - c, 5.0); }
-
-// direct is one light of color c (irradiance on a face turned to it)
-// coming from l. rough: 0 mirror, 1 chalk.
-vec3 direct(vec3 albedo, vec3 f0, float rough, vec3 n, vec3 v, vec3 l, vec3 c) {
-    float nl = dot(n, l);
-    // Dusty air and soft paint wrap the light a little past the terminator.
-    float diff = max(nl + 0.12, 0.0) / 1.12;
-    vec3 h = normalize(l + v);
-    float nh = max(dot(n, h), 0.0), nv = max(dot(n, v), 1e-3), cl = max(nl, 0.0);
-    float a = max(rough * rough, 0.02), a2 = a * a;
-    float d = nh * nh * (a2 - 1.0) + 1.0;
-    float k = a * 0.5;
-    vec3 F = fresnel(f0, max(dot(v, h), 0.0));
-    vec3 spec = F * a2 / (d * d) / ((cl * (1.0 - k) + k) * (nv * (1.0 - k) + k)) * 0.25 * cl;
-    return (albedo * (1.0 - F) * diff + spec) * c;
+// lightRamp turns the cosine to a light into the painted ramp.
+float lightRamp(float nl) {
+    return mix(smoothstep(-0.04, 0.2, nl), clamp(nl, 0.0, 1.0), 0.35);
 }
 
-// ambient adds light from all around: irradiance sky from above and
-// ground from below, then what the surroundings mirror (env) by Fresnel.
-vec3 ambient(vec3 albedo, vec3 f0, float rough, vec3 n, vec3 v, vec3 up, vec3 sky, vec3 ground, vec3 env, float ao) {
-    float u = dot(n, up);
-    vec3 irr = mix(ground, sky, smoothstep(-0.9, 0.9, u));
-    float nv = max(dot(n, v), 0.0);
-    vec3 F = f0 + (max(vec3(1.0 - rough), f0) - f0) * pow(1.0 - nv, 5.0);
-    return (albedo * (1.0 - F) * irr + env * F * (1.0 - rough * 0.7)) * ao;
+// glint is a painted highlight: a soft-edged spot, larger on matte
+// surfaces, none at all when spec is 0.
+float glint(vec3 n, vec3 v, vec3 l, float spec) {
+    float nh = max(dot(n, normalize(l + v)), 0.0);
+    float size = mix(0.93, 0.992, spec);
+    return smoothstep(size, mix(size, 1.0, 0.4), nh) * spec;
 }
 
 const vec3 sunCol    = vec3(1.42, 1.05, 0.76); // sunlight through the dust: warm
 const vec3 groundAlb = vec3(0.50, 0.27, 0.15); // what the ground bounces
 const vec3 moonCol   = vec3(0.10, 0.13, 0.30); // Phobos and Deimos, by night
 
-// skyLight is the irradiance from the sky on a face turned toward n:
-// the sky's own color seen above it, a little cooled in the shade.
+// shadeColor is the light in the shade: the sky's hue made deeper and
+// richer.
+vec3 shadeColor(vec3 up) {
+    float s = dot(sunDir, up);
+    float dusk = smoothstep(-0.35, -0.05, s) * (1.0 - smoothstep(0.05, 0.35, s));
+    vec3 c = mix(vec3(0.05, 0.06, 0.15), vec3(0.30, 0.29, 0.52), daylight(up));
+    return mix(c, vec3(0.24, 0.28, 0.62), dusk * 0.7);
+}
+
+// skyLight is what the sky alone gives a face turned toward n (the dust
+// devils use it).
 vec3 skyLight(vec3 n, vec3 up) {
-    vec3 t = n - up * dot(n, up);
-    vec3 hd = dot(t, t) > 1e-4 ? normalize(t) : normalize(cross(up, vec3(0.3, 0.9, 0.1)));
-    vec3 high = skyColor(normalize(up + hd * 0.5), up);
-    vec3 low = skyColor(normalize(hd + up * 0.25), up);
-    // By night the dark sky alone would leave the relief black: starlight
-    // and the moons' glow keep it a readable deep blue.
-    vec3 night = vec3(0.025, 0.03, 0.065) * (1.0 - daylight(up));
-    return mix(low, high, 0.5) * vec3(0.78, 0.82, 1.0) * 0.62 + night;
+    return shadeColor(up) * mix(0.6, 1.0, smoothstep(-0.7, 0.7, dot(n, up)));
 }
 
 // shadeM lights an outdoor surface: the sun (dimmed by shadow), the moon's
-// cold key at night, the sky and the lit ground around (dimmed by ao).
-// spec is how glossy the surface is (0..1), metal how metallic.
+// cold key at night, the shade (dimmed by ao). spec is how glossy the
+// surface is (0..1), metal how metallic.
 vec3 shadeM(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float spec, float metal) {
     float day = daylight(up);
-    float rough = mix(0.9, 0.22, spec);
-    vec3 f0 = mix(vec3(0.04), albedo, metal);
-    vec3 diff = albedo * (1.0 - metal);
-    vec3 col = direct(diff, f0, rough, n, v, sunDir, sunCol * day * shadow);
+    float u = dot(n, up);
+    float sun = lightRamp(dot(n, sunDir)) * shadow * day;
     vec3 mk = normalize(up + 0.9 * normalize(phobosDir - up * dot(phobosDir, up) + vec3(1e-4)));
-    col += direct(diff, f0, max(rough, 0.35), n, v, mk, moonCol * (1.0 - day));
-    vec3 sky = skyLight(n, up);
-    vec3 ground = groundAlb * (sunCol * max(dot(sunDir, up), 0.0) * 0.3 + sky * 0.8);
-    vec3 env = skyColor(reflect(-v, n), up);
-    env = mix(ground * 0.6, env, smoothstep(-0.15, 0.05, dot(reflect(-v, n), up)));
-    return col + ambient(diff, f0, rough, n, v, up, sky, ground, env, ao);
+    float moon = lightRamp(dot(n, mk)) * (1.0 - day);
+    vec3 shade = shadeColor(up);
+    vec3 bounce = groundAlb * sunCol * max(dot(sunDir, up), 0.0) * 0.5 + shade * 0.45;
+    vec3 amb = mix(bounce, shade, smoothstep(-0.9, 0.3, u)) * ao;
+    vec3 col = albedo * (1.0 - 0.45 * metal) * (sunCol * sun + moonCol * moon + amb);
+    col += sunCol * glint(n, v, sunDir, max(spec, metal)) * sun * mix(vec3(0.45), albedo * 1.4, metal);
+    vec3 r = reflect(-v, n);
+    vec3 env = mix(bounce, skyColor(r, up), smoothstep(-0.15, 0.05, dot(r, up)));
+    col += env * albedo * metal * 0.5 * ao;
+    // The sky behind a silhouette rims its edge.
+    vec3 back = -v - up * dot(-v, up);
+    vec3 rimSky = skyColor(normalize(back + up * (0.12 * length(back) + 1e-3)), up);
+    float rim = pow(1.0 - max(dot(n, v), 0.0), 4.0) * (1.0 - smoothstep(0.2, 0.7, u));
+    return col + rimSky * rim * 0.3 * ao;
 }
 
 vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float spec) {
