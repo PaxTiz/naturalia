@@ -162,15 +162,28 @@ func TestHangarDoor(t *testing.T) {
 
 	// Far away it stays shut, and walls the hangar off.
 	g.updateHallDoors(1)
-	if g.HallOpen[0] != 0 || len(g.wallsNow()) != len(g.walls)+1 {
-		t.Fatalf("door far: open %f", g.HallOpen[0])
+	// stopped tells if the door pushes back a player 0.2 m from it, z m
+	// from its middle.
+	stopped := func(z float64) bool {
+		at := mid.Add(vec3{0.2, base.FloorTop, z})
+		return base.ToLocal(base.Collide(base.ToWorld(at), g.wallsNow(), 0)).X > mid.X+0.3
+	}
+	if g.HallOpen[0] != 0 || !stopped(0) {
+		t.Fatalf("door far: open %f, walked in", g.HallOpen[0])
 	}
 
-	// Near it, it opens slowly, then lets the player in.
+	// Near it, it opens slowly; a second later, the player already goes
+	// through the middle, though not past its sides.
 	g.Player.Pos = outside
 	g.updateHallDoors(1)
 	if o := g.HallOpen[0]; o <= 0 || o >= 1 {
 		t.Errorf("after 1 s the door is %f open", o)
+	}
+	if stopped(0) || stopped(2) {
+		t.Error("can't go through the opening door")
+	}
+	if !stopped(base.Rooms[i].Hall.Door[0]/2 - 1) {
+		t.Error("went through a leaf")
 	}
 	for range 5 {
 		g.updateHallDoors(1)

@@ -76,16 +76,16 @@ func (g *Game) updateHallDoors(dt float64) {
 	}
 }
 
-// wallsNow are the base's walls, with the halls' doors where they are
-// still closed enough to stop the player.
+// wallsNow are the base's walls, with the halls' door leaves where they
+// stand: the player goes through as soon as the opening lets them.
 func (g *Game) wallsNow() []base.Segment {
-	walls := g.walls
+	walls := g.walls[:len(g.walls):len(g.walls)]
 	for k, i := range base.Halls() {
-		if k < len(g.HallOpen) && g.HallOpen[k] > 0.85 {
-			continue
+		open := 0.0
+		if k < len(g.HallOpen) {
+			open = g.HallOpen[k]
 		}
-		_, door := base.HallDoor(i)
-		walls = append(walls[:len(walls):len(walls)], door)
+		walls = append(walls, base.HallDoorWalls(i, open)...)
 	}
 	return walls
 }

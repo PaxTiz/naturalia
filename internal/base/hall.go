@@ -93,6 +93,27 @@ func HallDoor(i int) (mid vec3, closed Segment) {
 	return mid, Segment{mid.Add(vec3{0, 0, -dw}), mid.Add(vec3{0, 0, dw}), r.Hall.Door[1]}
 }
 
+// HallDoorWalls are the walls the door of hall room i makes, open from 0
+// to 1: on each side, from the jamb to the inner edge of its leaves, so
+// the opening lets through as soon as it is wide enough.
+func HallDoorWalls(i int, open float64) []Segment {
+	mid, closed := HallDoor(i)
+	half := Rooms[i].Hall.Door[0] / 2
+	gap := half // how far from the middle the leaves start, on each side
+	for _, l := range HallLeaves(i, open) {
+		gap = math.Min(gap, math.Abs(l.At.Z-mid.Z)-l.Size.Z/2)
+	}
+	if gap >= half-0.1 {
+		return nil
+	}
+	gap = math.Max(gap, 0)
+	var out []Segment
+	for _, s := range []float64{-1, 1} {
+		out = append(out, Segment{mid.Add(vec3{0, 0, s * gap}), mid.Add(vec3{0, 0, s * half}), closed.top})
+	}
+	return out
+}
+
 // Halls are the indexes of the hall rooms.
 func Halls() []int {
 	var out []int
