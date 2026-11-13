@@ -246,6 +246,15 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 			rl.DrawCircleV(v(x, 0.5), 0.38*s, uiInk)
 			rl.DrawCircleV(v(x, 0.5), 0.28*s, c)
 		}
+	case "robot": // a ground robot from the side: body, mast, three wheels
+		rect(-0.9, -0.15, 0.75, 0.3, c)
+		rect(0.75, 0.05, 1, 0.4, c)
+		rect(-0.6, -0.85, -0.48, -0.15, c)
+		rect(-0.75, -1, -0.33, -0.78, c)
+		for _, x := range []float32{-0.6, 0, 0.6} {
+			rl.DrawCircleV(v(x, 0.55), 0.3*s, uiInk)
+			rl.DrawCircleV(v(x, 0.55), 0.21*s, c)
+		}
 	case "flag": // a pole and a pennant
 		rect(-0.55, -1, -0.4, 1, c)
 		tri(v(-0.4, -1), v(-0.4, 0.05), v(0.85, -0.47), c)
@@ -301,7 +310,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		switch {
 		case g.Riding >= 0:
 			v, _ := g.Driven()
-			hud.prompt("E", "Descendre du "+strings.ToLower(v.Name), h*0.64, visorCyan)
+			hud.prompt("E", fmt.Sprintf("Descendre · %s · %.0f km/h", v.Name, g.DriveSpeed()*3.6), h*0.64, visorCyan)
 		case g.State.TotalDust < 5:
 			hud.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
 		case hud.hasUse(g):
@@ -370,6 +379,12 @@ func (hud *HUD) drawHints(g *game.Game) {
 	hints := [][2]string{
 		{"ZQSD", "bouger"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"CLIC", "balayer"},
 		{"E", "utiliser"}, {"P", "photo"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
+	}
+	if g.Riding >= 0 {
+		hints = [][2]string{
+			{"Z", "accélérer"}, {"S", "freiner"}, {"QD", "tourner"}, {"SOURIS", "regarder"},
+			{"E", "descendre"}, {"P", "photo"}, {"ÉCHAP", "pause"},
+		}
 	}
 	key, label := 11*u, 12*u
 	total := float32(0)
