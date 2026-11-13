@@ -4,6 +4,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/planet"
 )
 
@@ -22,20 +23,19 @@ const (
 	dockTime      = 1.6  // seconds it takes, gliding in
 )
 
-// park sets vehicle v in its bay: entity i, or a new one if i < 0. It
-// tells if v has a bay.
-func (g *Game) park(v *content.Vehicle, i int) bool {
+// park sets vehicle v in its bay: entity id, or a new one if 0. It tells
+// if v has a bay.
+func (g *Game) park(v *content.Vehicle, id ecs.ID) bool {
 	bay, ok := base.BayOf(v.ID)
 	if !ok {
 		return false
 	}
-	if i < 0 {
-		if !g.spawn(v.ID, base.ToWorld(bay.Spot)) {
+	if id == 0 {
+		if id = g.spawn(v.ID, base.ToWorld(bay.Spot)); id == 0 {
 			return false
 		}
-		i = len(g.State.Entities) - 1
 	}
-	e := &g.State.Entities[i]
+	e := g.Ents.Transform.Get(id)
 	e.Dir = base.ToWorld(bay.Spot).Norm()
 	e.Yaw = yawOf(e.Dir, vec3{1, 0, 0}) // nose to the door
 	e.Alt, e.Pitch, e.Roll = v.Hover, 0, 0
@@ -46,13 +46,13 @@ func (g *Game) park(v *content.Vehicle, i int) bool {
 // where they used to wait, and those in the hangar, in their bays as they
 // are now.
 func (g *Game) garageYard() {
-	for i, e := range g.State.Entities {
-		v, ok := g.Content.Vehicles.Get(e.Kind)
+	for id, e := range g.Ents.Transform.All() {
+		v, ok := g.vehicleOf(id)
 		home := planet.ArcDist(e.Dir, planet.BaseUp) < base.Reach+10 || base.Covered(base.ToLocal(e.Dir.Scale(planet.Radius)))
-		if !ok || v.Auto() || i == g.Riding || !home {
+		if !ok || v.Auto() || id == g.Riding || !home {
 			continue
 		}
-		g.park(v, i)
+		g.park(v, id)
 	}
 }
 

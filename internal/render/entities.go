@@ -20,9 +20,9 @@ type entityModel struct {
 // drawEntities draws the entities around the player, standing up from the
 // ground.
 func (gfx *Graphics) drawEntities(g *game.Game) {
-	for _, i := range g.EntitiesNear(game.EntityDrawDist) {
-		e := g.State.Entities[i]
-		def, ok := g.Content.Entities.Get(e.Kind)
+	for _, id := range g.EntitiesNear(game.EntityDrawDist) {
+		kind := *g.Ents.Kind.Get(id)
+		def, ok := g.Content.Entities.Get(kind)
 		if !ok {
 			continue // its mod was removed: it stays in the save
 		}
@@ -31,7 +31,7 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 			models = buildEntity(def, gfx)
 			gfx.entities[def.ID] = models
 		}
-		pos, ax, up, az := g.Frame(&e)
+		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
 		lit := float32(mesh.LitSun)
 		if base.Indoors(base.ToLocal(pos)) {
 			lit = mesh.LitIndoor
@@ -41,7 +41,7 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 			gfx.setMat(m.tok.Mat, m.tok.Scale, false)
 			gfx.putBasis(m.model, pos, ax, up, az, m.tok.Col, m.tok.Spec, m.tok.Emissive)
 		}
-		if v, ok := g.Content.Vehicles.Get(e.Kind); ok && v.Light != (vec3{}) && math.Sin(g.Elapsed*6+float64(i)) > 0 {
+		if v, ok := g.Content.Vehicles.Get(kind); ok && v.Light != (vec3{}) && math.Sin(g.Elapsed*6+float64(id.Index())) > 0 {
 			light := palette.Green
 			if g.TankFull() {
 				light = palette.Red

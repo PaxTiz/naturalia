@@ -160,10 +160,10 @@ func (g *Game) garageItems() []ShopItem {
 		if g.State.Levels[v.ID] > 0 {
 			it.Maxed, it.Refund = true, math.Floor(v.Cost*resale)
 			it.Info = "Au garage"
-			if i := g.entityOf(v.ID); i >= 0 && !base.Covered(base.ToLocal(g.World.Relief.Surface(g.State.Entities[i].Dir))) {
+			if id := g.entityOf(v.ID); id != 0 && !base.Covered(base.ToLocal(g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir))) {
 				it.Info = "Sorti"
 			}
-			if i := g.entityOf(v.ID); i >= 0 && i == g.Riding {
+			if id := g.entityOf(v.ID); id != 0 && id == g.Riding {
 				it.Info = "Conduit"
 			}
 			it.sell = func() { g.sellVehicle(v, it.Refund) }

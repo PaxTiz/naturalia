@@ -25,7 +25,7 @@ func TestScripts(t *testing.T) {
 	}
 	c := LoadContent(m.Pack())
 
-	g := &Game{State: State{Credits: 5}, Content: c}
+	g := &Game{State: State{Credits: 5}, Content: c, Ents: newEnts()}
 	g.emit(content.Event{Name: content.EvSell, Amount: 12})
 	g.emit(content.Event{Name: content.EvSell, Amount: 3})
 	if v := g.State.Mods["essai"]["ventes"]; v != int64(15) && v != 15.0 {

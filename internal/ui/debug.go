@@ -29,7 +29,7 @@ func (hud *HUD) updateDebug(g *game.Game, dt float64) {
 	if rl.IsKeyPressed(rl.KeyF3) {
 		d.on = !d.on
 	}
-	if d.on && rl.IsKeyPressed(rl.KeyF4) && g.Riding < 0 {
+	if d.on && rl.IsKeyPressed(rl.KeyF4) && g.Riding == 0 {
 		g.Player.SetFly(!g.Player.Fly, g.World.Relief)
 	}
 	if d.on && rl.IsKeyPressed(rl.KeyF5) { // not counted as earned
@@ -68,7 +68,7 @@ func (hud *HUD) drawDebug(g *game.Game, rs render.Stats) {
 		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(planet.SunDir))*180/math.Pi, rs.Sun, rs.AO),
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.World.DustAt(up), len(g.World.Touched())),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
-		fmt.Sprintf("packs %s   entités %d", content.PackList(), len(g.State.Entities)),
+		fmt.Sprintf("packs %s   entités %d", content.PackList(), g.Ents.Len()),
 	}
 	if g.Player.Fly {
 		lines = append(lines, fmt.Sprintf("VOL LIBRE (F4)  %.0f m/s  ×%.2f molette", g.Player.FlySpeed(t.Altitude(g.Player.Pos)), content.OrZero(g.Player.FlyBoost, 1)))

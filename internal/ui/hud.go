@@ -334,7 +334,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.drawReticle(g)
 		hud.drawHeldItem(g)
 		switch {
-		case g.Riding >= 0:
+		case g.Riding != 0:
 			v, _ := g.Driven()
 			line := fmt.Sprintf("Descendre · %s · %.0f km/h", v.Name, g.DriveSpeed()*3.6)
 			if v.Fly != nil {

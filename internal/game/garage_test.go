@@ -45,17 +45,12 @@ func TestDriveOutOfBay(t *testing.T) {
 	g := fleetGame(t, c, map[string]int{"core:harvester": 1, "core:drone": 4})
 	g.walls = base.Walls()
 	g.syncFleet()
-	h := -1
-	for i, e := range g.State.Entities {
-		if e.Kind == "core:harvester" {
-			h = i
-		}
-	}
+	h := g.entityOf("core:harvester")
 	g.getIn(h)
 	// Drones hang around, right over it: it drives through them.
-	for i := range g.State.Entities {
-		if i != h {
-			g.State.Entities[i].Dir = g.Player.Pos.Norm()
+	for id, e := range g.Ents.Transform.All() {
+		if id != h {
+			e.Dir = g.Player.Pos.Norm()
 		}
 	}
 	v, _ := g.Driven()
@@ -75,7 +70,8 @@ func TestDock(t *testing.T) {
 	c := LoadContent()
 	g := fleetGame(t, c, map[string]int{"core:rover": 1})
 	g.syncFleet()
-	g.getIn(0)
+	rover := g.entityOf("core:rover")
+	g.getIn(rover)
 	bay, _ := base.BayOf("core:rover")
 	// Askew, 4 m off its bay, turned away from the door.
 	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.Spot.Add(vec3{3, 0, 2.5})))
@@ -90,7 +86,7 @@ func TestDock(t *testing.T) {
 		g.updateVehicle(1.0 / 60)
 	}
 	at := base.ToLocal(g.Player.Pos)
-	if math.Hypot(at.X-bay.Spot.X, at.Z-bay.Spot.Z) > 0.05 || g.drive.fwd.X < 0.999 || g.drive.dock != nil || g.Riding != 0 {
+	if math.Hypot(at.X-bay.Spot.X, at.Z-bay.Spot.Z) > 0.05 || g.drive.fwd.X < 0.999 || g.drive.dock != nil || g.Riding != rover {
 		t.Errorf("%s parked at %v, facing %v", v.ID, at, g.drive.fwd)
 	}
 	// And it drives off again: the base's ground is a plane, rising a
@@ -115,32 +111,33 @@ func TestGarage(t *testing.T) {
 	g := fleetGame(t, c, map[string]int{"core:rover": 1})
 	g.syncFleet()
 	bay, _ := base.BayOf("core:rover")
-	e := g.State.Entities[0]
+	rover := g.entityOf("core:rover")
+	e := g.Ents.Transform.Get(rover)
 	if d := planet.ArcDist(e.Dir, base.ToWorld(bay.At)); d > 0.01 {
 		t.Errorf("the bought rover is %f m from its bay", d)
 	}
 
 	// One left in the yard by an older save is put away.
-	g.State.Entities[0].Dir = base.ToWorld(vec3{-5, 0, 18}).Norm()
+	e.Dir = base.ToWorld(vec3{-5, 0, 18}).Norm()
 	g.garageYard()
-	if d := planet.ArcDist(g.State.Entities[0].Dir, base.ToWorld(bay.At)); d > 0.01 {
+	if d := planet.ArcDist(e.Dir, base.ToWorld(bay.At)); d > 0.01 {
 		t.Errorf("the yard rover is %f m from its bay", d)
 	}
 
 	// Getting out in the hangar parks it; out on Mars, it stays there.
-	g.Riding = 0
-	g.State.Entities[0].Dir = base.ToWorld(vec3{40, 0, 10}).Norm()
+	g.Riding = rover
+	e.Dir = base.ToWorld(vec3{40, 0, 10}).Norm()
 	g.Player.Pos = base.ToWorld(vec3{40, base.FloorTop, 10})
 	g.getOut()
-	if d := planet.ArcDist(g.State.Entities[0].Dir, base.ToWorld(bay.At)); d > 0.01 {
+	if d := planet.ArcDist(e.Dir, base.ToWorld(bay.At)); d > 0.01 {
 		t.Errorf("got out in the hangar: the rover is %f m from its bay", d)
 	}
 	far := planet.Toward(vec3{1, 0, 0}, 200)
-	g.Riding = 0
-	g.State.Entities[0].Dir = far
+	g.Riding = rover
+	e.Dir = far
 	g.Player.Pos = g.World.Relief.Surface(far)
 	g.getOut()
-	if g.State.Entities[0].Dir != far {
+	if e.Dir != far {
 		t.Error("got out on Mars: the rover went home")
 	}
 }
@@ -279,7 +276,7 @@ func TestGarageShop(t *testing.T) {
 	if g.Entities("core:rover") != 0 || g.State.Levels["core:rover"] != 0 || g.State.Credits != before+rover.Refund || rover.Refund != 7500 {
 		t.Errorf("sold rover: %d left, credits +%f", g.Entities("core:rover"), g.State.Credits-before)
 	}
-	if g.State.Entities[g.Riding].Kind != "core:buggy" {
+	if g.kind(g.Riding) != "core:buggy" {
 		t.Error("lost track of the buggy driven")
 	}
 	// Not the one driven.

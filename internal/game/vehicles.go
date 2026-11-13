@@ -5,9 +5,9 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
-	"slices"
 )
 
 // Vehicles (content.Vehicle) are entities that sweep. The ones the player
@@ -32,31 +32,26 @@ func (g *Game) buyVehicle(v *content.Vehicle) {
 	g.syncFleet()
 }
 
-// entityOf is the first entity of a kind, or -1.
-func (g *Game) entityOf(kind string) int {
-	for i, e := range g.State.Entities {
-		if e.Kind == kind {
-			return i
+// entityOf is the first entity of a kind, or 0.
+func (g *Game) entityOf(kind string) ecs.ID {
+	for id := range g.Ents.All() {
+		if g.kind(id) == kind {
+			return id
 		}
 	}
-	return -1
+	return 0
 }
 
 // sellVehicle sells a driven vehicle back for refund credits: it leaves,
 // wherever it is, unless the player is in it.
 func (g *Game) sellVehicle(v *content.Vehicle, refund float64) {
-	i := g.entityOf(v.ID)
-	if i >= 0 && i == g.Riding {
+	id := g.entityOf(v.ID)
+	if id != 0 && id == g.Riding {
 		g.Say("Descends d'abord du véhicule")
 		g.sfx.Beep(0, 0.15, 0.1, 180)
 		return
 	}
-	if i >= 0 {
-		g.State.Entities = slices.Delete(g.State.Entities, i, i+1)
-		if g.Riding > i {
-			g.Riding--
-		}
-	}
+	g.Ents.Kill(id)
 	g.State.Levels[v.ID] = max(0, g.State.Levels[v.ID]-1)
 	g.State.Credits += refund
 	g.emit(content.Event{Name: content.EvResell, ID: v.ID, Amount: refund})
@@ -84,9 +79,10 @@ func (g *Game) syncFleet() {
 			case v.Patrol():
 				g.GiveItem(v.ID, 1)
 			case v.Auto():
-				g.spawn(v.ID, g.Player.Pos)
-				g.State.Entities[len(g.State.Entities)-1].Alt = v.Hover
-			case g.park(v, -1):
+				if id := g.spawn(v.ID, g.Player.Pos); id != 0 {
+					g.Ents.Transform.Get(id).Alt = v.Hover
+				}
+			case g.park(v, 0):
 			default:
 				off := float64(n%4) * 0.8
 				spot := vec3{float64(parked%3)*6 - 6, 0, float64(parked/3) * -6}
@@ -114,7 +110,7 @@ func offLimits(dir vec3) bool {
 
 // sweepUnder cleans the dust under a vehicle into the tank, away from the
 // base's ground.
-func (g *Game) sweepUnder(v *content.Vehicle, e *Placed, dt float64) {
+func (g *Game) sweepUnder(v *content.Vehicle, e *Transform, dt float64) {
 	if v.Sweep <= 0 || offLimits(e.Dir) {
 		return
 	}
@@ -135,21 +131,24 @@ func (g *Game) updateFleet(dt float64) {
 	// In the hangar too, they wait over the hub.
 	docked := planet.ArcDist(g.Player.LocalUp(), planet.BaseUp) < base.Reach+15 || base.Covered(base.ToLocal(g.Player.Pos))
 	nth := map[string]int{} // followers of each kind so far, to share the circle above the hub
-	for i := range g.State.Entities {
-		e := &g.State.Entities[i]
-		v, ok := g.Content.Vehicles.Get(e.Kind)
+	for id, e := range g.Ents.Transform.All() {
+		v, ok := g.vehicleOf(id)
 		if !ok || !v.Auto() {
 			continue
 		}
-		bob := math.Sin(g.Elapsed*3+float64(i)) * 0.08
+		r := g.Ents.Roam.Get(id)
+		if r == nil {
+			r = g.Ents.Roam.Set(id, Roam{})
+		}
+		bob := math.Sin(g.Elapsed*3+float64(id.Index())) * 0.08
 		if v.Patrol() {
-			g.patrol(v, e, dt)
+			g.patrol(v, e, r, dt)
 			e.Alt = v.Hover
 			if v.Hover > 0 {
 				e.Alt += bob
 			}
 		} else {
-			g.follow(v, e, dt, docked, nth[v.ID], g.Entities(v.ID))
+			g.follow(v, e, r, dt, docked, nth[v.ID], g.Entities(v.ID))
 			nth[v.ID]++
 			alt := v.Hover
 			switch {
@@ -173,55 +172,55 @@ func (g *Game) updateFleet(dt float64) {
 
 // follow: the vehicle looks for dust around the player, and keeps up with
 // them; at the base it circles above the hub with the others of its kind.
-func (g *Game) follow(v *content.Vehicle, e *Placed, dt float64, docked bool, i, n int) {
+func (g *Game) follow(v *content.Vehicle, e *Transform, r *Roam, dt float64, docked bool, i, n int) {
 	speed := content.OrZero(v.Speed, 5)
 	spread := content.OrZero(v.Range, 25)
 	switch {
 	case docked:
 		a := float64(i)/float64(n)*2*math.Pi + g.Elapsed*0.2
-		e.target = base.ToWorld(vec3{math.Cos(a) * dockRadius, 0, math.Sin(a) * dockRadius}).Norm()
+		r.target = base.ToWorld(vec3{math.Cos(a) * dockRadius, 0, math.Sin(a) * dockRadius}).Norm()
 	case g.TankFull():
 		return
 	default:
-		e.retarget -= dt
-		arrived := planet.ArcDist(e.Dir, e.target) < 0.3
-		if e.target == (vec3{}) || e.retarget <= 0 || (arrived && g.World.DustAt(e.target) < 0.05) || offLimits(e.target) {
-			e.target = g.World.FindDusty(g.Rng, g.Player.Pos, spread)
-			e.retarget = 8 + g.Rng.Float64()*5
+		r.retarget -= dt
+		arrived := planet.ArcDist(e.Dir, r.target) < 0.3
+		if r.target == (vec3{}) || r.retarget <= 0 || (arrived && g.World.DustAt(r.target) < 0.05) || offLimits(r.target) {
+			r.target = g.World.FindDusty(g.Rng, g.Player.Pos, spread)
+			r.retarget = 8 + g.Rng.Float64()*5
 		}
 	}
 	// Left behind (the player drives off), it hurries back.
 	if far := planet.ArcDist(e.Dir, g.Player.LocalUp()); far > spread {
 		speed *= far / spread
 	}
-	g.moveToward(e, e.target, speed, dt)
+	g.moveToward(e, r.target, speed, dt)
 }
 
 // patrol: the vehicle sweeps the dustiest spots around where it was set
 // down, staying off the base's ground.
-func (g *Game) patrol(v *content.Vehicle, e *Placed, dt float64) {
-	if e.Home == (vec3{}) {
-		e.Home = e.Dir
+func (g *Game) patrol(v *content.Vehicle, e *Transform, r *Roam, dt float64) {
+	if r.Home == (vec3{}) {
+		r.Home = e.Dir
 	}
 	if g.TankFull() {
 		return
 	}
-	e.retarget -= dt
-	arrived := planet.ArcDist(e.Dir, e.target) < 0.5
-	if e.target == (vec3{}) || e.retarget <= 0 || (arrived && g.World.DustAt(e.target) < 0.05) {
-		e.target = g.World.FindDusty(g.Rng, e.Home.Scale(planet.Radius), content.OrZero(v.Range, 30))
-		e.retarget = 10 + g.Rng.Float64()*6
-		if offLimits(e.target) {
-			e.target = e.Dir // try again next time
-			e.retarget = 0.5
+	r.retarget -= dt
+	arrived := planet.ArcDist(e.Dir, r.target) < 0.5
+	if r.target == (vec3{}) || r.retarget <= 0 || (arrived && g.World.DustAt(r.target) < 0.05) {
+		r.target = g.World.FindDusty(g.Rng, r.Home.Scale(planet.Radius), content.OrZero(v.Range, 30))
+		r.retarget = 10 + g.Rng.Float64()*6
+		if offLimits(r.target) {
+			r.target = e.Dir // try again next time
+			r.retarget = 0.5
 		}
 	}
-	g.moveToward(e, e.target, content.OrZero(v.Speed, 3), dt)
+	g.moveToward(e, r.target, content.OrZero(v.Speed, 3), dt)
 }
 
 // moveToward rolls or flies an entity along the ground toward the
 // direction to, turning its nose that way.
-func (g *Game) moveToward(e *Placed, to vec3, speed, dt float64) {
+func (g *Game) moveToward(e *Transform, to vec3, speed, dt float64) {
 	dist := planet.ArcDist(e.Dir, to)
 	if dist < 0.05 {
 		return
@@ -254,10 +253,16 @@ func (g *Game) LineUp() {
 			w := 2*content.OrZero(v.Radius, 1) + 1.5
 			at := g.Player.Pos.Add(g.Player.Heading.Scale(12 + 14*float64(r))).Add(right.Scale(x + w/2))
 			x += w
-			g.spawn(v.ID, g.World.Relief.Surface(at))
-			e := &g.State.Entities[len(g.State.Entities)-1]
-			e.Alt, e.Home = v.Hover, e.Dir
+			id := g.spawn(v.ID, g.World.Relief.Surface(at))
+			if id == 0 {
+				continue
+			}
+			e := g.Ents.Transform.Get(id)
+			e.Alt = v.Hover
 			e.Yaw += math.Pi / 3 // three-quarter view
+			if r := g.Ents.Roam.Get(id); r != nil {
+				r.Home = e.Dir
+			}
 		}
 	}
 }
@@ -271,9 +276,9 @@ func btoi(b bool) int {
 
 // Board gets in a new vehicle of kind id, for screenshots.
 func (g *Game) Board(id string) {
-	if g.spawn(id, g.Player.Pos) {
-		g.State.Entities[len(g.State.Entities)-1].Yaw = yawOf(g.Player.LocalUp(), g.Player.Heading)
-		g.getIn(len(g.State.Entities) - 1)
+	if e := g.spawn(id, g.Player.Pos); e != 0 {
+		g.Ents.Transform.Get(e).Yaw = yawOf(g.Player.LocalUp(), g.Player.Heading)
+		g.getIn(e)
 		g.updateVehicle(0)
 	}
 }

@@ -23,7 +23,7 @@ func (g *Game) OpenMap()               { g.setMode(ModeMap) }
 func (g *Game) OpenShop()              { g.Garage = false; g.setMode(ModeShop) }
 func (g *Game) OpenGarage()            { g.Garage = true; g.setMode(ModeShop) }
 func (g *Game) Sleep()                 { g.Mode, g.SleepT = ModeSleep, 0 }
-func (g *Game) Spawn(kind string) bool { return g.spawn(kind, g.placeAt()) }
+func (g *Game) Spawn(kind string) bool { return g.spawn(kind, g.placeAt()) != 0 }
 
 func (g *Game) Driving() string {
 	if v, ok := g.Driven(); ok {
@@ -33,9 +33,12 @@ func (g *Game) Driving() string {
 }
 
 func (g *Game) Entities(kind string) int {
+	if kind == "" {
+		return g.Ents.Len()
+	}
 	n := 0
-	for _, e := range g.State.Entities {
-		if kind == "" || e.Kind == kind {
+	for _, k := range g.Ents.Kind.All() {
+		if *k == kind {
 			n++
 		}
 	}

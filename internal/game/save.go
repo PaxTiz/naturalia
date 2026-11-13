@@ -53,7 +53,7 @@ func (g *Game) Save() {
 	data, err := json.Marshal(saveFile{
 		Version:   saveVersion,
 		SavedAt:   time.Now().Unix(),
-		State:     g.State,
+		State:     g.saved(),
 		Player:    g.Player,
 		Seed:      g.World.Seed,
 		Tiles:     g.World.TileBytes(),
@@ -82,6 +82,13 @@ func (g *Game) Save() {
 	if err := os.Rename(path+".tmp", path); err != nil {
 		log.Println("save:", err)
 	}
+}
+
+// saved is the state to save, with the entities.
+func (g *Game) saved() State {
+	st := g.State
+	st.Entities = g.placed()
+	return st
 }
 
 // load restores the last save. g.world stays nil when there is no world to

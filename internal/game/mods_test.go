@@ -19,7 +19,7 @@ func TestMigrateOldSave(t *testing.T) {
 	if st.Levels["core:tank"] != 3 || st.Levels["fusee:turbo"] != 2 || len(st.Levels) != 2 {
 		t.Errorf("levels = %v", st.Levels)
 	}
-	g := &Game{State: st, Content: c}
+	g := &Game{State: st, Content: c, Ents: newEnts()}
 	if c := g.Capacity(); c < 50*4.09 || c > 50*4.1 {
 		t.Errorf("capacity = %f", c)
 	}
@@ -41,7 +41,7 @@ func TestEventsAndBuildings(t *testing.T) {
 	}
 	var sold float64
 	c.On(content.EvSell, func(g content.Game, e *content.Event) { sold += e.Amount })
-	(&Game{Content: c}).emit(content.Event{Name: content.EvSell, Amount: 12})
+	(&Game{Content: c, Ents: newEnts()}).emit(content.Event{Name: content.EvSell, Amount: 12})
 	if sold != 12 {
 		t.Errorf("sold = %f", sold)
 	}

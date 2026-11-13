@@ -7,6 +7,7 @@ import (
 	"naturalia/internal/audio"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
@@ -22,7 +23,7 @@ type State struct {
 	Levels      map[string]int            `json:"levels"`              // by upgrade ID; a removed mod's stay
 	Mods        map[string]map[string]any `json:"mods,omitempty"`      // what each mod's scripts keep
 	Items       map[string]int            `json:"items,omitempty"`     // carried, by item ID
-	Entities    []Placed                  `json:"entities,omitempty"`  // standing in the world
+	Entities    []Placed                  `json:"entities,omitempty"`  // standing in the world: only at load and save, Game.Ents meanwhile
 	OldTier     int                       `json:"tool_tier,omitempty"` // before IDs: index of the tool
 	TotalDust   float64                   `json:"total_dust"`
 	TotalEarned float64                   `json:"total_earned"`
@@ -95,7 +96,8 @@ type Game struct {
 	Message     string  // said by a mod (say), shown on the visor...
 	MessageT    float64 // ...for this long still
 	itemSel     int     // which carried item F places (R cycles)
-	Riding      int     // index in State.Entities of the vehicle driven, -1 on foot
+	Ents        *Ents   // standing in the world
+	Riding      ecs.ID  // the vehicle driven, 0 on foot
 	drive       drive   // the driven vehicle's motion
 	chase       bool    // the camera follows the driven vehicle from behind (V)
 	fleetHeld   bool    // automatic vehicles stand still (LineUp)
@@ -125,10 +127,14 @@ func New(c *content.Content) *Game {
 	g := &Game{
 		Content: c,
 		Rng:     rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
-		Riding:  -1,
+		Ents:    newEnts(),
 		sfx:     audio.New(),
 	}
 	g.load()
+	for _, p := range g.State.Entities {
+		g.add(p)
+	}
+	g.State.Entities = nil
 	if g.State.Levels == nil {
 		g.State.Levels = map[string]int{}
 	}
@@ -183,7 +189,7 @@ func (g *Game) Update(dt float64) {
 		switch {
 		case rl.IsKeyPressed(rl.KeyEscape) || !rl.IsWindowFocused():
 			g.setMode(ModePaused)
-		case rl.IsKeyPressed(rl.KeyE) && g.Riding < 0:
+		case rl.IsKeyPressed(rl.KeyE) && g.Riding == 0:
 			if it, ok := g.NearbyUse(); ok {
 				g.use(it)
 			}
@@ -456,7 +462,7 @@ func (g *Game) updateFov(dt float64) {
 		target = 67
 	case rl.IsKeyDown(rl.KeyLeftShift) && g.Player.MoveAmount > 0.5:
 		target = 76
-	case g.Riding >= 0:
+	case g.Riding != 0:
 		// Speed widens the view, a rocket's much more.
 		s := g.DriveSpeed()
 		target += math.Min(10, s*0.4) + math.Min(20, math.Max(0, s-30)*0.03)

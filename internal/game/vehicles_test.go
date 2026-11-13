@@ -8,6 +8,7 @@ import (
 	_ "naturalia/packs/core"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -17,7 +18,7 @@ func fleetGame(t *testing.T, c *content.Content, levels map[string]int) *Game {
 	t.Helper()
 	set := c.Terrain
 	set.Gems = 0
-	g := &Game{Content: c, Riding: -1, Rng: rand.New(rand.NewPCG(1, 2)), State: State{Levels: levels}}
+	g := &Game{Content: c, Ents: newEnts(), Rng: rand.New(rand.NewPCG(1, 2)), State: State{Levels: levels}}
 	g.World = planet.NewWorld(7, &set)
 	g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{1, 0, 0}, 200))
 	g.Player.Heading = vec3{0, 0, 1}
@@ -61,13 +62,13 @@ func TestPatrolSweepsAroundItsSpot(t *testing.T) {
 	c := LoadContent()
 	g := fleetGame(t, c, map[string]int{})
 	g.State.Levels["core:tank"] = 20 // room for what it sweeps
-	g.spawn("core:crawler", g.Player.Pos)
-	home := g.State.Entities[0].Dir
+	id := g.spawn("core:crawler", g.Player.Pos)
+	home := g.Ents.Transform.Get(id).Dir
 	for range 60 * 60 {
 		g.updateFleet(1.0 / 60)
 	}
-	e := g.State.Entities[0]
-	if e.Home != home {
+	e := g.Ents.Transform.Get(id)
+	if g.Ents.Roam.Get(id).Home != home {
 		t.Errorf("home moved")
 	}
 	if d := planet.ArcDist(e.Dir, home); d > 31 || d < 0.5 {
@@ -203,8 +204,7 @@ func TestRampLaunches(t *testing.T) {
 	g, v := ride(t, "core:rover")
 	// A ramp 25 m ahead, rising away.
 	at := g.World.Relief.Surface(g.Player.Pos.Add(g.Player.Heading.Scale(25)))
-	g.spawn("core:ramp", at)
-	g.State.Entities[len(g.State.Entities)-1].Yaw = yawOf(at.Norm(), g.Player.Heading)
+	g.Ents.Transform.Get(g.spawn("core:ramp", at)).Yaw = yawOf(at.Norm(), g.Player.Heading)
 	peak := 0.0
 	for range 60 * 6 {
 		step(g, v, controls{throttle: 1, boost: true}, 1)
@@ -283,5 +283,31 @@ func TestShuttle(t *testing.T) {
 	step(g, v, controls{throttle: 1, climb: 1}, 60*120)
 	if alt := g.DriveAlt(); alt > v.Fly.Ceiling+5 {
 		t.Errorf("climbed to %.0f m", alt)
+	}
+}
+
+func TestEntitiesSaved(t *testing.T) {
+	c := LoadContent()
+	g := fleetGame(t, c, map[string]int{"core:rover": 1, "core:drone": 2})
+	g.syncFleet()
+	crawler := g.spawn("core:crawler", g.Player.Pos)
+	g.updateFleet(1.0 / 60) // it takes its spot as home
+	g.Ents.Transform.Get(g.entityOf("core:rover")).Pitch = 0.2
+	flag := g.spawn("core:ramp", g.Player.Pos)
+	g.Ents.Kill(flag)
+
+	saved := g.saved().Entities
+	if len(saved) != 4 || g.State.Entities != nil {
+		t.Fatalf("%d saved, %d left in the state", len(saved), len(g.State.Entities))
+	}
+	h := fleetGame(t, c, map[string]int{})
+	for _, p := range saved {
+		h.add(p)
+	}
+	if again := h.placed(); !slices.Equal(again, saved) {
+		t.Errorf("reloaded as %v, saved %v", again, saved)
+	}
+	if home := g.Ents.Roam.Get(crawler).Home; home == (vec3{}) || saved[3].Home != home {
+		t.Errorf("crawler's home %v saved as %v", home, saved[3].Home)
 	}
 }

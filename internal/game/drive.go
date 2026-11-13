@@ -5,6 +5,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
@@ -37,7 +38,7 @@ type drive struct {
 	pitch    float64  // nose up, radians: the slope, or the jump's arc
 	roll     float64  // right side down
 	shake    float64  // camera shake, 0 to 1, fading
-	kicked   int      // the boost pad being crossed, +1 (0: none)
+	kicked   ecs.ID   // the boost pad being crossed (0: none)
 	flip     float64  // a second jump's somersault so far, radians (0: none)
 	cruise   float64  // flying: the height over the ground set with Space and Ctrl
 	climbing bool     // Space or Ctrl held last frame
@@ -62,15 +63,12 @@ const (
 
 // Driven is the vehicle the player drives, if any.
 func (g *Game) Driven() (*content.Vehicle, bool) {
-	if g.Riding < 0 || g.Riding >= len(g.State.Entities) {
-		return nil, false
-	}
-	return g.Content.Vehicles.Get(g.State.Entities[g.Riding].Kind)
+	return g.vehicleOf(g.Riding)
 }
 
 // DriveSpeed is how fast the driven vehicle goes, in m/s.
 func (g *Game) DriveSpeed() float64 {
-	if g.Riding < 0 {
+	if g.Riding == 0 {
 		return 0
 	}
 	return math.Hypot(g.drive.vel.Length(), g.drive.vr)
@@ -78,7 +76,7 @@ func (g *Game) DriveSpeed() float64 {
 
 // DriveAlt is how high the driven vehicle is over the ground, in m.
 func (g *Game) DriveAlt() float64 {
-	if g.Riding < 0 || g.drive.r == 0 {
+	if g.Riding == 0 || g.drive.r == 0 {
 		return 0
 	}
 	return math.Max(0, g.drive.r-g.World.Relief.Surface(g.Player.Pos).Length())
@@ -98,17 +96,17 @@ func (g *Game) Boosting() (on bool, left float64) {
 func (g *Game) Shake() float64 { return g.drive.shake }
 
 // Chase is on when the camera follows the driven vehicle from behind.
-func (g *Game) Chase() bool { return g.chase && g.Riding >= 0 }
+func (g *Game) Chase() bool { return g.chase && g.Riding != 0 }
 
-// getIn or out of the vehicle standing as entity i.
-func (g *Game) getIn(i int) {
-	e := g.State.Entities[i]
-	g.Riding = i
+// getIn or out of the vehicle standing as entity id.
+func (g *Game) getIn(id ecs.ID) {
+	e := g.Ents.Transform.Get(id)
+	g.Riding = id
 	t1, t2 := mathx.TangentBasis(e.Dir)
 	g.drive = drive{fwd: t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw))), boarded: true}
 	g.Player.Pos = g.World.Relief.Surface(e.Dir)
 	g.Player.Heading, g.Player.seated = g.drive.fwd, true
-	if v, ok := g.Content.Vehicles.Get(e.Kind); ok {
+	if v, ok := g.vehicleOf(id); ok {
 		g.drive.fuel = content.OrZero(v.Fuel, 3)
 		g.chase = v.View == "chase"
 		// What flies stands where it landed.
@@ -118,18 +116,18 @@ func (g *Game) getIn(i int) {
 		}
 	}
 	g.sfx.Beep(0.02, 0.2, 0.12, 220, 330)
-	g.emit(content.Event{Name: content.EvDrive, ID: e.Kind})
+	g.emit(content.Event{Name: content.EvDrive, ID: g.kind(id)})
 }
 
 func (g *Game) getOut() {
 	v, ok := g.Driven()
-	i := g.Riding
+	id := g.Riding
 	if ok {
 		// Getting out up high leaves it standing on the ground below.
-		e := &g.State.Entities[i]
+		e := g.Ents.Transform.Get(id)
 		e.Alt, e.Pitch, e.Roll = v.Hover, 0, 0
 	}
-	g.Riding = -1
+	g.Riding = 0
 	g.Player.seated, g.Player.eyeH = false, 0
 	g.drive = drive{}
 	if !ok {
@@ -137,7 +135,7 @@ func (g *Game) getOut() {
 	}
 	// In a garage, it goes to its bay; the player steps out into the
 	// aisle in front of it.
-	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r >= 0 && base.Rooms[r].Hall != nil && g.park(v, i) {
+	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r >= 0 && base.Rooms[r].Hall != nil && g.park(v, id) {
 		bay, _ := base.BayOf(v.ID)
 		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(vec3{bay.Length/2 + 1.5, 0, 0})))
 		g.Say(v.Name + " rangé au garage")
@@ -205,8 +203,8 @@ func (g *Game) driveVehicle(dt float64) {
 func (g *Game) groundAt(p vec3) float64 {
 	r := g.World.Relief.Surface(p).Length()
 	up := p.Norm()
-	for _, e := range g.State.Entities {
-		def, ok := g.Content.Entities.Get(e.Kind)
+	for id, e := range g.Ents.Transform.All() {
+		def, ok := g.Content.Entities.Get(g.kind(id))
 		if !ok || def.Ramp == nil || planet.ArcDist(up, e.Dir) > def.Ramp.Length {
 			continue
 		}
@@ -232,7 +230,7 @@ func entityAxes(dir vec3, yaw float64) (ax, up, az vec3) {
 
 // Frame is where an entity stands and its axes (front, up, side), tilted
 // by its pitch and roll.
-func (g *Game) Frame(e *Placed) (pos, ax, up, az vec3) {
+func (g *Game) Frame(e *Transform) (pos, ax, up, az vec3) {
 	ax, up, az = entityAxes(e.Dir, e.Yaw)
 	pos = g.World.Relief.Surface(e.Dir).Add(up.Scale(e.Alt))
 	if e.Pitch != 0 {
@@ -464,7 +462,7 @@ func approach(v, target, step float64) float64 {
 
 // Push adds speed to the driven vehicle: forward along its nose, and up.
 func (g *Game) Push(forward, up float64) {
-	if g.Riding < 0 || math.IsNaN(forward+up) || math.IsInf(forward+up, 0) {
+	if g.Riding == 0 || math.IsNaN(forward+up) || math.IsInf(forward+up, 0) {
 		return
 	}
 	d := &g.drive
@@ -502,7 +500,7 @@ func (g *Game) updateVehicle(dt float64) {
 			d.vel = d.vel.Sub(n.Scale(into))
 		}
 	}
-	e := &g.State.Entities[g.Riding]
+	e := g.Ents.Transform.Get(g.Riding)
 	e.Dir = g.Player.Pos.Norm()
 	e.Yaw = yawOf(e.Dir, d.fwd)
 	ground := g.World.Relief.Surface(g.Player.Pos).Length()
@@ -524,7 +522,7 @@ func (g *Game) updateVehicle(dt float64) {
 
 // tilt leans the vehicle: along the slope on the ground, along its arc in
 // the air, into turns when it hovers; what flies leans forward with speed.
-func (g *Game) tilt(v *content.Vehicle, e *Placed, dt float64) {
+func (g *Game) tilt(v *content.Vehicle, e *Transform, dt float64) {
 	d := &g.drive
 	s := d.vel.Dot(d.fwd)
 	turn := d.vel.Dot(g.Player.LocalUp().Cross(d.fwd)) // sideways speed, to the left
@@ -567,27 +565,27 @@ func (g *Game) tilt(v *content.Vehicle, e *Placed, dt float64) {
 func (g *Game) kick(v *content.Vehicle) {
 	d := &g.drive
 	up := g.Player.LocalUp()
-	for i, e := range g.State.Entities {
-		def, ok := g.Content.Entities.Get(e.Kind)
-		if !ok || def.Kick <= 0 || i == g.Riding {
+	for id, e := range g.Ents.Transform.All() {
+		def, ok := g.Content.Entities.Get(g.kind(id))
+		if !ok || def.Kick <= 0 || id == g.Riding {
 			continue
 		}
 		near := planet.ArcDist(up, e.Dir) < padReach && d.r-g.World.Relief.Surface(e.Dir).Length() < 1.5
 		switch {
-		case near && d.kicked != i+1 && d.vel.Dot(d.fwd) > 0:
-			d.kicked = i + 1
+		case near && d.kicked != id && d.vel.Dot(d.fwd) > 0:
+			d.kicked = id
 			d.vel = d.vel.Add(d.fwd.Scale(def.Kick))
 			d.fuel = content.OrZero(v.Fuel, 3)
 			d.shake = math.Max(d.shake, 0.4)
 			g.sfx.Beep(0.03, 0.2, 0.14, 440, 660, 880)
-		case !near && d.kicked == i+1:
+		case !near && d.kicked == id:
 			d.kicked = 0
 		}
 	}
 }
 
 // exhaust: flames behind a boosting vehicle, under a flying one.
-func (g *Game) exhaust(v *content.Vehicle, e *Placed) {
+func (g *Game) exhaust(v *content.Vehicle, e *Transform) {
 	d := &g.drive
 	if v.Flame == (vec3{}) || g.Mode != ModePlay {
 		return
@@ -625,7 +623,7 @@ func (g *Game) ChaseCam() (eye, at vec3, ok bool) {
 	if !ok || !g.chase {
 		return vec3{}, vec3{}, false
 	}
-	e := &g.State.Entities[g.Riding]
+	e := g.Ents.Transform.Get(g.Riding)
 	pos, _, _, _ := g.Frame(e)
 	at = pos.Add(e.Dir.Scale(content.OrZero(v.Seat, 2.4) * 0.6))
 	dist := content.OrZero(v.Chase, content.OrZero(v.Radius, 1.2)*3+4)
