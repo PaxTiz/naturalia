@@ -115,8 +115,8 @@ type World struct {
 	statics  grid
 	movers   grid
 	dirty    bool // a static body was added, moved or removed
-	step     int // stamps grid queries
-	pass     int // counts sub-steps: contacts not seen in one have ended
+	step     int  // stamps grid queries
+	pass     int  // counts sub-steps: contacts not seen in one have ended
 	poly     [2]poly
 }
 

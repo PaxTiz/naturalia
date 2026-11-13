@@ -12,13 +12,13 @@ import "math"
 // V2 is a point or a vector on the plane.
 type V2 struct{ X, Y float64 }
 
-func (a V2) Add(b V2) V2            { return V2{a.X + b.X, a.Y + b.Y} }
-func (a V2) Sub(b V2) V2            { return V2{a.X - b.X, a.Y - b.Y} }
-func (a V2) Scale(s float64) V2     { return V2{a.X * s, a.Y * s} }
-func (a V2) Dot(b V2) float64       { return a.X*b.X + a.Y*b.Y }
-func (a V2) Cross(b V2) float64     { return a.X*b.Y - a.Y*b.X }
-func (a V2) Len() float64           { return math.Hypot(a.X, a.Y) }
-func (a V2) Perp() V2               { return V2{-a.Y, a.X} } // a quarter turn to the left
+func (a V2) Add(b V2) V2             { return V2{a.X + b.X, a.Y + b.Y} }
+func (a V2) Sub(b V2) V2             { return V2{a.X - b.X, a.Y - b.Y} }
+func (a V2) Scale(s float64) V2      { return V2{a.X * s, a.Y * s} }
+func (a V2) Dot(b V2) float64        { return a.X*b.X + a.Y*b.Y }
+func (a V2) Cross(b V2) float64      { return a.X*b.Y - a.Y*b.X }
+func (a V2) Len() float64            { return math.Hypot(a.X, a.Y) }
+func (a V2) Perp() V2                { return V2{-a.Y, a.X} } // a quarter turn to the left
 func (a V2) Lerp(b V2, t float64) V2 { return a.Add(b.Sub(a).Scale(t)) }
 
 func (a V2) Norm() V2 {
