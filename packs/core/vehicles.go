@@ -7,7 +7,7 @@ import (
 
 // registerVehicles adds the vehicles, cheapest first: drones and robots
 // that sweep on their own, then what the player drives, each one slower
-// but wider than the last, the stunt buggy and the rocket aside. Shapes
+// but wider than the last, the stunt buggy and the shuttle aside. Shapes
 // face +X, y up; a flying one is centered on its hover height.
 func registerVehicles(c *content.Content) {
 	for _, v := range []content.Vehicle{
@@ -39,12 +39,12 @@ func registerVehicles(c *content.Content) {
 		{ID: "core:titan", Name: "Titan", Desc: "Aspirateur minier à chenilles : 50 m de large d'un seul passage",
 			Cost: 12_000_000, Speed: 5.5, Turn: 0.5, Sweep: 26, Rate: 8, Hopper: 60_000, Seat: 4.6, Radius: 4.5,
 			Boost: 1.4, Parts: titanParts()},
-		// Mars is 21 km around: the rocket goes round it in under half a
+		// Mars is 21 km around: the shuttle goes round it in under half a
 		// minute, high up.
-		{ID: "core:rocket", Name: "Méga fusée", Desc: "Décolle (Espace), file à 3 200 km/h à 1 200 m d'altitude : le tour de Mars en 25 s",
-			Icon: "rocket", Cost: 2_500_000, Speed: 900, Turn: 0.9, Seat: 6, Radius: 2.6, View: "chase", Chase: 32,
-			Fly: &content.Flight{Climb: 70, Ceiling: 1200, Low: 25, Lean: 70}, Boost: 1.5, Fuel: 6,
-			Flame: vec3{0, 0.2, 0}, FlameR: 0.9, Parts: rocketParts()},
+		{ID: "core:shuttle", Name: "Navette", Desc: "Se conduit comme un rover : elle décolle en accélérant, monte avec la vitesse et file à 3 200 km/h ; le tour de Mars en 25 s",
+			Icon: "shuttle", Cost: 2_500_000, Speed: 900, Turn: 0.9, Hover: 1.2, Seat: 2.0, Radius: 3.5, View: "chase", Chase: 16,
+			Fly: &content.Flight{Ceiling: 1200, Climb: 150}, Boost: 1.5, Fuel: 6,
+			Flame: vec3{-3.6, 1.2, 0}, FlameR: 0.5, Parts: shuttleParts()},
 	} {
 		c.Vehicles.Add(v.ID, v)
 	}
@@ -302,30 +302,34 @@ func buggyParts() []content.PartJSON {
 	return p
 }
 
-// rocketParts: a rocket standing on its legs, 15 m tall, its engine
-// bell at the bottom; it leans forward to fly.
-func rocketParts() []content.PartJSON {
+// shuttleParts: a small lifting-body ship with delta wings and two
+// engines at the back, standing on skids; it hovers over them.
+func shuttleParts() []content.PartJSON {
 	p := []content.PartJSON{
-		prism("steel.dark", vec3{0, 0.2, 0}, vec3{}, 1.0, 0.6, 1.0, 16),
-		prism("neon.orange", vec3{0, 0.19, 0}, vec3{}, 0.85, 0.85, 0.02, 16),
-		prism("steel", vec3{0, 1.2, 0}, vec3{}, 1.15, 1.25, 0.5, 20),
-		prism("habitat.white", vec3{0, 1.7, 0}, vec3{}, 1.25, 1.25, 7.5, 20),
-		prism("hazard", vec3{0, 3.0, 0}, vec3{}, 1.27, 1.27, 0.5, 20),
-		prism("solar.blue", vec3{0, 6.0, 0}, vec3{}, 1.26, 1.26, 0.15, 20),
-		prism("habitat.white2", vec3{0, 9.2, 0}, vec3{}, 1.25, 0.6, 2.6, 20),
-		prism("neon.cyan", vec3{0, 9.1, 0}, vec3{}, 1.27, 1.27, 0.1, 20),
-		prism("pipe.red", vec3{0, 11.8, 0}, vec3{}, 0.6, 0.05, 1.8, 20),
-		// The cockpit's windows, facing forward.
-		box("glass.dark", vec3{1.0, 10.0, 0}, vec3{0.3, 0.7, 1.1}, 0.05),
+		box("habitat.white", vec3{0, 1.3, 0}, vec3{6, 1.4, 2.1}, 0.25),
+		prism("habitat.white2", vec3{3, 1.25, 0}, vec3{1, 0, 0}, 1.0, 0.2, 2.2, 10),
+		box("glass.dark", vec3{2.5, 1.95, 0}, vec3{1.8, 0.4, 1.5}, 0.15),
+		box("steel.dark", vec3{0.2, 0.6, 0}, vec3{6.2, 0.12, 2.0}, 0.04),
+		box("hazard", vec3{0.6, 1.5, 0}, vec3{0.5, 1.42, 2.14}, 0),
+		box("neon.cyan", vec3{-0.5, 2.02, 0}, vec3{3, 0.03, 0.2}, 0),
+		// The tail fin.
+		box("habitat.white", vec3{-2.4, 2.6, 0}, vec3{1.8, 1.6, 0.15}, 0.05),
+		box("pipe.red", vec3{-2.85, 3.3, 0}, vec3{0.9, 0.25, 0.17}, 0),
 	}
-	p[3].Bevel = 0.05
-	for i := range 4 {
-		a := math.Pi/4 + float64(i)*math.Pi/2
-		dir := vec3{math.Cos(a), 0, math.Sin(a)}
-		fin := boxYaw("pipe.red", dir.Scale(1.6).Add(vec3{0, 2.6, 0}), vec3{1.0, 2.4, 0.12}, a*180/math.Pi)
-		p = append(p, fin,
-			boxYaw("steel", dir.Scale(1.9).Add(vec3{0, 0.6, 0}), vec3{1.6, 0.12, 0.12}, a*180/math.Pi),
-			prism("steel.dark", dir.Scale(2.6), vec3{}, 0.3, 0.2, 0.12, 8),
+	for _, z := range []float64{-1, 1} {
+		yaw := -25 * z
+		p = append(p,
+			// A delta wing, its glowing edge and a red tip.
+			boxYaw("habitat.white2", vec3{-0.9, 0.95, z * 2.2}, vec3{3.4, 0.16, 2.6}, yaw),
+			boxYaw("neon.cyan", vec3{-0.35, 0.95, z * 2.55}, vec3{3.0, 0.05, 0.05}, yaw),
+			box("pipe.red", vec3{-2.2, 1.0, z * 3.45}, vec3{0.9, 0.2, 0.15}, 0),
+			// An engine.
+			prism("steel.dark", vec3{-2.9, 1.2, z * 0.6}, vec3{-1, 0, 0}, 0.45, 0.5, 0.7, 12),
+			prism("neon.orange", vec3{-3.6, 1.2, z * 0.6}, vec3{-1, 0, 0}, 0.38, 0.38, 0.01, 12),
+			// A skid and its struts.
+			box("steel", vec3{0, 0.06, z * 0.9}, vec3{4.2, 0.12, 0.15}, 0.03),
+			box("steel", vec3{1.2, 0.35, z * 0.9}, vec3{0.12, 0.5, 0.12}, 0),
+			box("steel", vec3{-1.2, 0.35, z * 0.9}, vec3{0.12, 0.5, 0.12}, 0),
 		)
 	}
 	return p

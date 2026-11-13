@@ -203,21 +203,22 @@ type Vehicle struct {
 	Fuel    float64 `json:"fuel"`   // seconds of boost when full (3), refilled in twice that
 	View    string  `json:"view"`   // "seat" (default) or "chase": the camera it starts with, V switches
 	Chase   float64 `json:"chase"`  // chase camera's distance (from its radius if left out)
-	// Fly makes it fly: Space climbs, Ctrl descends, it holds its altitude
-	// otherwise, and its top speed (speed) is only reached at the ceiling.
+	// Fly makes it fly, driven like the others: it rises with its speed,
+	// up to the ceiling at top speed, and comes back down to hover (at
+	// hover) as it slows. It speeds up gradually, so that it can be
+	// handled slowly and still go very fast.
 	Fly *Flight `json:"fly"`
 	// Flame is where its engine's exhaust comes out, pointing back along
-	// -X (or down along -Y for what flies), and how wide; none if 0,0,0.
+	// -X, and how wide; none if 0,0,0.
 	Flame  vec3    `json:"flame"`
 	FlameR float64 `json:"flame_r"`
 }
 
 // Flight is how a flying vehicle climbs.
 type Flight struct {
-	Climb   float64 `json:"climb"`   // m/s up and down
-	Ceiling float64 `json:"ceiling"` // highest altitude, in m, where it goes its top speed
-	Low     float64 `json:"low"`     // top speed near the ground (20 m/s)
-	Lean    float64 `json:"lean"`    // degrees it leans forward at top speed (it stands up on the ground)
+	Ceiling float64 `json:"ceiling"` // m over the ground at top speed (500)
+	Climb   float64 `json:"climb"`   // fastest it goes up and down, m/s (120)
+	Gain    float64 `json:"gain"`    // how fast it speeds up: this share of its speed per second (0.7)
 }
 
 // VehicleState is the driven vehicle seen by packs.

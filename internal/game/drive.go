@@ -13,8 +13,8 @@ import (
 
 // Driving: the player sits in a vehicle (content.Vehicle) that rolls,
 // hovers or flies. Rolling ones fly off crests and ramps under Mars'
-// weak gravity, jump with Space and boost with Shift; flying ones climb
-// with Space, come down with Ctrl, and only go their top speed high up.
+// weak gravity, jump with Space and boost with Shift; flying ones are
+// driven the same way and rise with their speed.
 
 // drive is the driven vehicle's motion. The player's position stays on
 // the ground under it; r says how high the vehicle is.
@@ -44,7 +44,6 @@ type drive struct {
 type controls struct {
 	throttle float64 // forward 1, back -1
 	steer    float64 // left 1, right -1
-	climb    float64 // flying: up 1, down -1
 	jump     bool    // pressed this frame
 	boost    bool    // held
 }
@@ -54,7 +53,6 @@ const (
 	airAbove   = 0.3  // m over the ground: in the air, no longer a bump
 	padReach   = 1.8  // m: a boost pad kicks what passes this close
 	aloft      = 3.0  // m over the ground: what flies that high goes over walls and rocks
-	flyLow     = 20.0 // m/s: a flying vehicle's top speed near the ground
 )
 
 // Driven is the vehicle the player drives, if any.
@@ -137,8 +135,8 @@ func (g *Game) getOut() {
 }
 
 // driveVehicle moves the driven vehicle, with the player in it, before the
-// collisions: Z/S throttle and brake, Q/D steer, Space jumps (or climbs),
-// Ctrl descends, Shift boosts, V switches the camera.
+// collisions: Z/S throttle and brake, Q/D steer, Space jumps, Shift
+// boosts, V switches the camera.
 func (g *Game) driveVehicle(dt float64) {
 	v, ok := g.Driven()
 	if !ok {
@@ -150,7 +148,7 @@ func (g *Game) driveVehicle(dt float64) {
 	d := &g.drive
 	if g.Mode == ModePlay && rl.IsKeyPressed(rl.KeyE) && !d.boarded {
 		if g.DriveAlt() > aloft && v.Fly != nil {
-			g.Say("Pose-toi d'abord (Ctrl)")
+			g.Say("Ralentis pour te poser (S)")
 		} else {
 			g.getOut()
 			return
@@ -164,8 +162,7 @@ func (g *Game) driveVehicle(dt float64) {
 			key int32
 			to  *float64
 			by  float64
-		}{{rl.KeyW, &in.throttle, 1}, {rl.KeyS, &in.throttle, -1}, {rl.KeyA, &in.steer, 1}, {rl.KeyD, &in.steer, -1},
-			{rl.KeySpace, &in.climb, 1}, {rl.KeyLeftControl, &in.climb, -1}} {
+		}{{rl.KeyW, &in.throttle, 1}, {rl.KeyS, &in.throttle, -1}, {rl.KeyA, &in.steer, 1}, {rl.KeyD, &in.steer, -1}} {
 			if rl.IsKeyDown(k.key) {
 				*k.to += k.by
 			}
@@ -237,23 +234,28 @@ func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
 	if d.r == 0 {
 		d.r = g.groundAt(g.Player.Pos)
 	}
-	ground := g.World.Relief.Surface(g.Player.Pos).Length()
 	gravity := marsGravity * content.OrZero(v.Gravity, 2)
 
 	top := v.Speed
+	accel, brake, coast := top*0.5, top*1.5, math.Max(top, 5)*0.4
 	if v.Fly != nil {
-		top = flightTop(v, d.r-ground)
+		// Gently at first, then faster and faster: in hand near the
+		// base, a few seconds to its top speed.
+		s := math.Abs(d.vel.Dot(d.fwd))
+		gain := content.OrZero(v.Fly.Gain, 0.7)
+		accel, brake, coast = math.Max(8, s*gain), math.Max(15, s*1.2), math.Max(4, s*0.3)
 	}
-	accel, brake := top*0.5, top*1.5
 	if v.Boost > 0 {
 		full := content.OrZero(v.Fuel, 3)
 		was := d.boosting
-		d.boosting = in.boost && d.fuel > 0 && in.throttle >= 0 && top > 0
+		d.boosting = in.boost && d.fuel > 0 && in.throttle >= 0
 		switch {
 		case d.boosting:
 			d.fuel = math.Max(0, d.fuel-dt)
 			top *= v.Boost
-			accel = top // there in a second
+			if v.Fly == nil {
+				accel = top // there in a second
+			}
 			in.throttle = 1
 			d.shake = math.Max(d.shake, 0.15)
 			if !was {
@@ -272,13 +274,17 @@ func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
 		case in.throttle > 0 && s < 0, in.throttle < 0 && s > 0:
 			s = approach(s, 0, brake*dt)
 		case s > top && in.throttle >= 0:
-			s = approach(s, top, math.Max(top, 5)*0.4*dt) // coming down from a boost or a pad
+			s = approach(s, top, coast*dt) // coming down from a boost or a pad
 		case in.throttle > 0:
 			s = approach(s, top, accel*dt)
 		case in.throttle < 0:
-			s = approach(s, -top*0.35, accel*dt)
+			back := top * 0.35
+			if v.Fly != nil {
+				back = 15 // what flies backs up to turn around, no more
+			}
+			s = approach(s, -back, accel*dt)
 		default:
-			s = approach(s, 0, math.Max(top, 5)*0.4*dt)
+			s = approach(s, 0, coast*dt)
 		}
 		// Hills: down is faster, up slower.
 		if v.Fly == nil {
@@ -309,7 +315,7 @@ func (g *Game) move(v *content.Vehicle, in controls, dt float64) {
 	g.Player.Pos = d.want
 
 	if v.Fly != nil {
-		g.climb(v, in, dt)
+		g.climb(v, dt)
 	} else {
 		g.fall(v, in, gravity, dt)
 	}
@@ -388,46 +394,27 @@ func (g *Game) dustBurst(p vec3, n int) {
 	}
 }
 
-// flightTop is a flying vehicle's top speed at alt over the ground: slow
-// low down, its full speed at the ceiling; still on the ground, it has to
-// take off first.
-func flightTop(v *content.Vehicle, alt float64) float64 {
-	if alt < 1 {
-		return 0
-	}
-	f := mathx.Smoothstep(0, content.OrZero(v.Fly.Ceiling, 500), alt)
-	low := content.OrZero(v.Fly.Low, flyLow)
-	return low + (v.Speed-low)*f*f
-}
-
-// climb moves a flying vehicle up and down: it holds its altitude, slows
-// down coming close to the ground and lands softly.
-func (g *Game) climb(v *content.Vehicle, in controls, dt float64) {
+// climb moves a flying vehicle up and down: it rises with its speed, to
+// its ceiling at top speed, and comes back down to hover as it slows,
+// always over the ground.
+func (g *Game) climb(v *content.Vehicle, dt float64) {
 	d := &g.drive
 	f := v.Fly
-	rate := content.OrZero(f.Climb, 30)
 	ground := g.groundAt(g.Player.Pos)
-	alt := d.r - ground
-	want := in.climb * rate
-	switch {
-	case in.climb < 0:
-		want = -math.Min(rate, math.Max(2, alt*0.8))
-	case in.climb > 0 && alt > content.OrZero(f.Ceiling, 500):
-		want = 0
-	}
-	d.vr = approach(d.vr, want, rate*1.5*dt)
+	k := math.Min(1, d.vel.Length()/math.Max(1, v.Speed))
+	want := ground + content.OrZero(f.Ceiling, 500)*math.Pow(k, 1.5)
+	rate := content.OrZero(f.Climb, 120)
+	d.vr = math.Max(-rate, math.Min(rate, (want-d.r)*1.5))
 	r := d.r + d.vr*dt
 	if r <= ground {
 		r, d.vr = ground, math.Max(0, d.vr)
-		if d.air {
-			g.land(v, 0)
-			d.air, d.airtime = false, 0
-		}
-		// On the ground, it stops.
-		d.vel = d.vel.Scale(math.Exp(-6 * dt))
-	} else {
+	}
+	if r-ground > airAbove {
 		d.airtime += dt
-		d.air = d.air || r-ground > airAbove
+		d.air = true
+	} else if d.air {
+		g.land(v, 0)
+		d.air, d.airtime = false, 0
 	}
 	d.r = r
 }
@@ -509,9 +496,9 @@ func (g *Game) tilt(v *content.Vehicle, e *Placed, dt float64) {
 	var pitch, roll float64
 	switch {
 	case v.Fly != nil:
-		top := math.Max(1, v.Speed)
-		pitch = -content.OrZero(v.Fly.Lean, 0) * math.Pi / 180 * math.Min(1, math.Max(0, s)/top*3)
-		roll = math.Max(-0.4, math.Min(0.4, -turn*0.01))
+		// Nose up as it climbs, banking into turns.
+		pitch = math.Atan2(d.vr, math.Max(math.Abs(s), 10)) * 0.6
+		roll = math.Max(-0.5, math.Min(0.5, turn*0.02))
 	case d.air:
 		pitch = math.Atan2(d.vr, math.Max(math.Abs(s), 4)) * 0.7
 	default:
@@ -575,9 +562,8 @@ func (g *Game) exhaust(v *content.Vehicle, e *Placed) {
 	burn := 0.0
 	switch {
 	case v.Fly != nil:
-		out = up.Scale(-1)
-		if d.air || d.vr > 0 {
-			burn = 0.4 + 0.6*math.Min(1, d.vel.Length()/math.Max(1, v.Speed)*4)
+		if s := d.vel.Length(); s > 1 {
+			burn = 0.3 + 0.7*math.Min(1, s/math.Max(1, v.Speed)*3)
 		}
 	case d.boosting:
 		burn = 1

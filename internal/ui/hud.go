@@ -255,13 +255,10 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 			rl.DrawCircleV(v(x, 0.55), 0.3*s, uiInk)
 			rl.DrawCircleV(v(x, 0.55), 0.21*s, c)
 		}
-	case "rocket": // a rocket standing, its fins and flame
-		tri(v(-0.3, -0.55), v(0.3, -0.55), v(0, -1.05), c)
-		rect(-0.3, -0.55, 0.3, 0.5, c)
-		tri(v(-0.3, 0.05), v(-0.3, 0.6), v(-0.7, 0.75), c)
-		tri(v(0.3, 0.05), v(0.3, 0.6), v(0.7, 0.75), c)
-		tri(v(-0.18, 0.6), v(0.18, 0.6), v(0, 1.05), c)
-		rl.DrawCircleV(v(0, -0.2), 0.13*s, uiInk)
+	case "shuttle": // a delta-winged ship seen from above, nose up
+		tri(v(0, -1), v(-0.95, 0.65), v(0.95, 0.65), c)
+		rect(-0.28, -0.3, 0.28, 0.95, c)
+		rl.DrawCircleV(v(0, -0.35), 0.15*s, uiInk)
 	case "ramp": // a wedge with its lip
 		tri(v(-1, 0.6), v(0.8, 0.6), v(0.8, -0.5), c)
 		rect(0.8, -0.5, 0.95, 0.6, c)
@@ -404,10 +401,7 @@ func (hud *HUD) drawHints(g *game.Game) {
 	}
 	if v, ok := g.Driven(); ok {
 		hints = [][2]string{{"Z", "accélérer"}, {"S", "freiner"}, {"QD", "tourner"}}
-		switch {
-		case v.Fly != nil:
-			hints = append(hints, [2]string{"ESPACE", "monter"}, [2]string{"CTRL", "descendre"})
-		case v.Jump > 0:
+		if v.Jump > 0 {
 			hints = append(hints, [2]string{"ESPACE", "sauter"})
 		}
 		if v.Boost > 0 {

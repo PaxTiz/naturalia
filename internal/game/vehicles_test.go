@@ -236,30 +236,32 @@ func TestBoostAndPad(t *testing.T) {
 	}
 }
 
-func TestRocket(t *testing.T) {
-	g, v := ride(t, "core:rocket")
+func TestShuttle(t *testing.T) {
+	g, v := ride(t, "core:shuttle")
 	start := g.Player.LocalUp()
+	// Gentle at first: in hand near the base.
 	step(g, v, controls{throttle: 1}, 60)
-	if planet.ArcDist(start, g.Player.LocalUp()) > 0.5 {
-		t.Error("rolls on the ground")
+	if s := g.DriveSpeed(); s > 15 {
+		t.Errorf("%.0f m/s after a second", s)
 	}
-	step(g, v, controls{climb: 1}, 60*25)
-	if alt := g.DriveAlt(); alt < v.Fly.Ceiling*0.9 || alt > v.Fly.Ceiling+100 {
-		t.Errorf("climbed to %.0f m", alt)
+	if alt := g.DriveAlt(); alt > 3 {
+		t.Errorf("%.1f m up after a second", alt)
 	}
-	step(g, v, controls{throttle: 1}, 60*10)
-	if s := g.DriveSpeed(); s < v.Speed*0.9 {
-		t.Errorf("flies at %.0f m/s", s)
+	step(g, v, controls{throttle: 1}, 60*12)
+	if s := g.drive.vel.Length(); s < v.Speed*0.98 {
+		t.Errorf("flies at %.0f m/s after 13 s", s)
 	}
-	// Round Mars in under a minute.
-	far := planet.ArcDist(start, g.Player.LocalUp())
-	if far < 3000 {
+	if alt := g.DriveAlt(); alt < v.Fly.Ceiling*0.9 || alt > v.Fly.Ceiling*1.1 {
+		t.Errorf("flies %.0f m up", alt)
+	}
+	if far := planet.ArcDist(start, g.Player.LocalUp()); far < 3000 {
 		t.Errorf("only %.0f m from the start", far)
 	}
-	alt := g.DriveAlt()
-	step(g, v, controls{}, 60*20)
-	step(g, v, controls{climb: -1}, 60*60)
-	if g.DriveAlt() > 0.01 || g.drive.air {
-		t.Errorf("still %.1f m up after descending from %.0f m", g.DriveAlt(), alt)
+	// Letting go, then braking: it comes down to hover, and can be left.
+	step(g, v, controls{}, 60*10)
+	step(g, v, controls{throttle: -1}, 60*2)
+	step(g, v, controls{}, 60*8)
+	if alt, s := g.DriveAlt(), g.drive.vel.Length(); alt > 0.5 || s > 1 || g.drive.air {
+		t.Errorf("after braking: %.1f m up at %.1f m/s", alt, s)
 	}
 }
