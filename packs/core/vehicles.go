@@ -39,10 +39,11 @@ func registerVehicles(c *content.Content) {
 		{ID: "core:titan", Name: "Titan", Desc: "Aspirateur minier à chenilles : 50 m de large d'un seul passage",
 			Cost: 12_000_000, Speed: 5.5, Turn: 0.5, Sweep: 26, Rate: 8, Hopper: 60_000, Seat: 4.6, Radius: 4.5,
 			Boost: 1.4, Parts: titanParts()},
-		// Mars is 21 km around: the shuttle goes round it in two minutes.
-		{ID: "core:shuttle", Name: "Navette", Desc: "Se conduit comme un rover : elle décolle en accélérant, monte avec la vitesse (Espace/Ctrl règlent l'altitude) et file à 650 km/h",
-			Icon: "shuttle", Cost: 2_500_000, Speed: 180, Turn: 1.0, Hover: 1.2, Seat: 2.0, Radius: 3.5, View: "chase", Chase: 16,
-			Fly: &content.Flight{Ceiling: 600, Climb: 60, Gain: 0.5}, Boost: 1.4, Fuel: 5,
+		// Mars is 21 km around: the shuttle goes round it in about four
+		// minutes.
+		{ID: "core:shuttle", Name: "Navette", Desc: "Se conduit comme un rover, à 330 km/h ; Espace monte, Ctrl descend, elle garde son altitude",
+			Icon: "shuttle", Cost: 2_500_000, Speed: 90, Turn: 1.1, Hover: 1.2, Seat: 2.0, Radius: 3.5, View: "chase", Chase: 16,
+			Fly: &content.Flight{Ceiling: 600, Climb: 40, Gain: 0.5}, Boost: 1.4, Fuel: 5,
 			Flame: vec3{-3.6, 1.2, 0}, FlameR: 0.5, Parts: shuttleParts()},
 	} {
 		c.Vehicles.Add(v.ID, v)

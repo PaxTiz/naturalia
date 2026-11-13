@@ -239,44 +239,45 @@ func TestBoostAndPad(t *testing.T) {
 func TestShuttle(t *testing.T) {
 	g, v := ride(t, "core:shuttle")
 	start := g.Player.LocalUp()
-	// Gentle at first: in hand near the base.
+	// Z alone: it glides, hovering, gently at first.
 	step(g, v, controls{throttle: 1}, 60)
 	if s := g.DriveSpeed(); s > 15 {
 		t.Errorf("%.0f m/s after a second", s)
 	}
-	if alt := g.DriveAlt(); alt > 3 {
-		t.Errorf("%.1f m up after a second", alt)
-	}
-	step(g, v, controls{throttle: 1}, 60*25)
+	step(g, v, controls{throttle: 1}, 60*14)
 	if s := g.drive.vel.Length(); s < v.Speed*0.98 {
-		t.Errorf("flies at %.0f m/s after 26 s", s)
+		t.Errorf("goes %.0f m/s after 15 s", s)
 	}
-	if alt := g.DriveAlt(); alt < v.Fly.Ceiling*0.9 || alt > v.Fly.Ceiling*1.1 {
-		t.Errorf("flies %.0f m up", alt)
+	if alt := g.DriveAlt(); alt > 0.5 {
+		t.Errorf("rose to %.1f m without Space", alt)
 	}
-	if far := planet.ArcDist(start, g.Player.LocalUp()); far < 2500 {
-		t.Errorf("only %.0f m from the start", far)
-	}
-	// Mars in two minutes or so, not seconds.
-	if round := 2 * math.Pi * planet.Radius / v.Speed; round < 90 {
+	// Mars in minutes, not seconds.
+	if round := 2 * math.Pi * planet.Radius / v.Speed; round < 180 {
 		t.Errorf("round Mars in %.0f s", round)
 	}
-	// Ctrl lowers the cruising altitude, which then holds at full speed.
-	step(g, v, controls{throttle: 1, climb: -1}, 60*4)
-	low := g.Cruise()
-	step(g, v, controls{throttle: 1}, 60*15)
-	if low > 100 || math.Abs(g.DriveAlt()-low) > 15 {
-		t.Errorf("cruising at %.0f m, %.0f m up", low, g.DriveAlt())
+	// Space climbs; let go, it holds its height over the ground, at any
+	// speed.
+	step(g, v, controls{throttle: 1, climb: 1}, 60*8)
+	high := g.DriveAlt()
+	if high < 50 {
+		t.Errorf("only %.0f m up after 8 s of Space", high)
 	}
-	step(g, v, controls{throttle: 1, climb: 1}, 60*20)
-	if g.Cruise() != v.Fly.Ceiling {
-		t.Errorf("Space raises the cruise to %.0f m only", g.Cruise())
-	}
-	// Letting go, then braking: it comes down to hover, and can be left.
-	step(g, v, controls{}, 60*10)
+	step(g, v, controls{throttle: 1}, 60*5)
 	step(g, v, controls{throttle: -1}, 60*2)
 	step(g, v, controls{}, 60*8)
-	if alt, s := g.DriveAlt(), g.drive.vel.Length(); alt > 0.5 || s > 1 || g.drive.air {
-		t.Errorf("after braking: %.1f m up at %.1f m/s", alt, s)
+	if alt := g.DriveAlt(); math.Abs(alt-high) > 10 || g.drive.vel.Length() > 1 {
+		t.Errorf("held %.0f m (from %.0f m) stopping", alt, high)
+	}
+	if far := planet.ArcDist(start, g.Player.LocalUp()); far < 1000 {
+		t.Errorf("only %.0f m from the start", far)
+	}
+	// Ctrl comes down to the ground, where it can be left.
+	step(g, v, controls{climb: -1}, 60*30)
+	if alt := g.DriveAlt(); alt > 0.01 || g.drive.air {
+		t.Errorf("still %.1f m up after Ctrl", alt)
+	}
+	step(g, v, controls{throttle: 1, climb: 1}, 60*120)
+	if alt := g.DriveAlt(); alt > v.Fly.Ceiling+5 {
+		t.Errorf("climbed to %.0f m", alt)
 	}
 }

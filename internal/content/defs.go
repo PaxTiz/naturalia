@@ -203,10 +203,10 @@ type Vehicle struct {
 	Fuel    float64 `json:"fuel"`   // seconds of boost when full (3), refilled in twice that
 	View    string  `json:"view"`   // "seat" (default) or "chase": the camera it starts with, V switches
 	Chase   float64 `json:"chase"`  // chase camera's distance (from its radius if left out)
-	// Fly makes it fly, driven like the others: it rises with its speed,
-	// up to the ceiling at top speed, and comes back down to hover (at
-	// hover) as it slows. It speeds up gradually, so that it can be
-	// handled slowly and still go very fast.
+	// Fly makes it fly, driven like the others: Space climbs, Ctrl comes
+	// down, and it holds its height over the ground otherwise, at any
+	// speed; at the bottom it hovers (at hover). It speeds up gradually,
+	// so that it can be handled slowly and still go fast.
 	Fly *Flight `json:"fly"`
 	// Flame is where its engine's exhaust comes out, pointing back along
 	// -X, and how wide; none if 0,0,0.
@@ -216,8 +216,8 @@ type Vehicle struct {
 
 // Flight is how a flying vehicle climbs.
 type Flight struct {
-	Ceiling float64 `json:"ceiling"` // m over the ground at top speed (500)
-	Climb   float64 `json:"climb"`   // fastest it goes up and down, m/s (120)
+	Ceiling float64 `json:"ceiling"` // highest it goes over the ground, m (500)
+	Climb   float64 `json:"climb"`   // fastest it goes up and down, m/s (40)
 	Gain    float64 `json:"gain"`    // how fast it speeds up: this share of its speed per second (0.7)
 }
 

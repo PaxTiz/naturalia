@@ -14,7 +14,7 @@ import (
 // Driving: the player sits in a vehicle (content.Vehicle) that rolls,
 // hovers or flies. Rolling ones fly off crests and ramps under Mars'
 // weak gravity, jump with Space and boost with Shift; flying ones are
-// driven the same way and rise with their speed.
+// driven the same way, and Space and Ctrl set their height.
 
 // drive is the driven vehicle's motion. The player's position stays on
 // the ground under it; r says how high the vehicle is.
@@ -38,14 +38,15 @@ type drive struct {
 	shake    float64 // camera shake, 0 to 1, fading
 	kicked   int     // the boost pad being crossed, +1 (0: none)
 	flip     float64 // a second jump's somersault so far, radians (0: none)
-	cruise   float64 // flying: the altitude chosen with Space and Ctrl (0: its ceiling)
+	cruise   float64 // flying: the height over the ground set with Space and Ctrl
+	climbing bool    // Space or Ctrl held last frame
 }
 
 // controls is what the player asks of the vehicle this frame.
 type controls struct {
 	throttle float64 // forward 1, back -1
 	steer    float64 // left 1, right -1
-	climb    float64 // flying: raise the cruising altitude 1, lower it -1
+	climb    float64 // flying: up 1, down -1
 	jump     bool    // pressed this frame
 	boost    bool    // held
 }
@@ -55,7 +56,6 @@ const (
 	airAbove   = 0.3 // m over the ground: in the air, no longer a bump
 	padReach   = 1.8 // m: a boost pad kicks what passes this close
 	aloft      = 3.0 // m over the ground: what flies that high goes over walls and rocks
-	minCruise  = 5.0 // m: the lowest cruising altitude
 )
 
 // Driven is the vehicle the player drives, if any.
@@ -112,6 +112,7 @@ func (g *Game) getIn(i int) {
 		// What flies stands where it landed.
 		if v.Fly != nil || v.Hover > 0 {
 			g.drive.r = g.Player.Pos.Length() + math.Max(0, e.Alt-v.Hover)
+			g.drive.cruise = math.Max(0, e.Alt-v.Hover)
 		}
 	}
 	g.sfx.Beep(0.02, 0.2, 0.12, 220, 330)
@@ -138,8 +139,8 @@ func (g *Game) getOut() {
 }
 
 // driveVehicle moves the driven vehicle, with the player in it, before the
-// collisions: Z/S throttle and brake, Q/D steer, Space jumps, Shift
-// boosts, V switches the camera.
+// collisions: Z/S throttle and brake, Q/D steer, Space jumps (or climbs),
+// Ctrl descends, Shift boosts, V switches the camera.
 func (g *Game) driveVehicle(dt float64) {
 	v, ok := g.Driven()
 	if !ok {
@@ -151,7 +152,7 @@ func (g *Game) driveVehicle(dt float64) {
 	d := &g.drive
 	if g.Mode == ModePlay && rl.IsKeyPressed(rl.KeyE) && !d.boarded {
 		if g.DriveAlt() > aloft && v.Fly != nil {
-			g.Say("Ralentis pour te poser (S)")
+			g.Say("Descends d'abord (Ctrl)")
 		} else {
 			g.getOut()
 			return
@@ -398,27 +399,28 @@ func (g *Game) dustBurst(p vec3, n int) {
 	}
 }
 
-// climb moves a flying vehicle up and down: it rises with its speed, to
-// its cruising altitude at top speed, and comes back down to hover as it
-// slows, always over the ground. Space and Ctrl raise and lower the
-// cruising altitude, up to the ceiling; it stays where they leave it.
+// climb moves a flying vehicle up and down: Space raises it, Ctrl lowers
+// it, and it holds its height over the ground otherwise, whatever its
+// speed. At 0 it hovers like the others.
 func (g *Game) climb(v *content.Vehicle, in controls, dt float64) {
 	d := &g.drive
 	f := v.Fly
-	ceiling := content.OrZero(f.Ceiling, 500)
-	if d.cruise == 0 {
-		d.cruise = ceiling
-	}
-	if in.climb != 0 {
-		d.cruise = math.Max(minCruise, math.Min(ceiling, d.cruise+in.climb*math.Max(20, d.cruise*0.8)*dt))
-	}
+	rate := content.OrZero(f.Climb, 40)
 	ground := g.groundAt(g.Player.Pos)
-	k := math.Min(1, d.vel.Length()/math.Max(1, v.Speed))
-	want := ground + math.Min(d.cruise, ceiling*math.Pow(k, 1.5))
-	rate := content.OrZero(f.Climb, 120)
-	d.vr = math.Max(-rate, math.Min(rate, (want-d.r)*1.5))
+	switch {
+	case in.climb != 0:
+		// Slow near the ground, to land; faster high up.
+		step := math.Min(rate, math.Max(6, d.cruise*0.8)) * dt
+		d.cruise = math.Max(0, math.Min(content.OrZero(f.Ceiling, 500), d.cruise+in.climb*step))
+	case d.climbing:
+		d.cruise = math.Max(0, d.r-ground) // it stops where the key was let go
+	}
+	d.climbing = in.climb != 0
+	// It follows the ground's rises and falls quicker than it climbs.
+	lim := rate + d.vel.Length()*0.5
+	d.vr = math.Max(-lim, math.Min(lim, (ground+d.cruise-d.r)*4))
 	r := d.r + d.vr*dt
-	if r <= ground {
+	if r <= ground || d.cruise == 0 {
 		r, d.vr = ground, math.Max(0, d.vr)
 	}
 	if r-ground > airAbove {
@@ -622,6 +624,3 @@ func (g *Game) Lift(alt, speed float64, chase bool) {
 	d.air = alt > airAbove
 	g.chase = chase
 }
-
-// Cruise is the flying vehicle's cruising altitude, in m.
-func (g *Game) Cruise() float64 { return g.drive.cruise }
