@@ -23,6 +23,10 @@ type Placed struct {
 	Yaw  float64 `json:"yaw"`
 	Alt  float64 `json:"alt,omitempty"`  // over the ground: what flies or hovers
 	Home vec3    `json:"home,omitempty"` // a patrolling vehicle's spot
+	// The driven vehicle leans on slopes and in jumps: nose up, right
+	// side down, in radians.
+	Pitch float64 `json:"pitch,omitempty"`
+	Roll  float64 `json:"roll,omitempty"`
 
 	target   vec3 // an automatic vehicle's next dusty spot...
 	retarget float64
@@ -44,6 +48,9 @@ func (g *Game) spawn(kind string, at vec3) bool {
 	t1, t2 := mathx.TangentBasis(up)
 	toward := planet.TangentAt(up, g.Player.Pos.Sub(at))
 	yaw := math.Atan2(toward.Dot(t2), toward.Dot(t1))
+	if def.Ramp != nil || def.Kick > 0 {
+		yaw += math.Pi // rising away from the player, toward where they drive
+	}
 	g.State.Entities = append(g.State.Entities, Placed{Kind: def.ID, Dir: up, Yaw: yaw})
 	return true
 }

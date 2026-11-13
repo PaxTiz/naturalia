@@ -63,6 +63,9 @@ func (s *Synth) Update() {
 
 // Beep plays a sequence of notes (Hz), one every gap seconds.
 func (s *Synth) Beep(gap, dur, gain float64, notes ...float64) {
+	if s == nil { // tests have no sound
+		return
+	}
 	for i, f := range notes {
 		s.voices = append(s.voices, voice{freq: f, dur: dur, gain: gain, delay: float64(i) * gap})
 	}

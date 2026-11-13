@@ -185,6 +185,24 @@ func (m *Builder) BoxBasis(c vec3, ax [3]vec3, size vec3, bevel float64) {
 	}
 }
 
+// Wedge adds a ramp standing on the local point c: size.X long along the
+// horizontal direction across, size.Z wide, rising from nothing to size.Y.
+func (m *Builder) Wedge(c, size, across vec3) {
+	up := vec3{0, 1, 0}
+	ex := across.Norm()
+	ez := ex.Cross(up)
+	x, z := ex.Scale(size.X/2), ez.Scale(size.Z/2)
+	b0, b1 := c.Sub(x).Sub(z), c.Add(x).Sub(z)
+	b2, b3 := c.Add(x).Add(z), c.Sub(x).Add(z)
+	t1, t2 := b1.Add(up.Scale(size.Y)), b2.Add(up.Scale(size.Y))
+	mid := c.Add(ex.Scale(size.X / 6)).Add(up.Scale(size.Y / 3))
+	m.quad(b0, b1, b2, b3, mid)
+	m.quad(b0, t1, t2, b3, mid)
+	m.quad(b1, t1, t2, b2, mid)
+	m.tri(b0, b1, t1, mid)
+	m.tri(b3, b2, t2, mid)
+}
+
 // Prism adds a faceted cylinder or cone frustum standing on base along
 // axis: radius r0 at the bottom, r1 at the top, its top edge chamfered.
 func (m *Builder) Prism(base, axis vec3, r0, r1, h float64, sides int, bevel float64) {

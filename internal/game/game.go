@@ -97,6 +97,7 @@ type Game struct {
 	itemSel     int     // which carried item F places (R cycles)
 	Riding      int     // index in State.Entities of the vehicle driven, -1 on foot
 	drive       drive   // the driven vehicle's motion
+	chase       bool    // the camera follows the driven vehicle from behind (V)
 	fleetHeld   bool    // automatic vehicles stand still (LineUp)
 	Photo       Photo   // the photo mode's camera and settings
 
@@ -207,12 +208,14 @@ func (g *Game) Update(dt float64) {
 	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)
 	g.sfx.Update()
 	g.updateFov(dt)
-	if !g.Player.Fly { // creative flight goes through everything
+	// Creative flight goes through everything, a flying vehicle over it.
+	solid := !g.Player.Fly && g.DriveAlt() < aloft
+	if solid {
 		g.Player.Pos = base.Collide(g.Player.Pos, g.walls)
 		g.collideRocks()
 	}
 	g.updateVehicle(dt)
-	if !g.Player.Fly {
+	if solid {
 		g.collideEntities()
 	}
 	g.updateItems()
@@ -445,7 +448,12 @@ func (g *Game) updateFov(dt float64) {
 	case rl.IsKeyDown(rl.KeyLeftShift) && g.Player.MoveAmount > 0.5:
 		target = 76
 	case g.Riding >= 0:
-		target += math.Min(10, g.DriveSpeed()*0.4) // speed widens the view
+		// Speed widens the view, a rocket's much more.
+		s := g.DriveSpeed()
+		target += math.Min(10, s*0.4) + math.Min(20, math.Max(0, s-30)*0.03)
+		if on, _ := g.Boosting(); on {
+			target += 8
+		}
 	}
 	if g.Fov == 0 {
 		g.Fov = target

@@ -7,8 +7,8 @@ import (
 
 // registerVehicles adds the vehicles, cheapest first: drones and robots
 // that sweep on their own, then what the player drives, each one slower
-// but wider than the last. Shapes face +X, y up; a flying one is centered
-// on its hover height.
+// but wider than the last, the stunt buggy and the rocket aside. Shapes
+// face +X, y up; a flying one is centered on its hover height.
 func registerVehicles(c *content.Content) {
 	for _, v := range []content.Vehicle{
 		{ID: "core:drone", Name: "Drone balayeur", Desc: "Un drone autonome qui te suit et nettoie autour de toi",
@@ -17,20 +17,34 @@ func registerVehicles(c *content.Content) {
 		{ID: "core:crawler", Name: "Robot rampeur", Desc: "Pose-le avec F : il nettoie seul à 30 m à la ronde, même sans toi",
 			Icon: "robot", Cost: 6_000, Growth: 1.45, Drive: "auto", AI: "patrol",
 			Speed: 2.5, Sweep: 3, Rate: 1.3, Range: 30, Radius: 0.6, Light: vec3{-0.4, 1.03, 0}, Parts: crawlerParts()},
-		{ID: "core:rover", Name: "Rover balayeur", Desc: "Roule à 45 km/h et aspire la poussière sous ses roues",
-			Cost: 15_000, Speed: 12.5, Turn: 1.3, Sweep: 5, Rate: 2.5, Hopper: 150, Seat: 2.3, Radius: 1.5, Parts: roverParts()},
+		{ID: "core:rover", Name: "Rover balayeur", Desc: "Roule à 45 km/h et aspire la poussière sous ses roues ; saute (Espace) et accélère (Maj)",
+			Cost: 15_000, Speed: 12.5, Turn: 1.3, Sweep: 5, Rate: 2.5, Hopper: 150, Seat: 2.3, Radius: 1.5,
+			Jump: 5.5, Boost: 1.6, Air: 0.4, Flame: vec3{-1.5, 0.55, 0}, FlameR: 0.25, Parts: roverParts()},
+		{ID: "core:buggy", Name: "Buggy cascadeur", Desc: "Léger et nerveux : double saut avec salto, gros boost, vue de derrière (V)",
+			Cost: 25_000, Speed: 18, Turn: 1.9, Sweep: 2.5, Rate: 1.5, Hopper: 60, Seat: 1.5, Radius: 1.3,
+			Jump: 7.5, Jumps: 2, Boost: 1.8, Fuel: 4, Air: 0.8, Gravity: 1.6, Bounce: 0.4, View: "chase",
+			Flame: vec3{-1.35, 0.75, 0}, FlameR: 0.22, Parts: buggyParts()},
 		{ID: "core:drone-heavy", Name: "Drone lourd", Desc: "Hexacoptère qui te suit de plus haut et balaie bien plus large",
 			Icon: "drone", Cost: 40_000, Growth: 1.7, Drive: "auto", AI: "follow",
 			Speed: 8, Hover: 3, Sweep: 4.5, Rate: 1.4, Range: 40, Light: vec3{0, 0.3, 0}, Parts: heavyDroneParts()},
 		{ID: "core:hover", Name: "Glisseur", Desc: "Aéroglisseur à 80 km/h : il dérape dans les virages",
-			Cost: 120_000, Speed: 22, Turn: 1.7, Grip: 1.2, Hover: 0.5, Sweep: 8, Rate: 3, Hopper: 800, Seat: 1.9, Radius: 1.9, Parts: hoverParts()},
+			Cost: 120_000, Speed: 22, Turn: 1.7, Grip: 1.2, Hover: 0.5, Sweep: 8, Rate: 3, Hopper: 800, Seat: 1.9, Radius: 1.9,
+			Jump: 6.5, Jumps: 2, Boost: 1.7, Air: 0.6, Gravity: 1.4, Flame: vec3{-1.7, 0.6, 0}, FlameR: 0.4, Parts: hoverParts()},
 		{ID: "core:tracker", Name: "Chenillard autonome", Desc: "Robot à chenilles à poser avec F : rase 90 m à la ronde",
 			Icon: "robot", Cost: 350_000, Growth: 1.5, Drive: "auto", AI: "patrol",
 			Speed: 4, Sweep: 9, Rate: 3, Range: 90, Radius: 1.6, Light: vec3{0.7, 1.9, 0.5}, Parts: trackerParts()},
 		{ID: "core:harvester", Name: "Moissonneuse", Desc: "Une barre de coupe de 30 m : lente, mais rien ne lui échappe",
-			Cost: 900_000, Speed: 8, Turn: 0.8, Sweep: 15, Rate: 5, Hopper: 6_000, Seat: 2.9, Radius: 2.8, Parts: harvesterParts()},
+			Cost: 900_000, Speed: 8, Turn: 0.8, Sweep: 15, Rate: 5, Hopper: 6_000, Seat: 2.9, Radius: 2.8,
+			Jump: 3, Boost: 1.5, Parts: harvesterParts()},
 		{ID: "core:titan", Name: "Titan", Desc: "Aspirateur minier à chenilles : 50 m de large d'un seul passage",
-			Cost: 12_000_000, Speed: 5.5, Turn: 0.5, Sweep: 26, Rate: 8, Hopper: 60_000, Seat: 4.6, Radius: 4.5, Parts: titanParts()},
+			Cost: 12_000_000, Speed: 5.5, Turn: 0.5, Sweep: 26, Rate: 8, Hopper: 60_000, Seat: 4.6, Radius: 4.5,
+			Boost: 1.4, Parts: titanParts()},
+		// Mars is 21 km around: the rocket goes round it in under half a
+		// minute, high up.
+		{ID: "core:rocket", Name: "Méga fusée", Desc: "Décolle (Espace), file à 3 200 km/h à 1 200 m d'altitude : le tour de Mars en 25 s",
+			Icon: "rocket", Cost: 2_500_000, Speed: 900, Turn: 0.9, Seat: 6, Radius: 2.6, View: "chase", Chase: 32,
+			Fly: &content.Flight{Climb: 70, Ceiling: 1200, Low: 25, Lean: 70}, Boost: 1.5, Fuel: 6,
+			Flame: vec3{0, 0.2, 0}, FlameR: 0.9, Parts: rocketParts()},
 	} {
 		c.Vehicles.Add(v.ID, v)
 	}
@@ -249,6 +263,69 @@ func titanParts() []content.PartJSON {
 			prism("steel", vec3{-3.0, 2.8, z}, vec3{}, 0.25, 0.25, 1.9, 10),
 			prism("steel.dark", vec3{-3.0, 4.7, z}, vec3{}, 0.28, 0.28, 0.1, 10),
 			prism("neon.orange", vec3{0.4, 5.13, z * 0.8}, vec3{}, 0.1, 0.1, 0.15, 8),
+		)
+	}
+	return p
+}
+
+func buggyParts() []content.PartJSON {
+	var p []content.PartJSON
+	for _, x := range []float64{-0.8, 0.85} {
+		for _, z := range []float64{-0.85, 0.85} {
+			p = append(p, wheel(vec3{x, 0.45, z}, 0.45, 0.35)...)
+			// Long-travel struts out to the wheels.
+			p = append(p, box("steel", vec3{x, 0.6, z * 0.6}, vec3{0.12, 0.08, 0.6}, 0))
+		}
+	}
+	p = append(p,
+		box("steel.dark", vec3{0, 0.55, 0}, vec3{2.2, 0.2, 0.9}, 0.04),
+		box("pipe.red", vec3{0.55, 0.75, 0}, vec3{1.1, 0.25, 0.95}, 0.08),
+		box("hazard", vec3{1.15, 0.7, 0}, vec3{0.1, 0.2, 1.1}, 0),
+		box("fabric.seat", vec3{-0.2, 0.9, 0}, vec3{0.5, 0.5, 0.5}, 0.06),
+		// The engine behind the seat, its exhaust pointing back.
+		box("steel", vec3{-0.85, 0.85, 0}, vec3{0.55, 0.45, 0.7}, 0.05),
+		prism("steel.dark", vec3{-1.1, 0.75, 0}, vec3{-1, 0, 0}, 0.13, 0.17, 0.25, 8),
+		prism("neon.orange", vec3{-1.35, 0.75, 0}, vec3{-1, 0, 0}, 0.12, 0.12, 0.01, 8),
+		// The roll cage.
+		box("pipe.yellow", vec3{-0.45, 1.55, 0}, vec3{0.07, 0.07, 0.9}, 0),
+		box("pipe.yellow", vec3{0.25, 1.4, 0}, vec3{0.07, 0.07, 0.9}, 0),
+		box("pipe.yellow", vec3{-0.1, 1.5, 0.45}, vec3{0.72, 0.07, 0.07}, 0),
+		box("pipe.yellow", vec3{-0.1, 1.5, -0.45}, vec3{0.72, 0.07, 0.07}, 0),
+		box("neon.cyan", vec3{1.11, 0.62, 0}, vec3{0.02, 0.05, 0.8}, 0),
+	)
+	for _, z := range []float64{-0.45, 0.45} {
+		p = append(p,
+			prism("pipe.yellow", vec3{-0.45, 0.65, z}, vec3{}, 0.035, 0.035, 0.9, 6),
+			prism("pipe.yellow", vec3{0.25, 0.75, z}, vec3{}, 0.035, 0.035, 0.65, 6),
+		)
+	}
+	return p
+}
+
+// rocketParts: a rocket standing on its legs, 15 m tall, its engine
+// bell at the bottom; it leans forward to fly.
+func rocketParts() []content.PartJSON {
+	p := []content.PartJSON{
+		prism("steel.dark", vec3{0, 0.2, 0}, vec3{}, 1.0, 0.6, 1.0, 16),
+		prism("neon.orange", vec3{0, 0.19, 0}, vec3{}, 0.85, 0.85, 0.02, 16),
+		prism("steel", vec3{0, 1.2, 0}, vec3{}, 1.15, 1.25, 0.5, 20),
+		prism("habitat.white", vec3{0, 1.7, 0}, vec3{}, 1.25, 1.25, 7.5, 20),
+		prism("hazard", vec3{0, 3.0, 0}, vec3{}, 1.27, 1.27, 0.5, 20),
+		prism("solar.blue", vec3{0, 6.0, 0}, vec3{}, 1.26, 1.26, 0.15, 20),
+		prism("habitat.white2", vec3{0, 9.2, 0}, vec3{}, 1.25, 0.6, 2.6, 20),
+		prism("neon.cyan", vec3{0, 9.1, 0}, vec3{}, 1.27, 1.27, 0.1, 20),
+		prism("pipe.red", vec3{0, 11.8, 0}, vec3{}, 0.6, 0.05, 1.8, 20),
+		// The cockpit's windows, facing forward.
+		box("glass.dark", vec3{1.0, 10.0, 0}, vec3{0.3, 0.7, 1.1}, 0.05),
+	}
+	p[3].Bevel = 0.05
+	for i := range 4 {
+		a := math.Pi/4 + float64(i)*math.Pi/2
+		dir := vec3{math.Cos(a), 0, math.Sin(a)}
+		fin := boxYaw("pipe.red", dir.Scale(1.6).Add(vec3{0, 2.6, 0}), vec3{1.0, 2.4, 0.12}, a*180/math.Pi)
+		p = append(p, fin,
+			boxYaw("steel", dir.Scale(1.9).Add(vec3{0, 0.6, 0}), vec3{1.6, 0.12, 0.12}, a*180/math.Pi),
+			prism("steel.dark", dir.Scale(2.6), vec3{}, 0.3, 0.2, 0.12, 8),
 		)
 	}
 	return p

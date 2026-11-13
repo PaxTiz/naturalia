@@ -132,6 +132,19 @@ type EntityDef struct {
 	Prompt string     `json:"prompt"` // what E says; empty: nothing to do
 	Pickup bool       `json:"pickup"` // E puts it back in the inventory
 	Item   string     `json:"item"`   // the item it gives back (set by the item that places it)
+	// Ramp lifts driven vehicles that roll over it: it rises along its
+	// front (+X), from 0 at -length/2 to height at +length/2. The player
+	// sets it facing away.
+	Ramp *Ramp `json:"ramp"`
+	// Kick throws a driven vehicle that crosses it forward, adding this
+	// speed in m/s (a boost pad).
+	Kick float64 `json:"kick"`
+}
+
+type Ramp struct {
+	Length float64 `json:"length"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // Item is carried in the inventory and placed as an entity.
@@ -177,6 +190,45 @@ type Vehicle struct {
 	Radius float64    `json:"radius"` // what the player bumps into on foot
 	Light  vec3       `json:"light"`  // a status light, blinking green (red when the tank is full); 0,0,0 has none
 	Parts  []PartJSON `json:"parts"`  // its shape, front toward +X
+
+	// Driven ones fly off crests and ramps, under Mars' gravity times
+	// Gravity (2 if left out: Mars' alone makes them float); in the air,
+	// Air (0.35) of the steering still works.
+	Gravity float64 `json:"gravity"`
+	Air     float64 `json:"air"`
+	Jump    float64 `json:"jump"`   // Space: upward speed in m/s; 0 can't jump
+	Jumps   int     `json:"jumps"`  // jumps before landing again: 2 jumps again in the air (1 if left out)
+	Bounce  float64 `json:"bounce"` // share of a hard landing's speed it bounces back up with (0.25)
+	Boost   float64 `json:"boost"`  // Shift: top speed times this; 0 has no boost
+	Fuel    float64 `json:"fuel"`   // seconds of boost when full (3), refilled in twice that
+	View    string  `json:"view"`   // "seat" (default) or "chase": the camera it starts with, V switches
+	Chase   float64 `json:"chase"`  // chase camera's distance (from its radius if left out)
+	// Fly makes it fly: Space climbs, Ctrl descends, it holds its altitude
+	// otherwise, and its top speed (speed) is only reached at the ceiling.
+	Fly *Flight `json:"fly"`
+	// Flame is where its engine's exhaust comes out, pointing back along
+	// -X (or down along -Y for what flies), and how wide; none if 0,0,0.
+	Flame  vec3    `json:"flame"`
+	FlameR float64 `json:"flame_r"`
+}
+
+// Flight is how a flying vehicle climbs.
+type Flight struct {
+	Climb   float64 `json:"climb"`   // m/s up and down
+	Ceiling float64 `json:"ceiling"` // highest altitude, in m, where it goes its top speed
+	Low     float64 `json:"low"`     // top speed near the ground (20 m/s)
+	Lean    float64 `json:"lean"`    // degrees it leans forward at top speed (it stands up on the ground)
+}
+
+// VehicleState is the driven vehicle seen by packs.
+type VehicleState struct {
+	ID       string
+	Speed    float64 // m/s
+	Air      bool    // off the ground
+	Alt      float64 // m over the ground
+	Airtime  float64 // seconds since it left the ground
+	Fuel     float64 // share of the boost left, 0 to 1
+	Boosting bool
 }
 
 func (v *Vehicle) Auto() bool   { return v.Drive == "auto" }
@@ -264,6 +316,11 @@ type Game interface {
 	OpenShop()
 	Sleep()
 	Deposit(at vec3) // sells the tank at the incinerator standing at a local point
+
+	// The driven vehicle: what it does, and a push in m/s along its nose
+	// and up.
+	Vehicle() (VehicleState, bool)
+	Push(forward, up float64)
 
 	// ModData is what a pack keeps in the save, by key.
 	ModData(pack string) map[string]any

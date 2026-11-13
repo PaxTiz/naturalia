@@ -72,6 +72,7 @@ func registerCore(c *content.Content) {
 		Icon: "flag", Cost: 40, Places: "core:flag"})
 
 	registerVehicles(c)
+	registerStunts(c)
 
 	// Dust devils rise in daytime, a few at once.
 	const maxDevils = 3

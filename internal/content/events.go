@@ -17,6 +17,9 @@ const (
 	EvWake  = "wake"           // the player gets up after sleeping
 	EvPlace = "place"          // ID of the entity placed with an item, At
 	EvDrive = "drive"          // ID of the vehicle the player gets in; empty when getting out
+	EvJump  = "jump"           // ID of the vehicle driven, Amount its upward speed
+	EvLand  = "land"           // ID of the vehicle driven, Amount seconds in the air, At where
+	EvBoost = "boost"          // ID of the vehicle driven, when its boost starts
 )
 
 type Event struct {

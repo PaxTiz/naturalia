@@ -297,7 +297,7 @@ type KitJSON struct {
 // PartJSON is one shape: a bevelled box, or a prism (a cylinder or a
 // truncated cone with that many sides) standing on At along Axis.
 type PartJSON struct {
-	Shape string  `json:"shape"` // "box" or "prism"
+	Shape string  `json:"shape"` // "box", "prism" or "wedge" (a ramp rising toward +X, standing on at, sized like a box)
 	Token string  `json:"token"`
 	At    vec3    `json:"at"`
 	Bevel float64 `json:"bevel"`
@@ -333,6 +333,9 @@ func (k KitJSON) Kit() Kit {
 					axis = vec3{0, 1, 0}
 				}
 				m.Prism(at.Add(p.At), axis.Norm(), p.R0, OrZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
+			case "wedge":
+				a := p.Yaw * math.Pi / 180
+				m.Wedge(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)})
 			default:
 				a := p.Yaw * math.Pi / 180
 				m.Box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)

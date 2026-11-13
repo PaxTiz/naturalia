@@ -258,10 +258,19 @@ func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 	if g.Sweeping {
 		eye = eye.Add(right.Scale(math.Sin(g.Elapsed*37) * 0.002)).Add(up.Scale(math.Sin(g.Elapsed*23+1) * 0.002))
 	}
+	target := eye.Add(p.Forward())
+	if ce, at, ok := g.ChaseCam(); ok {
+		eye, target, camUp = ce, at, up
+	}
+	// Hard landings and boosts shake the view.
+	if k := g.Shake(); k > 0 {
+		k *= 0.06
+		eye = eye.Add(right.Scale(math.Sin(g.Elapsed*61) * k)).Add(up.Scale(math.Sin(g.Elapsed*47+2) * k))
+	}
 	gfx.camEye = eye
 	return rl.Camera3D{
 		Position:   ToRL(eye),
-		Target:     ToRL(eye.Add(p.Forward())),
+		Target:     ToRL(target),
 		Up:         ToRL(camUp),
 		Fovy:       float32(g.Fov),
 		Projection: rl.CameraPerspective,
@@ -457,7 +466,7 @@ func (gfx *Graphics) clipPlanes(g *game.Game) {
 
 // drawTool draws the held tool, in the lower right corner of the view.
 func (gfx *Graphics) drawTool(g *game.Game) {
-	if g.Mode == game.ModePaused || g.Mode == game.ModePhoto || g.Player.Fly {
+	if g.Mode == game.ModePaused || g.Mode == game.ModePhoto || g.Player.Fly || g.Chase() {
 		return
 	}
 	look := g.Tool().Look

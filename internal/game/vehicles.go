@@ -6,8 +6,6 @@ import (
 	"naturalia/internal/content"
 	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
-
-	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // Vehicles (content.Vehicle) are entities that sweep. The ones the player
@@ -26,16 +24,6 @@ const (
 	domesReach = base.Reach + 6
 )
 
-// drive is the driven vehicle's motion, tangent to the ground.
-type drive struct {
-	fwd  vec3 // where its nose points
-	vel  vec3
-	want vec3 // where it went before walls and rocks pushed it back
-	// boarded is set on the frame the player gets in, whose E press must
-	// not get them out again.
-	boarded bool
-}
-
 // buyVehicle adds one to the fleet.
 func (g *Game) buyVehicle(v *content.Vehicle) {
 	g.State.Levels[v.ID]++
@@ -52,7 +40,11 @@ func (g *Game) owned(v *content.Vehicle) int {
 // inventory. It also brings back the drones of saves where they were an
 // upgrade, under the same ID.
 func (g *Game) syncFleet() {
+	parked := 0 // driven kinds so far: each has its spot on the pad
 	for _, v := range g.Content.Vehicles.All() {
+		if !v.Auto() && v.Fly == nil {
+			parked++
+		}
 		for n := g.owned(v); n < g.State.Levels[v.ID]; n++ {
 			switch {
 			case v.Patrol():
@@ -62,165 +54,13 @@ func (g *Game) syncFleet() {
 				g.State.Entities[len(g.State.Entities)-1].Alt = v.Hover
 			default:
 				off := float64(n%4) * 0.8
-				g.spawn(v.ID, g.World.Relief.Surface(base.ToWorld(padSpot.Add(vec3{off - 1.2, 0, off - 1.2}))))
+				spot := vec3{float64(parked%3)*6 - 6, 0, float64(parked/3) * -6}
+				if v.Fly != nil {
+					spot = vec3{} // what flies stands on the landing pad
+				}
+				g.spawn(v.ID, g.World.Relief.Surface(base.ToWorld(padSpot.Add(spot).Add(vec3{off - 1.2, 0, off - 1.2}))))
 			}
 		}
-	}
-}
-
-// Driven is the vehicle the player drives, if any.
-func (g *Game) Driven() (*content.Vehicle, bool) {
-	if g.Riding < 0 || g.Riding >= len(g.State.Entities) {
-		return nil, false
-	}
-	return g.Content.Vehicles.Get(g.State.Entities[g.Riding].Kind)
-}
-
-// DriveSpeed is how fast the driven vehicle goes, in m/s.
-func (g *Game) DriveSpeed() float64 {
-	if g.Riding < 0 {
-		return 0
-	}
-	return g.drive.vel.Length()
-}
-
-// getIn or out of the vehicle standing as entity i.
-func (g *Game) getIn(i int) {
-	e := g.State.Entities[i]
-	g.Riding = i
-	t1, t2 := mathx.TangentBasis(e.Dir)
-	g.drive = drive{fwd: t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw))), boarded: true}
-	g.Player.Pos = g.World.Relief.Surface(e.Dir)
-	g.Player.Heading, g.Player.seated = g.drive.fwd, true
-	g.sfx.Beep(0.02, 0.2, 0.12, 220, 330)
-	g.emit(content.Event{Name: content.EvDrive, ID: e.Kind})
-}
-
-func (g *Game) getOut() {
-	v, ok := g.Driven()
-	g.Riding = -1
-	g.Player.seated, g.Player.eyeH = false, 0
-	g.drive = drive{}
-	if !ok {
-		return
-	}
-	side := g.Player.Right().Scale(content.OrZero(v.Radius, 1.2) + 0.6)
-	g.Player.Pos = g.World.Relief.Surface(g.Player.Pos.Add(side))
-	g.sfx.Beep(0.02, 0.2, 0.12, 330, 220)
-	g.emit(content.Event{Name: content.EvDrive, ID: ""})
-}
-
-// driveVehicle moves the driven vehicle, with the player in it, before the
-// collisions: Z/S throttle and brake, Q/D steer. Wheels grip the ground;
-// what hovers slides on.
-func (g *Game) driveVehicle(dt float64) {
-	v, ok := g.Driven()
-	if !ok {
-		if g.Player.seated {
-			g.getOut()
-		}
-		return
-	}
-	d := &g.drive
-	if g.Mode == ModePlay && rl.IsKeyPressed(rl.KeyE) && !d.boarded {
-		g.getOut()
-		return
-	}
-	d.boarded = false
-	var throttle, steer float64
-	if g.Mode == ModePlay {
-		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.
-		if rl.IsKeyDown(rl.KeyW) {
-			throttle++
-		}
-		if rl.IsKeyDown(rl.KeyS) {
-			throttle--
-		}
-		if rl.IsKeyDown(rl.KeyA) {
-			steer++
-		}
-		if rl.IsKeyDown(rl.KeyD) {
-			steer--
-		}
-	}
-	g.move(v, throttle, steer, dt)
-}
-
-// move drives the vehicle for dt: throttle forward (1) or back (-1),
-// steer left (1) or right (-1).
-func (g *Game) move(v *content.Vehicle, throttle, steer, dt float64) {
-	d := &g.drive
-	up := g.Player.LocalUp()
-	d.fwd = planet.TangentAt(up, d.fwd)
-	d.vel = d.vel.Sub(up.Scale(d.vel.Dot(up)))
-	top := v.Speed
-	accel, brake := top*0.5, top*1.5
-	s := d.vel.Dot(d.fwd)
-	side := d.vel.Sub(d.fwd.Scale(s))
-	switch {
-	case throttle > 0 && s < 0, throttle < 0 && s > 0:
-		s = approach(s, 0, brake*dt)
-	case throttle > 0:
-		s = approach(s, top, accel*dt)
-	case throttle < 0:
-		s = approach(s, -top*0.35, accel*dt)
-	default:
-		s = approach(s, 0, top*0.4*dt)
-	}
-	side = side.Scale(math.Exp(-content.OrZero(v.Grip, 8) * dt))
-
-	// Wheels only turn when rolling, and backward when backing up; a
-	// hovering vehicle spins in place too.
-	grip := math.Min(1, math.Abs(s)/(top*0.3))
-	if v.Hover > 0 {
-		grip = math.Max(grip, 0.6)
-	}
-	if s < -0.1 {
-		grip = -grip
-	}
-	// The nose turns, the motion lags: grip pulls it along next frames.
-	d.vel = d.fwd.Scale(s).Add(side)
-	if a := steer * content.OrZero(v.Turn, 1.2) * grip * dt; a != 0 {
-		d.fwd = d.fwd.Scale(math.Cos(a)).Add(up.Cross(d.fwd).Scale(math.Sin(a)))
-		g.Player.Heading = g.Player.Heading.Scale(math.Cos(a)).Add(up.Cross(g.Player.Heading).Scale(math.Sin(a)))
-	}
-	d.want = g.World.Relief.Surface(g.Player.Pos.Add(d.vel.Scale(dt)))
-	g.Player.Pos = d.want
-}
-
-// approach moves v toward target by at most step.
-func approach(v, target, step float64) float64 {
-	if v < target {
-		return math.Min(target, v+step)
-	}
-	return math.Max(target, v-step)
-}
-
-// updateVehicle sets the driven vehicle where the collisions left the
-// player, and sweeps under it.
-func (g *Game) updateVehicle(dt float64) {
-	v, ok := g.Driven()
-	if !ok {
-		return
-	}
-	d := &g.drive
-	// Walls and rocks stop the motion that goes into them.
-	if push := g.Player.Pos.Sub(d.want); push.Length() > 1e-4 {
-		n := push.Norm()
-		if into := d.vel.Dot(n); into < 0 {
-			d.vel = d.vel.Sub(n.Scale(into))
-		}
-	}
-	e := &g.State.Entities[g.Riding]
-	e.Dir = g.Player.Pos.Norm()
-	e.Yaw = yawOf(e.Dir, d.fwd)
-	e.Alt = 0
-	if v.Hover > 0 {
-		e.Alt = v.Hover + math.Sin(g.Elapsed*2.2)*0.04
-	}
-	g.Player.eyeH = e.Alt + content.OrZero(v.Seat, 2.4)
-	if g.Mode == ModePlay {
-		g.sweepUnder(v, e, dt)
 	}
 }
 

@@ -31,11 +31,7 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 			models = buildEntity(def, gfx)
 			gfx.entities[def.ID] = models
 		}
-		up := e.Dir
-		pos := g.World.Relief.Surface(e.Dir).Add(up.Scale(e.Alt))
-		t1, t2 := mathx.TangentBasis(up)
-		ax := t1.Scale(math.Cos(e.Yaw)).Add(t2.Scale(math.Sin(e.Yaw)))
-		az := ax.Cross(up)
+		pos, ax, up, az := g.Frame(&e)
 		lit := float32(mesh.LitSun)
 		if base.Indoors(base.ToLocal(pos)) {
 			lit = mesh.LitIndoor

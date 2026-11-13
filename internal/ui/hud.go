@@ -255,6 +255,23 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 			rl.DrawCircleV(v(x, 0.55), 0.3*s, uiInk)
 			rl.DrawCircleV(v(x, 0.55), 0.21*s, c)
 		}
+	case "rocket": // a rocket standing, its fins and flame
+		tri(v(-0.3, -0.55), v(0.3, -0.55), v(0, -1.05), c)
+		rect(-0.3, -0.55, 0.3, 0.5, c)
+		tri(v(-0.3, 0.05), v(-0.3, 0.6), v(-0.7, 0.75), c)
+		tri(v(0.3, 0.05), v(0.3, 0.6), v(0.7, 0.75), c)
+		tri(v(-0.18, 0.6), v(0.18, 0.6), v(0, 1.05), c)
+		rl.DrawCircleV(v(0, -0.2), 0.13*s, uiInk)
+	case "ramp": // a wedge with its lip
+		tri(v(-1, 0.6), v(0.8, 0.6), v(0.8, -0.5), c)
+		rect(0.8, -0.5, 0.95, 0.6, c)
+		rl.DrawLineEx(v(-0.3, -0.35), v(0.5, -0.95), 2*u, c)
+	case "pad": // a plate with chevrons
+		rect(-1, 0.45, 1, 0.75, c)
+		for _, x := range []float32{-0.55, 0.15} {
+			rl.DrawLineEx(v(x, -0.6), v(x+0.4, -0.05), 2.4*u, c)
+			rl.DrawLineEx(v(x+0.4, -0.05), v(x, 0.25), 2.4*u, c)
+		}
 	case "flag": // a pole and a pennant
 		rect(-0.55, -1, -0.4, 1, c)
 		tri(v(-0.4, -1), v(-0.4, 0.05), v(0.85, -0.47), c)
@@ -310,7 +327,12 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		switch {
 		case g.Riding >= 0:
 			v, _ := g.Driven()
-			hud.prompt("E", fmt.Sprintf("Descendre · %s · %.0f km/h", v.Name, g.DriveSpeed()*3.6), h*0.64, visorCyan)
+			line := fmt.Sprintf("Descendre · %s · %.0f km/h", v.Name, g.DriveSpeed()*3.6)
+			if v.Fly != nil {
+				line += fmt.Sprintf(" · %.0f m", g.DriveAlt())
+			}
+			hud.prompt("E", line, h*0.64, visorCyan)
+			hud.drawBoost(g, h*0.64+30*uiScale())
 		case g.State.TotalDust < 5:
 			hud.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
 		case hud.hasUse(g):
@@ -380,11 +402,18 @@ func (hud *HUD) drawHints(g *game.Game) {
 		{"ZQSD", "bouger"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"CLIC", "balayer"},
 		{"E", "utiliser"}, {"P", "photo"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
 	}
-	if g.Riding >= 0 {
-		hints = [][2]string{
-			{"Z", "accélérer"}, {"S", "freiner"}, {"QD", "tourner"}, {"SOURIS", "regarder"},
-			{"E", "descendre"}, {"P", "photo"}, {"ÉCHAP", "pause"},
+	if v, ok := g.Driven(); ok {
+		hints = [][2]string{{"Z", "accélérer"}, {"S", "freiner"}, {"QD", "tourner"}}
+		switch {
+		case v.Fly != nil:
+			hints = append(hints, [2]string{"ESPACE", "monter"}, [2]string{"CTRL", "descendre"})
+		case v.Jump > 0:
+			hints = append(hints, [2]string{"ESPACE", "sauter"})
 		}
+		if v.Boost > 0 {
+			hints = append(hints, [2]string{"MAJ", "boost"})
+		}
+		hints = append(hints, [2]string{"V", "caméra"}, [2]string{"E", "descendre"}, [2]string{"ÉCHAP", "pause"})
 	}
 	key, label := 11*u, 12*u
 	total := float32(0)
@@ -399,8 +428,30 @@ func (hud *HUD) drawHints(g *game.Game) {
 	}
 }
 
+// drawBoost: the driven vehicle's boost gauge, under the prompt.
+func (hud *HUD) drawBoost(g *game.Game, y float32) {
+	v, _ := g.Driven()
+	if v == nil || v.Boost <= 0 {
+		return
+	}
+	u := uiScale()
+	w, _ := screenSize()
+	on, left := g.Boosting()
+	bw, bh := 160*u, 5*u
+	x := w/2 - bw/2
+	rl.DrawRectangleRec(rl.NewRectangle(x, y, bw, bh), withAlpha(uiInk, 0.5))
+	c := visorCyan
+	if on {
+		c = visorAmber
+	}
+	rl.DrawRectangleRec(rl.NewRectangle(x, y, bw*float32(left), bh), c)
+}
+
 // drawReticle: a thin ring with four ticks; brighter when the ground is in reach.
 func (hud *HUD) drawReticle(g *game.Game) {
+	if g.Chase() {
+		return
+	}
 	u := uiScale()
 	w, h := screenSize()
 	cx, cy := w/2, h/2
