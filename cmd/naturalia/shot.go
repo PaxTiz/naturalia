@@ -75,6 +75,15 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}
+	// NA_SHOT_FLEET=1 lines up every vehicle ahead; NA_SHOT_DRIVE=id
+	// sits in one.
+	if s.file != "" && os.Getenv("NA_SHOT_FLEET") != "" {
+		g.LineUp()
+	}
+	if id := os.Getenv("NA_SHOT_DRIVE"); s.file != "" && id != "" {
+		g.Board(id)
+		s.heading = g.Player.Heading
+	}
 	// NA_SHOT_AT=x,z,yaw stands in the base (local coordinates, yaw in
 	// radians from +X toward +Z), for views of the buildings.
 	if v := os.Getenv("NA_SHOT_AT"); s.file != "" && v != "" {
