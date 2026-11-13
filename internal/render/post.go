@@ -26,12 +26,13 @@ type postFX struct {
 	ldr           rl.RenderTexture2D // the graded image, luma in alpha, before FXAA
 	down, up, img rl.Shader
 	fxaa          rl.Shader
-	locs          struct{ texel, first, exposure, sunUp, time, sunScreen int32 }
+	locs          struct{ texel, first, exposure, sunUp, time, sunScreen, dof, look, grain int32 }
 	exposure      float64 // adapts over time, like an eye
 }
 
-// hdrTarget makes a half-float render texture, with a depth buffer if asked.
-// raylib-go has no rlLoadTexture: the texture comes from a converted image.
+// hdrTarget makes a half-float render texture, with a depth texture if
+// asked (the depth of field reads it). raylib-go has no rlLoadTexture: the
+// texture comes from a converted image.
 func hdrTarget(w, h int32, depth bool) rl.RenderTexture2D {
 	img := rl.GenImageColor(int(w), int(h), rl.Black)
 	rl.ImageFormat(img, pixelRGBA16F)
@@ -42,8 +43,8 @@ func hdrTarget(w, h int32, depth bool) rl.RenderTexture2D {
 	rt.ID = rl.LoadFramebuffer()
 	rl.FramebufferAttach(rt.ID, rt.Texture.ID, rl.AttachmentColorChannel0, rl.AttachmentTexture2d, 0)
 	if depth {
-		rt.Depth = rl.Texture2D{ID: rl.LoadTextureDepth(w, h, true), Width: w, Height: h}
-		rl.FramebufferAttach(rt.ID, rt.Depth.ID, rl.AttachmentDepth, rl.AttachmentRenderbuffer, 0)
+		rt.Depth = rl.Texture2D{ID: rl.LoadTextureDepth(w, h, false), Width: w, Height: h}
+		rl.FramebufferAttach(rt.ID, rt.Depth.ID, rl.AttachmentDepth, rl.AttachmentTexture2d, 0)
 	}
 	if !rl.FramebufferComplete(rt.ID) {
 		panic("HDR framebuffer incomplete")
@@ -64,6 +65,9 @@ func newPostFX() *postFX {
 	p.locs.sunUp = rl.GetShaderLocation(p.img, "sunUp")
 	p.locs.time = rl.GetShaderLocation(p.img, "time")
 	p.locs.sunScreen = rl.GetShaderLocation(p.img, "sunScreen")
+	p.locs.dof = rl.GetShaderLocation(p.img, "dof")
+	p.locs.look = rl.GetShaderLocation(p.img, "look")
+	p.locs.grain = rl.GetShaderLocation(p.fxaa, "grain")
 	return p
 }
 
@@ -113,8 +117,19 @@ func blit(src rl.Texture2D, w, h int32) {
 		rl.NewRectangle(0, 0, float32(w), float32(h)), rl.Vector2{}, 0, rl.White)
 }
 
+// look is how the picture is taken: the photo mode's settings, or the
+// game's own look.
+type look struct {
+	exposure        float64 // stops over the adapted exposure
+	focus, blur     float64 // focus distance (m, 0 for auto) and largest blur (px, 0 for none)
+	near, far       float64 // the view's clip planes, to read the depth
+	filter          int     // index in game.PhotoFilters
+	contrast, sat   float64 // -1 to 1
+	vignette, grain float64
+}
+
 // finish turns the HDR scene into the final image on the screen.
-func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
+func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64, lk look) {
 	// Bloom: halve again and again, then add each level back into the one
 	// above, blurring as it grows.
 	rl.BeginShaderMode(p.down)
@@ -139,7 +154,9 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	rl.EndBlendMode()
 	rl.EndShaderMode()
 
-	rl.SetShaderValue(p.img, p.locs.exposure, []float32{float32(p.exposure)}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(p.img, p.locs.exposure, []float32{float32(p.exposure * math.Exp2(lk.exposure))}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(p.img, p.locs.dof, []float32{float32(lk.focus), float32(lk.blur), float32(lk.near), float32(lk.far)}, rl.ShaderUniformVec4)
+	rl.SetShaderValue(p.img, p.locs.look, []float32{float32(lk.filter), float32(lk.contrast), float32(lk.sat), float32(lk.vignette)}, rl.ShaderUniformVec4)
 	rl.SetShaderValue(p.img, p.locs.sunUp, []float32{float32(sunUp)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(p.img, p.locs.time, []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
 	// Light shafts when the sun is low and ahead.
@@ -157,12 +174,14 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64) {
 	rl.SetBlendFactors(glOne, glZero, glAdd)
 	rl.BeginBlendMode(rl.BlendCustom)
 	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "bloom"), p.bloom[0].Texture)
+	rl.SetShaderValueTexture(p.img, rl.GetShaderLocation(p.img, "depthTex"), p.scene.Depth)
 	blit(p.scene.Texture, p.ldr.Texture.Width, p.ldr.Texture.Height)
 	rl.EndBlendMode()
 	rl.EndShaderMode()
 	rl.EndTextureMode()
 	// Then the edges are smoothed, straight to the screen.
 	rl.SetShaderValue(p.fxaa, rl.GetShaderLocation(p.fxaa, "time"), []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(p.fxaa, p.locs.grain, []float32{float32(lk.grain * 0.1)}, rl.ShaderUniformFloat)
 	rl.BeginShaderMode(p.fxaa)
 	blit(p.ldr.Texture, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()))
 	rl.EndShaderMode()

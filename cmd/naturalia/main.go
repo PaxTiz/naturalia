@@ -34,7 +34,7 @@ func main() {
 	g := game.New(c)
 	gfx := render.New(g)
 	hud := ui.New()
-	shot := newShotRun(g, gfx)
+	shot := newShotRun(g, gfx, hud)
 	for !rl.WindowShouldClose() {
 		// Clamp so a window drag or a hitch doesn't teleport everything.
 		dt := min(float64(rl.GetFrameTime()), 0.05)

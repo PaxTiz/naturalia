@@ -36,6 +36,7 @@ const (
 	ModeShop  // research lab: upgrades
 	ModeMap   // map table: state of Mars
 	ModeSleep // fading out, sleeping, waking up
+	ModePhoto // free camera, no interface (photo.go)
 )
 
 // Sleep timeline, in seconds: fade out, sleep (the game saves), fade in.
@@ -105,6 +106,7 @@ type Game struct {
 	MessageT    float64 // ...for this long still
 	itemSel     int     // which carried item F places (R cycles)
 	Riding      int     // index in State.Entities of the vehicle driven, -1 on foot
+	Photo       Photo   // the photo mode's camera and settings
 
 	walls    []base.Segment // the base's walls, for collisions
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
@@ -153,7 +155,7 @@ func New(c *content.Content) *Game {
 
 func (g *Game) setMode(m Mode) {
 	g.Mode = m
-	if m == ModePlay {
+	if m == ModePlay || m == ModePhoto {
 		rl.DisableCursor()
 	} else {
 		rl.EnableCursor()
@@ -161,6 +163,9 @@ func (g *Game) setMode(m Mode) {
 }
 
 func (g *Game) Update(dt float64) {
+	if g.Mode == ModePhoto && g.updatePhoto(dt) {
+		return // the world stands still for the photo
+	}
 	g.Elapsed += dt
 
 	if rl.IsKeyPressed(rl.KeyF11) {
@@ -184,6 +189,8 @@ func (g *Game) Update(dt float64) {
 			if it, ok := g.NearbyUse(); ok {
 				g.use(it)
 			}
+		case rl.IsKeyPressed(rl.KeyP):
+			g.EnterPhoto()
 		}
 	case ModeShop:
 		if closeKeys {

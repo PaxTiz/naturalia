@@ -8,7 +8,9 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
 	"naturalia/internal/render"
+	"naturalia/internal/ui"
 	"os"
+	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -29,7 +31,7 @@ type shotRun struct {
 	perf    float64 // summed frame times (NA_SHOT_PERF)
 }
 
-func newShotRun(g *game.Game, gfx *render.Graphics) *shotRun {
+func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	s := &shotRun{file: os.Getenv("NA_SHOT"), mode: game.ModePlay}
 	// NA_SHOT_MODE opens a screen for the shot: shop, map or pause.
 	switch os.Getenv("NA_SHOT_MODE") {
@@ -39,6 +41,8 @@ func newShotRun(g *game.Game, gfx *render.Graphics) *shotRun {
 		s.mode = game.ModeMap
 	case "pause":
 		s.mode = game.ModePaused
+	case "photo":
+		s.mode = game.ModePhoto
 	}
 	// NA_SHOT_TOOL=n holds tool n (0 is the toothbrush) for the shot.
 	var tool int
@@ -82,6 +86,22 @@ func newShotRun(g *game.Game, gfx *render.Graphics) *shotRun {
 		fmt.Sscanf(os.Getenv("NA_SHOT_PITCH"), "%f", &g.Player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
+	}
+	// In the photo mode, NA_SHOT_PHOTO=key=value,... sets its settings
+	// (game.PhotoKeys), and NA_SHOT_PHOTO_HIDE=1 hides its panel.
+	if s.mode == game.ModePhoto && s.file != "" {
+		g.EnterPhoto()
+		for _, kv := range strings.Split(os.Getenv("NA_SHOT_PHOTO"), ",") {
+			k, v, _ := strings.Cut(kv, "=")
+			for i, name := range game.PhotoKeys {
+				if name == k {
+					fmt.Sscanf(v, "%f", &g.Photo.Set[i])
+				}
+			}
+		}
+		if os.Getenv("NA_SHOT_PHOTO_HIDE") != "" {
+			hud.HidePhoto()
+		}
 	}
 	return s
 }

@@ -6,6 +6,7 @@
 in vec2 fragTexCoord;
 uniform sampler2D texture0; // rgb: image, a: luma
 uniform float time;
+uniform float grain;
 out vec4 finalColor;
 
 float L(vec2 p) { return texture(texture0, p).a; }
@@ -65,6 +66,6 @@ void main() {
         col = texture(texture0, fuv).rgb;
     }
     float n = fract(sin(dot(uv * 1000.0 + time, vec2(12.9898, 78.233))) * 43758.5453);
-    col += (n - 0.5) * 0.02;
+    col += (n - 0.5) * grain;
     finalColor = vec4(col, 1.0);
 }

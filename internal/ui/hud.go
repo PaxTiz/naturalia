@@ -285,6 +285,10 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
 	}
 
+	if g.Mode == game.ModePhoto { // nothing over the picture but the photo mode's own
+		hud.drawPhoto(g)
+		return
+	}
 	if g.Mode == game.ModePlay || g.Mode == game.ModeMap || g.Mode == game.ModeShop {
 		hud.drawVisor(g)
 	}
@@ -365,7 +369,7 @@ func (hud *HUD) drawHints(g *game.Game) {
 	w, h := screenSize()
 	hints := [][2]string{
 		{"ZQSD", "bouger"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"CLIC", "balayer"},
-		{"E", "utiliser"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
+		{"E", "utiliser"}, {"P", "photo"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
 	}
 	key, label := 11*u, 12*u
 	total := float32(0)
@@ -576,7 +580,7 @@ func (hud *HUD) drawPause(g *game.Game) {
 
 	keys := [][2]string{
 		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"F11", "plein écran"},
-		{"CLIC", "balayer la poussière visée"}, {"E", "incinérateur, labo, carte, lit"}, {"ÉCHAP", "pause"},
+		{"CLIC", "balayer la poussière visée"}, {"E", "incinérateur, labo, carte, lit"}, {"P", "mode photo"}, {"ÉCHAP", "pause"},
 	}
 	box := rl.NewRectangle(w/2-330*u, h*0.53, 660*u, 4*38*u+50*u)
 	visorPanel(box, visorCyan)
@@ -747,10 +751,12 @@ func (hud *HUD) drawSleep(g *game.Game) {
 	}
 }
 
-// Update follows the interface's input: the debug overlay, the shop. It
+// Update follows the interface's input: the debug overlay, the photo
+// mode's panel, the shop. It
 // runs before the game's update.
 func (hud *HUD) Update(g *game.Game, dt float64) {
 	hud.updateDebug(g, dt)
+	hud.updatePhoto(g, dt)
 	if g.Mode == game.ModeShop {
 		hud.updateShop(g)
 	}
@@ -790,6 +796,7 @@ type HUD struct {
 	hover                       int // shop row under the mouse
 	shopScroll                  int // first row shown in the shop
 	dbg                         debugInfo
+	photo                       photoUI
 }
 
 func New() *HUD {

@@ -239,6 +239,16 @@ func (gfx *Graphics) segment(m rl.Model, a, b vec3, radius float64, c color.RGBA
 // walking, a slight tremor while the tool runs, and the field of view
 // eased by updateFov.
 func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
+	if ph := &g.Photo; g.Mode == game.ModePhoto {
+		gfx.camEye = ph.Pos
+		return rl.Camera3D{
+			Position:   ToRL(ph.Pos),
+			Target:     ToRL(ph.Pos.Add(ph.Forward())),
+			Up:         ToRL(ph.CamUp()),
+			Fovy:       float32(ph.Fov),
+			Projection: rl.CameraPerspective,
+		}
+	}
 	p := &g.Player
 	eye := p.Eye()
 	walk := p.MoveAmount
@@ -299,7 +309,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "roomCount"), []float32{float32(len(rms) / 4)}, rl.ShaderUniformFloat)
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "corrCount"), []float32{float32(len(crs) / 4)}, rl.ShaderUniformFloat)
 	}
-	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
+	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(gfx.camEye.Norm()), rl.ShaderUniformVec3)
 	rl.SetShaderValue(gfx.skySh, rl.GetShaderLocation(gfx.skySh, "air"), []float32{gfx.skyAir}, rl.ShaderUniformFloat)
 	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
@@ -338,7 +348,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	atlas, lookup := gfx.dust.Upload(g.World, g.Player.Pos)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapSpecular, lookup)
-	patches := gfx.Terrain.Visible(g.Player.Eye())
+	patches := gfx.Terrain.Visible(gfx.camEye)
 	gfx.stats.Patches = len(patches)
 	gfx.nearGems = g.World.GemsNear(g.Player.Pos, gemDrawDist)
 	// Objects cast their shadows first, then the scene is lit with them.
@@ -360,8 +370,9 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
 	}
 
-	sunUp := g.Player.Pos.Norm().Dot(planet.SunDir)
-	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, base.Indoors(base.ToLocal(g.Player.Eye())))
+	sunUp := gfx.camEye.Norm().Dot(planet.SunDir)
+	indoors := base.Indoors(base.ToLocal(gfx.camEye))
+	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors)
 	gfx.post.resize()
 	rl.BeginTextureMode(gfx.post.scene)
 	rl.ClearBackground(rl.Black)
@@ -389,7 +400,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.drawPebbles(g)
 	gfx.drawGems(g)
 	gfx.drawDevils(g)
-	if base.Indoors(base.ToLocal(g.Player.Eye())) {
+	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
 	gfx.drawTool(g)
@@ -400,7 +411,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	rl.EndTextureMode()
 
 	rl.BeginDrawing()
-	gfx.post.finish(cam, sunUp, g.Elapsed)
+	gfx.post.finish(cam, sunUp, g.Elapsed, gfx.look(g))
 	overlay(cam)
 	rl.EndDrawing()
 }
@@ -479,7 +490,7 @@ func (gfx *Graphics) clipPlanes(g *game.Game) {
 
 // drawTool draws the held tool, in the lower right corner of the view.
 func (gfx *Graphics) drawTool(g *game.Game) {
-	if g.Mode == game.ModePaused || g.Player.Fly {
+	if g.Mode == game.ModePaused || g.Mode == game.ModePhoto || g.Player.Fly {
 		return
 	}
 	look := g.Tool().Look
