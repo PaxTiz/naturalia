@@ -750,7 +750,7 @@ func (hud *HUD) drawSleep(g *game.Game) {
 // Update follows the interface's input: the debug overlay, the shop. It
 // runs before the game's update.
 func (hud *HUD) Update(g *game.Game, dt float64) {
-	hud.updateDebug(dt)
+	hud.updateDebug(g, dt)
 	if g.Mode == game.ModeShop {
 		hud.updateShop(g)
 	}

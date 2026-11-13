@@ -102,7 +102,7 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 	rl.EndBlendMode()
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
 	rl.EndMode3D()
-	rl.SetClipPlanes(0.05, 9000)
+	rl.SetClipPlanes(gfx.near, gfx.far)
 	rl.EndTextureMode()
 }
 
@@ -180,6 +180,6 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 		rl.EndMode3D()
 	}
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
-	rl.SetClipPlanes(0.05, 9000)
+	rl.SetClipPlanes(gfx.near, gfx.far)
 	rl.EndTextureMode()
 }

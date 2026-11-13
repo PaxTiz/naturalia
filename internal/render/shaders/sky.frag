@@ -3,6 +3,7 @@ in vec3 fragPos;
 in vec3 fragNormal;
 uniform vec3 up; // the viewer's local up: the horizon follows them around Mars
 uniform float time;
+uniform float air; // 1 on the ground, 0 high up in creative flight: space
 out vec4 finalColor;
 #include "common.glsl"
 // moon draws one of the two small moons: a lumpy gray rock, lit by the
@@ -31,8 +32,8 @@ vec3 moon(vec3 d, vec3 dir, float radius, float seed, inout float cover) {
 void main() {
     vec3 d = normalize(fragRel - viewRel);
     float h = dot(d, up);
-    vec3 col = skyColor(d, up);
-    float day = daylight(up);
+    vec3 col = skyColor(d, up) * air;
+    float day = daylight(up) * air;
 
     // Stars come out at night only, on a fine 3D grid of directions.
     vec3 p = d * 220.0;
@@ -42,7 +43,7 @@ void main() {
         vec3 star = cell + 0.5 + (vec3(hash13(cell + 1.0), hash13(cell + 2.0), hash13(cell + 3.0)) - 0.5) * 0.6;
         float twinkle = 0.7 + 0.3 * sin(time * (1.0 + r * 4.0) + r * 50.0);
         float bright = (r - 0.97) / 0.03;
-        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.32, 0.0, length(p - star)) * bright * twinkle * smoothstep(-0.02, 0.12, h) * (1.0 - day);
+        col += vec3(0.9, 0.93, 1.0) * smoothstep(0.32, 0.0, length(p - star)) * bright * twinkle * max(smoothstep(-0.02, 0.12, h), 1.0 - air) * (1.0 - day);
     }
 
     // Phobos, then tiny Deimos: pale in the day sky, bright at night.

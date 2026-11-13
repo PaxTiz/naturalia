@@ -22,11 +22,15 @@ type debugInfo struct {
 	goroutines       int
 }
 
-// updateDebug toggles the overlay and refreshes its slower measures.
-func (hud *HUD) updateDebug(dt float64) {
+// updateDebug toggles the overlay, and with it on the creative flight
+// (F4), and refreshes its slower measures.
+func (hud *HUD) updateDebug(g *game.Game, dt float64) {
 	d := &hud.dbg
 	if rl.IsKeyPressed(rl.KeyF3) {
 		d.on = !d.on
+	}
+	if d.on && rl.IsKeyPressed(rl.KeyF4) && g.Riding < 0 {
+		g.Player.SetFly(!g.Player.Fly, g.World.Relief)
 	}
 	ms := dt * 1000
 	d.frameMs += (ms - d.frameMs) * 0.1
@@ -61,6 +65,11 @@ func (hud *HUD) drawDebug(g *game.Game, rs render.Stats) {
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.World.DustAt(up), len(g.World.Touched())),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
 		fmt.Sprintf("packs %s   entités %d", content.PackList(), len(g.State.Entities)),
+	}
+	if g.Player.Fly {
+		lines = append(lines, fmt.Sprintf("VOL LIBRE (F4)  %.0f m/s  ×%.2f molette", g.Player.FlySpeed(t.Altitude(g.Player.Pos)), content.OrZero(g.Player.FlyBoost, 1)))
+	} else {
+		lines = append(lines, "F4 vol libre")
 	}
 	for _, line := range g.Content.Debug { // added by packs
 		lines = append(lines, line(g))

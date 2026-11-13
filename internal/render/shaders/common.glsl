@@ -10,6 +10,9 @@ uniform vec3 sunDir;
 // point near the camera), and the fine work uses it with viewRel.
 uniform vec3 origin;
 uniform vec3 viewRel; // viewPos - origin, computed in double precision
+// hazeThin shortens the haze's distances when the eye is high above the
+// ground (creative flight): the air is thinner up there. 1 on foot.
+uniform float hazeThin;
 in vec3 fragRel;
 
 const vec3 phobosDir = vec3(0.451, 0.551, -0.702);
@@ -200,6 +203,7 @@ float baseAO(vec3 n) {
 // layers. The result is HDR: the exposure and the tone curve come later,
 // on the whole image (post.go).
 vec3 finish(vec3 col, float dist) {
+    dist *= hazeThin;
     vec3 d = normalize(fragRel - viewRel);
     vec3 haze = skyColor(d, normalize(viewPos));
     vec3 veil = haze * vec3(0.62, 0.52, 0.72);

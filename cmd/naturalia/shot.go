@@ -62,6 +62,12 @@ func newShotRun(g *game.Game, gfx *render.Graphics) *shotRun {
 			g.Player.Heading = g.Player.Heading.Scale(math.Cos(turn)).Add(r.Scale(math.Sin(turn)))
 		}
 		fmt.Sscanf(os.Getenv("NA_SHOT_PITCH"), "%f", &g.Player.Pitch)
+		// NA_SHOT_ALT=meters flies that high, in creative flight.
+		var alt float64
+		if _, err := fmt.Sscanf(os.Getenv("NA_SHOT_ALT"), "%f", &alt); err == nil {
+			g.Player.SetFly(true, g.World.Relief)
+			g.Player.Pos = g.Player.Pos.Add(up.Scale(alt))
+		}
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}

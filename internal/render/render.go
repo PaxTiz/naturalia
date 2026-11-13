@@ -68,8 +68,11 @@ type Graphics struct {
 	nearGems    []planet.Gem                // crystals around the player, refreshed every frame
 	nearPebbles map[planet.TileKey][]pebble // per tile, around the player
 	stats       Stats
-	camEye      vec3 // the camera's position in double precision (camera)
-	origin      vec3 // the shaders' origin this frame (setUniforms)
+	camEye      vec3    // the camera's position in double precision (camera)
+	near, far   float64 // the view's clip planes, set each frame by clipPlanes
+	hazeThin    float32 // and the haze's thinning with altitude (common.glsl)
+	skyAir      float32 // the sky fading to space with altitude (sky.frag)
+	origin      vec3    // the shaders' origin this frame (setUniforms)
 }
 
 func loadShader(fs string) (rl.Shader, shaderLocs) { return loadShaderVS(glsl("mesh.vert"), fs) }
@@ -177,9 +180,8 @@ func New(g *game.Game) *Graphics {
 	gfx.rocks = rockModels(gfx.objectSh, objectMaps, planet.RockShapes, 1300, 14, 18)
 	gfx.pebbles = rockModels(gfx.objectSh, objectMaps, pebbleShapes, 1700, 5, 7)
 
-	// Mars is big: see mountains far away, but keep the held tool, very
-	// close to the eye, from being clipped.
-	rl.SetClipPlanes(0.05, 9000)
+	gfx.near, gfx.far = 0.05, 9000
+	rl.SetClipPlanes(gfx.near, gfx.far)
 
 	// The base's ceiling lamps never move.
 	var lights []float32
@@ -272,6 +274,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.Sub(o)), rl.ShaderUniformVec3)
+		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "hazeThin"), []float32{gfx.hazeThin}, rl.ShaderUniformFloat)
 	}
 	// The base's shapes, for its ambient occlusion (baseAO).
 	var rms, crs, csz []float32
@@ -297,6 +300,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "corrCount"), []float32{float32(len(crs) / 4)}, rl.ShaderUniformFloat)
 	}
 	rl.SetShaderValue(gfx.skySh, gfx.sLoc.up, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
+	rl.SetShaderValue(gfx.skySh, rl.GetShaderLocation(gfx.skySh, "air"), []float32{gfx.skyAir}, rl.ShaderUniformFloat)
 	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
 	sun, ao := gfx.Terrain.light(gfx.Terrain.Surface(g.Player.Pos))
@@ -329,6 +333,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 // (the interface).
 func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	cam := gfx.camera(g)
+	gfx.clipPlanes(g)
 
 	atlas, lookup := gfx.dust.Upload(g.World, g.Player.Pos)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
@@ -459,9 +464,22 @@ func (gfx *Graphics) drawGems(g *game.Game) {
 	}
 }
 
+// clipPlanes sets the view's depth range for the eye's altitude. Mars is
+// big: see mountains far away, but keep the held tool, very close to the
+// eye, from being clipped. High up in creative flight, see the whole
+// visible half of Mars.
+func (gfx *Graphics) clipPlanes(g *game.Game) {
+	alt := g.World.Relief.Altitude(gfx.camEye)
+	gfx.near = math.Max(0.05, math.Min(20, alt*0.002))
+	gfx.hazeThin = float32(1 / (1 + max(0, alt-20)/150))
+	gfx.skyAir = float32(1 - mathx.Smoothstep(300, 5000, alt))
+	gfx.far = math.Max(9000, gfx.camEye.Length()+planet.Radius)
+	rl.SetClipPlanes(gfx.near, gfx.far)
+}
+
 // drawTool draws the held tool, in the lower right corner of the view.
 func (gfx *Graphics) drawTool(g *game.Game) {
-	if g.Mode == game.ModePaused {
+	if g.Mode == game.ModePaused || g.Player.Fly {
 		return
 	}
 	look := g.Tool().Look

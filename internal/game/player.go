@@ -16,6 +16,7 @@ const (
 	marsGravity  = 3.71
 	jumpSpeed    = 2.9
 	mouseSens    = 0.0025
+	flySpeed     = 20.0 // creative flight, near the ground; faster higher up
 )
 
 // Player walks on the sphere: "up" is always away from Mars' center and
@@ -30,6 +31,25 @@ type Player struct {
 	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 	speed      float64 // driving: the vehicle's speed, no sprint nor jump
 	eyeH       float64 // driving: the seat's height
+	// Fly is the debug creative mode: no gravity nor collisions, Space
+	// climbs, Ctrl descends, the wheel sets FlyBoost.
+	Fly      bool    `json:"-"`
+	FlyBoost float64 `json:"-"`
+}
+
+// FlySpeed is the creative flight's speed at the player's altitude alt:
+// it grows with altitude so a view of the whole region is seconds away.
+func (p *Player) FlySpeed(alt float64) float64 {
+	return flySpeed * content.OrZero(p.FlyBoost, 1) * math.Max(1, alt/30)
+}
+
+// SetFly turns the creative flight on or off; leaving it lands the
+// player on the ground below.
+func (p *Player) SetFly(on bool, t planet.Relief) {
+	p.Fly, p.vr = on, 0
+	if !on {
+		p.Pos, p.onGround = t.Surface(p.Pos), true
+	}
 }
 
 func (p *Player) LocalUp() vec3 { return p.Pos.Norm() }
@@ -54,6 +74,10 @@ func (p *Player) tangentHeading() {
 
 // Update moves the player. With control false (menus) only gravity applies.
 func (p *Player) Update(dt float64, t planet.Relief, control bool) {
+	if p.Fly {
+		p.fly(dt, t, control)
+		return
+	}
 	p.tangentHeading()
 	up := p.LocalUp()
 	var move vec3
@@ -110,6 +134,45 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 		p.WalkPhase += dt * speed * 1.6
 	}
 	p.MoveAmount += (target - p.MoveAmount) * math.Min(1, dt*8)
+}
+
+// fly moves the player in creative flight: like walking, plus Space and
+// Ctrl for up and down, Shift for more speed, never below the ground.
+func (p *Player) fly(dt float64, t planet.Relief, control bool) {
+	p.tangentHeading()
+	p.onGround, p.MoveAmount = false, 0
+	if !control {
+		return
+	}
+	up := p.LocalUp()
+	d := rl.GetMouseDelta()
+	turn := -float64(d.X) * mouseSens
+	p.Heading = p.Heading.Scale(math.Cos(turn)).Add(up.Cross(p.Heading).Scale(math.Sin(turn)))
+	p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*mouseSens))
+	if w := rl.GetMouseWheelMove(); w != 0 {
+		p.FlyBoost = math.Max(0.1, math.Min(50, content.OrZero(p.FlyBoost, 1)*math.Pow(1.25, float64(w))))
+	}
+
+	var move vec3
+	right := p.Right()
+	for _, k := range []struct {
+		key int32
+		dir vec3
+	}{{rl.KeyW, p.Heading}, {rl.KeyS, p.Heading.Scale(-1)}, {rl.KeyD, right}, {rl.KeyA, right.Scale(-1)},
+		{rl.KeySpace, up}, {rl.KeyLeftControl, up.Scale(-1)}} {
+		if rl.IsKeyDown(k.key) {
+			move = move.Add(k.dir)
+		}
+	}
+	speed := p.FlySpeed(t.Altitude(p.Pos))
+	if rl.IsKeyDown(rl.KeyLeftShift) {
+		speed *= 4
+	}
+	p.Pos = p.Pos.Add(move.Norm().Scale(speed * dt))
+	if t.Altitude(p.Pos) < 0 {
+		p.Pos = t.Surface(p.Pos)
+	}
+	p.tangentHeading()
 }
 
 // pushOut keeps the player outside a vertical cylinder around center.

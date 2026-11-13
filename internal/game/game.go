@@ -207,10 +207,14 @@ func (g *Game) Update(dt float64) {
 	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)
 	g.sfx.Update()
 	g.updateFov(dt)
-	g.Player.Pos = base.Collide(g.Player.Pos, g.walls)
-	g.collideRocks()
+	if !g.Player.Fly { // creative flight goes through everything
+		g.Player.Pos = base.Collide(g.Player.Pos, g.walls)
+		g.collideRocks()
+	}
 	g.updateVehicle(dt)
-	g.collideEntities()
+	if !g.Player.Fly {
+		g.collideEntities()
+	}
 	g.updateItems()
 	g.updateBase(dt)
 	g.updateAim()
