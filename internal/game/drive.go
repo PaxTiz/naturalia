@@ -39,7 +39,7 @@ type drive struct {
 	pitch    float64  // nose up, radians: the slope, or the jump's arc
 	roll     float64  // right side down
 	shake    float64  // camera shake, 0 to 1, fading
-	kicked   ecs.ID   // the boost pad being crossed (0: none)
+	over     []ecs.ID // the ramps and pads under it (stepPhysics)
 	flip     float64  // a second jump's somersault so far, radians (0: none)
 	cruise   float64  // flying: the height over the ground set with Space and Ctrl
 	climbing bool     // Space or Ctrl held last frame
@@ -59,6 +59,7 @@ const (
 	coyoteTime = 0.2 // a jump still works this long after rolling off an edge
 	airAbove   = 0.3 // m over the ground: in the air, no longer a bump
 	padReach   = 1.8 // m: a boost pad kicks what passes this close
+	triggerH   = 1.5 // m over a ramp or a pad where it still counts
 	aloft      = 3.0 // m over the ground: what flies that high can't be left
 )
 
@@ -200,15 +201,15 @@ func (g *Game) driveVehicle(dt float64) {
 }
 
 // groundAt is the height a driven vehicle rolls on at p, from Mars'
-// center: the ground, or a ramp standing there.
+// center: the ground, or a ramp it is over standing there.
 func (g *Game) groundAt(p vec3) float64 {
 	r := g.World.Relief.Surface(p).Length()
-	up := p.Norm()
-	for id, e := range g.Ents.Transform.All() {
+	for _, id := range g.drive.over {
 		def, ok := g.Content.Entities.Get(g.kind(id))
-		if !ok || def.Ramp == nil || planet.ArcDist(up, e.Dir) > def.Ramp.Length {
+		if !ok || def.Ramp == nil {
 			continue
 		}
+		e := g.Ents.Transform.Get(id)
 		foot := g.World.Relief.Surface(e.Dir)
 		ax, _, az := entityAxes(e.Dir, e.Yaw)
 		off := p.Sub(foot)
@@ -517,7 +518,6 @@ func (g *Game) updateVehicle(dt float64) {
 	}
 	g.Player.eyeH = e.Alt + content.OrZero(v.Seat, 2.4)
 	g.tilt(v, e, dt)
-	g.kick(v)
 	g.exhaust(v, e)
 	if g.Mode == ModePlay && d.r-ground < 1 {
 		g.sweepUnder(v, e, dt)
@@ -564,28 +564,18 @@ func (g *Game) tilt(v *content.Vehicle, e *Transform, dt float64) {
 	}
 }
 
-// kick: a boost pad throws the vehicle crossing it forward, once, and
+// kick: a boost pad throws the vehicle coming onto it forward, and
 // fills its boost.
-func (g *Game) kick(v *content.Vehicle) {
+func (g *Game) kick(v *content.Vehicle, id ecs.ID) {
 	d := &g.drive
-	up := g.Player.LocalUp()
-	for id, e := range g.Ents.Transform.All() {
-		def, ok := g.Content.Entities.Get(g.kind(id))
-		if !ok || def.Kick <= 0 || id == g.Riding {
-			continue
-		}
-		near := planet.ArcDist(up, e.Dir) < padReach && d.r-g.World.Relief.Surface(e.Dir).Length() < 1.5
-		switch {
-		case near && d.kicked != id && d.vel.Dot(d.fwd) > 0:
-			d.kicked = id
-			d.vel = d.vel.Add(d.fwd.Scale(def.Kick))
-			d.fuel = content.OrZero(v.Fuel, 3)
-			d.shake = math.Max(d.shake, 0.4)
-			g.sfx.Beep(0.03, 0.2, 0.14, 440, 660, 880)
-		case !near && d.kicked == id:
-			d.kicked = 0
-		}
+	def, ok := g.Content.Entities.Get(g.kind(id))
+	if !ok || def.Kick <= 0 || d.vel.Dot(d.fwd) <= 0 {
+		return
 	}
+	d.vel = d.vel.Add(d.fwd.Scale(def.Kick))
+	d.fuel = content.OrZero(v.Fuel, 3)
+	d.shake = math.Max(d.shake, 0.4)
+	g.sfx.Beep(0.03, 0.2, 0.14, 440, 660, 880)
 }
 
 // exhaust: flames behind a boosting vehicle, under a flying one.

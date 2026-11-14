@@ -30,6 +30,7 @@ const (
 	layerRobot   // automatic vehicles on the ground
 	layerProp    // things pushed around: crates
 	layerDrone   // automatic vehicles flying: over the others
+	layerTrigger // ramps and pads: they tell the driven vehicle is over them
 )
 
 // What things are made of: how they rub and bounce. A contact takes the
@@ -168,6 +169,9 @@ func (g *Game) stepPhysics(dt float64) {
 		p.w.Remove(p.car)
 		p.car = nil
 	}
+	if p.car == nil || p.car.Mask == 0 {
+		g.drive.over = nil
+	}
 
 	p.w.Step(dt)
 
@@ -175,6 +179,7 @@ func (g *Game) stepPhysics(dt float64) {
 	switch {
 	case driving:
 		g.carAfter(v)
+		g.senses(v)
 	case b.Mask != 0:
 		pl.Pos = p.dir(b.Pos).Scale(r)
 		pl.vel = p.vecWorld(pl.Pos, b.Vel)
@@ -385,7 +390,7 @@ func (g *Game) carBefore(v *content.Vehicle) {
 		p.carKind = v.ID
 	}
 	c := p.car
-	c.Layer, c.Mask = layerVehicle, layerStatic|layerEntity|layerPlayer|layerProp|layerRobot
+	c.Layer, c.Mask = layerVehicle, layerStatic|layerEntity|layerPlayer|layerProp|layerRobot|layerTrigger
 	if d.dock != nil {
 		c.Layer, c.Mask = 0, 0 // gliding into its bay
 	}
@@ -545,8 +550,8 @@ func (g *Game) syncEntities() {
 	for _, id := range near {
 		def, ok := g.Content.Entities.Get(g.kind(id))
 		v, isVehicle := g.vehicleOf(id)
-		auto := isVehicle && v.Auto()
-		if !ok || (def.Radius <= 0 && def.Mass <= 0 && !auto) || id == g.Riding {
+		takes := def.Radius > 0 || def.Mass > 0 || (isVehicle && v.Auto()) || trigger(def)
+		if !ok || !takes || id == g.Riding {
 			continue
 		}
 		e := g.Ents.Transform.Get(id)
@@ -564,15 +569,41 @@ func (g *Game) syncEntities() {
 		}
 		b := *bp
 		if b.Kind != physics.Dynamic {
-			b.Pos = p.plane(at) // where it went by itself
+			ax, _, _ := entityAxes(e.Dir, e.Yaw)
+			f := p.vecPlane(at, ax)
+			b.Pos, b.Angle = p.plane(at), math.Atan2(f.Y, f.X) // where it went by itself
 		}
 		lo, hi := p.partsBounds(def)
 		if hi.Y <= 0 {
 			hi.Y = thingH
 		}
+		if b.Sensor {
+			hi.Y += triggerH
+		}
 		b.Bottom, b.Top = p.slice(at.Add(e.Dir.Scale(e.Alt)), hi.Y)
 		if b.Layer == layerDrone {
 			b.Bottom = b.Top - hi.Y + lo.Y
+		}
+	}
+}
+
+// trigger tells if an entity does something to the vehicle driven over
+// it: a ramp lifts it, a pad throws it.
+func trigger(def *content.EntityDef) bool { return def.Ramp != nil || def.Kick > 0 }
+
+// senses keeps the ramps and pads the driven vehicle is over, and kicks it
+// off the pads it comes onto.
+func (g *Game) senses(v *content.Vehicle) {
+	d := &g.drive
+	for _, s := range g.phys.w.Senses {
+		if s.Body != g.phys.car {
+			continue
+		}
+		id := ecs.ID(s.Sensor.ID)
+		d.over = slices.DeleteFunc(d.over, func(o ecs.ID) bool { return o == id || !g.Ents.Alive(o) })
+		if s.In {
+			d.over = append(d.over, id)
+			g.kick(v, id)
 		}
 	}
 }
@@ -582,6 +613,14 @@ func (g *Game) syncEntities() {
 func (g *Game) entityBody(id ecs.ID, def *content.EntityDef) *physics.Body {
 	b := &physics.Body{Kind: physics.Kinematic, Shape: physics.Circle(def.Radius), Layer: layerEntity, Mask: ^uint32(0), ID: uint32(id),
 		Friction: frictionWall, Restitution: bounceWall}
+	if trigger(def) {
+		b.Sensor, b.Layer, b.Mask = true, layerTrigger, layerVehicle
+		b.Shape = physics.Circle(padReach)
+		if r := def.Ramp; r != nil {
+			b.Shape = physics.Box(r.Length/2, r.Width/2, 0)
+		}
+		return b
+	}
 	if v, ok := g.vehicleOf(id); ok && v.Auto() {
 		// Driven by the fleet, pushed around like a heavy crate.
 		b.Kind, b.Mass, b.FixedRotation = physics.Dynamic, v.Weight(), true
