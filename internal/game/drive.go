@@ -233,17 +233,8 @@ func entityAxes(dir vec3, yaw float64) (ax, up, az vec3) {
 // Frame is where an entity stands and its axes (front, up, side), tilted
 // by its pitch and roll.
 func (g *Game) Frame(e *Transform) (pos, ax, up, az vec3) {
-	ax, up, az = entityAxes(e.Dir, e.Yaw)
-	pos = g.World.Relief.Surface(e.Dir).Add(up.Scale(e.Alt))
-	if e.Pitch != 0 {
-		c, s := math.Cos(e.Pitch), math.Sin(e.Pitch)
-		ax, up = ax.Scale(c).Add(up.Scale(s)), up.Scale(c).Sub(ax.Scale(s))
-	}
-	if e.Roll != 0 {
-		c, s := math.Cos(e.Roll), math.Sin(e.Roll)
-		up, az = up.Scale(c).Add(az.Scale(s)), az.Scale(c).Sub(up.Scale(s))
-	}
-	return pos, ax, up, az
+	ax, up, az = e.Axes()
+	return g.World.Relief.Surface(e.Dir).Add(e.Dir.Scale(e.Alt)), ax, up, az
 }
 
 // move sets the vehicle's speed along the ground for dt, and where it
