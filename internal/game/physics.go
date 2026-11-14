@@ -27,8 +27,9 @@ const (
 	layerPlayer
 	layerEntity
 	layerVehicle // the one driven
-	layerRobot   // automatic vehicles: the one driven goes through
+	layerRobot   // automatic vehicles on the ground
 	layerProp    // things pushed around: crates
+	layerDrone   // automatic vehicles flying: over the others
 )
 
 // What things are made of: how they rub and bounce. A contact takes the
@@ -42,19 +43,21 @@ const (
 )
 
 const (
-	physReach = 120.0 // m from the anchor where things collide
-	reanchor  = 50.0  // m the player strays before the plane is laid again
-	walkAccel = 60.0  // m/s²: how fast walking reaches the speed asked
-	bodyFeet  = 1.0   // m below the ground where a body starts
-	personH   = 1.8
-	thingH    = 2.0 // entities and furniture, without a better idea
-	minRock   = 0.6 // smaller rocks are walked over
-	pushSpeed = 1.6 // m/s: pushing a crate on foot goes slowly
-	pushAhead = 0.4 // m: how far ahead the player sees it coming
-	tossed    = 4.0 // m/s: a thing hit harder flies off
-	tossFall  = 2.5 // times Mars's gravity on what flies off: it lands quick
-	rub       = 6.0 // the ground's friction on what is pushed around
-	knocked   = 8.0 // m/s: the fastest something knocks the player back
+	physReach  = 120.0 // m from the anchor where things collide
+	reanchor   = 50.0  // m the player strays before the plane is laid again
+	walkAccel  = 60.0  // m/s²: how fast walking reaches the speed asked
+	bodyFeet   = 1.0   // m below the ground where a body starts
+	personH    = 1.8
+	thingH     = 2.0 // entities and furniture, without a better idea
+	minRock    = 0.6 // smaller rocks are walked over
+	pushSpeed  = 1.6 // m/s: pushing a crate on foot goes slowly
+	pushAhead  = 0.4 // m: how far ahead the player sees it coming
+	tossed     = 4.0 // m/s: a thing hit harder flies off
+	tossFall   = 2.5 // times Mars's gravity on what flies off: it lands quick
+	rub        = 6.0 // the ground's friction on what is pushed around
+	knocked    = 8.0 // m/s: the fastest something knocks the player back
+	fleetAccel = 6.0 // m/s²: how fast an automatic vehicle gets going, at least
+	overhead   = 0.6 // m a drone keeps over what it flies above
 )
 
 type phys struct {
@@ -67,7 +70,19 @@ type phys struct {
 	side       float64 // +1 if a vehicle's right side (+Z) is the plane's left of its nose
 	doorSegs   []base.Segment
 	doors      []*physics.Body
-	carried    map[ecs.ID]moving // from the plane before, until put back
+	carried    map[ecs.ID]moving  // from the plane before, until put back
+	bounds     map[string][2]vec3 // the box around each kind's parts
+}
+
+// partsBounds is the box around the parts of an entity of that kind,
+// figured once.
+func (p *phys) partsBounds(def *content.EntityDef) (lo, hi vec3) {
+	b, ok := p.bounds[def.ID]
+	if !ok {
+		b[0], b[1] = content.Bounds(def.Parts)
+		p.bounds[def.ID] = b
+	}
+	return b[0], b[1]
 }
 
 // moving is how a thing pushed around went when the plane was laid
@@ -120,6 +135,7 @@ func (g *Game) stepPhysics(dt float64) {
 	p := g.phys
 	g.syncDoors()
 	g.syncEntities()
+	g.fleetBefore(dt)
 
 	b := p.player
 	b.Layer, b.Mask, b.Vel = 0, 0, physics.V2{} // in a vehicle, or flying through everything
@@ -176,7 +192,7 @@ func (g *Game) stepPhysics(dt float64) {
 			g.bump(hit.Speed + walk.Dot(hit.Normal))
 		}
 	}
-	g.entitiesAfter()
+	g.entitiesAfter(dt)
 	g.updateTossed(dt)
 }
 
@@ -242,8 +258,8 @@ func (g *Game) updateTossed(dt float64) {
 }
 
 // entitiesAfter moves the things pushed around where the collisions left
-// them.
-func (g *Game) entitiesAfter() {
+// them; the fleet turns its nose the way it goes.
+func (g *Game) entitiesAfter(dt float64) {
 	p := g.phys
 	for id, bp := range g.Ents.Body.All() {
 		b := *bp
@@ -252,9 +268,104 @@ func (g *Game) entitiesAfter() {
 		}
 		e := g.Ents.Transform.Get(id)
 		e.Dir = p.dir(b.Pos)
-		at := g.World.Relief.Surface(e.Dir)
-		e.Yaw = yawOf(e.Dir, p.vecWorld(at, physics.V2{X: math.Cos(b.Angle), Y: math.Sin(b.Angle)}))
+		at := e.Dir.Scale(p.r0) // near enough the ground, for a speed
+		if !b.FixedRotation {
+			e.Yaw = yawOf(e.Dir, p.vecWorld(at, physics.V2{X: math.Cos(b.Angle), Y: math.Sin(b.Angle)}))
+		} else if b.Vel.Len() > 0.3 {
+			turn := math.Remainder(yawOf(e.Dir, p.vecWorld(at, b.Vel))-e.Yaw, 2*math.Pi)
+			e.Yaw += turn * math.Min(1, dt*4)
+		}
 	}
+}
+
+// fleetBefore sets the automatic vehicles near the player going at the
+// speed the fleet asked (moveToward), the ground ones around what stands
+// in their way. Pushed off, they come back to it.
+func (g *Game) fleetBefore(dt float64) {
+	p := g.phys
+	for id, r := range g.Ents.Roam.All() {
+		bp := g.Ents.Body.Get(id)
+		if bp == nil {
+			continue
+		}
+		b := *bp
+		want := p.vecPlane(g.Ents.Transform.Get(id).Dir.Scale(p.r0), r.want)
+		r.want = vec3{} // asked again each frame
+		if b.Layer == layerRobot {
+			want = g.steer(b, r, want)
+		}
+		d, most := want.Sub(b.Vel), math.Max(fleetAccel, 2*want.Len())*dt
+		if l := d.Len(); l > most {
+			d = d.Scale(most / l)
+		}
+		b.Vel = b.Vel.Add(d)
+		if want.Len() > 0 {
+			b.Wake()
+		}
+	}
+}
+
+// What a ground robot goes around.
+const inTheWay = layerStatic | layerEntity | layerVehicle | layerProp | layerRobot | layerPlayer
+
+// steer turns the way a ground robot asks for around what stands ahead:
+// the nearest free heading, on the side it already took. Hemmed in, it
+// only pushes gently.
+func (g *Game) steer(b *physics.Body, r *Roam, want physics.V2) physics.V2 {
+	speed := want.Len()
+	if speed < 0.01 {
+		r.dodge = 0
+		return want
+	}
+	ahead := b.Shape.Radius + 0.4 + speed*0.6
+	side := r.dodge
+	if side == 0 {
+		side = 1
+	}
+	for _, deg := range [...]float64{0, 35, 70, 110, -35, -70, -110} {
+		dir := physics.MakeRot(side * deg * math.Pi / 180).Apply(want.Scale(1 / speed))
+		if g.phys.w.Overlap(b.Shape, b.Pos.Add(dir.Scale(ahead*0.5)), 0, b.Bottom, b.Top, inTheWay, b) ||
+			g.phys.w.Overlap(b.Shape, b.Pos.Add(dir.Scale(ahead)), 0, b.Bottom, b.Top, inTheWay, b) {
+			continue
+		}
+		switch {
+		case deg == 0:
+			r.dodge = 0
+		case deg > 0:
+			r.dodge = side
+		default:
+			r.dodge = -side
+		}
+		return dir.Scale(speed)
+	}
+	return want.Scale(0.2)
+}
+
+// clearance is the height a drone flies at to pass over what stands
+// below it and ahead: vehicles, the player, rocks, walls.
+func (g *Game) clearance(id ecs.ID) float64 {
+	bp := g.Ents.Body.Get(id)
+	if bp == nil || g.phys == nil {
+		return 0
+	}
+	b, p := *bp, g.phys
+	def, _ := g.Content.Entities.Get(g.kind(id))
+	lo, _ := p.partsBounds(def)
+	reach := b.Shape.Radius + 1
+	box := physics.AABB{Lo: b.Pos.Sub(physics.V2{X: reach, Y: reach}), Hi: b.Pos.Add(physics.V2{X: reach, Y: reach})}
+	box = box.Union(physics.AABB{Lo: box.Lo.Add(b.Vel), Hi: box.Hi.Add(b.Vel)}) // where it is in a second
+	ground := p.height(g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir))
+	top := 0.0
+	p.w.Query(box, func(o *physics.Body) bool {
+		if o != b && o.Layer != 0 && o.Layer != layerDrone && !o.Sensor {
+			top = math.Max(top, o.Top-ground)
+		}
+		return true
+	})
+	if top == 0 {
+		return 0
+	}
+	return top + overhead - lo.Y
 }
 
 // carBefore sets the driven vehicle's body where it stands, going at the
@@ -274,7 +385,7 @@ func (g *Game) carBefore(v *content.Vehicle) {
 		p.carKind = v.ID
 	}
 	c := p.car
-	c.Layer, c.Mask = layerVehicle, layerStatic|layerEntity|layerPlayer|layerProp
+	c.Layer, c.Mask = layerVehicle, layerStatic|layerEntity|layerPlayer|layerProp|layerRobot
 	if d.dock != nil {
 		c.Layer, c.Mask = 0, 0 // gliding into its bay
 	}
@@ -336,7 +447,7 @@ func (g *Game) layPlane() {
 	up := g.Player.LocalUp()
 	t1, t2 := mathx.TangentBasis(up)
 	p := &phys{w: physics.NewWorld(), up: up, t1: t1, t2: t2, r0: g.World.Relief.Surface(up).Length(),
-		carried: map[ecs.ID]moving{}}
+		carried: map[ecs.ID]moving{}, bounds: map[string][2]vec3{}}
 	p.side = t1.Cross(up).Dot(t2)
 	p.w.Mix = mix
 	for id, bp := range g.Ents.Body.All() {
@@ -433,7 +544,9 @@ func (g *Game) syncEntities() {
 	}
 	for _, id := range near {
 		def, ok := g.Content.Entities.Get(g.kind(id))
-		if !ok || (def.Radius <= 0 && def.Mass <= 0) || id == g.Riding {
+		v, isVehicle := g.vehicleOf(id)
+		auto := isVehicle && v.Auto()
+		if !ok || (def.Radius <= 0 && def.Mass <= 0 && !auto) || id == g.Riding {
 			continue
 		}
 		e := g.Ents.Transform.Get(id)
@@ -450,14 +563,17 @@ func (g *Game) syncEntities() {
 			}
 		}
 		b := *bp
-		h := thingH
-		if b.Kind == physics.Dynamic {
-			_, hi := content.Bounds(def.Parts)
-			h = hi.Y
-		} else {
+		if b.Kind != physics.Dynamic {
 			b.Pos = p.plane(at) // where it went by itself
 		}
-		b.Bottom, b.Top = p.slice(at.Add(e.Dir.Scale(e.Alt)), h)
+		lo, hi := p.partsBounds(def)
+		if hi.Y <= 0 {
+			hi.Y = thingH
+		}
+		b.Bottom, b.Top = p.slice(at.Add(e.Dir.Scale(e.Alt)), hi.Y)
+		if b.Layer == layerDrone {
+			b.Bottom = b.Top - hi.Y + lo.Y
+		}
 	}
 }
 
@@ -467,11 +583,20 @@ func (g *Game) entityBody(id ecs.ID, def *content.EntityDef) *physics.Body {
 	b := &physics.Body{Kind: physics.Kinematic, Shape: physics.Circle(def.Radius), Layer: layerEntity, Mask: ^uint32(0), ID: uint32(id),
 		Friction: frictionWall, Restitution: bounceWall}
 	if v, ok := g.vehicleOf(id); ok && v.Auto() {
-		b.Layer = layerRobot
+		// Driven by the fleet, pushed around like a heavy crate.
+		b.Kind, b.Mass, b.FixedRotation = physics.Dynamic, v.Weight(), true
+		b.Friction, b.Restitution = frictionCar, bounceCar
+		b.Layer, b.Mask = layerRobot, inTheWay
+		if v.Hover > 0 {
+			lo, hi := g.phys.partsBounds(def)
+			b.Shape = physics.Circle(math.Max(0.3, math.Max(math.Max(-lo.X, hi.X), math.Max(-lo.Z, hi.Z))))
+			b.Layer, b.Mask = layerDrone, layerStatic|layerDrone
+		}
+		return b
 	}
 	if def.Mass > 0 {
 		const round = 0.03
-		lo, hi := content.Bounds(def.Parts)
+		lo, hi := g.phys.partsBounds(def)
 		mid := physics.V2{X: (lo.X + hi.X) / 2, Y: g.phys.side * (lo.Z + hi.Z) / 2}
 		b.Kind, b.Layer, b.Mass = physics.Dynamic, layerProp, def.Mass
 		b.Shape = physics.OffsetBox(math.Max(0.05, (hi.X-lo.X)/2-round), math.Max(0.05, (hi.Z-lo.Z)/2-round), mid, 0, round)

@@ -55,6 +55,8 @@ type Roam struct {
 	Home     vec3 // a patrolling vehicle's spot
 	target   vec3 // its next dusty spot...
 	retarget float64
+	want     vec3    // near the player, the speed it asks of its body this frame
+	dodge    float64 // a ground robot going around something: the side, ±1
 }
 
 // Placed is an entity as the save keeps it.

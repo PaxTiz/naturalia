@@ -7,6 +7,7 @@ import (
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
+	"naturalia/internal/physics"
 	"naturalia/internal/planet"
 )
 
@@ -142,13 +143,14 @@ func (g *Game) updateFleet(dt float64) {
 		}
 		bob := math.Sin(g.Elapsed*3+float64(id.Index())) * 0.08
 		if v.Patrol() {
-			g.patrol(v, e, r, dt)
-			e.Alt = v.Hover
+			g.patrol(id, v, e, r, dt)
+			alt := 0.0
 			if v.Hover > 0 {
-				e.Alt += bob
+				alt = math.Max(v.Hover, g.clearance(id)) + bob // over what stands below
 			}
+			e.Alt += (alt - e.Alt) * math.Min(1, dt*3)
 		} else {
-			g.follow(v, e, r, dt, docked, nth[v.ID], g.Entities(v.ID))
+			g.follow(id, v, e, r, dt, docked, nth[v.ID], g.Entities(v.ID))
 			nth[v.ID]++
 			alt := v.Hover
 			switch {
@@ -159,6 +161,9 @@ func (g *Game) updateFleet(dt float64) {
 			}
 			if planet.ArcDist(e.Dir, planet.BaseUp) < domesReach {
 				alt = math.Max(alt, dockAltitude)
+			}
+			if v.Hover > 0 {
+				alt = math.Max(alt, g.clearance(id)) // over what stands below
 			}
 			e.Alt += (alt + bob - e.Alt) * math.Min(1, dt*3)
 		}
@@ -172,7 +177,7 @@ func (g *Game) updateFleet(dt float64) {
 
 // follow: the vehicle looks for dust around the player, and keeps up with
 // them; at the base it circles above the hub with the others of its kind.
-func (g *Game) follow(v *content.Vehicle, e *Transform, r *Roam, dt float64, docked bool, i, n int) {
+func (g *Game) follow(id ecs.ID, v *content.Vehicle, e *Transform, r *Roam, dt float64, docked bool, i, n int) {
 	speed := content.OrZero(v.Speed, 5)
 	spread := content.OrZero(v.Range, 25)
 	switch {
@@ -193,12 +198,12 @@ func (g *Game) follow(v *content.Vehicle, e *Transform, r *Roam, dt float64, doc
 	if far := planet.ArcDist(e.Dir, g.Player.LocalUp()); far > spread {
 		speed *= far / spread
 	}
-	g.moveToward(e, r.target, speed, dt)
+	g.moveToward(id, e, r, r.target, speed, dt)
 }
 
 // patrol: the vehicle sweeps the dustiest spots around where it was set
 // down, staying off the base's ground.
-func (g *Game) patrol(v *content.Vehicle, e *Transform, r *Roam, dt float64) {
+func (g *Game) patrol(id ecs.ID, v *content.Vehicle, e *Transform, r *Roam, dt float64) {
 	if r.Home == (vec3{}) {
 		r.Home = e.Dir
 	}
@@ -215,17 +220,22 @@ func (g *Game) patrol(v *content.Vehicle, e *Transform, r *Roam, dt float64) {
 			r.retarget = 0.5
 		}
 	}
-	g.moveToward(e, r.target, content.OrZero(v.Speed, 3), dt)
+	g.moveToward(id, e, r, r.target, content.OrZero(v.Speed, 3), dt)
 }
 
 // moveToward rolls or flies an entity along the ground toward the
-// direction to, turning its nose that way.
-func (g *Game) moveToward(e *Transform, to vec3, speed, dt float64) {
+// direction to, turning its nose that way. Near the player, it asks its
+// body for that speed instead, and the collisions move it (fleetBefore).
+func (g *Game) moveToward(id ecs.ID, e *Transform, r *Roam, to vec3, speed, dt float64) {
 	dist := planet.ArcDist(e.Dir, to)
 	if dist < 0.05 {
 		return
 	}
 	fwd := planet.TangentAt(e.Dir, to)
+	if bp := g.Ents.Body.Get(id); bp != nil && (*bp).Kind == physics.Dynamic {
+		r.want = fwd.Scale(math.Min(speed, dist*3)) // slowing down to stop on it
+		return
+	}
 	step := math.Min(dist, speed*dt)
 	e.Dir = e.Dir.Scale(planet.Radius).Add(fwd.Scale(step)).Norm()
 	want := yawOf(e.Dir, fwd)
