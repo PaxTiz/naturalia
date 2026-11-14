@@ -354,7 +354,10 @@ func (g *Game) clearance(id ecs.ID) float64 {
 		return 0
 	}
 	b, p := *bp, g.phys
-	def, _ := g.Content.Entities.Get(g.kind(id))
+	def, ok := g.Content.Entities.Get(g.kind(id))
+	if !ok {
+		return 0
+	}
 	lo, _ := p.partsBounds(def)
 	reach := b.Shape.Radius + 1
 	box := physics.AABB{Lo: b.Pos.Sub(physics.V2{X: reach, Y: reach}), Hi: b.Pos.Add(physics.V2{X: reach, Y: reach})}
@@ -549,9 +552,11 @@ func (g *Game) syncEntities() {
 	}
 	for _, id := range near {
 		def, ok := g.Content.Entities.Get(g.kind(id))
+		if !ok || id == g.Riding {
+			continue
+		}
 		v, isVehicle := g.vehicleOf(id)
-		takes := def.Radius > 0 || def.Mass > 0 || (isVehicle && v.Auto()) || trigger(def)
-		if !ok || !takes || id == g.Riding {
+		if def.Radius <= 0 && def.Mass <= 0 && !(isVehicle && v.Auto()) && !trigger(def) {
 			continue
 		}
 		e := g.Ents.Transform.Get(id)

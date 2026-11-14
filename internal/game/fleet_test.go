@@ -99,3 +99,11 @@ func TestDronesSpread(t *testing.T) {
 		t.Errorf("drones %.2f m apart, %.2f wide", d, 2*r)
 	}
 }
+
+// An entity of a kind no longer known (its mod gone) stands there,
+// untouched.
+func TestUnknownKindNear(t *testing.T) {
+	g := fleetGame(t, LoadContent(), map[string]int{})
+	g.add(Placed{Kind: "gone:thing", Dir: ahead(g, 3).Norm()})
+	g.stepPhysics(1.0 / 60)
+}
