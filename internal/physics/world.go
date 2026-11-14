@@ -241,6 +241,28 @@ func (w *World) Overlap(s Shape, pos V2, angle, bottom, top float64, mask uint32
 	return hit
 }
 
+// Touching calls fn for each body b touched in the last step, or nearly
+// (sensors aside), with the normal from b toward it.
+func (w *World) Touching(b *Body, fn func(o *Body, n V2)) {
+	for _, c := range w.list {
+		if c.seen != w.pass || c.sensing || c.a.Sensor || c.b.Sensor || (c.a != b && c.b != b) {
+			continue
+		}
+		touch := false
+		for i := range c.n {
+			touch = touch || c.pts[i].sep < speculative
+		}
+		if !touch {
+			continue
+		}
+		if c.a == b {
+			fn(c.b, c.normal)
+		} else {
+			fn(c.a, c.normal.Scale(-1))
+		}
+	}
+}
+
 func (w *World) refreshStatics() {
 	if !w.dirty {
 		return

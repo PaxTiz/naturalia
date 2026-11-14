@@ -152,9 +152,12 @@ type EntityDef struct {
 	Name   string     `json:"name"`
 	Parts  []PartJSON `json:"parts"`
 	Radius float64    `json:"radius"` // what the player bumps into; 0 walks through
-	Prompt string     `json:"prompt"` // what E says; empty: nothing to do
-	Pickup bool       `json:"pickup"` // E puts it back in the inventory
-	Item   string     `json:"item"`   // the item it gives back (set by the item that places it)
+	// Mass, in kg, makes it a thing pushed around, that bounces and flies
+	// off when hit hard, the size of its parts; 0 stands fixed.
+	Mass   float64 `json:"mass"`
+	Prompt string  `json:"prompt"` // what E says; empty: nothing to do
+	Pickup bool    `json:"pickup"` // E puts it back in the inventory
+	Item   string  `json:"item"`   // the item it gives back (set by the item that places it)
 	// Ramp lifts driven vehicles that roll over it: it rises along its
 	// front (+X), from 0 at -length/2 to height at +length/2. The player
 	// sets it facing away.
@@ -272,12 +275,25 @@ func (v *Vehicle) Weight() float64 {
 // a box around them, seen from above, never smaller than its radius.
 func (v *Vehicle) Footprint() (lo, hi vec3) {
 	r := OrZero(v.Radius, 1.2)
-	lo, hi = vec3{-r, 0, -r}, vec3{r, 0, r}
-	grow := func(c vec3, ex, ez float64) {
-		lo.X, hi.X = math.Min(lo.X, c.X-ex), math.Max(hi.X, c.X+ex)
-		lo.Z, hi.Z = math.Min(lo.Z, c.Z-ez), math.Max(hi.Z, c.Z+ez)
+	lo, hi = Bounds(v.Parts)
+	lo.X, lo.Z = math.Min(lo.X, -r), math.Min(lo.Z, -r)
+	hi.X, hi.Z = math.Max(hi.X, r), math.Max(hi.Z, r)
+	return vec3{lo.X, 0, lo.Z}, vec3{hi.X, 0, hi.Z}
+}
+
+// Bounds is the box around parts, in their frame (y up); nothing at all
+// without parts.
+func Bounds(parts []PartJSON) (lo, hi vec3) {
+	if len(parts) == 0 {
+		return vec3{}, vec3{}
 	}
-	for _, p := range v.Parts {
+	inf := math.Inf(1)
+	lo, hi = vec3{inf, inf, inf}, vec3{-inf, -inf, -inf}
+	grow := func(c, e vec3) {
+		lo = vec3{math.Min(lo.X, c.X-e.X), math.Min(lo.Y, c.Y-e.Y), math.Min(lo.Z, c.Z-e.Z)}
+		hi = vec3{math.Max(hi.X, c.X+e.X), math.Max(hi.Y, c.Y+e.Y), math.Max(hi.Z, c.Z+e.Z)}
+	}
+	for _, p := range parts {
 		switch p.Shape {
 		case "prism":
 			axis := p.Axis
@@ -285,12 +301,12 @@ func (v *Vehicle) Footprint() (lo, hi vec3) {
 				axis = vec3{0, 1, 0}
 			}
 			rr := math.Max(p.R0, OrZero(p.R1, p.R0))
-			grow(p.At, rr, rr)
-			grow(p.At.Add(axis.Norm().Scale(p.H)), rr, rr)
-		default: // a box or a wedge, maybe turned
+			grow(p.At, vec3{rr, 0, rr})
+			grow(p.At.Add(axis.Norm().Scale(p.H)), vec3{rr, 0, rr})
+		default: // a box or a wedge, maybe turned, from its middle
 			a := p.Yaw * math.Pi / 180
 			c, s := math.Abs(math.Cos(a)), math.Abs(math.Sin(a))
-			grow(p.At, (p.Size.X*c+p.Size.Z*s)/2, (p.Size.X*s+p.Size.Z*c)/2)
+			grow(p.At, vec3{(p.Size.X*c + p.Size.Z*s) / 2, p.Size.Y / 2, (p.Size.X*s + p.Size.Z*c) / 2})
 		}
 	}
 	return lo, hi

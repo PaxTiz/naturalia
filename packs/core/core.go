@@ -70,6 +70,9 @@ func registerCore(c *content.Content) {
 	}})
 	c.Items.Add("core:flag", content.Item{Name: "Drapeau", Desc: "À planter où tu veux : un repère visible de loin (F)",
 		Icon: "flag", Cost: 40, Places: "core:flag"})
+	c.Entities.Add("core:crate", content.EntityDef{Name: "Caisse", Pickup: true, Mass: 40, Parts: crateParts()})
+	c.Items.Add("core:crate", content.Item{Name: "Caisse", Desc: "Du matériel à poser (F) : on la pousse, les véhicules la bousculent",
+		Icon: "crate", Cost: 25, Places: "core:crate"})
 
 	registerVehicles(c)
 	registerStunts(c)
@@ -79,6 +82,29 @@ func registerCore(c *content.Content) {
 	c.Events.Add("core:dust-devil", content.RandomEvent{Every: 15,
 		When: func(g content.Game) bool { return g.DustDevils() < maxDevils && g.SunHeight() > 0.2 },
 		Run:  content.Game.SpawnDustDevil})
+}
+
+// crateParts: a crate of 80 cm, ochre, with steel corners and rims.
+func crateParts() []content.PartJSON {
+	const s, h = 0.8, 0.4
+	parts := []content.PartJSON{
+		{Shape: "box", Token: "crate.ochre", At: vec3{0, h, 0}, Size: vec3{s * 0.94, s * 0.94, s * 0.94}, Bevel: 0.03, Lit: "outdoor"},
+		{Shape: "box", Token: "rubber", At: vec3{0, h, 0}, Size: vec3{0.08, s * 0.95, s * 0.95}, Lit: "outdoor"},
+		{Shape: "box", Token: "habitat.white", At: vec3{s * 0.2, h + s*0.1, s * 0.475}, Size: vec3{s * 0.3, s * 0.2, 0.01}, Lit: "outdoor"},
+	}
+	for _, x := range []float64{-1, 1} {
+		for _, z := range []float64{-1, 1} {
+			parts = append(parts, content.PartJSON{Shape: "box", Token: "steel.dark", At: vec3{x * s * 0.47, h, z * s * 0.47}, Size: vec3{0.07, s, 0.07}, Lit: "outdoor"})
+		}
+	}
+	for _, y := range []float64{0.03, s - 0.03} {
+		for _, k := range []float64{-1, 1} {
+			parts = append(parts,
+				content.PartJSON{Shape: "box", Token: "steel.dark", At: vec3{0, y, k * s * 0.47}, Size: vec3{s, 0.06, 0.06}, Lit: "outdoor"},
+				content.PartJSON{Shape: "box", Token: "steel.dark", At: vec3{k * s * 0.47, y, 0}, Size: vec3{0.06, 0.06, s}, Lit: "outdoor"})
+		}
+	}
+	return parts
 }
 
 // Off-whites, steel greys, cyan and yellow/black accents: they stand out

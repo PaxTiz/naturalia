@@ -259,3 +259,20 @@ func BenchmarkCrowd(b *testing.B) {
 		w.Step(1.0 / 60)
 	}
 }
+
+func TestTouching(t *testing.T) {
+	w := NewWorld()
+	wl := wall(w, V2{1, -5}, V2{1, 5})
+	b := ball(w, V2{}, V2{}, 0.35)
+	run(w, 1, func() { b.Vel = V2{3, 0} })
+	var got []*Body
+	w.Touching(b, func(o *Body, n V2) {
+		got = append(got, o)
+		if n.Sub(V2{1, 0}).Len() > 1e-6 {
+			t.Errorf("normal %v", n)
+		}
+	})
+	if len(got) != 1 || got[0] != wl {
+		t.Errorf("touching %v", got)
+	}
+}

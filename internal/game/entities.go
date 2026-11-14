@@ -27,12 +27,17 @@ type Ents struct {
 	Transform *ecs.Store[Transform]
 	Roam      *ecs.Store[Roam]          // automatic vehicles
 	Body      *ecs.Store[*physics.Body] // near the player, what takes room (physics.go)
+	Air       *ecs.Store[Air]           // tossed up
 }
+
+// Air is a thing tossed up by a knock: its speed up, and how fast it
+// tumbles.
+type Air struct{ vz, tumble float64 }
 
 func newEnts() *Ents {
 	w := ecs.NewWorld()
 	return &Ents{World: w, Kind: ecs.NewStore[string](w), Transform: ecs.NewStore[Transform](w), Roam: ecs.NewStore[Roam](w),
-		Body: ecs.NewStore[*physics.Body](w)}
+		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w)}
 }
 
 // Transform is where an entity stands.

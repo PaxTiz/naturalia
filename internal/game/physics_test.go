@@ -213,3 +213,51 @@ func TestCrashIntoWall(t *testing.T) {
 		t.Errorf("impacts %v", hits)
 	}
 }
+
+func TestPushCrate(t *testing.T) {
+	g := fleetGame(t, LoadContent(), map[string]int{})
+	start := g.Player.Pos
+	id := g.spawn("core:crate", g.World.Relief.Surface(start.Add(g.Player.Heading.Scale(2))))
+	from := g.Ents.Transform.Get(id).Dir
+	walk(g, g.Player.Heading, 3)
+	moved := planet.ArcDist(from, g.Ents.Transform.Get(id).Dir)
+	walked := planet.ArcDist(start.Norm(), g.Player.LocalUp())
+	if moved < 2 || walked > 1.5+pushSpeed*3 {
+		t.Errorf("crate pushed %.2f m, player walked %.2f m", moved, walked)
+	}
+	// Let go, it stops at once and falls asleep.
+	walk(g, g.Player.Heading.Scale(-1), 1)
+	at := g.Ents.Transform.Get(id).Dir
+	walk(g, g.Player.Heading.Scale(-1), 1)
+	if d := planet.ArcDist(at, g.Ents.Transform.Get(id).Dir); d > 0.01 || !(*g.Ents.Body.Get(id)).Asleep() {
+		t.Errorf("crate slid %.2f m on its own", d)
+	}
+}
+
+func TestCrashIntoCrate(t *testing.T) {
+	g, v := ride(t, "core:buggy")
+	at := g.World.Relief.Surface(g.Player.Pos.Add(g.Player.Heading.Scale(30)))
+	id := g.spawn("core:crate", at)
+	flew, top, after := false, 0.0, 0.0
+	for range 4 * 60 {
+		in := controls{throttle: 1, boost: true}
+		if flew {
+			in = controls{} // not to run into it again
+		}
+		step(g, v, in, 1)
+		if !flew && g.Ents.Air.Has(id) {
+			flew, after = true, g.drive.vel.Length()
+		}
+		top = math.Max(top, g.Ents.Transform.Get(id).Alt)
+	}
+	e := g.Ents.Transform.Get(id)
+	if !flew || top < 0.5 || planet.ArcDist(at.Norm(), e.Dir) < 5 {
+		t.Errorf("crate flew %v, %.1f m high, %.1f m away", flew, top, planet.ArcDist(at.Norm(), e.Dir))
+	}
+	if g.Ents.Air.Has(id) || e.Alt != 0 || math.Mod(math.Abs(e.Pitch), math.Pi/2) > 1e-6 {
+		t.Errorf("not down on a face: alt %.2f, pitch %.2f", e.Alt, e.Pitch)
+	}
+	if after < v.Speed*0.5 {
+		t.Errorf("a crate stopped the buggy: %.1f m/s", after)
+	}
+}
