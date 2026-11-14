@@ -24,8 +24,8 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 	for _, id := range g.EntitiesNear(game.EntityDrawDist) {
 		kind := *g.Ents.Kind.Get(id)
 		def, ok := g.Content.Entities.Get(kind)
-		if !ok {
-			continue // its mod was removed: it stays in the save
+		if !ok || g.Held(id) {
+			continue // its mod was removed (it stays in the save), or it is being moved
 		}
 		models := gfx.entityModels(def)
 		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))

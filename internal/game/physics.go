@@ -548,14 +548,14 @@ func (g *Game) syncEntities() {
 	near := g.EntitiesNear(physReach)
 	slices.Sort(near) // the same bodies in the same order: steps repeat exactly
 	for id, bp := range g.Ents.Body.All() {
-		if _, ok := slices.BinarySearch(near, id); !ok || id == g.Riding {
+		if _, ok := slices.BinarySearch(near, id); !ok || id == g.Riding || id == g.held() {
 			p.w.Remove(*bp)
 			g.Ents.Body.Remove(id)
 		}
 	}
 	for _, id := range near {
 		def, ok := g.Content.Entities.Get(g.kind(id))
-		if !ok || id == g.Riding {
+		if !ok || id == g.Riding || id == g.held() {
 			continue
 		}
 		v, isVehicle := g.vehicleOf(id)

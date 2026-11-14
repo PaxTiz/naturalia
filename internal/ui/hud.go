@@ -333,6 +333,10 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.drawCompass(g)
 		hud.drawReticle(g)
 		hud.drawHeldItem(g)
+		moving := ""
+		if g.Riding == 0 {
+			moving = hud.aimedMovable(g)
+		}
 		switch {
 		case g.Riding != 0:
 			v, _ := g.Driven()
@@ -350,6 +354,8 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		case hud.hasUse(g):
 			it, _ := g.NearbyUse()
 			hud.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
+		case moving != "":
+			hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64, visorCyan)
 		case g.TankFull() && !g.AutoSell() && math.Mod(g.Elapsed, 1) < 0.7:
 			hud.prompt("", "RÉSERVOIR PLEIN · rapporte la poussière à l'incinérateur", h*0.64, visorAmber)
 		case !g.AimOK && rl.IsMouseButtonDown(rl.MouseButtonLeft):
@@ -378,6 +384,22 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 	}
 }
 
+// aimedMovable is the name of what right click would move, "" for none.
+func (hud *HUD) aimedMovable(g *game.Game) string {
+	if g.Ghost != nil {
+		return ""
+	}
+	id := g.AimedMovable()
+	if id == 0 {
+		return ""
+	}
+	def, ok := g.Content.Entities.Get(*g.Ents.Kind.Get(id))
+	if !ok {
+		return ""
+	}
+	return def.Name
+}
+
 // drawVisor lays the helmet's visor over the view.
 func (hud *HUD) drawVisor(g *game.Game) {
 	w, h := screenSize()
@@ -390,7 +412,8 @@ func (hud *HUD) drawVisor(g *game.Game) {
 // place it.
 func (hud *HUD) drawHeldItem(g *game.Game) {
 	it, n := g.HeldItem()
-	if it == nil {
+	moving := g.Ghost != nil && g.Ghost.Moving != 0
+	if it == nil && !moving {
 		return
 	}
 	keys := [][2]string{{"F", "poser"}, {"R", "changer"}}
@@ -400,19 +423,29 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 			place = "coller"
 		}
 		keys = [][2]string{{"F", "poser"}, {"R", "changer"}, {"X C B", "tourner"}, {"T", place}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
+		if moving {
+			keys = append(keys[:1], keys[2:]...)
+			keys[len(keys)-1][1] = "annuler"
+		}
 		if !gh.OK {
 			keys[0][1] = "bloqué"
 		}
 	}
 	u := uiScale()
 	x, y := 40*u, 158*u
-	label := fmt.Sprintf("%s ×%d", it.Name, n)
+	var label, ic string
+	if moving {
+		def, _ := g.Content.Entities.Get(g.Ghost.Kind)
+		label, ic = "Déplacer : "+def.Name, "crate"
+	} else {
+		label, ic = fmt.Sprintf("%s ×%d", it.Name, n), it.Icon
+	}
 	w := 44*u + hud.width(label, 16*u) + 6*u
 	for _, k := range keys {
 		w += rl.MeasureTextEx(hud.mono, k[0], 11*u, 0).X + 12*u + 4*u + hud.capsWidth(k[1], 12*u) + 10*u
 	}
 	visorPanel(rl.NewRectangle(x, y, w, 34*u), visorCyan)
-	icon(content.OrDefault(it.Icon, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
+	icon(content.OrDefault(ic, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
 	hud.text(label, x+36*u, y+8*u, 16*u, uiWhite)
 	kx := x + 44*u + hud.width(label, 16*u)
 	for _, k := range keys {

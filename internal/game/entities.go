@@ -167,7 +167,7 @@ func (g *Game) EntitiesNear(dist float64) []ecs.ID {
 func (g *Game) nearbyEntity() (ecs.ID, float64) {
 	best, bestDist := ecs.ID(0), math.Inf(1)
 	for _, id := range g.EntitiesNear(entityReach + 3) {
-		if id == g.Riding {
+		if id == g.Riding || id == g.held() {
 			continue
 		}
 		def, ok := g.Content.Entities.Get(g.kind(id))

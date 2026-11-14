@@ -134,7 +134,7 @@ func (g *Game) updateFleet(dt float64) {
 	nth := map[string]int{} // followers of each kind so far, to share the circle above the hub
 	for id, e := range g.Ents.Transform.All() {
 		v, ok := g.vehicleOf(id)
-		if !ok || !v.Auto() {
+		if !ok || !v.Auto() || id == g.held() {
 			continue
 		}
 		r := g.Ents.Roam.Get(id)

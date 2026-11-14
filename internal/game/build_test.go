@@ -174,3 +174,37 @@ func TestSlabAtChestHeight(t *testing.T) {
 		t.Errorf("walked into a slab at chest height: %.2f m from its middle", d)
 	}
 }
+
+func TestMoveBlock(t *testing.T) {
+	g := fleetGame(t, LoadContent(), map[string]int{})
+	id := block(g, "core:slab", 4)
+	from := g.Ents.Transform.Get(id).Dir
+	g.Player.Pitch = -0.5
+	if got := g.AimedMovable(); got != id {
+		t.Fatalf("aimed at %v, not the slab %v", got, id)
+	}
+	n := g.Ents.Len()
+	g.grab(id)
+	if !g.Held(id) || g.Ents.Body.Has(id) {
+		t.Fatalf("held %v, body %v", g.Held(id), g.Ents.Body.Has(id))
+	}
+	// Turned a quarter, set down beside: the same slab, moved.
+	g.Player.Heading = g.Player.Right()
+	g.poseGhost()
+	if !g.Ghost.OK {
+		t.Fatal("doesn't fit")
+	}
+	g.placeGhost()
+	g.stepPhysics(1.0 / 60)
+	to := g.Ents.Transform.Get(id).Dir
+	if g.Ghost != nil || g.Ents.Len() != n || planet.ArcDist(from, to) < 3 || !g.Ents.Body.Has(id) {
+		t.Errorf("moved %.1f m, %d entities (was %d), ghost %v, body %v", planet.ArcDist(from, to), g.Ents.Len(), n, g.Ghost, g.Ents.Body.Has(id))
+	}
+	// Taken again and put back: where it was, solid again.
+	g.grab(id)
+	g.Ghost = nil
+	g.stepPhysics(1.0 / 60)
+	if planet.ArcDist(to, g.Ents.Transform.Get(id).Dir) > 1e-3 || !g.Ents.Body.Has(id) {
+		t.Errorf("not back where it was: %.3f m off, body %v", planet.ArcDist(to, g.Ents.Transform.Get(id).Dir), g.Ents.Body.Has(id))
+	}
+}
