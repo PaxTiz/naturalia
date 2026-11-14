@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/physics"
 	"naturalia/internal/planet"
 
@@ -119,8 +120,9 @@ func (gh *Ghost) turn(axis vec3, angle float64) {
 	gh.rel[1] = rotate(gh.rel[1], axis, angle).Norm()
 }
 
-// poseGhost sets the ghost where the player looks: resting on the ground
-// by its lowest point, or held in the air when free.
+// poseGhost sets the ghost where the player looks: resting by its lowest
+// point on the ground, or against the face of a block, lined up with it
+// on a 25 cm grid; or held in the air when free.
 func (g *Game) poseGhost() {
 	gh := g.Ghost
 	def, ok := g.Content.Entities.Get(gh.Kind)
@@ -130,41 +132,73 @@ func (g *Game) poseGhost() {
 	p := &g.Player
 	eye, fwd := p.Eye(), p.Forward()
 	at := eye.Add(fwd.Scale(gh.dist))
-	if !gh.Free {
-		hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach)
-		if !ok {
-			hit = g.World.Relief.Surface(eye.Add(planet.TangentAt(p.LocalUp(), fwd).Scale(buildReach)))
-		}
-		at = hit
-	}
 	n := at.Norm() // the surface's up
 	face := planet.TangentAt(n, p.Heading).Scale(-1)
 	if def.Ramp != nil || def.Kick > 0 {
 		face = face.Scale(-1) // rising away from the player, toward where they drive
 	}
-	side := face.Cross(n)
-	world := func(v vec3) vec3 { return face.Scale(v.X).Add(n.Scale(v.Y)).Add(side.Scale(v.Z)) }
+	frame := [3]vec3{face, n, face.Cross(n)} // what the player's turns are from
+	var on ecs.ID                            // the block it rests against
+	if !gh.Free {
+		hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach)
+		reach := hit.Sub(eye).Length()
+		if !ok {
+			hit, reach = g.World.Relief.Surface(eye.Add(planet.TangentAt(p.LocalUp(), fwd).Scale(buildReach))), buildReach
+		}
+		at, n = hit, hit.Norm()
+		if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach); ok && g.turnable(def) {
+			at, n, on = bhit, bn, id
+			_, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+			frame = [3]vec3{ax, up, az}
+		}
+	}
+	world := func(v vec3) vec3 { return frame[0].Scale(v.X).Add(frame[1].Scale(v.Y)).Add(frame[2].Scale(v.Z)) }
 	ax, up := world(gh.rel[0]), world(gh.rel[1])
-	corners := ghostCorners(def, ax, up, 0)
 	var origin vec3
 	if gh.Free {
 		lo, hi := content.Bounds(def.Parts)
 		mid := lo.Add(hi).Scale(0.5)
 		origin = at.Sub(ax.Scale(mid.X).Add(up.Scale(mid.Y)).Add(ax.Cross(up).Scale(mid.Z)))
 	} else {
-		low := math.Inf(1)
-		for _, c := range corners {
-			low = math.Min(low, c.Dot(n))
-		}
-		if len(def.Parts) == 0 {
-			low = 0
+		low := 0.0
+		if len(def.Parts) > 0 {
+			low = math.Inf(1)
+			for _, c := range ghostCorners(def, ax, up, 0) {
+				low = math.Min(low, c.Dot(n))
+			}
 		}
 		origin = at.Sub(n.Scale(low - gh.lift))
+	}
+	if on != 0 {
+		origin = g.snapOn(on, origin, n)
+	} else if !gh.Free {
+		// On a slope: up to where none of it goes into the ground.
+		sink := 0.0
+		for _, c := range ghostCorners(def, ax, up, 0) {
+			sink = math.Max(sink, -g.World.Relief.Altitude(origin.Add(c)))
+		}
+		origin = origin.Add(n.Scale(sink))
 	}
 	gh.Pose = Transform{Dir: origin.Norm()}
 	gh.Pose.Alt = origin.Length() - g.World.Relief.Surface(gh.Pose.Dir).Length()
 	gh.Pose.SetAxes(ax, up)
 	gh.OK = g.ghostFits(def, origin, ax, up)
+}
+
+// snapOn moves a point resting on a face of block id onto a 25 cm grid in
+// the block's frame, along the face only.
+func (g *Game) snapOn(id ecs.ID, at, n vec3) vec3 {
+	const grid = 0.25
+	pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+	off := at.Sub(pos)
+	for _, a := range [3]vec3{ax, up, az} {
+		if math.Abs(a.Dot(n)) > 0.9 {
+			continue // across the face: it rests on it
+		}
+		l := off.Dot(a)
+		off = off.Add(a.Scale(math.Round(l/grid)*grid - l))
+	}
+	return pos.Add(off)
 }
 
 // ghostCorners are the corners of the box around an entity's parts,

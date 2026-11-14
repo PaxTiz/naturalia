@@ -165,6 +165,9 @@ type EntityDef struct {
 	// Kick throws a driven vehicle that crosses it forward, adding this
 	// speed in m/s (a boost pad).
 	Kick float64 `json:"kick"`
+	// Build makes it a block to build with: set down turned any way, it
+	// stays put, and the player walks on it.
+	Build bool `json:"build"`
 	// Trigger makes it a zone, walked and driven through: who comes in and
 	// goes out says trigger_enter and trigger_leave. It spans radius, or
 	// its parts without one, up to 1.5 m over them.
@@ -310,10 +313,14 @@ func Bounds(parts []PartJSON) (lo, hi vec3) {
 			rr := math.Max(p.R0, OrZero(p.R1, p.R0))
 			grow(p.At, vec3{rr, 0, rr})
 			grow(p.At.Add(axis.Norm().Scale(p.H)), vec3{rr, 0, rr})
-		default: // a box or a wedge, maybe turned, from its middle
+		default: // a box from its middle, or a wedge standing on at, maybe turned
 			a := p.Yaw * math.Pi / 180
 			c, s := math.Abs(math.Cos(a)), math.Abs(math.Sin(a))
-			grow(p.At, vec3{(p.Size.X*c + p.Size.Z*s) / 2, p.Size.Y / 2, (p.Size.X*s + p.Size.Z*c) / 2})
+			mid := p.At
+			if p.Shape == "wedge" {
+				mid.Y += p.Size.Y / 2
+			}
+			grow(mid, vec3{(p.Size.X*c + p.Size.Z*s) / 2, p.Size.Y / 2, (p.Size.X*s + p.Size.Z*c) / 2})
 		}
 	}
 	return lo, hi

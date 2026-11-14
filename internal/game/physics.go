@@ -557,12 +557,19 @@ func (g *Game) syncEntities() {
 			continue
 		}
 		v, isVehicle := g.vehicleOf(id)
-		if def.Radius <= 0 && def.Mass <= 0 && !(isVehicle && v.Auto()) && !trigger(def) {
+		if def.Radius <= 0 && def.Mass <= 0 && !(isVehicle && v.Auto()) && !trigger(def) && !def.Build {
+			continue
+		}
+		bp := g.Ents.Body.Get(id)
+		switch {
+		case bp != nil && (*bp).Kind == physics.Static:
+			continue // a block: it stays put
+		case bp == nil && def.Build:
+			g.Ents.Body.Set(id, p.w.Add(g.blockBody(id, def)))
 			continue
 		}
 		e := g.Ents.Transform.Get(id)
 		at := g.World.Relief.Surface(e.Dir)
-		bp := g.Ents.Body.Get(id)
 		if bp == nil {
 			bp = g.Ents.Body.Set(id, p.w.Add(g.entityBody(id, def)))
 			ax, _, _ := entityAxes(e.Dir, e.Yaw)

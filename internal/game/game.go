@@ -91,18 +91,20 @@ type Game struct {
 	Mode        Mode
 	Elapsed     float64 // seconds played
 	saveTimer   float64
+	NoSave      bool    // screenshots: the player was moved, nothing is kept
 	SellPop     float64 // timer of the "+X cr" pop next to the credits
 	SellPopText string
-	Message     string  // said by a mod (say), shown on the visor...
-	MessageT    float64 // ...for this long still
-	itemSel     int     // which carried item F places (R cycles)
-	Ghost       *Ghost  // the item being placed, drawn see-through (build.go)
-	Ents        *Ents   // standing in the world
-	Riding      ecs.ID  // the vehicle driven, 0 on foot
-	drive       drive   // the driven vehicle's motion
-	chase       bool    // the camera follows the driven vehicle from behind (V)
-	fleetHeld   bool    // automatic vehicles stand still (LineUp)
-	Photo       Photo   // the photo mode's camera and settings
+	Message     string             // said by a mod (say), shown on the visor...
+	MessageT    float64            // ...for this long still
+	itemSel     int                // which carried item F places (R cycles)
+	Ghost       *Ghost             // the item being placed, drawn see-through (build.go)
+	solids      map[string][]solid // each kind's parts, for rays (blocks.go)
+	Ents        *Ents              // standing in the world
+	Riding      ecs.ID             // the vehicle driven, 0 on foot
+	drive       drive              // the driven vehicle's motion
+	chase       bool               // the camera follows the driven vehicle from behind (V)
+	fleetHeld   bool               // automatic vehicles stand still (LineUp)
+	Photo       Photo              // the photo mode's camera and settings
 
 	walls    []base.Segment // the base's walls, for collisions
 	phys     *phys          // the collisions' plane (physics.go)
@@ -237,7 +239,7 @@ func (g *Game) Update(dt float64) {
 	}
 
 	g.saveTimer += dt
-	if g.saveTimer >= saveInterval {
+	if g.saveTimer >= saveInterval && !g.NoSave {
 		g.saveTimer = 0
 		g.Save()
 	}
