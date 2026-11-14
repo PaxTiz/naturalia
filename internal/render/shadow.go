@@ -93,6 +93,7 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 	rl.ClearBackground(rl.White)
 	rl.SetClipPlanes(1, shadowDepth)
 	rl.BeginMode3D(s.camera(center))
+	gfx.setViewProj(s.cols(gfx.origin))
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
 	rl.SetBlendFactors(glOne, glOne, glMin)
 	rl.BeginBlendMode(rl.BlendCustom)
@@ -163,6 +164,7 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 	rl.ClearBackground(rl.White)
 	rl.SetClipPlanes(0.1, 30)
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
+	proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
 	for i, lamp := range lamps[:min(len(lamps), s.grid*s.grid)] {
 		cam := rl.Camera3D{
 			Position: ToRL(lamp), Target: ToRL(lamp.Sub(vec3{0, 1, 0})), Up: rl.Vector3{X: 1},
@@ -171,6 +173,7 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 		rl.BeginMode3D(cam)
 		rl.Viewport(int32(i)%grid*cell, int32(i)/grid*cell, cell, cell)
 		s.lamps = append(s.lamps, lamp)
+		gfx.setViewProj(relVP(lamp, lamp.Sub(vec3{0, 1, 0}), vec3{1, 0, 0}, gfx.origin, proj))
 		rl.SetBlendFactors(glOne, glOne, glMin)
 		rl.BeginBlendMode(rl.BlendCustom)
 		rl.DisableBackfaceCulling()

@@ -4,8 +4,12 @@
 in vec3 vertexPosition;
 in vec3 vertexNormal;
 in vec2 vertexTexCoord;
-uniform mat4 mvp;
 uniform vec3 origin;
+// viewProj is the camera about origin, computed in double precision (relVP):
+// projecting fragRel rather than the world position keeps the quarter
+// millimeter of float grain off the screen, where it made close surfaces
+// fight for each pixel as the camera moved.
+uniform vec4 viewProj[4];
 uniform vec4 lightVP[4]; // the shadow map's camera about origin, by columns
 out vec3 fragPos;
 out vec3 fragRel;
@@ -25,5 +29,5 @@ void main() {
     vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragRel, 1.0);
     shadowCoord = lp.xyz / lp.w * 0.5 + 0.5; // orthographic: linear, so exact per vertex
     fragNormal = normalize(vertexNormal);
-    gl_Position = mvp * vec4(vertexPosition, 1.0);
+    gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel, 1.0);
 }

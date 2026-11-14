@@ -3,11 +3,15 @@
 // The column narrows above a dusty skirt, flares at the top and sways.
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
-uniform mat4 mvp;
 uniform mat4 matModel;
 uniform float time;
 uniform vec4 devil; // x: seed, y: strength
 uniform vec3 origin;
+// viewProj is the camera about origin, computed in double precision (relVP):
+// projecting fragRel rather than the world position keeps the quarter
+// millimeter of float grain off the screen, where it made close surfaces
+// fight for each pixel as the camera moved.
+uniform vec4 viewProj[4];
 out vec3 fragRel;
 out vec3 fragPos;
 out vec3 fragNormal;
@@ -22,5 +26,5 @@ void main() {
     fragPos = vec3(matModel * vec4(p, 1.0));
     fragRel = fragPos - origin;
     fragNormal = normalize(mat3(matModel) * vec3(cos(a), 0.0, sin(a)));
-    gl_Position = mvp * vec4(p, 1.0);
+    gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel, 1.0);
 }

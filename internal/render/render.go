@@ -29,6 +29,7 @@ type shaderLocs struct {
 	ground                      int32
 	steps, stepDirs, stepCount  int32
 	lightVP, shadowPass         int32
+	viewProj                    int32
 	lighting, room              int32
 	mat, wear                   int32
 	globeCenter, globeRot       int32
@@ -70,7 +71,9 @@ type Graphics struct {
 	nearGems    []planet.Gem                // crystals around the player, refreshed every frame
 	nearPebbles map[planet.TileKey][]pebble // per tile, around the player
 	stats       Stats
-	camEye      vec3    // the camera's position in double precision (camera)
+	camEye      vec3 // the camera's position in double precision (camera)
+	camLook     vec3 // where it looks, and its up, in double precision too
+	camUp       vec3
 	near, far   float64 // the view's clip planes, set each frame by clipPlanes
 	hazeThin    float32 // and the haze's thinning with altitude (common.glsl)
 	skyAir      float32 // the sky fading to space with altitude (sky.frag)
@@ -87,7 +90,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"), instanced: loc("instanced"), ground: loc("ground"),
 		steps: loc("steps"), stepDirs: loc("stepDirs"), stepCount: loc("stepCount"),
-		lightVP: loc("lightVP"), shadowPass: loc("shadowPass"),
+		lightVP: loc("lightVP"), shadowPass: loc("shadowPass"), viewProj: loc("viewProj"),
 		lighting: loc("lighting"), room: loc("room"),
 		mat: loc("matInfo"), wear: loc("wear"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
@@ -243,7 +246,7 @@ func (gfx *Graphics) segment(m rl.Model, a, b vec3, radius float64, c color.RGBA
 // eased by updateFov.
 func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 	if ph := &g.Photo; g.Mode == game.ModePhoto {
-		gfx.camEye = ph.Pos
+		gfx.camEye, gfx.camLook, gfx.camUp = ph.Pos, ph.Pos.Add(ph.Forward()), ph.CamUp()
 		return rl.Camera3D{
 			Position:   ToRL(ph.Pos),
 			Target:     ToRL(ph.Pos.Add(ph.Forward())),
@@ -270,7 +273,7 @@ func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 		k *= 0.06
 		eye = eye.Add(right.Scale(math.Sin(g.Elapsed*61) * k)).Add(up.Scale(math.Sin(g.Elapsed*47+2) * k))
 	}
-	gfx.camEye = eye
+	gfx.camEye, gfx.camLook, gfx.camUp = eye, target, camUp
 	return rl.Camera3D{
 		Position:   ToRL(eye),
 		Target:     ToRL(target),
@@ -287,14 +290,8 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
 	}
-	// The shaders' origin (common.glsl): the eye snapped to a 32 m grid,
-	// so the tile offsets they derive from it stay put between snaps.
-	e := gfx.camEye
-	snap := func(v float64) float64 { return float64(float32(math.Floor(v/32) * 32)) }
-	o := vec3{snap(e.X), snap(e.Y), snap(e.Z)}
-	gfx.origin = o
+	e, o := gfx.camEye, gfx.origin
 	for _, s := range gfx.shaders() {
-		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(o), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "viewRel"), v3f(e.Sub(o)), rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "hazeThin"), []float32{gfx.hazeThin}, rl.ShaderUniformFloat)
 	}
@@ -357,11 +354,40 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	rl.SetShaderValueV(gfx.objectSh, gfx.oLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
 
+// setOrigin sets the shaders' origin (common.glsl): the eye snapped to a
+// 32 m grid, so the tile offsets they derive from it stay put between
+// snaps. Every pass projects from it, the shadows' too.
+func (gfx *Graphics) setOrigin() {
+	e := gfx.camEye
+	snap := func(v float64) float64 { return float64(float32(math.Floor(v/32) * 32)) }
+	gfx.origin = vec3{snap(e.X), snap(e.Y), snap(e.Z)}
+	for _, s := range gfx.shaders() {
+		rl.SetShaderValue(s.sh, rl.GetShaderLocation(s.sh, "origin"), v3f(gfx.origin), rl.ShaderUniformVec3)
+	}
+}
+
+// setViewProj gives every shader the camera of the next draws, about
+// origin (relVP).
+func (gfx *Graphics) setViewProj(cols []float32) {
+	for _, s := range gfx.shaders() {
+		rl.SetShaderValueV(s.sh, s.loc.viewProj, cols, rl.ShaderUniformVec4, 4)
+	}
+}
+
+// viewCols is the view's camera about origin, as BeginMode3D sets it for
+// the scene's target.
+func (gfx *Graphics) viewCols(cam rl.Camera3D) []float32 {
+	t := gfx.post.scene.Texture
+	proj := rl.MatrixPerspective(cam.Fovy*math.Pi/180, float32(t.Width)/float32(t.Height), float32(gfx.near), float32(gfx.far))
+	return relVP(gfx.camEye, gfx.camLook, gfx.camUp, gfx.origin, proj)
+}
+
 // Draw draws a frame of the game; overlay draws over it, on the screen
 // (the interface).
 func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	cam := gfx.camera(g)
 	gfx.clipPlanes(g)
+	gfx.setOrigin()
 
 	atlas, lookup := gfx.dust.Upload(g.World, g.Player.Pos)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapDiffuse, atlas)
@@ -394,6 +420,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	rl.BeginTextureMode(gfx.post.scene)
 	rl.ClearBackground(rl.Black)
 	rl.BeginMode3D(cam)
+	gfx.setViewProj(gfx.viewCols(cam))
 
 	// Sky: a big sphere around the camera, seen from inside, behind everything.
 	rl.DisableBackfaceCulling()
