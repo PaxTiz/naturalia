@@ -4,6 +4,7 @@ import (
 	"math"
 	"naturalia/internal/ecs"
 	"naturalia/internal/planet"
+	"slices"
 	"testing"
 )
 
@@ -226,5 +227,31 @@ func TestMoveBlock(t *testing.T) {
 	g.stepPhysics(1.0 / 60)
 	if planet.ArcDist(to, g.Ents.Transform.Get(id).Dir) > 1e-3 || !g.Ents.Body.Has(id) {
 		t.Errorf("not back where it was: %.3f m off, body %v", planet.ArcDist(to, g.Ents.Transform.Get(id).Dir), g.Ents.Body.Has(id))
+	}
+}
+
+func TestShopTabs(t *testing.T) {
+	g := fleetGame(t, LoadContent(), map[string]int{})
+	items := g.ShopItems()
+	var got []string
+	for _, tab := range ShopTabs(items) {
+		got = append(got, tab.ID)
+	}
+	if want := []string{"tools", "upgrades", "fleet", "build", "items"}; !slices.Equal(got, want) {
+		t.Errorf("tabs %v, want %v", got, want)
+	}
+	for _, it := range items {
+		if want := map[string]string{"core:crate-4": "build", "core:slope": "build", "core:crate": "items"}[it.id]; want != "" && it.Tab != want {
+			t.Errorf("%s in %q, want %q", it.id, it.Tab, want)
+		}
+	}
+	// A mod's own category gets a tab of its own, last.
+	items = append(items, ShopItem{Tab: "Déco"})
+	if tabs := ShopTabs(items); tabs[len(tabs)-1] != (ShopTab{"Déco", "Déco"}) {
+		t.Errorf("tabs %v", tabs)
+	}
+	g.Garage = true
+	if tabs := ShopTabs(g.ShopItems()); len(tabs) != 0 {
+		t.Errorf("garage tabs %v", tabs)
 	}
 }

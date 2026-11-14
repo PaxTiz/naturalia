@@ -120,14 +120,15 @@ type Tool struct {
 // Upgrade is bought level after level; each level applies its effects to
 // the game's stats.
 type Upgrade struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Desc    string   `json:"desc"`
-	Icon    string   `json:"icon"`   // pictogram drawn by the shop (icon)
-	Base    float64  `json:"base"`   // price of the first level...
-	Growth  float64  `json:"growth"` // ...times this for each level bought
-	Max     int      `json:"max"`    // 0 means unlimited
-	Effects []Effect `json:"effects"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Desc     string   `json:"desc"`
+	Icon     string   `json:"icon"`     // pictogram drawn by the shop (icon)
+	Category string   `json:"category"` // the shop's tab: "upgrades" if left out (see ShopTabs)
+	Base     float64  `json:"base"`     // price of the first level...
+	Growth   float64  `json:"growth"`   // ...times this for each level bought
+	Max      int      `json:"max"`      // 0 means unlimited
+	Effects  []Effect `json:"effects"`
 }
 
 // Effect changes a stat for each level: (base + Add×level) × Mult^level.
@@ -185,12 +186,24 @@ type Ramp struct {
 
 // Item is carried in the inventory and placed as an entity.
 type Item struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Desc   string  `json:"desc"`
-	Icon   string  `json:"icon"`
-	Cost   float64 `json:"cost"`   // in the shop; 0 keeps it out of it
-	Places string  `json:"places"` // ID of the entity it becomes
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Desc     string  `json:"desc"`
+	Icon     string  `json:"icon"`
+	Cost     float64 `json:"cost"`     // in the shop; 0 keeps it out of it
+	Category string  `json:"category"` // the shop's tab: "build" for a block, "items" otherwise, if left out
+	Places   string  `json:"places"`   // ID of the entity it becomes
+}
+
+// ShopTabs are the shop's tabs, in their order. An upgrade, an item or an
+// automatic vehicle with a category of its own gets a tab after them, named
+// after that category.
+var ShopTabs = []struct{ ID, Name string }{
+	{"tools", "Outils"},
+	{"upgrades", "Améliorations"},
+	{"fleet", "Flotte"},
+	{"build", "Construction"},
+	{"items", "Objets"},
 }
 
 // Vehicles are entities that sweep the dust: bought in the shop, they come
@@ -205,28 +218,29 @@ type Item struct {
 // like the drones) or "patrol" (they go into the inventory, are set down
 // with F and sweep around that spot, until E picks them back up).
 type Vehicle struct {
-	ID     string     `json:"id"`
-	Name   string     `json:"name"`
-	Desc   string     `json:"desc"`
-	Icon   string     `json:"icon"`   // in the shop: "vehicle" if left out
-	Cost   float64    `json:"cost"`   // the first one...
-	Growth float64    `json:"growth"` // ...times this for each one owned (automatic ones)
-	Max    int        `json:"max"`    // how many can be owned: 1 for driven ones, 0 unlimited
-	Drive  string     `json:"drive"`  // "manual" (default) or "auto"
-	AI     string     `json:"ai"`     // automatic: "follow" (default) or "patrol"
-	Range  float64    `json:"range"`  // automatic: how far from the player, or its spot, it looks for dust
-	Speed  float64    `json:"speed"`  // m/s
-	Turn   float64    `json:"turn"`   // driven: steering, radians per second at full speed
-	Grip   float64    `json:"grip"`   // driven: how fast sideways sliding stops; low drifts (hover)
-	Hover  float64    `json:"hover"`  // height it floats or flies at; 0 rolls on the ground
-	Sweep  float64    `json:"sweep"`  // radius it sweeps under it; 0 doesn't
-	Rate   float64    `json:"rate"`   // grams per second, like a tool's
-	Hopper float64    `json:"hopper"` // driven: grams it adds to the tank while driven
-	Seat   float64    `json:"seat"`   // driven: eye height, over the hover height
-	Radius float64    `json:"radius"` // what the player bumps into on foot
-	Mass   float64    `json:"mass"`   // kg: how hard it hits and is hit (from its size if left out)
-	Light  vec3       `json:"light"`  // a status light, blinking green (red when the tank is full); 0,0,0 has none
-	Parts  []PartJSON `json:"parts"`  // its shape, front toward +X
+	ID       string     `json:"id"`
+	Name     string     `json:"name"`
+	Desc     string     `json:"desc"`
+	Icon     string     `json:"icon"`     // in the shop: "vehicle" if left out
+	Category string     `json:"category"` // automatic ones: the shop's tab, "fleet" if left out
+	Cost     float64    `json:"cost"`     // the first one...
+	Growth   float64    `json:"growth"`   // ...times this for each one owned (automatic ones)
+	Max      int        `json:"max"`      // how many can be owned: 1 for driven ones, 0 unlimited
+	Drive    string     `json:"drive"`    // "manual" (default) or "auto"
+	AI       string     `json:"ai"`       // automatic: "follow" (default) or "patrol"
+	Range    float64    `json:"range"`    // automatic: how far from the player, or its spot, it looks for dust
+	Speed    float64    `json:"speed"`    // m/s
+	Turn     float64    `json:"turn"`     // driven: steering, radians per second at full speed
+	Grip     float64    `json:"grip"`     // driven: how fast sideways sliding stops; low drifts (hover)
+	Hover    float64    `json:"hover"`    // height it floats or flies at; 0 rolls on the ground
+	Sweep    float64    `json:"sweep"`    // radius it sweeps under it; 0 doesn't
+	Rate     float64    `json:"rate"`     // grams per second, like a tool's
+	Hopper   float64    `json:"hopper"`   // driven: grams it adds to the tank while driven
+	Seat     float64    `json:"seat"`     // driven: eye height, over the hover height
+	Radius   float64    `json:"radius"`   // what the player bumps into on foot
+	Mass     float64    `json:"mass"`     // kg: how hard it hits and is hit (from its size if left out)
+	Light    vec3       `json:"light"`    // a status light, blinking green (red when the tank is full); 0,0,0 has none
+	Parts    []PartJSON `json:"parts"`    // its shape, front toward +X
 
 	// Driven ones fly off crests and ramps, under Mars' gravity times
 	// Gravity (2 if left out: Mars' alone makes them float); in the air,

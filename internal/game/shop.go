@@ -53,6 +53,7 @@ type ShopItem struct {
 	id               string // of the tool or upgrade
 	Name, Desc, Info string
 	Icon             string // what the shop draws next to it: "tool" or an upgrade id
+	Tab              string // the shop's tab it is in (content.ShopTabs); "" at the garage
 	Cost             float64
 	Maxed            bool
 	buy              func()
@@ -81,11 +82,12 @@ func (g *Game) ShopItems() []ShopItem {
 			Desc: fmt.Sprintf("Rayon %.1f m, portée %.0f m, vitesse %.1f g/s", t.Radius, t.Reach, t.Rate),
 			Info: fmt.Sprintf("Outil %d/%d", next+1, len(tools)),
 			Icon: "tool",
+			Tab:  "tools",
 			Cost: t.Cost,
 			buy:  func() { g.State.Tool = t.ID },
 		})
 	} else {
-		items = append(items, ShopItem{Name: "Outil : " + g.Tool().Name, Desc: "Le meilleur outil de la galaxie", Info: "Outil max", Icon: "tool", Maxed: true})
+		items = append(items, ShopItem{Name: "Outil : " + g.Tool().Name, Desc: "Le meilleur outil de la galaxie", Info: "Outil max", Icon: "tool", Tab: "tools", Maxed: true})
 	}
 
 	for _, u := range g.Content.Upgrades.All() {
@@ -95,6 +97,7 @@ func (g *Game) ShopItems() []ShopItem {
 			Name: u.Name,
 			Desc: u.Desc,
 			Icon: u.Icon,
+			Tab:  content.OrDefault(u.Category, "upgrades"),
 			Info: fmt.Sprintf("Niv %d", lvl),
 			Cost: u.Base * math.Pow(u.Growth, float64(lvl)),
 			buy:  func() { g.State.Levels[u.ID]++ },
@@ -112,6 +115,7 @@ func (g *Game) ShopItems() []ShopItem {
 		bought := g.State.Levels[v.ID]
 		it := ShopItem{
 			id: v.ID, Name: v.Name, Desc: v.Desc, Icon: content.OrDefault(v.Icon, "vehicle"),
+			Tab:  content.OrDefault(v.Category, "fleet"),
 			Cost: v.Cost * math.Pow(content.OrZero(v.Growth, 1), float64(bought)),
 			buy:  func() { g.buyVehicle(v) },
 		}
@@ -130,9 +134,14 @@ func (g *Game) ShopItems() []ShopItem {
 		if o.Cost <= 0 {
 			continue
 		}
+		tab, kind := o.Category, "Objet"
+		if def, ok := g.Content.Entities.Get(o.Places); ok && def.Build {
+			tab, kind = content.OrDefault(tab, "build"), "Bloc"
+		}
 		items = append(items, ShopItem{
 			id: o.ID, Name: o.Name, Desc: o.Desc, Icon: content.OrDefault(o.Icon, "flag"),
-			Info: fmt.Sprintf("Objet · %d sur toi", g.State.Items[o.ID]), Cost: o.Cost,
+			Tab:  content.OrDefault(tab, "items"),
+			Info: fmt.Sprintf("%s · %d sur toi", kind, g.State.Items[o.ID]), Cost: o.Cost,
 			buy: func() {
 				if g.State.Items == nil {
 					g.State.Items = map[string]int{}
@@ -142,6 +151,26 @@ func (g *Game) ShopItems() []ShopItem {
 		})
 	}
 	return items
+}
+
+// ShopTab is a tab of the shop: its category, and its name.
+type ShopTab struct{ ID, Name string }
+
+// ShopTabs are the tabs items are in, in content.ShopTabs' order, then
+// the mods' own categories as they come.
+func ShopTabs(items []ShopItem) []ShopTab {
+	var tabs []ShopTab
+	for _, t := range content.ShopTabs {
+		if slices.ContainsFunc(items, func(it ShopItem) bool { return it.Tab == t.ID }) {
+			tabs = append(tabs, ShopTab(t))
+		}
+	}
+	for _, it := range items {
+		if it.Tab != "" && !slices.ContainsFunc(tabs, func(t ShopTab) bool { return t.ID == it.Tab }) {
+			tabs = append(tabs, ShopTab{it.Tab, it.Tab})
+		}
+	}
+	return tabs
 }
 
 // garageItems are the vehicles to drive: those to buy, and those owned,

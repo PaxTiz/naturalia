@@ -11,6 +11,7 @@ import (
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
 	"naturalia/internal/render"
+	"slices"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -290,19 +291,51 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 	}
 }
 
-// shopPanel and the item rows are shared by drawing and mouse handling.
-func shopPanel() rl.Rectangle {
+// shopPanel, its tabs and the item rows are shared by drawing and mouse
+// handling; tabs (how many, 0 for none) push the rows down.
+func shopPanel(tabs int) rl.Rectangle {
 	u := uiScale()
 	w, h := screenSize()
-	return rl.NewRectangle((w-700*u)/2, (h-470*u)/2, 700*u, 470*u)
+	ph := 470 * u
+	if tabs > 0 {
+		ph += shopTabsH * u
+	}
+	return rl.NewRectangle((w-700*u)/2, (h-ph)/2, 700*u, ph)
 }
 
 // shopRows is how many rows the shop shows at once; the wheel scrolls.
 const shopRows = 6
 
-func shopItemRect(i int) rl.Rectangle {
-	p, u := shopPanel(), uiScale()
-	return rl.NewRectangle(p.X+18*u, p.Y+72*u+float32(i)*64*u, p.Width-36*u, 58*u)
+// shopTabsH is the height the tabs take, over the rows.
+const shopTabsH = 42
+
+func shopTabRect(i, tabs int) rl.Rectangle {
+	p, u := shopPanel(tabs), uiScale()
+	w := (p.Width - 36*u + 6*u) / float32(tabs)
+	return rl.NewRectangle(p.X+18*u+float32(i)*w, p.Y+68*u, w-6*u, 30*u)
+}
+
+func shopItemRect(i, tabs int) rl.Rectangle {
+	p, u := shopPanel(tabs), uiScale()
+	y := p.Y + 72*u
+	if tabs > 0 {
+		y += shopTabsH * u
+	}
+	return rl.NewRectangle(p.X+18*u, y+float32(i)*64*u, p.Width-36*u, 58*u)
+}
+
+// shopPage is the shop's tabs (none for just one) and the items of the
+// one open: the first, if the one open before is gone.
+func (hud *HUD) shopPage(g *game.Game) ([]game.ShopTab, []game.ShopItem) {
+	items := g.ShopItems()
+	tabs := game.ShopTabs(items)
+	if len(tabs) < 2 {
+		return nil, items
+	}
+	if !slices.ContainsFunc(tabs, func(t game.ShopTab) bool { return t.ID == hud.shopTab }) {
+		hud.shopTab = tabs[0].ID
+	}
+	return tabs, slices.DeleteFunc(items, func(it game.ShopItem) bool { return it.Tab != hud.shopTab })
 }
 
 // Draw draws the interface over the frame: rs are the rendering's
@@ -741,7 +774,8 @@ func (hud *HUD) terminal(g *game.Game, p rl.Rectangle, title string, accent colo
 
 func (hud *HUD) drawShop(g *game.Game) {
 	u := uiScale()
-	p := shopPanel()
+	tabs, items := hud.shopPage(g)
+	p := shopPanel(len(tabs))
 	title := "LABORATOIRE DE RECHERCHE"
 	if g.Garage {
 		title = "GARAGE · VÉHICULES"
@@ -754,12 +788,28 @@ func (hud *HUD) drawShop(g *game.Game) {
 	rl.DrawRing(coin, 3.5*u, 5.5*u, 50, 310, 16, color.RGBA{150, 105, 30, 255})
 	hud.monoRight(game.FmtNum(g.State.Credits)+" cr", right, p.Y+13*u, 24*u, uiInk)
 
-	items := g.ShopItems()
+	mouse := rl.GetMousePosition()
+	for i, t := range tabs {
+		r := shopTabRect(i, len(tabs))
+		bg, col := uiRow, uiMuted
+		switch {
+		case t.ID == hud.shopTab:
+			bg, col = visorCyan, uiInk
+		case rl.CheckCollisionPointRec(mouse, r):
+			bg, col = uiRowLit, uiWhite
+		}
+		fillCut(r, 6*u, bg)
+		name, size := strings.ToUpper(t.Name), 14*u
+		if w := hud.capsWidth(name, size); w > r.Width-14*u {
+			size *= (r.Width - 14*u) / w // a long name shrinks to fit
+		}
+		hud.capsCenter(name, r.X+r.Width/2, r.Y+(r.Height-size)/2, size, col)
+	}
 	for i, it := range items {
 		if i < hud.shopScroll || i >= hud.shopScroll+shopRows {
 			continue
 		}
-		r := shopItemRect(i - hud.shopScroll)
+		r := shopItemRect(i-hud.shopScroll, len(tabs))
 		bg := uiRow
 		if i == hud.hover {
 			bg = uiRowLit
@@ -803,7 +853,7 @@ func (hud *HUD) drawShop(g *game.Game) {
 	}
 	// A scroll bar when everything doesn't fit.
 	if len(items) > shopRows {
-		top, bottom := shopItemRect(0), shopItemRect(shopRows-1)
+		top, bottom := shopItemRect(0, len(tabs)), shopItemRect(shopRows-1, len(tabs))
 		track := rl.NewRectangle(p.X+p.Width-12*u, top.Y, 4*u, bottom.Y+bottom.Height-top.Y)
 		rl.DrawRectangleRec(track, uiTrack)
 		h := track.Height * shopRows / float32(len(items))
@@ -903,10 +953,29 @@ func (hud *HUD) Update(g *game.Game, dt float64) {
 	}
 }
 
-// updateShop scrolls the shop, follows the mouse over its rows and buys
-// the one clicked.
+// updateShop switches the shop's tabs (a click, Q D or the arrows), scrolls
+// it, follows the mouse over its rows and buys the one clicked.
 func (hud *HUD) updateShop(g *game.Game) {
-	items := g.ShopItems()
+	tabs, _ := hud.shopPage(g)
+	if n := len(tabs); n > 0 {
+		at := slices.IndexFunc(tabs, func(t game.ShopTab) bool { return t.ID == hud.shopTab })
+		to := at
+		switch {
+		case rl.IsKeyPressed(rl.KeyLeft), rl.IsKeyPressed(rl.KeyA): // Q on AZERTY
+			to = (at + n - 1) % n
+		case rl.IsKeyPressed(rl.KeyRight), rl.IsKeyPressed(rl.KeyD):
+			to = (at + 1) % n
+		}
+		for i := range tabs {
+			if rl.IsMouseButtonPressed(rl.MouseButtonLeft) && rl.CheckCollisionPointRec(rl.GetMousePosition(), shopTabRect(i, n)) {
+				to = i
+			}
+		}
+		if to != at {
+			hud.shopTab, hud.shopScroll, hud.confirm = tabs[to].ID, 0, -1
+		}
+	}
+	tabs, items := hud.shopPage(g)
 	wheel := rl.GetMouseWheelMove()
 	if wheel < 0 || rl.IsKeyPressed(rl.KeyDown) {
 		hud.shopScroll++
@@ -917,7 +986,7 @@ func (hud *HUD) updateShop(g *game.Game) {
 	mouse := rl.GetMousePosition()
 	hud.hover = -1
 	for i := hud.shopScroll; i < min(len(items), hud.shopScroll+shopRows); i++ {
-		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-hud.shopScroll)) {
+		if rl.CheckCollisionPointRec(mouse, shopItemRect(i-hud.shopScroll, len(tabs))) {
 			hud.hover = i
 		}
 	}
@@ -943,9 +1012,10 @@ func (hud *HUD) updateShop(g *game.Game) {
 type HUD struct {
 	font, bold, smallcaps, mono rl.Font
 	visor                       rl.Texture2D
-	hover                       int // shop row under the mouse
-	confirm                     int // vehicle row clicked once to sell it back, or -1
-	shopScroll                  int // first row shown in the shop
+	hover                       int    // shop row under the mouse
+	confirm                     int    // vehicle row clicked once to sell it back, or -1
+	shopScroll                  int    // first row shown in the shop
+	shopTab                     string // the shop's tab open
 	dbg                         debugInfo
 	photo                       photoUI
 }
