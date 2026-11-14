@@ -1,6 +1,10 @@
 package physics
 
-import "math"
+import (
+	"cmp"
+	"math"
+	"slices"
+)
 
 const maxVerts = 8
 
@@ -134,4 +138,61 @@ type poly struct {
 	nm [maxVerts]V2
 	n  int
 	r  float64
+}
+
+// Hull is the convex polygon around points (a box seen from above,
+// turned any way), rounded by r; a circle of radius r around them if they
+// barely spread. Up to 8 corners: the farthest apart are kept.
+func Hull(pts []V2, r float64) Shape {
+	ps := slices.Clone(pts)
+	slices.SortFunc(ps, func(a, b V2) int {
+		if c := cmp.Compare(a.X, b.X); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.Y, b.Y)
+	})
+	// Andrew's monotone chain, counter-clockwise.
+	var h []V2
+	for pass := range 2 {
+		start := len(h)
+		for i := range ps {
+			p := ps[i]
+			if pass == 1 {
+				p = ps[len(ps)-1-i]
+			}
+			for len(h) >= start+2 && h[len(h)-1].Sub(h[len(h)-2]).Cross(p.Sub(h[len(h)-2])) <= 1e-9 {
+				h = h[:len(h)-1]
+			}
+			h = append(h, p)
+		}
+		h = h[:len(h)-1]
+	}
+	for len(h) > maxVerts { // drop the corner that matters least
+		least, at := math.Inf(1), 0
+		for i := range h {
+			a, b, c := h[(i+len(h)-1)%len(h)], h[i], h[(i+1)%len(h)]
+			if area := b.Sub(a).Cross(c.Sub(a)); area < least {
+				least, at = area, i
+			}
+		}
+		h = slices.Delete(h, at, at+1)
+	}
+	if len(h) < 3 {
+		var c V2
+		for _, p := range pts {
+			c = c.Add(p)
+		}
+		c = c.Scale(1 / float64(max(1, len(pts))))
+		far := 0.0
+		for _, p := range pts {
+			far = math.Max(far, p.Sub(c).Len())
+		}
+		if len(h) == 2 {
+			return Capsule(h[0], h[1], r)
+		}
+		s := Circle(r + far)
+		s.V[0] = c
+		return s
+	}
+	return Polygon(h, r)
 }

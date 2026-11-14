@@ -86,6 +86,7 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	if id := os.Getenv("NA_SHOT_RAMP"); s.file != "" && id != "" {
 		g.SpawnAhead(id, 15)
 	}
+
 	if id := os.Getenv("NA_SHOT_DRIVE"); s.file != "" && id != "" {
 		g.Board(id)
 		var alt, speed float64
@@ -135,6 +136,14 @@ func (s *shotRun) tick(g *game.Game) {
 		g.Player.Heading, g.Player.Pitch = s.heading, s.pitch
 	}
 	s.frames++
+	// NA_SHOT_GHOST=item,degrees holds that item's ghost, tipped over,
+	// once playing.
+	if v := os.Getenv("NA_SHOT_GHOST"); v != "" && s.frames == 60 {
+		item, deg, _ := strings.Cut(v, ",")
+		var d float64
+		fmt.Sscanf(deg, "%f", &d)
+		g.HoldGhost(item, d)
+	}
 	// NA_SHOT_PERF=1 prints the mean frame time over frames 120 to 239,
 	// without vsync (main.go). NA_SHOT_SIZE=WxH sets the window.
 	if os.Getenv("NA_SHOT_PERF") != "" && s.frames >= 120 && s.frames < 240 {

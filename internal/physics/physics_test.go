@@ -276,3 +276,30 @@ func TestTouching(t *testing.T) {
 		t.Errorf("touching %v", got)
 	}
 }
+
+func TestHull(t *testing.T) {
+	// A unit square's corners, shuffled, with its middle and doubles.
+	s := Hull([]V2{{1, 1}, {0, 0}, {0.5, 0.5}, {1, 0}, {0, 1}, {1, 1}, {0, 0}}, 0)
+	if len(s.V) != 4 {
+		t.Fatalf("%d corners: %v", len(s.V), s.V)
+	}
+	for i := range s.V {
+		a, b, c := s.V[i], s.V[(i+1)%4], s.V[(i+2)%4]
+		if b.Sub(a).Cross(c.Sub(b)) <= 0 {
+			t.Errorf("not counter-clockwise: %v", s.V)
+		}
+	}
+	// Twelve points on a circle: eight kept.
+	var ring []V2
+	for i := range 12 {
+		a := float64(i) * math.Pi / 6
+		ring = append(ring, V2{math.Cos(a), math.Sin(a)})
+	}
+	if s := Hull(ring, 0); len(s.V) != 8 {
+		t.Errorf("%d corners from 12", len(s.V))
+	}
+	// A segment seen edge on: a capsule.
+	if s := Hull([]V2{{0, 0}, {2, 0}, {1, 0}}, 0.1); len(s.V) != 2 {
+		t.Errorf("segment: %v", s.V)
+	}
+}

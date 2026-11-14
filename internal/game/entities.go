@@ -8,8 +8,6 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/physics"
 	"naturalia/internal/planet"
-
-	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // Entities are things standing in the world that aren't part of the base:
@@ -151,26 +149,6 @@ func (g *Game) HeldItem() (*content.Item, int) {
 	}
 	it := owned[g.itemSel%len(owned)]
 	return it, g.State.Items[it.ID]
-}
-
-func (g *Game) updateItems() {
-	if g.Mode != ModePlay {
-		return
-	}
-	if rl.IsKeyPressed(rl.KeyR) {
-		g.itemSel++
-	}
-	it, n := g.HeldItem()
-	if it == nil || n == 0 || !rl.IsKeyPressed(rl.KeyF) {
-		return
-	}
-	at := g.placeAt()
-	if g.spawn(it.Places, at) == 0 {
-		return
-	}
-	g.State.Items[it.ID]--
-	g.sfx.Beep(0.02, 0.15, 0.12, 392, 523)
-	g.emit(content.Event{Name: content.EvPlace, ID: content.Qualify(it.Places), At: at})
 }
 
 // EntitiesNear lists the entities within dist of the player.

@@ -96,6 +96,7 @@ type Game struct {
 	Message     string  // said by a mod (say), shown on the visor...
 	MessageT    float64 // ...for this long still
 	itemSel     int     // which carried item F places (R cycles)
+	Ghost       *Ghost  // the item being placed, drawn see-through (build.go)
 	Ents        *Ents   // standing in the world
 	Riding      ecs.ID  // the vehicle driven, 0 on foot
 	drive       drive   // the driven vehicle's motion

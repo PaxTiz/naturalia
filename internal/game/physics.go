@@ -257,6 +257,7 @@ func (g *Game) updateTossed(dt float64) {
 		}
 		// Down on a face.
 		e.Pitch = math.Round(e.Pitch/(math.Pi/2)) * math.Pi / 2
+		e.Roll = math.Round(e.Roll/(math.Pi/2)) * math.Pi / 2
 		g.Ents.Air.Remove(id)
 		g.rubs(id, true)
 	}

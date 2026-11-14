@@ -1,6 +1,7 @@
 package render
 
 import (
+	"image/color"
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
@@ -26,11 +27,7 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 		if !ok {
 			continue // its mod was removed: it stays in the save
 		}
-		models, ok := gfx.entities[def.ID]
-		if !ok {
-			models = buildEntity(def, gfx)
-			gfx.entities[def.ID] = models
-		}
+		models := gfx.entityModels(def)
 		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
 		lit := float32(mesh.LitSun)
 		if base.Indoors(base.ToLocal(pos)) {
@@ -54,6 +51,43 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 	}
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
+}
+
+// entityModels are an entity's models, built on first use.
+func (gfx *Graphics) entityModels(def *content.EntityDef) []entityModel {
+	models, ok := gfx.entities[def.ID]
+	if !ok {
+		models = buildEntity(def, gfx)
+		gfx.entities[def.ID] = models
+	}
+	return models
+}
+
+// drawGhost draws the item being placed see-through, glowing cyan where
+// it fits, red where it doesn't. Last, over the scene, not hiding it.
+func (gfx *Graphics) drawGhost(g *game.Game) {
+	gh := g.Ghost
+	if gh == nil {
+		return
+	}
+	def, ok := g.Content.Entities.Get(gh.Kind)
+	if !ok {
+		return
+	}
+	col := color.RGBA{110, 235, 245, 90}
+	if !gh.OK {
+		col = color.RGBA{255, 90, 70, 100}
+	}
+	pos, ax, up, az := g.Frame(&gh.Pose)
+	rl.DrawRenderBatchActive()
+	rl.DisableDepthMask()
+	gfx.setLighting(mesh.LitSun, vec3{})
+	gfx.setMat(content.MtPlain, 1, false)
+	for _, m := range gfx.entityModels(def) {
+		gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.5)
+	}
+	rl.DrawRenderBatchActive()
+	rl.EnableDepthMask()
 }
 
 // buildEntity merges an entity's parts into one model per material, in

@@ -386,25 +386,40 @@ func (hud *HUD) drawVisor(g *game.Game) {
 }
 
 // drawHints lists the controls along the bottom of the visor, as keys.
-// drawHeldItem: what F places, under the status panel.
+// drawHeldItem: what F places, under the status panel, and the keys that
+// place it.
 func (hud *HUD) drawHeldItem(g *game.Game) {
 	it, n := g.HeldItem()
 	if it == nil {
 		return
 	}
+	keys := [][2]string{{"F", "poser"}, {"R", "changer"}}
+	if gh := g.Ghost; gh != nil {
+		place := "libre"
+		if gh.Free {
+			place = "coller"
+		}
+		keys = [][2]string{{"F", "poser"}, {"R", "changer"}, {"X C B", "tourner"}, {"T", place}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
+		if !gh.OK {
+			keys[0][1] = "bloqué"
+		}
+	}
 	u := uiScale()
 	x, y := 40*u, 158*u
 	label := fmt.Sprintf("%s ×%d", it.Name, n)
-	w := hud.width(label, 16*u) + 150*u
+	w := 44*u + hud.width(label, 16*u) + 6*u
+	for _, k := range keys {
+		w += rl.MeasureTextEx(hud.mono, k[0], 11*u, 0).X + 12*u + 4*u + hud.capsWidth(k[1], 12*u) + 10*u
+	}
 	visorPanel(rl.NewRectangle(x, y, w, 34*u), visorCyan)
 	icon(content.OrDefault(it.Icon, "flag"), x+18*u, y+17*u, 9*u, visorCyan)
 	hud.text(label, x+36*u, y+8*u, 16*u, uiWhite)
 	kx := x + 44*u + hud.width(label, 16*u)
-	kx += hud.keycap("F", kx, y+9*u, 11*u) + 4*u
-	hud.caps("poser", kx, y+11*u, 12*u, visorDim)
-	kx += hud.capsWidth("poser", 12*u) + 10*u
-	kx += hud.keycap("R", kx, y+9*u, 11*u) + 4*u
-	hud.caps("changer", kx, y+11*u, 12*u, visorDim)
+	for _, k := range keys {
+		kx += hud.keycap(k[0], kx, y+9*u, 11*u) + 4*u
+		hud.caps(k[1], kx, y+11*u, 12*u, visorDim)
+		kx += hud.capsWidth(k[1], 12*u) + 10*u
+	}
 }
 
 func (hud *HUD) drawHints(g *game.Game) {
