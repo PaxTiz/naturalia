@@ -185,7 +185,7 @@ func New(g *game.Game) *Graphics {
 	gfx.rocks = rockModels(gfx.objectSh, objectMaps, planet.RockShapes, 1300, 14, 18)
 	gfx.pebbles = rockModels(gfx.objectSh, objectMaps, pebbleShapes, 1700, 5, 7)
 
-	gfx.near, gfx.far = 0.05, 9000
+	gfx.near, gfx.far = 0.15, 9000
 	rl.SetClipPlanes(gfx.near, gfx.far)
 
 	// The base's ceiling lamps never move.
@@ -375,11 +375,24 @@ func (gfx *Graphics) setViewProj(cols []float32) {
 }
 
 // viewCols is the view's camera about origin, as BeginMode3D sets it for
-// the scene's target.
-func (gfx *Graphics) viewCols(cam rl.Camera3D) []float32 {
+// the scene's target, between the clip planes near and far.
+func (gfx *Graphics) viewCols(cam rl.Camera3D, near, far float64) []float32 {
 	t := gfx.post.scene.Texture
-	proj := rl.MatrixPerspective(cam.Fovy*math.Pi/180, float32(t.Width)/float32(t.Height), float32(gfx.near), float32(gfx.far))
+	proj := rl.MatrixPerspective(cam.Fovy*math.Pi/180, float32(t.Width)/float32(t.Height), float32(near), float32(far))
 	return relVP(gfx.camEye, gfx.camLook, gfx.camUp, gfx.origin, proj)
+}
+
+// toolCols is the view's camera for the held tool: its own near plane, a
+// centimeter from the eye, and its depth squeezed into the front hundredth
+// of the range, where the world isn't (it starts at the view's near
+// plane). The tool is never clipped, nor sinks into a wall.
+func (gfx *Graphics) toolCols(cam rl.Camera3D) []float32 {
+	const k = 0.01
+	c := gfx.viewCols(cam, 0.01, 10)
+	for i := 0; i < 16; i += 4 {
+		c[i+2] = k*c[i+2] - (1-k)*c[i+3] // z: from [-w, w] to [-w, (2k-1)w]
+	}
+	return c
 }
 
 // Draw draws a frame of the game; overlay draws over it, on the screen
@@ -420,7 +433,8 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	rl.BeginTextureMode(gfx.post.scene)
 	rl.ClearBackground(rl.Black)
 	rl.BeginMode3D(cam)
-	gfx.setViewProj(gfx.viewCols(cam))
+	view := gfx.viewCols(cam, gfx.near, gfx.far)
+	gfx.setViewProj(view)
 
 	// Sky: a big sphere around the camera, seen from inside, behind everything.
 	rl.DisableBackfaceCulling()
@@ -447,7 +461,9 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
+	gfx.setViewProj(gfx.toolCols(cam))
 	gfx.drawTool(g)
+	gfx.setViewProj(view)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.drawGlows(g, cam)
 	gfx.drawGlobe(g, cam)
@@ -489,12 +505,13 @@ func (gfx *Graphics) drawGems(g *game.Game) {
 }
 
 // clipPlanes sets the view's depth range for the eye's altitude. Mars is
-// big: see mountains far away, but keep the held tool, very close to the
-// eye, from being clipped. High up in creative flight, see the whole
-// visible half of Mars.
+// big: see mountains far away. The depth buffer's grain grows as the
+// square of the distance over the near plane: it stays as far out as the
+// player's body allows, 35 cm wide (the held tool has its own, toolCols).
+// High up in creative flight, see the whole visible half of Mars.
 func (gfx *Graphics) clipPlanes(g *game.Game) {
 	alt := g.World.Relief.Altitude(gfx.camEye)
-	gfx.near = math.Max(0.05, math.Min(20, alt*0.002))
+	gfx.near = math.Max(0.15, math.Min(20, alt*0.002))
 	gfx.hazeThin = float32(1 / (1 + max(0, alt-20)/150))
 	gfx.skyAir = float32(1 - mathx.Smoothstep(300, 5000, alt))
 	gfx.far = math.Max(9000, gfx.camEye.Length()+planet.Radius)
