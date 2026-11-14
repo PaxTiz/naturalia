@@ -102,6 +102,9 @@ type World struct {
 	Mix func(a, b *Body) (friction, restitution float64)
 	// ImpactSpeed is the slowest a contact must begin at to be an Impact.
 	ImpactSpeed float64
+	// Allow, if set, tells whether two bodies that overlap there push each
+	// other apart: false lets them through (a step walked onto).
+	Allow func(a, b *Body, m *Manifold) bool
 
 	// Filled by Step, until the next.
 	Impacts []Impact
@@ -404,6 +407,13 @@ func (w *World) pair(a, b *Body) {
 	}
 	key := pairKey(a, b)
 	c := w.contacts[key]
+	if !a.Sensor && !b.Sensor && w.Allow != nil && !w.Allow(a, b, &m) {
+		if c != nil {
+			delete(w.contacts, key)
+			c.seen = -1 // dropped from the list next sub-step
+		}
+		return
+	}
 	if a.Sensor || b.Sensor {
 		in := m.MinSep() < 0
 		if c == nil {
@@ -487,7 +497,7 @@ func (w *World) sweep(b *Body, d V2) V2 {
 		b.Shape.world(start.Add(d.Scale(t)), b.rot, &w.poly[0])
 		for _, s := range near {
 			s.Shape.world(s.Pos, s.rot, &w.poly[1])
-			if m := collide(&w.poly[0], &w.poly[1]); m.N > 0 && m.MinSep() < -linearSlop {
+			if m := collide(&w.poly[0], &w.poly[1]); m.N > 0 && m.MinSep() < -linearSlop && (w.Allow == nil || w.Allow(b, s, &m)) {
 				return true
 			}
 		}

@@ -27,6 +27,7 @@ type Player struct {
 	Pitch      float64 `json:"pitch"`
 	vr         float64 // radial (vertical) speed
 	onGround   bool
+	floor      float64 // what the feet stand on, over the ground: a block's top (stepPhysics)
 	WalkPhase  float64
 	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 	seated     bool    // driving: the vehicle moves the player, who only looks around
@@ -132,13 +133,14 @@ func (p *Player) fall(dt float64, t planet.Relief) {
 	p.vr -= marsGravity * dt
 	p.Pos = p.Pos.Add(p.LocalUp().Scale(p.vr * dt))
 
-	alt := t.Altitude(p.Pos)
+	alt := t.Altitude(p.Pos) - p.floor
+	ground := func() vec3 { s := t.Surface(p.Pos); return s.Add(s.Norm().Scale(p.floor)) }
 	// Stick to the ground on gentle downhill steps instead of floating off.
 	if p.onGround && p.vr <= 0 && alt < 0.4 {
-		p.Pos, alt = t.Surface(p.Pos), 0
+		p.Pos, alt = ground(), 0
 	}
 	if alt <= 0 {
-		p.Pos, p.vr, p.onGround = t.Surface(p.Pos), 0, true
+		p.Pos, p.vr, p.onGround = ground(), 0, true
 	} else if alt > 0.4 {
 		p.onGround = false
 	}

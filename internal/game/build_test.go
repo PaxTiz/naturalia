@@ -127,3 +127,50 @@ func TestDriveIntoBlock(t *testing.T) {
 		t.Error("the block moved")
 	}
 }
+
+// walkOn walks ahead for some seconds, jumping after jump seconds (never
+// if negative), and tells the highest the feet stood over the ground.
+func walkOn(g *Game, seconds, jump float64) float64 {
+	top := 0.0
+	for i := range int(seconds * 60) {
+		if jump >= 0 && i == int(jump*60) {
+			g.Player.vr, g.Player.onGround = jumpSpeed, false
+		}
+		walk(g, g.Player.Heading, 1.0/60)
+		if g.Player.onGround {
+			top = math.Max(top, g.World.Relief.Altitude(g.Player.Pos))
+		}
+	}
+	return top
+}
+
+func TestWalkOnBlocks(t *testing.T) {
+	for _, c := range []struct {
+		kind       string
+		at         float64
+		jump, want float64
+	}{
+		{"core:slab", 4, -1, 0.2},     // a step up
+		{"core:slope", 4, -1, 1},      // walked up to its top (and its strip)
+		{"core:crate-2", 4, -1, 0},    // too high: in the way
+		{"core:crate", 1.8, 0.4, 0.8}, // jumped on
+	} {
+		g := fleetGame(t, LoadContent(), map[string]int{})
+		block(g, c.kind, c.at)
+		if top := walkOn(g, 3, c.jump); math.Abs(top-c.want) > 0.06 {
+			t.Errorf("%s: stood %.2f m high, want %.2f", c.kind, top, c.want)
+		}
+	}
+}
+
+func TestSlabAtChestHeight(t *testing.T) {
+	g := fleetGame(t, LoadContent(), map[string]int{})
+	id := g.spawn("core:slab", ahead(g, 4))
+	g.Ents.Transform.Get(id).Alt = 1.1
+	g.stepPhysics(1.0 / 60)
+	at := g.Ents.Transform.Get(id).Dir
+	walk(g, g.Player.Heading, 3)
+	if d := planet.ArcDist(g.Player.LocalUp(), at); d < 2+0.35-0.05 {
+		t.Errorf("walked into a slab at chest height: %.2f m from its middle", d)
+	}
+}

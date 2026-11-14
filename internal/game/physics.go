@@ -49,6 +49,7 @@ const (
 	walkAccel  = 60.0  // m/s²: how fast walking reaches the speed asked
 	bodyFeet   = 1.0   // m below the ground where a body starts
 	personH    = 1.8
+	personStep = 0.3 // pebbles and kerbs under the player's body
 	thingH     = 2.0 // entities and furniture, without a better idea
 	minRock    = 0.6 // smaller rocks are walked over
 	pushSpeed  = 1.6 // m/s: pushing a crate on foot goes slowly
@@ -144,8 +145,8 @@ func (g *Game) stepPhysics(dt float64) {
 	if !pl.Fly && !pl.seated {
 		b.Layer, b.Mask = layerPlayer, layerStatic|layerEntity|layerRobot|layerVehicle|layerProp|layerTrigger
 		b.Pos = p.plane(pl.Pos)
-		b.Bottom = p.height(pl.Pos) + 0.3 // steps and pebbles
-		b.Top = b.Bottom + personH - 0.3
+		b.Bottom = p.height(pl.Pos) + personStep
+		b.Top = b.Bottom + personH - personStep
 		// The speed asked, reached quickly: what pushed the player fades.
 		vel, want := p.vecPlane(pl.Pos, pl.vel), p.vecPlane(pl.Pos, pl.want)
 		// Slowed down before reaching a crate, not to kick it away.
@@ -182,6 +183,7 @@ func (g *Game) stepPhysics(dt float64) {
 	case b.Mask != 0:
 		pl.Pos = p.dir(b.Pos).Scale(r)
 		pl.vel = p.vecWorld(pl.Pos, b.Vel)
+		pl.floor = g.floorUnder(pl.Pos)
 	}
 	for _, hit := range p.w.Impacts {
 		for _, o := range [2]*physics.Body{hit.A, hit.B} {
@@ -458,7 +460,7 @@ func (g *Game) layPlane() {
 	p := &phys{w: physics.NewWorld(), up: up, t1: t1, t2: t2, r0: g.World.Relief.Surface(up).Length(),
 		carried: map[ecs.ID]moving{}, bounds: map[string][2]vec3{}}
 	p.side = t1.Cross(up).Dot(t2)
-	p.w.Mix = mix
+	p.w.Mix, p.w.Allow = mix, g.allow
 	for id, bp := range g.Ents.Body.All() {
 		if b := *bp; b.Kind == physics.Dynamic && !b.Asleep() {
 			at := g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir)

@@ -4,6 +4,7 @@ import (
 	"math"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
+	"naturalia/internal/mathx"
 	"naturalia/internal/physics"
 )
 
@@ -93,23 +94,68 @@ func (s solid) hit(o, d vec3, max float64) (float64, vec3, bool) {
 	return in, n, true
 }
 
-// rayEntity is where a ray from o along d (length 1) meets an entity's
-// parts, within max, and the face's normal, in the world.
-func (g *Game) rayEntity(id ecs.ID, o, d vec3, max float64) (float64, vec3, bool) {
+// contains tells if x is inside the solid.
+func (s solid) contains(x vec3) bool {
+	for _, p := range s {
+		if p.n.Dot(x) > p.d {
+			return false
+		}
+	}
+	return true
+}
+
+// local is an entity's shape and frame, to turn world points into it.
+func (g *Game) local(id ecs.ID) (solids []solid, toLocal func(v vec3) vec3, toWorld func(v vec3) vec3, pos vec3, ok bool) {
 	def, ok := g.Content.Entities.Get(g.kind(id))
+	if !ok {
+		return nil, nil, nil, vec3{}, false
+	}
+	pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+	toLocal = func(v vec3) vec3 { return vec3{v.Dot(ax), v.Dot(up), v.Dot(az)} }
+	toWorld = func(v vec3) vec3 { return ax.Scale(v.X).Add(up.Scale(v.Y)).Add(az.Scale(v.Z)) }
+	return g.solidsOf(def), toLocal, toWorld, pos, true
+}
+
+// rayEntity is where a ray from o along d (length 1) meets an entity's
+// parts, within max, and the face's normal, in the world; nothing from
+// inside one of them.
+func (g *Game) rayEntity(id ecs.ID, o, d vec3, max float64) (float64, vec3, bool) {
+	solids, toLocal, toWorld, pos, ok := g.local(id)
 	if !ok {
 		return 0, vec3{}, false
 	}
-	pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
-	local := func(v vec3) vec3 { return vec3{v.Dot(ax), v.Dot(up), v.Dot(az)} }
-	lo, ld := local(o.Sub(pos)), local(d)
+	lo, ld := toLocal(o.Sub(pos)), toLocal(d)
+	for _, s := range solids {
+		if s.contains(lo) {
+			return 0, vec3{}, false
+		}
+	}
 	best, normal, found := max, vec3{}, false
-	for _, s := range g.solidsOf(def) {
+	for _, s := range solids {
 		if t, n, ok := s.hit(lo, ld, best); ok {
 			best, normal, found = t, n, true
 		}
 	}
-	return best, ax.Scale(normal.X).Add(up.Scale(normal.Y)).Add(az.Scale(normal.Z)), found
+	return best, toWorld(normal), found
+}
+
+// clearAbove tells if nothing of entity id is at o, nor above it along up
+// within h.
+func (g *Game) clearAbove(id ecs.ID, o, up vec3, h float64) bool {
+	solids, toLocal, _, pos, ok := g.local(id)
+	if !ok {
+		return true
+	}
+	lo, lu := toLocal(o.Sub(pos)), toLocal(up)
+	for _, s := range solids {
+		if s.contains(lo) {
+			return false
+		}
+		if _, _, ok := s.hit(lo, lu, h); ok {
+			return false
+		}
+	}
+	return true
 }
 
 // aimBlock is the nearest block a ray from o along d meets within max:
@@ -126,6 +172,61 @@ func (g *Game) aimBlock(o, d vec3, max float64) (ecs.ID, vec3, vec3, bool) {
 		}
 	}
 	return best, o.Add(d.Scale(max)), normal, best != 0
+}
+
+// stepUp is how high a step the player walks up without jumping.
+const stepUp = 0.45
+
+// floorUnder is what stands under feet at pos, as high over the ground as
+// the highest top of a block (or a thing pushed around) there, no higher
+// than a step up: 0 on the bare ground. It looks a bit around the feet, so
+// the player stands on an edge.
+func (g *Game) floorUnder(pos vec3) float64 {
+	up := pos.Norm()
+	t1, t2 := mathx.TangentBasis(up)
+	from := pos.Add(up.Scale(stepUp))
+	reach := g.World.Relief.Altitude(from)
+	if reach <= 0 {
+		return 0
+	}
+	floor := 0.0
+	for _, id := range g.EntitiesNear(10) {
+		if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || (!def.Build && def.Mass <= 0) || g.Ents.Air.Has(id) {
+			continue
+		}
+		for _, off := range [...]vec3{{}, t1.Scale(0.22), t1.Scale(-0.22), t2.Scale(0.22), t2.Scale(-0.22)} {
+			if d, _, ok := g.rayEntity(id, from.Add(off), up.Scale(-1), reach); ok {
+				floor = math.Max(floor, reach-d)
+			}
+		}
+	}
+	return floor
+}
+
+// allow tells the engine whether the walking player bumps into a block:
+// not if, under them and just ahead of them toward it, the block is at
+// most a step up, with nothing of it above up to their head.
+func (g *Game) allow(a, b *physics.Body, m *physics.Manifold) bool {
+	p := g.phys
+	n := m.Normal // from a to b
+	if b == p.player {
+		a, b, n = b, a, n.Scale(-1)
+	}
+	if a != p.player || b.Kind != physics.Static || b.ID == 0 {
+		return true
+	}
+	id := ecs.ID(b.ID)
+	if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || !def.Build {
+		return true
+	}
+	feet := p.r0 + a.Bottom - personStep // from Mars' center
+	for _, at := range [2]physics.V2{a.Pos, a.Pos.Add(n.Scale(a.Shape.Radius + 0.2))} {
+		dir := p.dir(at)
+		if !g.clearAbove(id, dir.Scale(feet+stepUp), dir, personH-stepUp) {
+			return true
+		}
+	}
+	return false
 }
 
 // blockBody is a block's body: the outline of the box around its parts

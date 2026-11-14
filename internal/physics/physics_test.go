@@ -303,3 +303,16 @@ func TestHull(t *testing.T) {
 		t.Errorf("segment: %v", s.V)
 	}
 }
+
+func TestAllow(t *testing.T) {
+	for _, through := range []bool{false, true} {
+		w := NewWorld()
+		wl := wall(w, V2{1, -5}, V2{1, 5})
+		b := ball(w, V2{}, V2{}, 0.35)
+		w.Allow = func(a, c *Body, m *Manifold) bool { return !through || (a != wl && c != wl) }
+		run(w, 1, func() { b.Vel = V2{3, 0} })
+		if past := b.Pos.X > 1.5; past != through {
+			t.Errorf("let through %v: at %.2f", through, b.Pos.X)
+		}
+	}
+}
