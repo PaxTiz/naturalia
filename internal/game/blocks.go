@@ -174,55 +174,82 @@ func (g *Game) aimBlock(o, d vec3, max float64) (ecs.ID, vec3, vec3, bool) {
 	return best, o.Add(d.Scale(max)), normal, best != 0
 }
 
-// stepUp is how high a step the player walks up without jumping.
-const stepUp = 0.45
+// How high a step the player walks up without jumping, and a driven
+// vehicle rolls up.
+const (
+	stepUp  = 0.45
+	carStep = 0.6
+)
 
-// floorUnder is what stands under feet at pos, as high over the ground as
-// the highest top of a block (or a thing pushed around) there, no higher
-// than a step up: 0 on the bare ground. It looks a bit around the feet, so
-// the player stands on an edge.
-func (g *Game) floorUnder(pos vec3) float64 {
-	up := pos.Norm()
-	t1, t2 := mathx.TangentBasis(up)
-	from := pos.Add(up.Scale(stepUp))
-	reach := g.World.Relief.Altitude(from)
+// topUnder is the highest top of a block (with things, of a crate too)
+// straight under at, below from (both from Mars' center); 0 for none.
+func (g *Game) topUnder(at vec3, from float64, things bool) float64 {
+	start := at.Norm().Scale(from)
+	reach := g.World.Relief.Altitude(start)
 	if reach <= 0 {
 		return 0
 	}
-	floor := 0.0
-	for _, id := range g.EntitiesNear(10) {
-		if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || (!def.Build && def.Mass <= 0) || g.Ents.Air.Has(id) {
+	top := 0.0
+	for _, id := range g.EntitiesNear(15) {
+		def, ok := g.Content.Entities.Get(g.kind(id))
+		if !ok || !(def.Build || things && def.Mass > 0) || g.Ents.Air.Has(id) || id == g.held() {
 			continue
 		}
-		for _, off := range [...]vec3{{}, t1.Scale(0.22), t1.Scale(-0.22), t2.Scale(0.22), t2.Scale(-0.22)} {
-			if d, _, ok := g.rayEntity(id, from.Add(off), up.Scale(-1), reach); ok {
-				floor = math.Max(floor, reach-d)
-			}
+		if d, _, ok := g.rayEntity(id, start, at.Norm().Scale(-1), reach); ok {
+			top = math.Max(top, from-d)
+		}
+	}
+	return top
+}
+
+// floorUnder is what stands under feet at pos, as high over the ground as
+// the highest top of a block (or a crate) there, no higher than a step up:
+// 0 on the bare ground. It looks a bit around the feet, so the player
+// stands on an edge.
+func (g *Game) floorUnder(pos vec3) float64 {
+	t1, t2 := mathx.TangentBasis(pos.Norm())
+	floor := 0.0
+	for _, off := range [...]vec3{{}, t1.Scale(0.22), t1.Scale(-0.22), t2.Scale(0.22), t2.Scale(-0.22)} {
+		at := pos.Add(off)
+		if top := g.topUnder(at, pos.Length()+stepUp, true); top > 0 {
+			floor = math.Max(floor, top-g.World.Relief.Surface(at).Length())
 		}
 	}
 	return floor
 }
 
-// allow tells the engine whether the walking player bumps into a block:
-// not if, under them and just ahead of them toward it, the block is at
-// most a step up, with nothing of it above up to their head.
+// allow tells the engine whether the walking player, or the vehicle they
+// drive, bumps into a block: not if, under them and where they meet it,
+// the block is at most a step up, with nothing of it above up to their
+// top.
 func (g *Game) allow(a, b *physics.Body, m *physics.Manifold) bool {
 	p := g.phys
 	n := m.Normal // from a to b
-	if b == p.player {
+	if b == p.player || b == p.car {
 		a, b, n = b, a, n.Scale(-1)
 	}
-	if a != p.player || b.Kind != physics.Static || b.ID == 0 {
+	if (a != p.player && a != p.car) || b.Kind != physics.Static || b.ID == 0 {
 		return true
 	}
 	id := ecs.ID(b.ID)
 	if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || !def.Build {
 		return true
 	}
-	feet := p.r0 + a.Bottom - personStep // from Mars' center
-	for _, at := range [2]physics.V2{a.Pos, a.Pos.Add(n.Scale(a.Shape.Radius + 0.2))} {
+	feet, step, tall := p.r0+a.Bottom-personStep, stepUp, personH // from Mars' center
+	look := []physics.V2{a.Pos, a.Pos.Add(n.Scale(a.Shape.Radius + 0.2))}
+	if a == p.car {
+		if g.drive.r <= 0 {
+			return true
+		}
+		feet, step, tall = g.drive.r, carStep, a.Top-a.Bottom
+		look = look[:1]
+		for i := range m.N {
+			look = append(look, m.Points[i].Point.Add(n.Scale(0.2))) // into the block, past its rim
+		}
+	}
+	for _, at := range look {
 		dir := p.dir(at)
-		if !g.clearAbove(id, dir.Scale(feet+stepUp), dir, personH-stepUp) {
+		if !g.clearAbove(id, dir.Scale(feet+step), dir, tall-step) {
 			return true
 		}
 	}

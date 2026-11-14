@@ -201,9 +201,15 @@ func (g *Game) driveVehicle(dt float64) {
 }
 
 // groundAt is the height a driven vehicle rolls on at p, from Mars'
-// center: the ground, or a ramp it is over standing there.
+// center: the ground, a ramp it is over standing there, or a block.
 func (g *Game) groundAt(p vec3) float64 {
-	r := g.World.Relief.Surface(p).Length()
+	r, _ := g.groundOn(p)
+	return r
+}
+
+// groundOn is groundAt, telling too if it is a block's top.
+func (g *Game) groundOn(p vec3) (r float64, block bool) {
+	r = g.World.Relief.Surface(p).Length()
 	for _, id := range g.drive.over {
 		def, ok := g.Content.Entities.Get(g.kind(id))
 		if !ok || def.Ramp == nil {
@@ -219,7 +225,12 @@ func (g *Game) groundAt(p vec3) float64 {
 			r = math.Max(r, foot.Length()+rp.Height*(x/rp.Length+0.5))
 		}
 	}
-	return r
+	if g.drive.r > 0 { // and the blocks it rolls onto
+		if top := g.topUnder(p, g.drive.r+carStep, false); top > r {
+			return top, true
+		}
+	}
+	return r, false
 }
 
 // entityAxes are an entity's front, up and side, standing at dir turned
@@ -362,7 +373,7 @@ func (g *Game) fall(v *content.Vehicle, in controls, gravity, dt float64) {
 		g.sfx.Beep(0.02, 0.15, 0.12, 300, 450)
 		g.emit(content.Event{Name: content.EvJump, ID: v.ID, Amount: v.Jump})
 	}
-	ground := g.groundAt(g.Player.Pos)
+	ground, block := g.groundOn(g.Player.Pos)
 	d.vr -= gravity * dt
 	r := d.r + d.vr*dt
 	// Going down a slope it stays on the ground; only what goes up a
@@ -378,7 +389,12 @@ func (g *Game) fall(v *content.Vehicle, in controls, gravity, dt float64) {
 		d.airtime, d.jumps, d.air, d.flip = 0, 0, false, 0
 		// The ground's rise is the speed it throws the vehicle up with;
 		// a step much steeper than the motion stops it instead.
-		d.vr = math.Max(bounce, math.Min((ground-d.r)/dt, math.Max(4, d.vel.Length()*1.2)))
+		// A block's edge, steeper than the motion, is a step it rolls up.
+		rise := (ground - d.r) / dt
+		if block && rise > d.vel.Length() {
+			rise = 0
+		}
+		d.vr = math.Max(bounce, math.Min(rise, math.Max(4, d.vel.Length()*1.2)))
 		r = ground
 	} else {
 		d.airtime += dt

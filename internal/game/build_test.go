@@ -128,6 +128,26 @@ func TestDriveIntoBlock(t *testing.T) {
 	}
 }
 
+func TestDriveOnBlocks(t *testing.T) {
+	for _, c := range []struct {
+		kind string
+		want float64 // the highest it rolled over the ground
+	}{{"core:slab", 0.2}, {"core:slope", 1}} {
+		g, v := ride(t, "core:buggy")
+		block(g, c.kind, 12)
+		top := 0.0
+		for range 60 * 3 {
+			step(g, v, controls{throttle: 0.5}, 1)
+			if !g.drive.air {
+				top = math.Max(top, g.DriveAlt())
+			}
+		}
+		if math.Abs(top-c.want) > 0.1 {
+			t.Errorf("%s: rolled %.2f m high, want %.2f", c.kind, top, c.want)
+		}
+	}
+}
+
 // walkOn walks ahead for some seconds, jumping after jump seconds (never
 // if negative), and tells the highest the feet stood over the ground.
 func walkOn(g *Game, seconds, jump float64) float64 {
