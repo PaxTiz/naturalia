@@ -39,11 +39,23 @@
         {"shape": "box", "token": "core:hazard", "at": [0, 0.05, -3.05], "size": [14, 0.1, 0.1], "lit": "outdoor"},
         {"shape": "box", "token": "core:hazard", "at": [0, 0.05, 3.05], "size": [14, 0.1, 0.1], "lit": "outdoor"}
       ]
+    },
+    "cible": {
+      "name": "Cible", "pickup": true, "prompt": "Ramasser : Cible",
+      "trigger": true, "radius": 3,
+      "data": {"prime": 400},
+      "parts": [
+        {"shape": "prism", "token": "carbone", "r0": 3, "h": 0.04, "sides": 32, "lit": "outdoor"},
+        {"shape": "prism", "token": "fluo", "r0": 2, "h": 0.05, "sides": 32, "lit": "outdoor"},
+        {"shape": "prism", "token": "carbone", "r0": 1.2, "h": 0.06, "sides": 32, "lit": "outdoor"},
+        {"shape": "prism", "token": "fluo", "r0": 0.5, "h": 0.07, "sides": 24, "lit": "outdoor"}
+      ]
     }
   },
 
   "items": [
-    {"id": "mega-tremplin", "name": "Méga tremplin", "desc": "5 m de haut : prends de l'élan (F pour le poser)", "icon": "ramp", "cost": 15000}
+    {"id": "mega-tremplin", "name": "Méga tremplin", "desc": "5 m de haut : prends de l'élan (F pour le poser)", "icon": "ramp", "cost": 15000},
+    {"id": "cible", "name": "Cible", "desc": "À poser après un tremplin (F) : atterris dessus en véhicule pour une prime", "icon": "pad", "cost": 3000}
   ],
 
   "patch": {

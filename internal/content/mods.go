@@ -49,6 +49,7 @@ type modFile struct {
 		Buildings map[string]json.RawMessage `json:"buildings"`
 		Vehicles  map[string]json.RawMessage `json:"vehicles"`
 		Items     map[string]json.RawMessage `json:"items"`
+		Entities  map[string]json.RawMessage `json:"entities"`
 	} `json:"patch"`
 	Remove struct {
 		Tools     []string `json:"tools"`
@@ -260,6 +261,9 @@ func (m *modFile) register(c *Content) {
 	})
 	patch("item", m.Patch.Items, func(id string, raw json.RawMessage) bool {
 		return c.Items.Patch(id, func(it *Item) { unmarshal(raw, it) })
+	})
+	patch("entity", m.Patch.Entities, func(id string, raw json.RawMessage) bool {
+		return c.Entities.Patch(id, func(e *EntityDef) { unmarshal(raw, e) })
 	})
 
 	if len(m.Terrain) > 0 {

@@ -101,6 +101,16 @@ type jsEvent struct {
 	At     jsVec   `json:"at"`
 	Amount float64 `json:"amount"`
 	Dt     float64 `json:"dt"`
+	Entity uint32  `json:"entity"`
+	By     string  `json:"by"`
+}
+
+type jsEntity struct {
+	ID   uint32  `json:"id"`
+	Kind string  `json:"kind"`
+	At   jsVec   `json:"at"`
+	Alt  float64 `json:"alt"`
+	Dist float64 `json:"dist"`
 }
 
 type jsVehicle struct {
@@ -119,7 +129,7 @@ func (s *script) api(c *content.Content) map[string]any {
 		// Listening.
 		"on": func(name string, fn goja.Callable) {
 			c.On(name, func(g content.Game, e *content.Event) {
-				s.call(g, fn, jsEvent{e.Name, e.ID, jsVec(e.At), e.Amount, e.Dt})
+				s.call(g, fn, jsEvent{e.Name, e.ID, jsVec(e.At), e.Amount, e.Dt, e.Entity, e.By})
 			})
 		},
 		"randomEvent": func(def struct {
@@ -178,6 +188,29 @@ func (s *script) api(c *content.Content) map[string]any {
 		},
 		"giveItem": func(id string, n int) {
 			s.game().GiveItem(refIn(s.mod, id, func(id string) bool { _, ok := c.Items.Get(id); return ok }), n)
+		},
+		// near are the entities of a kind ("": all) within dist m of the
+		// player, the nearest first: [{id, kind, at, alt, dist}].
+		"near": func(kind string, dist float64) []jsEntity {
+			if kind != "" {
+				kind = refIn(s.mod, kind, isEntity)
+			}
+			var out []jsEntity
+			for _, e := range s.game().Near(kind, dist) {
+				out = append(out, jsEntity{e.ID, e.Kind, jsVec(e.At), e.Alt, e.Dist})
+			}
+			return out
+		},
+		// impulse adds speed to an entity pushed around or driven, in m/s
+		// along world axes {x, y, z}: along the ground it slides, up (away
+		// from Mars' center) it flies off.
+		"impulse": func(id uint32, v jsVec) bool { return s.game().Impulse(id, vec3(v)) },
+		// data is what a kind of entity carries for scripts (its "data").
+		"data": func(kind string) map[string]any {
+			if e, ok := c.Entities.Get(refIn(s.mod, kind, isEntity)); ok {
+				return e.Data
+			}
+			return nil
 		},
 		"driving": func() string { return s.game().Driving() },
 		// vehicle is the driven vehicle, or null: {id, speed (m/s), air,

@@ -21,7 +21,11 @@ const (
 	EvJump   = "jump"           // ID of the vehicle driven, Amount its upward speed
 	EvLand   = "land"           // ID of the vehicle driven, Amount seconds in the air, At where
 	EvBoost  = "boost"          // ID of the vehicle driven, when its boost starts
-	EvImpact = "impact"         // the vehicle driven hit something: ID its kind (empty: a wall, a rock), Amount the speed, At where
+	EvImpact = "impact"         // the vehicle driven hit something: ID its kind (empty: a wall, a rock), Entity it, Amount the speed, At where
+	// Into a zone (ramps and pads too): ID its kind, Entity it, By who
+	// ("player", or the kind of the vehicle driven), At where it stands.
+	EvTriggerIn  = "trigger_enter"
+	EvTriggerOut = "trigger_leave"
 )
 
 type Event struct {
@@ -30,6 +34,8 @@ type Event struct {
 	At     vec3
 	Amount float64
 	Dt     float64
+	Entity uint32 // the entity it happened to (Game.Near, Game.Impulse), 0: none
+	By     string
 }
 
 type Handler func(g Game, e *Event)

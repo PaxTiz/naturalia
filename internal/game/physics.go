@@ -30,7 +30,7 @@ const (
 	layerRobot   // automatic vehicles on the ground
 	layerProp    // things pushed around: crates
 	layerDrone   // automatic vehicles flying: over the others
-	layerTrigger // ramps and pads: they tell the driven vehicle is over them
+	layerTrigger // zones, ramps and pads: they tell who is in them
 )
 
 // What things are made of: how they rub and bounce. A contact takes the
@@ -142,7 +142,7 @@ func (g *Game) stepPhysics(dt float64) {
 	b.Layer, b.Mask, b.Vel = 0, 0, physics.V2{} // in a vehicle, or flying through everything
 	var walk physics.V2
 	if !pl.Fly && !pl.seated {
-		b.Layer, b.Mask = layerPlayer, layerStatic|layerEntity|layerRobot|layerVehicle|layerProp
+		b.Layer, b.Mask = layerPlayer, layerStatic|layerEntity|layerRobot|layerVehicle|layerProp|layerTrigger
 		b.Pos = p.plane(pl.Pos)
 		b.Bottom = p.height(pl.Pos) + 0.3 // steps and pebbles
 		b.Top = b.Bottom + personH - 0.3
@@ -179,7 +179,6 @@ func (g *Game) stepPhysics(dt float64) {
 	switch {
 	case driving:
 		g.carAfter(v)
-		g.senses(v)
 	case b.Mask != 0:
 		pl.Pos = p.dir(b.Pos).Scale(r)
 		pl.vel = p.vecWorld(pl.Pos, b.Vel)
@@ -197,6 +196,7 @@ func (g *Game) stepPhysics(dt float64) {
 			g.bump(hit.Speed + walk.Dot(hit.Normal))
 		}
 	}
+	g.senses(v)
 	g.entitiesAfter(dt)
 	g.updateTossed(dt)
 }
@@ -446,7 +446,7 @@ func (g *Game) knock(v *content.Vehicle, hit physics.Impact) {
 	if other == p.car {
 		other = hit.A
 	}
-	g.emit(content.Event{Name: content.EvImpact, ID: g.kind(ecs.ID(other.ID)), Amount: hit.Speed, At: at})
+	g.emit(content.Event{Name: content.EvImpact, ID: g.kind(ecs.ID(other.ID)), Entity: other.ID, Amount: hit.Speed, At: at})
 }
 
 // layPlane lays the plane under the player, with the base and the rocks
@@ -594,22 +594,35 @@ func (g *Game) syncEntities() {
 
 // trigger tells if an entity does something to the vehicle driven over
 // it: a ramp lifts it, a pad throws it.
-func trigger(def *content.EntityDef) bool { return def.Ramp != nil || def.Kick > 0 }
+func trigger(def *content.EntityDef) bool { return def.Ramp != nil || def.Kick > 0 || def.Trigger }
 
-// senses keeps the ramps and pads the driven vehicle is over, and kicks it
-// off the pads it comes onto.
+// senses tells packs who comes into the zones and goes out, keeps the
+// ramps and pads the driven vehicle is over, and kicks it off the pads it
+// comes onto.
 func (g *Game) senses(v *content.Vehicle) {
-	d := &g.drive
-	for _, s := range g.phys.w.Senses {
-		if s.Body != g.phys.car {
+	p, d := g.phys, &g.drive
+	for _, s := range p.w.Senses {
+		id := ecs.ID(s.Sensor.ID)
+		by := "player"
+		switch {
+		case s.Body == p.car && p.car != nil && v != nil:
+			by = v.ID
+			d.over = slices.DeleteFunc(d.over, func(o ecs.ID) bool { return o == id || !g.Ents.Alive(o) })
+			if s.In {
+				d.over = append(d.over, id)
+				g.kick(v, id)
+			}
+		case s.Body != p.player:
 			continue
 		}
-		id := ecs.ID(s.Sensor.ID)
-		d.over = slices.DeleteFunc(d.over, func(o ecs.ID) bool { return o == id || !g.Ents.Alive(o) })
+		ev := content.Event{Name: content.EvTriggerOut, ID: g.kind(id), Entity: uint32(id), By: by}
 		if s.In {
-			d.over = append(d.over, id)
-			g.kick(v, id)
+			ev.Name = content.EvTriggerIn
 		}
+		if e := g.Ents.Transform.Get(id); e != nil {
+			ev.At = g.World.Relief.Surface(e.Dir)
+		}
+		g.emit(ev)
 	}
 }
 
@@ -619,10 +632,20 @@ func (g *Game) entityBody(id ecs.ID, def *content.EntityDef) *physics.Body {
 	b := &physics.Body{Kind: physics.Kinematic, Shape: physics.Circle(def.Radius), Layer: layerEntity, Mask: ^uint32(0), ID: uint32(id),
 		Friction: frictionWall, Restitution: bounceWall}
 	if trigger(def) {
-		b.Sensor, b.Layer, b.Mask = true, layerTrigger, layerVehicle
-		b.Shape = physics.Circle(padReach)
-		if r := def.Ramp; r != nil {
-			b.Shape = physics.Box(r.Length/2, r.Width/2, 0)
+		b.Sensor, b.Layer, b.Mask = true, layerTrigger, layerVehicle|layerPlayer
+		lo, hi := g.phys.partsBounds(def)
+		switch {
+		case def.Ramp != nil:
+			b.Shape = physics.Box(def.Ramp.Length/2, def.Ramp.Width/2, 0)
+		case def.Kick > 0:
+			b.Shape = physics.Circle(padReach)
+		case def.Radius > 0:
+			b.Shape = physics.Circle(def.Radius)
+		case hi.X > lo.X && hi.Z > lo.Z:
+			mid := physics.V2{X: (lo.X + hi.X) / 2, Y: g.phys.side * (lo.Z + hi.Z) / 2}
+			b.Shape = physics.OffsetBox((hi.X-lo.X)/2, (hi.Z-lo.Z)/2, mid, 0, 0)
+		default:
+			b.Shape = physics.Circle(1)
 		}
 		return b
 	}

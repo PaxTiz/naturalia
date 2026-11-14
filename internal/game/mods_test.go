@@ -113,6 +113,9 @@ func TestStuntMod(t *testing.T) {
 	if e, _ := c.Entities.Get("cascadeur:mega-tremplin"); e == nil || e.Ramp == nil || e.Ramp.Height != 5 || e.Parts[0].Shape != "wedge" {
 		t.Errorf("ramp: %+v", e)
 	}
+	if e, _ := c.Entities.Get("cascadeur:cible"); e == nil || !e.Trigger || e.Data["prime"] != 400.0 {
+		t.Errorf("target: %+v", e)
+	}
 	if v, _ := c.Vehicles.Get("core:rover"); v.Jumps != 2 || v.Jump != 5.5 {
 		t.Errorf("patched rover: jump %f, %d jumps", v.Jump, v.Jumps)
 	}

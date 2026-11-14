@@ -165,6 +165,13 @@ type EntityDef struct {
 	// Kick throws a driven vehicle that crosses it forward, adding this
 	// speed in m/s (a boost pad).
 	Kick float64 `json:"kick"`
+	// Trigger makes it a zone, walked and driven through: who comes in and
+	// goes out says trigger_enter and trigger_leave. It spans radius, or
+	// its parts without one, up to 1.5 m over them.
+	Trigger bool `json:"trigger"`
+	// Data is the pack's own components, anything JSON holds, for its
+	// scripts (game.data).
+	Data map[string]any `json:"data"`
 }
 
 type Ramp struct {
@@ -363,6 +370,16 @@ const (
 	FabricTile = 0.25
 )
 
+// EntityState is an entity of the world, for packs: ID stays its own
+// while it lives.
+type EntityState struct {
+	ID   uint32
+	Kind string
+	At   vec3    // its foot on the ground, from Mars' center
+	Alt  float64 // over the ground
+	Dist float64 // from the player, m
+}
+
 // Game is what packs see of the running game: their handlers, random
 // events, furniture and debug lines act through it, never on the game's
 // internals. Scripts get the same, in JavaScript (internal/script).
@@ -379,6 +396,9 @@ type Game interface {
 	PlayerPos() vec3          // from Mars' center
 	Driving() string          // ID of the vehicle driven
 	Entities(kind string) int // placed entities of a kind, all of them for ""
+	// Near are the entities of a kind ("": all) within dist m of the
+	// player, the nearest first.
+	Near(kind string, dist float64) []EntityState
 	DustDevils() int
 	Random() float64
 
@@ -400,6 +420,10 @@ type Game interface {
 	// and up.
 	Vehicle() (VehicleState, bool)
 	Push(forward, up float64)
+	// Impulse adds speed v (m/s, world axes) to an entity near the player
+	// pushed around (a crate, a robot) or driven: along the ground it
+	// slides, up it flies off. False if it can't be.
+	Impulse(id uint32, v vec3) bool
 
 	// ModData is what a pack keeps in the save, by key.
 	ModData(pack string) map[string]any

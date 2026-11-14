@@ -1,10 +1,15 @@
 package game
 
 import (
+	"cmp"
 	"image/color"
 	"math"
+	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/palette"
+	"naturalia/internal/physics"
 	"naturalia/internal/planet"
+	"slices"
 )
 
 func (g *Game) Credits() float64       { return g.State.Credits }
@@ -79,4 +84,51 @@ func (g *Game) ModData(pack string) map[string]any {
 		g.State.Mods[pack] = map[string]any{}
 	}
 	return g.State.Mods[pack]
+}
+
+func (g *Game) Near(kind string, dist float64) []content.EntityState {
+	var out []content.EntityState
+	up := g.Player.LocalUp()
+	for id, e := range g.Ents.Transform.All() {
+		d := planet.ArcDist(up, e.Dir)
+		if d > dist || (kind != "" && g.kind(id) != kind) {
+			continue
+		}
+		out = append(out, content.EntityState{ID: uint32(id), Kind: g.kind(id), At: g.World.Relief.Surface(e.Dir), Alt: e.Alt, Dist: d})
+	}
+	slices.SortFunc(out, func(a, b content.EntityState) int { return cmp.Compare(a.Dist, b.Dist) })
+	return out
+}
+
+func (g *Game) Impulse(id uint32, v vec3) bool {
+	e := ecs.ID(id)
+	if !g.Ents.Alive(e) || math.IsNaN(v.X+v.Y+v.Z) || math.IsInf(v.X+v.Y+v.Z, 0) {
+		return false
+	}
+	t := g.Ents.Transform.Get(e)
+	up := v.Dot(t.Dir)
+	along := v.Sub(t.Dir.Scale(up))
+	if e == g.Riding {
+		d := &g.drive
+		d.vel = d.vel.Add(along)
+		d.vr += up
+		d.air = d.air || up > 0
+		return true
+	}
+	bp := g.Ents.Body.Get(e)
+	if bp == nil || (*bp).Kind != physics.Dynamic || g.phys == nil {
+		return false
+	}
+	b := *bp
+	b.Vel = b.Vel.Add(g.phys.vecPlane(t.Dir.Scale(g.phys.r0), along))
+	b.Wake()
+	if def, ok := g.Content.Entities.Get(g.kind(e)); ok && def.Mass > 0 && up > 0 {
+		a := g.Ents.Air.Get(e)
+		if a == nil {
+			a = g.Ents.Air.Set(e, Air{})
+		}
+		a.vz = math.Max(a.vz, up)
+		g.rubs(e, false)
+	}
+	return true
 }
