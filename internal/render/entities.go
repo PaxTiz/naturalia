@@ -95,6 +95,7 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 func buildEntity(def *content.EntityDef, gfx *Graphics) []entityModel {
 	b := mesh.NewParts(vec3{})
 	content.KitJSON{Parts: def.Parts}.Kit().Build(b, vec3{}, 0)
+	b.Unfight()
 	var out []entityModel
 	for _, k := range b.Keys {
 		m := b.Mesh(k)

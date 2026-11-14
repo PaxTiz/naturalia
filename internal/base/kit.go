@@ -86,6 +86,7 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	}
 	b.airlock()
 	b.outside()
+	b.Unfight()
 	return b.Parts
 }
 

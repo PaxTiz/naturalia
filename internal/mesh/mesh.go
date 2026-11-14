@@ -22,6 +22,7 @@ type Parts struct {
 	byKey  map[Key]*Builder
 	Keys   []Key
 	origin vec3 // of every mesh
+	built  int  // pieces built so far, in all meshes
 }
 
 // Key says what a mesh is: material token, lighting mode, and the world
@@ -41,7 +42,7 @@ func NewParts(origin vec3) *Parts {
 func (s *Parts) Part(tok string, lit float32, at vec3) *Builder {
 	k := Key{tok, lit, at}
 	if s.byKey[k] == nil {
-		s.byKey[k] = &Builder{origin: s.origin}
+		s.byKey[k] = &Builder{origin: s.origin, parts: s}
 		s.Keys = append(s.Keys, k)
 	}
 	return s.byKey[k]
@@ -58,6 +59,10 @@ func (s *Parts) MergeTurned(o *Parts, turn func(p vec3) vec3) {
 			at = s.origin.Add(turn(at.Sub(s.origin)))
 		}
 		src, dst := o.byKey[k], s.Part(k.Tok, k.Lit, at)
+		for i, p := range src.pieces {
+			dst.pieces = append(dst.pieces, len(dst.V)/3+p)
+			dst.seqs = append(dst.seqs, s.built+src.seqs[i])
+		}
 		dir := func(x, y, z float32) vec3 { return turn(vec3{float64(x), float64(y), float64(z)}).Sub(turn(vec3{})) }
 		for i := 0; i+2 < len(src.V); i += 3 {
 			p := s.origin.Add(turn(vec3{float64(src.V[i]), float64(src.V[i+1]), float64(src.V[i+2])}))
@@ -67,6 +72,7 @@ func (s *Parts) MergeTurned(o *Parts, turn func(p vec3) vec3) {
 		}
 		dst.UV = append(dst.UV, src.UV...)
 	}
+	s.built += o.built
 }
 
 // Mesh is the mesh of a piece already built.
@@ -75,10 +81,24 @@ func (s *Parts) Mesh(k Key) *Builder { return s.byKey[k] }
 // Builder collects triangles, moved by origin.
 type Builder struct {
 	V, N, UV []float32
-	origin   vec3 // added to every point: the frame the triangles are built in
+	origin   vec3  // added to every point: the frame the triangles are built in
+	pieces   []int // the first vertex of each piece (a box, a slab...), for Unfight
+	seqs     []int // and when it was built, among all the pieces of parts
+	parts    *Parts
 	// uvf lays the plate texture (the panel material) on the surface being built: the
 	// texture coordinates of a local point. Without it, the middle of a plate.
 	uvf func(p vec3) [2]float64
+}
+
+// begin starts a new piece.
+func (m *Builder) begin() {
+	seq := len(m.pieces)
+	if m.parts != nil {
+		seq = m.parts.built
+		m.parts.built++
+	}
+	m.pieces = append(m.pieces, len(m.V)/3)
+	m.seqs = append(m.seqs, seq)
 }
 
 func (m *Builder) emit(p, nrm vec3) {
@@ -141,6 +161,7 @@ func (m *Builder) Box(c, size, across vec3, bevel float64) {
 // BoxBasis adds a box along the unit axes ax, with edges and corners
 // chamfered by bevel: they catch the light instead of being sharp.
 func (m *Builder) BoxBasis(c vec3, ax [3]vec3, size vec3, bevel float64) {
+	m.begin()
 	h := [3]float64{size.X / 2, size.Y / 2, size.Z / 2}
 	bevel = math.Min(bevel, 0.45*math.Min(h[0], math.Min(h[1], h[2])))
 	// pt is the corner s pushed out along one axis: the corner of that face.
@@ -210,6 +231,7 @@ func (m *Builder) BoxBasis(c vec3, ax [3]vec3, size vec3, bevel float64) {
 // Slab extrudes the convex polygon pts, given in order on a plane, by
 // depth along that plane's normal n: a gable end, any flat odd shape.
 func (m *Builder) Slab(pts []vec3, n vec3, depth float64) {
+	m.begin()
 	n = n.Norm().Scale(depth / 2)
 	var mid vec3
 	for _, p := range pts {
@@ -229,6 +251,7 @@ func (m *Builder) Slab(pts []vec3, n vec3, depth float64) {
 // Wedge adds a ramp standing on the local point c: size.X long along the
 // horizontal direction across, size.Z wide, rising from nothing to size.Y.
 func (m *Builder) Wedge(c, size, across vec3) {
+	m.begin()
 	up := vec3{0, 1, 0}
 	ex := across.Norm()
 	ez := ex.Cross(up)
@@ -247,6 +270,7 @@ func (m *Builder) Wedge(c, size, across vec3) {
 // Prism adds a faceted cylinder or cone frustum standing on base along
 // axis: radius r0 at the bottom, r1 at the top, its top edge chamfered.
 func (m *Builder) Prism(base, axis vec3, r0, r1, h float64, sides int, bevel float64) {
+	m.begin()
 	// Round pieces are round: more sides and smooth normals around them
 	// (the chamfer still creases). Few sides stay faceted on purpose.
 	round := sides >= 8
@@ -309,6 +333,7 @@ const DomeGores = 16
 // flat gores, like a geodesic shell: each gore is flat across and smooth
 // from bottom to top, its corners on the ellipsoid.
 func (m *Builder) Dome(c vec3, a, bh float64) {
+	m.begin()
 	const rings, per = 12, 3 // per: rows of vertices across a gore
 	pt := func(i int, g, f float64) (vec3, vec3) {
 		phi := float64(i) / rings * math.Pi / 2
