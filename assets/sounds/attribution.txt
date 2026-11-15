@@ -3,3 +3,7 @@ under the Pixabay Content License: free to use in a game, even sold,
 without credit. The files may not be sold or shared on their own, as a
 sound bank: built into the game, they are not.
 https://pixabay.com/service/license-summary/
+
+Except wind_mars.wav: the wind of Mars recorded by the Perseverance rover,
+from NASA. Its credit line (NASA/JPL-Caltech alone, or with the SuperCam
+partners LANL, CNES, CNRS, ISAE-Supaéro) is still to be checked.
