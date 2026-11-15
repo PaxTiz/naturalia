@@ -35,7 +35,6 @@ func settingRow(box rl.Rectangle, i int) (row, bar rl.Rectangle) {
 // click or a drag along its bar.
 func (hud *HUD) updateSettings(g *game.Game) {
 	s := &hud.settings
-	g.UIClick = false
 	if g.Mode != game.ModePaused {
 		s.drag = -1
 		return
@@ -55,7 +54,9 @@ func (hud *HUD) updateSettings(g *game.Game) {
 	_, box := pauseBoxes()
 	mouse := rl.GetMousePosition()
 	click := rl.IsMouseButtonPressed(rl.MouseButtonLeft)
-	g.UIClick = click && rl.CheckCollisionPointRec(mouse, box)
+	if click && !rl.CheckCollisionPointRec(mouse, box) {
+		g.Resume()
+	}
 	for i := range game.SoundSettings {
 		row, bar := settingRow(box, i)
 		if rl.CheckCollisionPointRec(mouse, row) && s.drag < 0 {

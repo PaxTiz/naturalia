@@ -951,6 +951,7 @@ func (hud *HUD) drawSleep(g *game.Game) {
 // mode's panel, the pause screen's settings, the shop. It runs before the
 // game's update.
 func (hud *HUD) Update(g *game.Game, dt float64) {
+	g.PollKeys()
 	hud.updateDebug(g, dt)
 	hud.updatePhoto(g, dt)
 	hud.updateSettings(g)

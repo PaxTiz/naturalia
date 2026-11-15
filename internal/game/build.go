@@ -50,13 +50,13 @@ func (g *Game) updateItems() {
 	if gh != nil && gh.Moving != 0 && !g.Ents.Alive(gh.Moving) {
 		g.Ghost, gh = nil, nil // gone meanwhile (a mod)
 	}
-	if gh != nil && (rl.IsMouseButtonPressed(rl.MouseButtonRight) || rl.IsKeyPressed(rl.KeyBackspace)) {
+	if gh != nil && (rl.IsMouseButtonPressed(rl.MouseButtonRight) || KeyPressed(ActStow)) {
 		g.Ghost = nil
 		return
 	}
 	if gh == nil || gh.Moving == 0 {
 		it, n := g.HeldItem()
-		if rl.IsKeyPressed(rl.KeyR) {
+		if KeyPressed(ActNextItem) {
 			g.itemSel++
 			it, n = g.HeldItem()
 		}
@@ -70,7 +70,7 @@ func (g *Game) updateItems() {
 			g.Ghost = nil
 			return
 		case gh == nil:
-			if rl.IsKeyPressed(rl.KeyF) {
+			if KeyPressed(ActPlace) {
 				g.Ghost = &Ghost{rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}, dist: 4}
 				g.Ghost.Kind, g.Ghost.item = content.Qualify(it.Places), it.ID
 				g.poseGhost()
@@ -86,29 +86,29 @@ func (g *Game) updateItems() {
 	}
 	step := turnStep
 	switch {
-	case rl.IsKeyDown(rl.KeyLeftControl):
+	case KeyDown(ActTurnQuarter):
 		step = math.Pi / 2
-	case rl.IsKeyDown(rl.KeyLeftAlt):
+	case KeyDown(ActTurnDegree):
 		step = math.Pi / 180
 	}
-	if rl.IsKeyDown(rl.KeyLeftShift) {
+	if KeyDown(ActTurnBack) {
 		step = -step
 	}
-	if rl.IsKeyPressed(rl.KeyX) {
+	if KeyPressed(ActTurnY) {
 		gh.turn(vec3{0, 1, 0}, step)
 	}
 	if g.turnable(def) {
-		if rl.IsKeyPressed(rl.KeyC) {
+		if KeyPressed(ActTurnZ) {
 			gh.turn(vec3{0, 0, 1}, step)
 		}
-		if rl.IsKeyPressed(rl.KeyB) {
+		if KeyPressed(ActTurnX) {
 			gh.turn(vec3{1, 0, 0}, step)
 		}
 	} else {
 		gh.rel[1] = vec3{0, 1, 0}
 		gh.rel[0] = vec3{gh.rel[0].X, 0, gh.rel[0].Z}.Norm()
 	}
-	if rl.IsKeyPressed(rl.KeyT) {
+	if KeyPressed(ActStick) {
 		gh.Free = !gh.Free
 		pos, _, _, _ := g.Frame(&gh.Pose)
 		gh.dist = math.Max(1.5, pos.Sub(g.Player.Eye()).Length()) // it stays where it was
@@ -121,7 +121,7 @@ func (g *Game) updateItems() {
 		}
 	}
 	g.poseGhost()
-	if rl.IsKeyPressed(rl.KeyF) && gh.OK {
+	if KeyPressed(ActPlace) && gh.OK {
 		g.placeGhost()
 	}
 }

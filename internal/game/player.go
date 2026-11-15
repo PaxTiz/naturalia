@@ -88,9 +88,9 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 	var move vec3
 	if control {
 		d := rl.GetMouseDelta()
-		turn := -float64(d.X) * mouseSens
+		turn := -float64(d.X) * lookX
 		p.Heading = p.Heading.Scale(math.Cos(turn)).Add(up.Cross(p.Heading).Scale(math.Sin(turn)))
-		p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*mouseSens))
+		p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*lookY))
 	}
 	p.want = vec3{}
 	if p.seated {
@@ -99,25 +99,24 @@ func (p *Player) Update(dt float64, t planet.Relief, control bool) {
 		return
 	}
 	if control {
-		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.
 		right := p.Right()
-		if rl.IsKeyDown(rl.KeyW) {
+		if KeyDown(ActForward) {
 			move = move.Add(p.Heading)
 		}
-		if rl.IsKeyDown(rl.KeyS) {
+		if KeyDown(ActBack) {
 			move = move.Sub(p.Heading)
 		}
-		if rl.IsKeyDown(rl.KeyD) {
+		if KeyDown(ActRight) {
 			move = move.Add(right)
 		}
-		if rl.IsKeyDown(rl.KeyA) {
+		if KeyDown(ActLeft) {
 			move = move.Sub(right)
 		}
 		move = move.Norm().Scale(walkSpeed)
-		if rl.IsKeyDown(rl.KeyLeftShift) {
+		if KeyDown(ActRun) {
 			move = move.Scale(sprintFactor)
 		}
-		if p.onGround && rl.IsKeyPressed(rl.KeySpace) {
+		if p.onGround && KeyPressed(ActUp) {
 			p.vr = jumpSpeed
 			p.onGround = false
 		}
@@ -165,9 +164,9 @@ func (p *Player) fly(dt float64, t planet.Relief, control bool) {
 	}
 	up := p.LocalUp()
 	d := rl.GetMouseDelta()
-	turn := -float64(d.X) * mouseSens
+	turn := -float64(d.X) * lookX
 	p.Heading = p.Heading.Scale(math.Cos(turn)).Add(up.Cross(p.Heading).Scale(math.Sin(turn)))
-	p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*mouseSens))
+	p.Pitch = math.Max(-1.5, math.Min(1.5, p.Pitch-float64(d.Y)*lookY))
 	if w := rl.GetMouseWheelMove(); w != 0 {
 		p.FlyBoost = math.Max(0.1, math.Min(50, content.OrZero(p.FlyBoost, 1)*math.Pow(1.25, float64(w))))
 	}
@@ -175,16 +174,16 @@ func (p *Player) fly(dt float64, t planet.Relief, control bool) {
 	var move vec3
 	right := p.Right()
 	for _, k := range []struct {
-		key int32
+		key Action
 		dir vec3
-	}{{rl.KeyW, p.Heading}, {rl.KeyS, p.Heading.Scale(-1)}, {rl.KeyD, right}, {rl.KeyA, right.Scale(-1)},
-		{rl.KeySpace, up}, {rl.KeyLeftControl, up.Scale(-1)}} {
-		if rl.IsKeyDown(k.key) {
+	}{{ActForward, p.Heading}, {ActBack, p.Heading.Scale(-1)}, {ActRight, right}, {ActLeft, right.Scale(-1)},
+		{ActUp, up}, {ActDown, up.Scale(-1)}} {
+		if KeyDown(k.key) {
 			move = move.Add(k.dir)
 		}
 	}
 	speed := p.FlySpeed(t.Altitude(p.Pos))
-	if rl.IsKeyDown(rl.KeyLeftShift) {
+	if KeyDown(ActRun) {
 		speed *= 4
 	}
 	p.Pos = p.Pos.Add(move.Norm().Scale(speed * dt))

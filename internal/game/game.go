@@ -120,9 +120,12 @@ type Game struct {
 
 	Settings        Settings // the player's preferences (settings.go)
 	settingsChanged bool
-	// UIClick is set by the interface when this frame's click was on one
-	// of its panels: the pause screen does not resume on it.
-	UIClick bool
+	// KeysPressed are this frame's keys, in order (PollKeys); KeyCapture
+	// is set while the menu waits for a key to bind, so none acts.
+	KeysPressed []int32
+	KeyCapture  bool
+	resume      bool // the pause menu said to play (Resume)
+	Quit        bool // the pause menu said to leave the game
 
 	Aim       vec3 // where the tool points on the ground
 	AimOK     bool
@@ -178,6 +181,14 @@ func (g *Game) setMode(m Mode) {
 	}
 }
 
+// Resume leaves the pause screen, at the game's next update: the key that
+// said so does not act in the game.
+func (g *Game) Resume() { g.resume = true }
+
+// WakingUp tells whether the game has not started yet: a new game wakes
+// up in bed when the pause screen is left.
+func (g *Game) WakingUp() bool { return g.wakeUp }
+
 func (g *Game) Update(dt float64) {
 	if g.Mode == ModePhoto && g.updatePhoto(dt) {
 		g.sfx.Update() // the sound goes on
@@ -185,16 +196,19 @@ func (g *Game) Update(dt float64) {
 	}
 	g.Elapsed += dt
 
-	if rl.IsKeyPressed(rl.KeyF11) {
-		rl.ToggleBorderlessWindowed()
+	if !g.KeyCapture { // the menu waits for a key to bind: it is only that
+		if KeyPressed(ActFullscreen) {
+			g.ToggleFullscreen()
+		}
+		if KeyPressed(ActMute) {
+			g.sfx.ToggleMute()
+		}
 	}
-	if rl.IsKeyPressed(rl.KeyM) {
-		g.sfx.ToggleMute()
-	}
-	closeKeys := rl.IsKeyPressed(rl.KeyEscape) || rl.IsKeyPressed(rl.KeyE) || rl.IsKeyPressed(rl.KeyTab)
+	closeKeys := rl.IsKeyPressed(rl.KeyEscape) || KeyPressed(ActUse) || rl.IsKeyPressed(rl.KeyTab)
 	switch g.Mode {
 	case ModePaused:
-		if rl.IsMouseButtonPressed(rl.MouseButtonLeft) && !g.UIClick {
+		if g.resume {
+			g.resume = false
 			g.SaveSettings()
 			g.setMode(ModePlay)
 			if g.wakeUp {
@@ -206,11 +220,11 @@ func (g *Game) Update(dt float64) {
 		switch {
 		case rl.IsKeyPressed(rl.KeyEscape) || !rl.IsWindowFocused():
 			g.setMode(ModePaused)
-		case rl.IsKeyPressed(rl.KeyE) && g.Riding == 0:
+		case KeyPressed(ActUse) && g.Riding == 0:
 			if it, ok := g.NearbyUse(); ok {
 				g.use(it)
 			}
-		case rl.IsKeyPressed(rl.KeyP):
+		case KeyPressed(ActPhoto):
 			g.EnterPhoto()
 		}
 	case ModeShop:
@@ -475,7 +489,7 @@ func (g *Game) updateFov(dt float64) {
 	switch {
 	case g.Sweeping:
 		target = 67
-	case rl.IsKeyDown(rl.KeyLeftShift) && g.Player.MoveAmount > 0.5:
+	case KeyDown(ActRun) && g.Player.MoveAmount > 0.5:
 		target = 76
 	case g.Riding != 0:
 		// Speed widens the view, a rocket's much more.

@@ -6,6 +6,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // The sound settings, in the order of the pause screen's panel.
@@ -25,9 +27,52 @@ type Settings struct {
 	Volume float64 `json:"volume"`
 	Music  float64 `json:"music"`
 	Vacuum float64 `json:"vacuum"`
+	// Mouse is the mouse's sensitivity, 1 by default; InvertY looks down
+	// when the mouse goes up.
+	Mouse      float64 `json:"mouse"`
+	InvertY    bool    `json:"invert_y,omitempty"`
+	Fullscreen bool    `json:"fullscreen,omitempty"`
+	// Keys are the keys the player changed, by action (keys.go); KeyNames
+	// the labels learned from the keyboard.
+	Keys     map[string]int32 `json:"keys,omitempty"`
+	KeyNames map[int32]string `json:"key_names,omitempty"`
 }
 
-var defaultSettings = Settings{Volume: 0.7, Music: 0.9, Vacuum: 1}
+var defaultSettings = Settings{Volume: 0.7, Music: 0.9, Vacuum: 1, Mouse: 1}
+
+// The mouse's sensitivity's range, and its steps.
+const (
+	MouseMin, MouseMax, MouseStep = 0.25, 3, 0.05
+)
+
+// lookX and lookY turn the view by the mouse's motion (applySettings).
+var lookX, lookY = mouseSens, mouseSens
+
+// SetMouse changes the mouse's sensitivity.
+func (g *Game) SetMouse(v float64) {
+	v = math.Round(math.Max(MouseMin, math.Min(MouseMax, v))/MouseStep) * MouseStep
+	if g.Settings.Mouse != v {
+		g.Settings.Mouse = v
+		g.settingsChanged = true
+		g.applySettings()
+	}
+}
+
+// SetInvertY turns the vertical look upside down, or back.
+func (g *Game) SetInvertY(on bool) {
+	if g.Settings.InvertY != on {
+		g.Settings.InvertY = on
+		g.settingsChanged = true
+		g.applySettings()
+	}
+}
+
+// ToggleFullscreen switches between a window and the whole screen.
+func (g *Game) ToggleFullscreen() {
+	rl.ToggleBorderlessWindowed()
+	g.Settings.Fullscreen = !g.Settings.Fullscreen
+	g.settingsChanged = true
+}
 
 func (s *Settings) sound(i int) *float64 {
 	return [SoundSettings]*float64{&s.Volume, &s.Music, &s.Vacuum}[i]
@@ -49,6 +94,11 @@ func (g *Game) SetSound(i int, v float64) {
 func (g *Game) applySettings() {
 	s := g.Settings
 	g.sfx.SetVolumes(s.Volume*s.Volume, s.Music*s.Music, s.Vacuum*s.Vacuum)
+	lookX = mouseSens * s.Mouse
+	lookY = lookX
+	if s.InvertY {
+		lookY = -lookY
+	}
 }
 
 func (g *Game) loadSettings() {
@@ -65,7 +115,18 @@ func (g *Game) loadSettings() {
 		p := g.Settings.sound(i)
 		*p = math.Max(0, math.Min(1, *p))
 	}
+	if g.Settings.Mouse == 0 { // a settings.json from before
+		g.Settings.Mouse = 1
+	}
+	g.Settings.Mouse = math.Max(MouseMin, math.Min(MouseMax, g.Settings.Mouse))
+	for k, s := range g.Settings.KeyNames {
+		keyNames[k] = s
+	}
+	g.loadKeys()
 	g.applySettings()
+	if g.Settings.Fullscreen {
+		rl.ToggleBorderlessWindowed()
+	}
 }
 
 // SaveSettings writes settings.json if a setting changed.

@@ -157,12 +157,12 @@ func (g *Game) EnterPhoto() {
 }
 
 // updatePhoto flies the photo camera: like the creative flight, plus the
-// roll (A and E on AZERTY) and the zoom (wheel). The panel's settings are
+// roll (A and E on AZERTY, by default) and the zoom (wheel). The panel's settings are
 // the interface's (ui). It returns whether the world skips this frame:
 // frozen, or just back to playing (the key that left would act again).
 func (g *Game) updatePhoto(dt float64) bool {
 	ph := &g.Photo
-	if rl.IsKeyPressed(rl.KeyP) || rl.IsKeyPressed(rl.KeyEscape) {
+	if KeyPressed(ActPhoto) || rl.IsKeyPressed(rl.KeyEscape) {
 		g.setMode(ModePlay)
 		return true
 	}
@@ -170,38 +170,38 @@ func (g *Game) updatePhoto(dt float64) bool {
 		up := ph.up()
 		d := rl.GetMouseDelta()
 		// Slower turns when zoomed in, so framing stays precise.
-		sens := mouseSens * ph.Fov / 70
-		turn := -float64(d.X) * sens
+		sens := ph.Fov / 70
+		turn := -float64(d.X) * lookX * sens
 		ph.Heading = ph.Heading.Scale(math.Cos(turn)).Add(up.Cross(ph.Heading).Scale(math.Sin(turn)))
-		ph.Pitch = math.Max(-1.55, math.Min(1.55, ph.Pitch-float64(d.Y)*sens))
+		ph.Pitch = math.Max(-1.55, math.Min(1.55, ph.Pitch-float64(d.Y)*lookY*sens))
 		if w := rl.GetMouseWheelMove(); w != 0 {
 			ph.Fov = math.Max(8, math.Min(110, ph.Fov*math.Pow(0.92, float64(w))))
 		}
-		if rl.IsKeyDown(rl.KeyQ) {
+		if KeyDown(ActRollLeft) {
 			ph.Roll -= photoRoll * dt
 		}
-		if rl.IsKeyDown(rl.KeyE) {
+		if KeyDown(ActRollRight) {
 			ph.Roll += photoRoll * dt
 		}
-		if rl.IsKeyPressed(rl.KeyR) {
+		if KeyPressed(ActRollReset) {
 			ph.Roll = 0
 		}
 		var move vec3
 		right := ph.Right()
 		for _, k := range []struct {
-			key int32
+			key Action
 			dir vec3
-		}{{rl.KeyW, ph.Forward()}, {rl.KeyS, ph.Forward().Scale(-1)}, {rl.KeyD, right}, {rl.KeyA, right.Scale(-1)},
-			{rl.KeySpace, up}, {rl.KeyLeftControl, up.Scale(-1)}} {
-			if rl.IsKeyDown(k.key) {
+		}{{ActForward, ph.Forward()}, {ActBack, ph.Forward().Scale(-1)}, {ActRight, right}, {ActLeft, right.Scale(-1)},
+			{ActUp, up}, {ActDown, up.Scale(-1)}} {
+			if KeyDown(k.key) {
 				move = move.Add(k.dir)
 			}
 		}
 		speed := photoSpeed
 		switch {
-		case rl.IsKeyDown(rl.KeyLeftShift):
+		case KeyDown(ActRun):
 			speed *= 4
-		case rl.IsKeyDown(rl.KeyLeftAlt):
+		case KeyDown(ActSlow):
 			speed /= 4
 		}
 		ph.Pos = ph.Pos.Add(move.Norm().Scale(speed * dt))

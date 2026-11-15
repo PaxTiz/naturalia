@@ -9,8 +9,6 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
-
-	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // Driving: the player sits in a vehicle (content.Vehicle) that rolls,
@@ -161,7 +159,7 @@ func (g *Game) driveVehicle(dt float64) {
 		return
 	}
 	d := &g.drive
-	if g.Mode == ModePlay && rl.IsKeyPressed(rl.KeyE) && !d.boarded {
+	if g.Mode == ModePlay && KeyPressed(ActUse) && !d.boarded {
 		if g.DriveAlt() > aloft && v.Fly != nil {
 			g.Say("Descends d'abord (Ctrl)")
 		} else {
@@ -174,26 +172,25 @@ func (g *Game) driveVehicle(dt float64) {
 		g.glideDock(v, dt)
 		return
 	}
-	if g.Mode == ModePlay && rl.IsKeyPressed(rl.KeyG) && g.CanDock() {
+	if g.Mode == ModePlay && KeyPressed(ActDock) && g.CanDock() {
 		g.startDock()
 		return
 	}
 	var in controls
 	if g.Mode == ModePlay {
-		// Physical key positions: WASD on QWERTY is ZQSD on AZERTY.
 		for _, k := range []struct {
-			key int32
+			key Action
 			to  *float64
 			by  float64
-		}{{rl.KeyW, &in.throttle, 1}, {rl.KeyS, &in.throttle, -1}, {rl.KeyA, &in.steer, 1}, {rl.KeyD, &in.steer, -1},
-			{rl.KeySpace, &in.climb, 1}, {rl.KeyLeftControl, &in.climb, -1}} {
-			if rl.IsKeyDown(k.key) {
+		}{{ActForward, &in.throttle, 1}, {ActBack, &in.throttle, -1}, {ActLeft, &in.steer, 1}, {ActRight, &in.steer, -1},
+			{ActUp, &in.climb, 1}, {ActDown, &in.climb, -1}} {
+			if KeyDown(k.key) {
 				*k.to += k.by
 			}
 		}
-		in.jump = rl.IsKeyPressed(rl.KeySpace)
-		in.boost = rl.IsKeyDown(rl.KeyLeftShift)
-		if rl.IsKeyPressed(rl.KeyV) {
+		in.jump = KeyPressed(ActUp)
+		in.boost = KeyDown(ActRun)
+		if KeyPressed(ActCamera) {
 			g.chase = !g.chase
 		}
 	}
