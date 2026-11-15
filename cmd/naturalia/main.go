@@ -35,7 +35,7 @@ func main() {
 	gfx := render.New(g)
 	hud := ui.New()
 	shot := newShotRun(g, gfx, hud)
-	for !rl.WindowShouldClose() {
+	for !rl.WindowShouldClose() && !g.Quit {
 		// Clamp so a window drag or a hitch doesn't teleport everything.
 		dt := min(float64(rl.GetFrameTime()), 0.05)
 		hud.Update(g, dt)

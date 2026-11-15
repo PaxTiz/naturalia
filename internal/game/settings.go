@@ -122,6 +122,7 @@ func (g *Game) loadSettings() {
 	for k, s := range g.Settings.KeyNames {
 		keyNames[k] = s
 	}
+	guessLayout()
 	g.loadKeys()
 	g.applySettings()
 	if g.Settings.Fullscreen {

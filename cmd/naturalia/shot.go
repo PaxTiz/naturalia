@@ -29,13 +29,19 @@ type shotRun struct {
 	pitch   float64
 	mode    game.Mode
 	perf    float64 // summed frame times (NA_SHOT_PERF)
+	hud     *ui.HUD
+	tab     int // the settings' tab shown, or -1 (NA_SHOT_MODE=settings)
 }
 
 func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
-	s := &shotRun{file: os.Getenv("NA_SHOT"), mode: game.ModePlay}
+	s := &shotRun{file: os.Getenv("NA_SHOT"), mode: game.ModePlay, hud: hud, tab: -1}
 	g.NoSave = s.file != ""
-	// NA_SHOT_MODE opens a screen for the shot: shop, garage, map or pause.
+	// NA_SHOT_MODE opens a screen for the shot: shop, garage, map, pause,
+	// or settings (NA_SHOT_TAB=n picks the tab).
 	switch os.Getenv("NA_SHOT_MODE") {
+	case "settings":
+		s.mode, s.tab = game.ModePaused, 0
+		fmt.Sscanf(os.Getenv("NA_SHOT_TAB"), "%d", &s.tab)
 	case "shop":
 		s.mode = game.ModeShop
 	case "garage":
@@ -133,6 +139,9 @@ func (s *shotRun) tick(g *game.Game) {
 		return
 	}
 	g.Mode = s.mode
+	if s.tab >= 0 {
+		s.hud.OpenSettings(s.tab)
+	}
 	if s.placed {
 		g.Player.Heading, g.Player.Pitch = s.heading, s.pitch
 	}

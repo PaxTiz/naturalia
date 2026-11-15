@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"math"
-	"naturalia/internal/audio"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/game"
@@ -716,49 +715,6 @@ func marsEmblem(cx, cy, r float32) {
 	rl.DrawRing(rl.NewVector2(cx, cy), r+2*uiScale(), r+4*uiScale(), 200, 340, 48, color.RGBA{255, 170, 120, 120})
 }
 
-func (hud *HUD) drawPause(g *game.Game) {
-	u := uiScale()
-	w, h := screenSize()
-	rl.DrawRectangleGradientV(0, 0, int32(w), int32(h), color.RGBA{8, 4, 10, 215}, color.RGBA{20, 8, 10, 235})
-	hud.drawVisor(g)
-
-	// Emblem and title, centered as one block.
-	title := "NATURALIA"
-	size := 76 * u
-	tw := hud.titleWidth(title, size)
-	er := 46 * u
-	x0 := w/2 - (2*er+28*u+tw)/2
-	ty := h * 0.16
-	marsEmblem(x0+er, ty+size*0.5+6*u, er)
-	tx := x0 + 2*er + 28*u
-	hud.title(title, tx+3*u, ty+4*u, size, color.RGBA{0, 0, 0, 150})
-	hud.title(title, tx, ty, size, uiWhite)
-	hazard(rl.NewRectangle(tx+2*u, ty+size+4*u, tw, 7*u))
-	if math.Mod(g.Elapsed, 1.4) < 1.0 {
-		hud.caps("CLIQUE POUR ENFILER TON CASQUE", tx+2*u, ty+size+22*u, 18*u, visorCyan)
-	}
-
-	keys := [][2]string{
-		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"F11", "plein écran"},
-		{"M", "couper le son"},
-		{"CLIC", "balayer la poussière visée"}, {"E", "incinérateur, labo, carte, lit"}, {"P", "mode photo"}, {"ÉCHAP", "pause"},
-	}
-	box, sound := pauseBoxes()
-	visorPanel(box, visorCyan)
-	hud.caps("COMMANDES", box.X+24*u, box.Y+14*u, 13*u, visorDim)
-	for i, k := range keys {
-		col := float32(i / 5)
-		x := box.X + 24*u + col*300*u
-		y := box.Y + 42*u + float32(i%5)*38*u
-		kw := rl.MeasureTextEx(hud.mono, k[0], 15*u, 0).X + 12*u
-		hud.keycap(k[0], x+70*u-kw, y, 15*u)
-		hud.text(k[1], x+84*u, y+1*u, 19*u, uiWhite)
-	}
-	hud.drawSettings(g, sound)
-	cw := hud.width(audio.Credits, 15*u)
-	hud.text(audio.Credits, w/2-cw/2, h-34*u, 15*u, visorDim)
-}
-
 // terminal draws a base computer screen: a charcoal body under an
 // off-white header, like the habitat panels, with an accent square, a
 // hazard block at its end and an accent line beneath.
@@ -948,13 +904,13 @@ func (hud *HUD) drawSleep(g *game.Game) {
 }
 
 // Update follows the interface's input: the debug overlay, the photo
-// mode's panel, the pause screen's settings, the shop. It runs before the
+// mode's panel, the pause menu, the shop. It runs before the
 // game's update.
 func (hud *HUD) Update(g *game.Game, dt float64) {
 	g.PollKeys()
 	hud.updateDebug(g, dt)
 	hud.updatePhoto(g, dt)
-	hud.updateSettings(g)
+	hud.updateMenu(g, dt)
 	if g.Mode == game.ModeShop {
 		hud.updateShop(g)
 	}
@@ -1025,7 +981,7 @@ type HUD struct {
 	shopTab                     string // the shop's tab open
 	dbg                         debugInfo
 	photo                       photoUI
-	settings                    settingsUI
+	menu                        menuUI
 }
 
 func New() *HUD {
@@ -1037,6 +993,6 @@ func New() *HUD {
 		visor:     render.GenVisor(),
 		hover:     -1,
 		confirm:   -1,
-		settings:  settingsUI{drag: -1},
+		menu:      menuUI{drag: -1},
 	}
 }
