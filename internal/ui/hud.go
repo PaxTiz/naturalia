@@ -743,7 +743,7 @@ func (hud *HUD) drawPause(g *game.Game) {
 		{"M", "couper le son"},
 		{"CLIC", "balayer la poussière visée"}, {"E", "incinérateur, labo, carte, lit"}, {"P", "mode photo"}, {"ÉCHAP", "pause"},
 	}
-	box := rl.NewRectangle(w/2-330*u, h*0.53, 660*u, 5*38*u+50*u)
+	box, sound := pauseBoxes()
 	visorPanel(box, visorCyan)
 	hud.caps("COMMANDES", box.X+24*u, box.Y+14*u, 13*u, visorDim)
 	for i, k := range keys {
@@ -754,6 +754,7 @@ func (hud *HUD) drawPause(g *game.Game) {
 		hud.keycap(k[0], x+70*u-kw, y, 15*u)
 		hud.text(k[1], x+84*u, y+1*u, 19*u, uiWhite)
 	}
+	hud.drawSettings(g, sound)
 	cw := hud.width(audio.Credits, 15*u)
 	hud.text(audio.Credits, w/2-cw/2, h-34*u, 15*u, visorDim)
 }
@@ -947,11 +948,12 @@ func (hud *HUD) drawSleep(g *game.Game) {
 }
 
 // Update follows the interface's input: the debug overlay, the photo
-// mode's panel, the shop. It
-// runs before the game's update.
+// mode's panel, the pause screen's settings, the shop. It runs before the
+// game's update.
 func (hud *HUD) Update(g *game.Game, dt float64) {
 	hud.updateDebug(g, dt)
 	hud.updatePhoto(g, dt)
+	hud.updateSettings(g)
 	if g.Mode == game.ModeShop {
 		hud.updateShop(g)
 	}
@@ -1022,6 +1024,7 @@ type HUD struct {
 	shopTab                     string // the shop's tab open
 	dbg                         debugInfo
 	photo                       photoUI
+	settings                    settingsUI
 }
 
 func New() *HUD {
@@ -1033,5 +1036,6 @@ func New() *HUD {
 		visor:     render.GenVisor(),
 		hover:     -1,
 		confirm:   -1,
+		settings:  settingsUI{drag: -1},
 	}
 }

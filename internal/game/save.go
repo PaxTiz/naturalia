@@ -45,6 +45,7 @@ func saveDir() (string, error) {
 }
 
 func (g *Game) Save() {
+	g.SaveSettings()
 	dir, err := saveDir()
 	if err != nil {
 		log.Println("save:", err)

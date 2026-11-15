@@ -48,6 +48,7 @@ type Mixer struct {
 
 	Master  float64 // the player's volume, 0.5 by default
 	BusGain [busCount]float64
+	Vacuum  float64 // the tool's own volume: it can tire on the long run
 	muted   bool
 	mute    float64 // eased toward 0 or 1
 	fade    float64 // start-up fade, 0 to 1
@@ -88,6 +89,7 @@ func newMixer(fsys fs.FS) *Mixer {
 		rng:       rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 		Master:    0.5,
 		BusGain:   [busCount]float64{1, 1, 0.8},
+		Vacuum:    1,
 		mute:      1,
 		limGain:   1,
 		lastStep:  -1,
@@ -142,6 +144,14 @@ func (m *Mixer) Update() {
 func (m *Mixer) ToggleMute() {
 	if m != nil {
 		m.muted = !m.muted
+	}
+}
+
+// SetVolumes sets the player's gains, 0 to 1: the master volume, the
+// music's and the tool's.
+func (m *Mixer) SetVolumes(master, music, vacuum float64) {
+	if m != nil {
+		m.Master, m.BusGain[busMusic], m.Vacuum = master, music, vacuum
 	}
 }
 
@@ -239,7 +249,7 @@ func (m *Mixer) steer(dt float64) {
 	if m.Sweeping {
 		tool = 1
 	}
-	set(m.vacuum, tool, 0, 0.9+0.2*math.Max(0, math.Min(1, m.Power)))
+	set(m.vacuum, tool*math.Max(0, math.Min(1, m.Vacuum)), 0, 0.9+0.2*math.Max(0, math.Min(1, m.Power)))
 	m.airlockCD -= dt
 
 	// Music: a track, then a few minutes of silence, then the next one.

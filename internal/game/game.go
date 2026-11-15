@@ -118,6 +118,12 @@ type Game struct {
 	SleepT    float64 // time into the sleep sequence
 	wakeUp    bool    // a new game starts by waking up in bed
 
+	Settings        Settings // the player's preferences (settings.go)
+	settingsChanged bool
+	// UIClick is set by the interface when this frame's click was on one
+	// of its panels: the pause screen does not resume on it.
+	UIClick bool
+
 	Aim       vec3 // where the tool points on the ground
 	AimOK     bool
 	Sweeping  bool
@@ -136,6 +142,7 @@ func New(c *content.Content) *Game {
 		sfx:     audio.New(),
 	}
 	g.load()
+	g.loadSettings()
 	for _, p := range g.State.Entities {
 		g.add(p)
 	}
@@ -187,7 +194,8 @@ func (g *Game) Update(dt float64) {
 	closeKeys := rl.IsKeyPressed(rl.KeyEscape) || rl.IsKeyPressed(rl.KeyE) || rl.IsKeyPressed(rl.KeyTab)
 	switch g.Mode {
 	case ModePaused:
-		if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+		if rl.IsMouseButtonPressed(rl.MouseButtonLeft) && !g.UIClick {
+			g.SaveSettings()
 			g.setMode(ModePlay)
 			if g.wakeUp {
 				g.wakeUp = false
