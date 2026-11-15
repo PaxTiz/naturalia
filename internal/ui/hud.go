@@ -377,16 +377,16 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 			if v.Fly != nil {
 				line += fmt.Sprintf(" · altitude %.0f m", g.DriveAlt())
 			}
-			hud.prompt("E", line, h*0.64, visorCyan)
+			hud.prompt(game.KeyLabel(game.ActUse), line, h*0.64, visorCyan)
 			if g.CanDock() {
-				hud.prompt("G", "Garer à sa place", h*0.64-34*uiScale(), visorAmber)
+				hud.prompt(game.KeyLabel(game.ActDock), "Garer à sa place", h*0.64-34*uiScale(), visorAmber)
 			}
 			hud.drawBoost(g, h*0.64+30*uiScale())
 		case g.State.TotalDust < 5:
 			hud.prompt("CLIC", "Maintiens pour balayer la poussière visée", h*0.64, visorCyan)
 		case hud.hasUse(g):
 			it, _ := g.NearbyUse()
-			hud.prompt("E", strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
+			hud.prompt(game.KeyLabel(game.ActUse), strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
 		case moving != "":
 			hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64, visorCyan)
 		case g.TankFull() && !g.AutoSell() && math.Mod(g.Elapsed, 1) < 0.7:
@@ -449,13 +449,15 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 	if it == nil && !moving {
 		return
 	}
-	keys := [][2]string{{"F", "poser"}, {"R", "changer"}}
+	place, next := game.KeyLabel(game.ActPlace), game.KeyLabel(game.ActNextItem)
+	keys := [][2]string{{place, "poser"}, {next, "changer"}}
 	if gh := g.Ghost; gh != nil {
-		place := "libre"
+		stick := "libre"
 		if gh.Free {
-			place = "coller"
+			stick = "coller"
 		}
-		keys = [][2]string{{"F", "poser"}, {"R", "changer"}, {"X C B", "tourner"}, {"T", place}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
+		keys = [][2]string{{place, "poser"}, {next, "changer"}, {game.KeyLabel(game.ActTurnY) + " " + game.KeyLabel(game.ActTurnZ) + " " + game.KeyLabel(game.ActTurnX), "tourner"},
+			{game.KeyLabel(game.ActStick), stick}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
 		if moving {
 			keys = append(keys[:1], keys[2:]...)
 			keys[len(keys)-1][1] = "annuler"
@@ -492,21 +494,24 @@ func (hud *HUD) drawHints(g *game.Game) {
 	u := uiScale()
 	w, h := screenSize()
 	hints := [][2]string{
-		{"ZQSD", "bouger"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"CLIC", "balayer"},
-		{"E", "utiliser"}, {"P", "photo"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
+		{game.KeyLabels(game.ActForward, game.ActLeft, game.ActBack, game.ActRight), "bouger"},
+		{game.KeyLabel(game.ActRun), "courir"}, {game.KeyLabel(game.ActUp), "sauter"}, {"CLIC", "balayer"},
+		{game.KeyLabel(game.ActUse), "utiliser"}, {game.KeyLabel(game.ActPhoto), "photo"}, {"ÉCHAP", "pause"}, {"F3", "debug"},
 	}
 	if v, ok := g.Driven(); ok {
-		hints = [][2]string{{"Z", "accélérer"}, {"S", "freiner"}, {"QD", "tourner"}}
+		hints = [][2]string{{game.KeyLabel(game.ActForward), "accélérer"}, {game.KeyLabel(game.ActBack), "freiner"},
+			{game.KeyLabels(game.ActLeft, game.ActRight), "tourner"}}
 		switch {
 		case v.Fly != nil:
-			hints = append(hints, [2]string{"ESPACE", "monter"}, [2]string{"CTRL", "descendre"})
+			hints = append(hints, [2]string{game.KeyLabel(game.ActUp), "monter"}, [2]string{game.KeyLabel(game.ActDown), "descendre"})
 		case v.Jump > 0:
-			hints = append(hints, [2]string{"ESPACE", "sauter"})
+			hints = append(hints, [2]string{game.KeyLabel(game.ActUp), "sauter"})
 		}
 		if v.Boost > 0 {
-			hints = append(hints, [2]string{"MAJ", "boost"})
+			hints = append(hints, [2]string{game.KeyLabel(game.ActRun), "boost"})
 		}
-		hints = append(hints, [2]string{"V", "caméra"}, [2]string{"E", "descendre"}, [2]string{"ÉCHAP", "pause"})
+		hints = append(hints, [2]string{game.KeyLabel(game.ActCamera), "caméra"}, [2]string{game.KeyLabel(game.ActUse), "descendre"},
+			[2]string{"ÉCHAP", "pause"})
 	}
 	key, label := 11*u, 12*u
 	total := float32(0)
@@ -828,11 +833,12 @@ func (hud *HUD) drawShop(g *game.Game) {
 func (hud *HUD) closeHint(g *game.Game, x, y float32, centered bool) {
 	u := uiScale()
 	s := "OU ÉCHAP POUR FERMER"
-	kw := rl.MeasureTextEx(hud.mono, "E", 14*u, 0).X + 12*u
+	use := game.KeyLabel(game.ActUse)
+	kw := rl.MeasureTextEx(hud.mono, use, 14*u, 0).X + 12*u
 	if centered {
 		x -= (kw + 8*u + hud.capsWidth(s, 13*u)) / 2
 	}
-	hud.keycap("E", x, y, 14*u)
+	hud.keycap(use, x, y, 14*u)
 	hud.caps(s, x+kw+8*u, y+3*u, 13*u, withAlpha(uiWhite, 0.8))
 }
 
@@ -916,7 +922,7 @@ func (hud *HUD) Update(g *game.Game, dt float64) {
 	}
 }
 
-// updateShop switches the shop's tabs (a click, Q D or the arrows), scrolls
+// updateShop switches the shop's tabs (a click, left and right or the arrows), scrolls
 // it, follows the mouse over its rows and buys the one clicked.
 func (hud *HUD) updateShop(g *game.Game) {
 	tabs, _ := hud.shopPage(g)
@@ -924,9 +930,9 @@ func (hud *HUD) updateShop(g *game.Game) {
 		at := slices.IndexFunc(tabs, func(t game.ShopTab) bool { return t.ID == hud.shopTab })
 		to := at
 		switch {
-		case rl.IsKeyPressed(rl.KeyLeft), rl.IsKeyPressed(rl.KeyA): // Q on AZERTY
+		case rl.IsKeyPressed(rl.KeyLeft), game.KeyPressed(game.ActLeft):
 			to = (at + n - 1) % n
-		case rl.IsKeyPressed(rl.KeyRight), rl.IsKeyPressed(rl.KeyD):
+		case rl.IsKeyPressed(rl.KeyRight), game.KeyPressed(game.ActRight):
 			to = (at + 1) % n
 		}
 		for i := range tabs {

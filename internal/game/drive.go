@@ -161,7 +161,7 @@ func (g *Game) driveVehicle(dt float64) {
 	d := &g.drive
 	if g.Mode == ModePlay && KeyPressed(ActUse) && !d.boarded {
 		if g.DriveAlt() > aloft && v.Fly != nil {
-			g.Say("Descends d'abord (Ctrl)")
+			g.Say("Descends d'abord (" + KeyLabel(ActDown) + ")")
 		} else {
 			g.getOut()
 			return

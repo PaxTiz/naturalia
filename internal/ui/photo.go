@@ -23,7 +23,7 @@ type photoUI struct {
 }
 
 // updatePhoto follows the panel's keys: arrows to pick and change a
-// setting, Backspace to reset it, H to hide everything, Enter or a click
+// setting, Backspace to reset it, the panel's key (H) to hide everything, Enter or a click
 // to take the picture.
 func (hud *HUD) updatePhoto(g *game.Game, dt float64) {
 	p := &hud.photo
@@ -44,7 +44,7 @@ func (hud *HUD) updatePhoto(g *game.Game, dt float64) {
 		g.Photo.Adjust(p.sel, -1)
 	case rl.IsKeyPressed(rl.KeyBackspace):
 		g.Photo.Reset(p.sel)
-	case rl.IsKeyPressed(rl.KeyH):
+	case game.KeyPressed(game.ActPhotoPanel):
 		p.hidden = !p.hidden
 	case rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) || rl.IsMouseButtonPressed(rl.MouseButtonLeft):
 		p.shoot = true
@@ -168,8 +168,10 @@ func (hud *HUD) drawPhotoHints() {
 	u := uiScale()
 	w, h := screenSize()
 	hints := [][2]string{
-		{"ZQSD", "bouger"}, {"ESPACE/CTRL", "monter, descendre"}, {"A/E", "pencher"}, {"MOLETTE", "zoom"},
-		{"ENTRÉE", "photo"}, {"H", "masquer"}, {"P", "quitter"},
+		{game.KeyLabels(game.ActForward, game.ActLeft, game.ActBack, game.ActRight), "bouger"},
+		{game.KeyLabel(game.ActUp) + "/" + game.KeyLabel(game.ActDown), "monter, descendre"},
+		{game.KeyLabel(game.ActRollLeft) + "/" + game.KeyLabel(game.ActRollRight), "pencher"}, {"MOLETTE", "zoom"},
+		{"ENTRÉE", "photo"}, {game.KeyLabel(game.ActPhotoPanel), "masquer"}, {game.KeyLabel(game.ActPhoto), "quitter"},
 	}
 	key, label := 11*u, 12*u
 	total := float32(0)
