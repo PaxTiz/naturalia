@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"naturalia/internal/audio"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/game"
@@ -739,19 +740,22 @@ func (hud *HUD) drawPause(g *game.Game) {
 
 	keys := [][2]string{
 		{"ZQSD", "se déplacer"}, {"MAJ", "courir"}, {"ESPACE", "sauter"}, {"F11", "plein écran"},
+		{"M", "couper le son"},
 		{"CLIC", "balayer la poussière visée"}, {"E", "incinérateur, labo, carte, lit"}, {"P", "mode photo"}, {"ÉCHAP", "pause"},
 	}
-	box := rl.NewRectangle(w/2-330*u, h*0.53, 660*u, 4*38*u+50*u)
+	box := rl.NewRectangle(w/2-330*u, h*0.53, 660*u, 5*38*u+50*u)
 	visorPanel(box, visorCyan)
 	hud.caps("COMMANDES", box.X+24*u, box.Y+14*u, 13*u, visorDim)
 	for i, k := range keys {
-		col := float32(i / 4)
+		col := float32(i / 5)
 		x := box.X + 24*u + col*300*u
-		y := box.Y + 42*u + float32(i%4)*38*u
+		y := box.Y + 42*u + float32(i%5)*38*u
 		kw := rl.MeasureTextEx(hud.mono, k[0], 15*u, 0).X + 12*u
 		hud.keycap(k[0], x+70*u-kw, y, 15*u)
 		hud.text(k[1], x+84*u, y+1*u, 19*u, uiWhite)
 	}
+	cw := hud.width(audio.Credits, 15*u)
+	hud.text(audio.Credits, w/2-cw/2, h-34*u, 15*u, visorDim)
 }
 
 // terminal draws a base computer screen: a charcoal body under an

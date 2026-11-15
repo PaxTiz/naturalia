@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	github.com/dop251/goja v0.0.0-20261020172427-7b1a02208696
 	github.com/gen2brain/raylib-go/raylib v0.60.1
+	github.com/hajimehoshi/go-mp3 v0.3.4
 	golang.org/x/image v0.45.0
 )
 

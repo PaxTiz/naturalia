@@ -82,7 +82,7 @@ type Game struct {
 	Particles []Particle
 	Floaters  []Floater
 	NearRocks []planet.Rock // boulders around the player
-	sfx       *audio.Synth
+	sfx       *audio.Mixer
 	Fov       float64 // degrees, eased by updateFov
 	Steps     Footprints
 	Devils    []*DustDevil
@@ -109,6 +109,7 @@ type Game struct {
 	walls    []base.Segment // the base's walls, for collisions
 	phys     *phys          // the collisions' plane (physics.go)
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
+	doorWant float64        // where they are going
 	HallOpen []float64      // the halls' big doors, in the order of base.Halls
 	// The halls' corridor doors (base.InnerDoors), like the airlock's.
 	InnerOpen []float64
@@ -172,12 +173,16 @@ func (g *Game) setMode(m Mode) {
 
 func (g *Game) Update(dt float64) {
 	if g.Mode == ModePhoto && g.updatePhoto(dt) {
-		return // the world stands still for the photo
+		g.sfx.Update() // the sound goes on
+		return         // the world stands still for the photo
 	}
 	g.Elapsed += dt
 
 	if rl.IsKeyPressed(rl.KeyF11) {
 		rl.ToggleBorderlessWindowed()
+	}
+	if rl.IsKeyPressed(rl.KeyM) {
+		g.sfx.ToggleMute()
 	}
 	closeKeys := rl.IsKeyPressed(rl.KeyEscape) || rl.IsKeyPressed(rl.KeyE) || rl.IsKeyPressed(rl.KeyTab)
 	switch g.Mode {
@@ -218,10 +223,12 @@ func (g *Game) Update(dt float64) {
 	g.stepPhysics(dt)
 	g.liftVehicle(dt)
 	g.Player.fall(dt, g.World.Relief)
+	outside := !base.Indoors(base.ToLocal(g.Player.Eye()))
 	if g.Steps.update(&g.Player) {
-		g.sfx.Step()
+		g.sfx.Step(!outside || g.Player.floor > 0.01) // the base's floor, a block
 	}
-	g.sfx.Outside = !base.Indoors(base.ToLocal(g.Player.Eye()))
+	g.sfx.Outside = outside
+	g.sfx.Running = g.Mode == ModePlay && g.Riding == 0 && g.Player.want.Length() > walkSpeed*1.2
 	g.sfx.Sweeping = g.Sweeping
 	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)
 	g.sfx.Update()
@@ -350,6 +357,10 @@ func (g *Game) updateBase(dt float64) {
 	open := 0.0
 	if base.ToLocal(g.Player.Pos).Sub(base.AirlockEnd).Length() < 4 {
 		open = 1
+	}
+	if open != g.doorWant {
+		g.doorWant = open
+		g.sfx.Airlock()
 	}
 	g.DoorOpen += (open - g.DoorOpen) * math.Min(1, dt*4)
 	g.updateHallDoors(dt)
