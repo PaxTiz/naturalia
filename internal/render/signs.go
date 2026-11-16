@@ -30,9 +30,8 @@ const signHeight = 0.34
 func (gfx *Graphics) baseSigns() []sign {
 	hubID, hub := base.Hub()
 	inHub := func(angle float64, text string, accent color.RGBA) sign {
-		dir := vec3{math.Cos(angle), 0, math.Sin(angle)}
-		at := dir.Scale(hub.Radius - base.WallThick/2 - 0.03).Add(vec3{0, 2.6, 0})
-		return sign{at: at, facing: dir.Scale(-1), width: 1.9, text: text, accent: accent}
+		at, facing := hub.SignOver(angle)
+		return sign{at: at, facing: facing, width: 1.9, text: text, accent: accent}
 	}
 	// Over each door of the hub, the name of the building it leads to.
 	var signs []sign
@@ -43,6 +42,19 @@ func (gfx *Graphics) baseSigns() []sign {
 		if bp := base.Ents.Building.Get(c.Rooms[1]).Plan(); bp.Sign != "" {
 			d := bp.At.Sub(hub.Center)
 			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, gfx.tok(bp.Accent).Col))
+		}
+	}
+	// The names the blueprints paint on their walls.
+	for _, r := range base.Buildings() {
+		bp := r.Plan()
+		for _, s := range bp.Signs {
+			facing := r.TurnDir(vec3{math.Cos(s.Facing), 0, math.Sin(s.Facing)})
+			accent := s.Accent
+			if accent == "" {
+				accent = bp.Accent
+			}
+			signs = append(signs, sign{at: r.Turn(r.Center.Add(s.At)), facing: facing, width: s.Width, height: s.Height,
+				text: s.Text, accent: gfx.tok(accent).Col})
 		}
 	}
 	// On the halls: their name outside, and over each bay of a garage the

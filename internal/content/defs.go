@@ -31,6 +31,17 @@ type Blueprint struct {
 	Doors  []Door   `json:"doors"`
 	Props  []Prop   `json:"props"`
 	Floors []Floor  `json:"floors"` // up in it: a mezzanine, the stairs to it
+	Signs  []Sign   `json:"signs"`  // names painted on its walls, inside
+}
+
+// Sign is a name on a wall of a building, in its frame (before its Yaw).
+type Sign struct {
+	Text   string  `json:"text"`
+	At     vec3    `json:"at"`     // its middle
+	Facing float64 `json:"facing"` // the way it faces, an angle like a door's
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"` // of its plate; 0.34 m if left out
+	Accent string  `json:"accent"` // token of its stripe; the building's if left out
 }
 
 // Floor is somewhere to walk up in a building, in its frame (before its

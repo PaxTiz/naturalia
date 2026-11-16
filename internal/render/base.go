@@ -168,8 +168,7 @@ func (gfx *Graphics) drawBeacon(g *game.Game) {
 
 // beaconTop is where the blinking light sits, for its glow.
 func beaconTop() vec3 {
-	_, hub := base.Hub()
-	return base.ToWorld(vec3{1.5, hub.WallH + hub.Radius*0.55 + 2.25, 1.5})
+	return base.ToWorld(base.BeaconTop())
 }
 
 // drawGlobe draws the hologram of Mars above the map table.

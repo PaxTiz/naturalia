@@ -36,7 +36,7 @@
   "buildings": [
     {
       "id": "serre",
-      "at": [-10, 0, 10],
+      "at": [-8, 0, 17],
       "link": "core:hub",
       "sign": "SERRE",
       "shape": {"radius": 3.5, "wall_height": 2.6},

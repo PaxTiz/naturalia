@@ -368,8 +368,8 @@ func (b *building) yard() {
 		sun("lamp.warm").Box(head.Add(vec3{0, -0.15, 0}).Add(in.Scale(0.03)), vec3{0.6, 0.02, 0.22}, vec3{-in.Z, 0, in.X}, 0)
 	}
 
-	// Cables on the ground, from the solar panels to the sale room.
-	for _, seg := range [][2]vec3{{{-12, 0.03, -9}, {-12, 0.03, -4.6}}, {{-12, 0.03, -4.6}, {-13, 0.03, -4.0}}} {
+	// Cables on the ground, from the solar panels to the great hall.
+	for _, seg := range [][2]vec3{{{solarX, 0.03, -11}, {solarX, 0.03, -6.6}}, {{solarX, 0.03, -6.6}, {-12.2, 0.03, -6.6}}} {
 		d := seg[1].Sub(seg[0])
 		sun("rubber").Box(seg[0].Lerp(seg[1], 0.5), vec3{0.07, 0.06, d.Length()}, vec3{d.Z, 0, -d.X}.Norm(), 0.02)
 	}
@@ -411,9 +411,11 @@ func (b *building) waterTanks() {
 
 var (
 	yardMasts     = []vec3{{-17.5, 0, 6}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
-	yardBarrels   = []vec3{{5.4, 0, -9.4}, {-9.4, 0, 8.6}}
+	yardBarrels   = []vec3{{5.4, 0, -10.6}, {-9.4, 0, 10.2}}
 	yardTanks     = vec3{-5, 0, -13.3}
-	yardContainer = vec3{9.6, 0, 9.4}
+	yardContainer = vec3{10, 0, 13.5}
+	solarX        = -17.0 // the solar panels, west of the great hall
+	solarPanels   = []float64{-9.5, -12.5}
 )
 
 // yardFree tells whether a yard object of radius r at p stays clear of the
@@ -647,16 +649,16 @@ func (b *building) helmet(p vec3, a float64) {
 func (b *building) clutter(bp *content.Blueprint) {
 	at := func(v vec3) vec3 { return bp.At.Add(v) }
 	switch bp.ID {
-	case "core:hub":
-		b.coil(at(vec3{-4.3, FloorTop, 2.6}), 0.26, "pipe.yellow")
-		b.toolbox(at(vec3{2.5, FloorTop, 4.6}), 0.4)
-		b.helmet(at(content.Polar(5.4, 0.8)).Add(vec3{0, 1.24, 0}), 3.9)
+	case "core:hall":
+		b.coil(at(vec3{-6.5, FloorTop, 4.2}), 0.26, "pipe.yellow")
+		b.toolbox(at(vec3{3.5, FloorTop, 6.6}), 0.4)
+		b.helmet(at(vec3{-10.6, 1.24, 6.6}), 3.9)
 		b.tablet(at(vec3{0.6, 0.94, 0.6}), 0.7)
 		b.mug(at(vec3{-0.75, 0.93, -0.45}), "pipe.blue", 1)
-	case "core:sale":
-		b.coil(at(vec3{-2.8, FloorTop, 1.6}), 0.3, "rubber")
-		b.toolbox(at(vec3{0.4, FloorTop, 1.3}), 2.1)
-		b.papers(at(vec3{0.6, 0, -2.7}).Add(vec3{0, 1.35, 0}), 0.4, 3)
+		// The sale corner, by the incinerator.
+		b.coil(at(vec3{-8.2, FloorTop, -2.4}), 0.3, "rubber")
+		b.toolbox(at(vec3{-7.4, FloorTop, -4.4}), 2.1)
+		b.papers(at(vec3{-10.9, 1.35, -7.2}), 0.4, 3)
 	case "core:research":
 		// On the console's desk, turned like it.
 		c := at(vec3{0, 0, -2.3})

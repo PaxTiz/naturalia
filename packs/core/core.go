@@ -60,6 +60,10 @@ func registerCore(c *content.Content) {
 	for _, bp := range coreBuildings {
 		c.Buildings.Add(bp.ID, bp)
 	}
+	// The hub and the sale room were joined in the great hall: what was
+	// linked to them is linked to it.
+	c.Buildings.Alias("core:hub", "core:hall")
+	c.Buildings.Alias("core:sale", "core:hall")
 
 	c.Entities.Add("core:flag", content.EntityDef{Name: "Drapeau", Pickup: true, Radius: 0.15, Parts: []content.PartJSON{
 		{Shape: "prism", Token: "steel.dark", R0: 0.16, R1: 0.12, H: 0.08, Sides: 8, Lit: "outdoor"},
@@ -158,53 +162,42 @@ var coreTokens = map[string]content.Token{
 	"visor.gold":    {color.RGBA{200, 150, 60, 255}, content.MtPlain, 1, 1.2, 0},
 }
 
-// coreBuildings: the hub first, the rooms around it, then the hangar. The
-// hub's south door leads to the airlock. The sale and research rooms and
-// the hangar keep the layout they had on the other side of the hub,
-// turned half a turn (Yaw).
+// coreBuildings: the great hall first, the rooms around it, then the
+// hangar. The hall's south door leads to the airlock; its east wall is
+// kept for the bay window. The research room and the hangar stand west,
+// turned half a turn (Yaw): they keep the layout they had on the other
+// side.
 var coreBuildings = []content.Blueprint{
+	// The hub and the sale room in one: the map table in the middle, the
+	// incinerator in the south-west corner under its sign.
 	content.Blueprint{
-		ID:     "core:hub",
+		ID:     "core:hall",
 		Accent: "neon.cyan",
-		Shape:  content.Dome{Radius: 6.5, WallH: 2.8},
+		Hall:   &content.Hall{Size: [2]float64{24, 16}, WallH: 5, Rise: 2},
 		Style:  "habitat.white",
-		Doors:  []content.Door{{base.East}, {base.West}, {base.North}, {base.South}},
+		Signs:  []content.Sign{{Text: "VENTE", At: vec3{-11.82, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"}},
 		Props: []content.Prop{
 			{Kit: "maptable"},
-			{Kit: "crate.stack", At: content.Polar(5.4, 0.8), Seed: 1},
-			{Kit: "crate.stack", At: content.Polar(5.4, 2.4), Seed: 2},
-			{Kit: "crate.stack", At: content.Polar(5.4, 3.9), Seed: 4},
-			{Kit: "crate.stack", At: content.Polar(5.4, 5.5), Seed: 5},
-		},
-	},
-	content.Blueprint{
-		ID:     "core:sale",
-		Link:   "core:hub",
-		Sign:   "VENTE",
-		Accent: "neon.orange",
-		At:     vec3{13, 0, 0},
-		Yaw:    180,
-		Shape:  content.Dome{Radius: 4, WallH: 2.6},
-		Style:  "habitat.white",
-		Doors:  []content.Door{{base.East}},
-		Props: []content.Prop{
-			{Kit: "incinerator", At: vec3{-1.6, 0, 0}},
-			{Kit: "crate.stack", At: vec3{1.2, 0, 2.4}, Seed: 3},
-			{Kit: "crate.stack", At: vec3{0.6, 0, -2.7}, Seed: 8},
+			{Kit: "incinerator", At: vec3{-10, 0, -5}},
+			{Kit: "crate.stack", At: vec3{-10.6, 0, 6.6}, Seed: 1},
+			{Kit: "crate.stack", At: vec3{10.6, 0, 6.6}, Seed: 2},
+			{Kit: "crate.stack", At: vec3{10.6, 0, -6.6}, Seed: 4},
+			{Kit: "crate.stack", At: vec3{-7.2, 0, -7.0}, Seed: 3},
+			{Kit: "crate.stack", At: vec3{-10.9, 0, -7.2}, Seed: 8},
 		},
 	},
 	content.Blueprint{
 		ID:     "core:research",
-		Link:   "core:hub",
+		Link:   "core:hall",
 		Sign:   "RECHERCHE",
 		Accent: "neon.blue",
-		At:     vec3{-13, 0, 0},
+		At:     vec3{-20, 0, 0},
 		Yaw:    180,
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []content.Door{{base.West}},
 		// The console against the south wall, facing north: the way from
-		// the hub to the hangar runs across the room.
+		// the hall to the hangar runs across the room.
 		Props: []content.Prop{
 			{Kit: "console", At: vec3{0, 0, -2.3}, Yaw: -90},
 			{Kit: "chair", At: vec3{0.5, 0, -1.2}, Seed: 0, Yaw: -90},
@@ -214,10 +207,10 @@ var coreBuildings = []content.Blueprint{
 	},
 	content.Blueprint{
 		ID:     "core:sleep",
-		Link:   "core:hub",
+		Link:   "core:hall",
 		Sign:   "QUARTIERS",
 		Accent: "neon.purple",
-		At:     vec3{0, 0, 13},
+		At:     vec3{0, 0, 15},
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []content.Door{{base.South}},
@@ -236,7 +229,7 @@ var coreBuildings = []content.Blueprint{
 		Link:   "core:research",
 		Sign:   "HANGAR 01",
 		Accent: "neon.orange",
-		At:     vec3{-39, 0, 0},
+		At:     vec3{-46, 0, 0},
 		Yaw:    180,
 		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
 		Garage: true,

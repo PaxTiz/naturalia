@@ -13,11 +13,11 @@ import (
 // flat over the whole base: everything here is laid out in local
 // coordinates (x, y, z) relative to Origin, with y up.
 //
-//	              [ Sleep ]
-//	                  ║
-//	[ Sale ]═══( Hub + map table )═══[ Research ]
-//	                  ║
-//	              [ Airlock ] → outside
+//	                            [ Sleep ]
+//	                                ║
+//	[ Hangar ]═══[ Research ]═══( Great hall: map table, sale )
+//	                                ║
+//	                            [ Airlock ] → outside
 
 // Room is a round building: panel walls with openings, under a dome roof;
 // or, with Hall set, a big rectangular one (hall.go).
@@ -44,6 +44,19 @@ func (r Room) Unturn(p vec3) vec3 { return r.Center.Add(content.Turn(p.Sub(r.Cen
 // TurnDir turns a direction of the room's own frame to the base's.
 func (r Room) TurnDir(d vec3) vec3 { return content.Turn(d, r.Yaw) }
 
+// SignOver is where a sign hangs inside the room over the doorway toward
+// angle a (in the base), against the wall, and the way it faces: a dome's
+// just under its dome, a hall's over the stripes above its doorways.
+func (r Room) SignOver(a float64) (at, facing vec3) {
+	d := vec3{math.Cos(a), 0, math.Sin(a)}
+	if r.Hall == nil {
+		return r.Center.Add(d.Scale(r.Radius - WallThick/2 - 0.03)).Add(vec3{0, 2.6, 0}), d.Scale(-1)
+	}
+	w := r.Unturn(r.Center.Add(d.Scale(edge(r.plan, d))))
+	out := r.wallOut(w)
+	return r.Turn(w.Sub(out.Scale(hallWall/2 + 0.03))).Add(vec3{0, DoorHeight + 1.25, 0}), r.TurnDir(out.Scale(-1))
+}
+
 // Corridor is a straight rectangular tube between two rooms (or outside).
 type Corridor struct {
 	From, To vec3 // local, on the floor, along its axis
@@ -64,8 +77,8 @@ const (
 var (
 	East, West, North, South = 0.0, math.Pi, math.Pi / 2, -math.Pi / 2
 
-	AirlockEnd = vec3{0, 0, -10.5} // the hub's south door leads there
-	SpawnSpot  = vec3{0, 0, 11.6}  // wake up next to the bed
+	AirlockEnd = vec3{0, 0, -10.5} // the hub's south door leads there (Setup)
+	SpawnSpot  = vec3{0, 0, 11.6}  // wake up next to the bed (Setup)
 )
 
 // The base as laid out from the buildings in the content (Setup), besides
@@ -80,6 +93,9 @@ var (
 // player and what they can use.
 func Setup(c *content.Content) {
 	plans := c.Buildings.All()
+	hub := plans[0]
+	south := vec3{0, 0, -1}
+	addDoor(hub, South) // to the airlock
 	// The links open the doors first: a room is laid out with them.
 	type link struct {
 		from, to *content.Blueprint
@@ -119,8 +135,8 @@ func Setup(c *content.Content) {
 		l.c.Rooms = [2]ecs.ID{ids[l.to], ids[l.from]}
 		Ents.Corridor.Set(Ents.New(), l.c)
 	}
-	hub := plans[0]
-	Ents.Corridor.Set(Ents.New(), Corridor{vec3{0, 0, -(hub.Shape.Radius - 0.2)}, AirlockEnd, DoorWidth + 0.2, 2.6, [2]ecs.ID{ids[hub], 0}})
+	AirlockEnd = hub.At.Add(south.Scale(edge(hub, south) + 4.2))
+	Ents.Corridor.Set(Ents.New(), Corridor{hub.At.Add(south.Scale(edge(hub, south))), AirlockEnd, DoorWidth + 0.2, 2.6, [2]ecs.ID{ids[hub], 0}})
 	// The yard's clutter keeps clear of the buildings and corridors.
 	Ents.Obstacles.Set(Ents.New(), YardObstacles())
 	for _, bp := range plans {
@@ -132,6 +148,16 @@ func Setup(c *content.Content) {
 		for _, fl := range bp.Floors {
 			addFloor(ids[bp], bp, fl)
 		}
+	}
+	// Wake up 3.5 m from the bed, toward the middle of its room.
+	for _, f := range AllFurniture() {
+		if f.Kit != "core:bed" {
+			continue
+		}
+		if d := Ents.Building.Get(f.In).Center.Sub(f.At); d.Length() > 0.1 {
+			SpawnSpot = f.At.Add(d.Norm().Scale(3.5))
+		}
+		break
 	}
 	Extent = Reach
 	for _, r := range Buildings() {
@@ -409,10 +435,10 @@ func Lamps(rooms, corridors []ecs.ID) []Lamp {
 	for _, id := range rooms {
 		r := Ents.Building.Get(id)
 		switch {
-		case id == hub:
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10})
 		case r.Hall != nil:
 			lamps = append(lamps, r.turnLamp(r.hallLamps()[0]))
+		case id == hub:
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10})
 		default:
 			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
 		}

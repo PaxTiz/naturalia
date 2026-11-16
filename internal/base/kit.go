@@ -43,6 +43,7 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	for id, r := range Buildings() {
 		if r.Hall != nil {
 			b.hall(id, *r)
+			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		} else {
 			b.room(id, *r)
 			b.greebleRoom(id, *r, i*97+3)
@@ -249,22 +250,44 @@ func (b *building) airlock() {
 	b.Part("steel.dark", mesh.LitSun, vec3{}).Box(end.Add(vec3{0, 2.6, 0}), vec3{2*half + 0.3, 0.3, 0.35}, across, 0.05)
 }
 
+// roof is the height of the outside of the room's roof over local point
+// at: a dome's taken where its antenna stands.
+func (r Room) roof(at vec3) float64 {
+	if r.Hall == nil {
+		return r.WallH + r.Radius*0.55 - 0.8
+	}
+	return r.vault(r.Unturn(at).X-r.Center.X) + 0.24
+}
+
+// mast and dish are where the hub's antenna and dish stand on its roof.
+func mast() vec3 { _, hub := Hub(); return hub.Center.Add(vec3{1.5, 0, 1.5}) }
+func dish() vec3 { _, hub := Hub(); return hub.Center.Add(vec3{-1.8, 0, -1.2}) }
+
+// BeaconTop is where the red light blinks, on top of the antenna (local).
+func BeaconTop() vec3 {
+	_, hub := Hub()
+	return mast().Add(vec3{0, hub.roof(mast()) + 3.05, 0})
+}
+
 // outside: an antenna and a dish on the hub, solar panels nearby.
 func (b *building) outside() {
 	_, hub := Hub()
-	top := hub.WallH + hub.Radius*0.55
 	up := vec3{0, 1, 0}
 	steel := b.Part("steel", mesh.LitSun, vec3{})
-	steel.Prism(vec3{1.5, top - 0.8, 1.5}, up, 0.05, 0.05, 3.0, 6, 0)
-	steel.Box(vec3{1.5, top - 0.05, 1.5}, vec3{0.3, 0.2, 0.3}, vec3{1, 0, 0}, 0.04)
-	dish := vec3{math.Sin(25 * math.Pi / 180), math.Cos(25 * math.Pi / 180), 0}
-	steel.Prism(vec3{-1.8, top - 0.7, -1.2}, up, 0.08, 0.08, 0.35, 8, 0)
-	b.Part("habitat.white", mesh.LitSun, vec3{}).Prism(vec3{-1.8, top - 0.4, -1.2}, dish, 0.15, 0.75, 0.28, 16, 0.03)
-	tilt := -30 * math.Pi / 180
-	ax := [3]vec3{{1, 0, 0}, {0, math.Cos(tilt), math.Sin(tilt)}, {}}
+	m := mast()
+	m.Y = hub.roof(m)
+	steel.Prism(m, up, 0.05, 0.05, 3.0, 6, 0)
+	steel.Box(m.Add(vec3{0, 0.1, 0}), vec3{0.3, 0.2, 0.3}, vec3{1, 0, 0}, 0.04)
+	tilt := vec3{math.Sin(25 * math.Pi / 180), math.Cos(25 * math.Pi / 180), 0}
+	d := dish()
+	d.Y = hub.roof(d)
+	steel.Prism(d.Add(vec3{0, 0.1, 0}), up, 0.08, 0.08, 0.35, 8, 0)
+	b.Part("habitat.white", mesh.LitSun, vec3{}).Prism(d.Add(vec3{0, 0.4, 0}), tilt, 0.15, 0.75, 0.28, 16, 0.03)
+	slope := -30 * math.Pi / 180
+	ax := [3]vec3{{1, 0, 0}, {0, math.Cos(slope), math.Sin(slope)}, {}}
 	ax[2] = ax[0].Cross(ax[1])
-	for _, z := range []float64{-7.5, -10.5} {
-		at := vec3{-12, 0, z}
+	for _, z := range solarPanels {
+		at := vec3{solarX, 0, z}
 		steel.Prism(at, up, 0.06, 0.06, 1.2, 8, 0)
 		panel := at.Add(vec3{0, 1.28, 0})
 		steel.BoxBasis(panel, ax, vec3{2.7, 0.05, 1.6}, 0.02)

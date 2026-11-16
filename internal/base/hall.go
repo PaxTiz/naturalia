@@ -31,6 +31,10 @@ const (
 
 func (r Room) half() (hx, hz float64) { return r.Hall.Size[0] / 2, r.Hall.Size[1] / 2 }
 
+// bigDoor tells a hall with a big door from one closed all around, like
+// the great hall.
+func (r Room) bigDoor() bool { return r.Hall != nil && r.Hall.Door[0] > 0 }
+
 // vault is the inside of the roof's height over the floor, u m east of the
 // hall's middle: a parabola from the walls' top to the ridge.
 func (r Room) vault(u float64) float64 {
@@ -90,14 +94,16 @@ func (r Room) hallWalls() []Segment {
 func (r Room) straightWalls() [][2]vec3 {
 	hx, hz := r.half()
 	p := func(x, z float64) vec3 { return r.Center.Add(vec3{x, 0, z}) }
-	dw := r.Hall.Door[0] / 2
-	return [][2]vec3{
+	walls := [][2]vec3{
 		{p(-hx, -hz), p(-hx, hz)},
 		{p(-hx, -hz), p(hx, -hz)},
 		{p(-hx, hz), p(hx, hz)},
-		{p(hx, -hz), p(hx, -dw)},
-		{p(hx, dw), p(hx, hz)},
 	}
+	if !r.bigDoor() {
+		return append(walls, [2]vec3{p(hx, -hz), p(hx, hz)})
+	}
+	dw := r.Hall.Door[0] / 2
+	return append(walls, [2]vec3{p(hx, -hz), p(hx, -dw)}, [2]vec3{p(hx, dw), p(hx, hz)})
 }
 
 // hallGap is half the width of a corridor's doorway in a hall's wall.
@@ -153,11 +159,11 @@ type InnerDoor struct {
 // InnerLeaf is the width of each of an inner door's two leaves.
 const InnerLeaf = (DoorWidth + 0.2) / 2
 
-// InnerDoors are the halls' corridor doors.
+// InnerDoors are the corridor doors of the halls with a big door.
 func InnerDoors() []InnerDoor {
 	var out []InnerDoor
 	for _, r := range Buildings() {
-		if r.Hall == nil {
+		if !r.bigDoor() {
 			continue
 		}
 		for _, w := range r.doorways() {
@@ -252,11 +258,11 @@ func HallDoorWalls(i ecs.ID, open float64) []Segment {
 	return out
 }
 
-// Halls are the hall buildings.
+// Halls are the hall buildings with a big door.
 func Halls() []ecs.ID {
 	var out []ecs.ID
 	for id, r := range Buildings() {
-		if r.Hall != nil {
+		if r.bigDoor() {
 			out = append(out, id)
 		}
 	}
@@ -515,8 +521,10 @@ func (b *building) hallShell(r Room) {
 
 	// Floor, and a concrete apron before the door.
 	inside("floor.slate").Box(p(0, FloorTop-0.05, 0), vec3{2 * hx, 0.1, 2 * hz}, X, 0)
-	sun("pad.concrete").Box(p(hx+5, 0.02, 0), vec3{10, 0.1, dw + 4}, X, 0.02)
-	sun("hazard").Box(p(hx+0.6, 0.075, 0), vec3{0.5, 0.02, dw}, X, 0)
+	if dw > 0 {
+		sun("pad.concrete").Box(p(hx+5, 0.02, 0), vec3{10, 0.1, dw + 4}, X, 0.02)
+		sun("hazard").Box(p(hx+0.6, 0.075, 0), vec3{0.5, 0.02, dw}, X, 0)
+	}
 
 	// Walls, in panels: x0 to x1 along the wall from a to b at height y0
 	// to y1. The east one leaves the door open below the header.
@@ -534,7 +542,9 @@ func (b *building) hallShell(r Room) {
 			panels(s[0], s[1], 0, r.WallH)
 		}
 	}
-	panels(p(hx, 0, -dw/2), p(hx, 0, dw/2), dh, r.WallH)
+	if dw > 0 {
+		panels(p(hx, 0, -dw/2), p(hx, 0, dw/2), dh, r.WallH)
+	}
 	// The corridors' doorways: a lintel above, a steel frame on both
 	// faces, hazard stripes over it.
 	for _, w := range r.doorways() {
@@ -597,7 +607,7 @@ func (b *building) hallShell(r Room) {
 	// dark plinth.
 	for _, z := range r.pillars() {
 		for _, s := range []float64{-1, 1} {
-			if s > 0 && math.Abs(z) < dw/2+0.5 {
+			if s > 0 && dw > 0 && math.Abs(z) < dw/2+0.5 {
 				continue // the door
 			}
 			x := s * hx
@@ -608,7 +618,10 @@ func (b *building) hallShell(r Room) {
 			inside("steel").Box(p(x-s*0.35, r.WallH/2, z), vec3{0.4, r.WallH, 0.45}, X, 0.04)
 		}
 	}
-	for _, w := range r.straightWalls()[:3] { // the west, north and south ones
+	for k, w := range r.straightWalls() {
+		if k >= 3 && dw > 0 {
+			break // the door's wall
+		}
 		for _, s := range r.spans(w[0], w[1]) {
 			d := s[1].Sub(s[0])
 			mid := s[0].Lerp(s[1], 0.5)
@@ -645,10 +658,26 @@ func (b *building) hallShell(r Room) {
 		inside("lamp.warm").Prism(l.At.Sub(vec3{0, 0.08, 0}), yUp, 0.6, 0.6, 0.04, 16, 0)
 	}
 
-	// The door: a hazard header over the opening, jambs, rails on the
-	// ground, a gantry over the leaves' path and the pockets' posts.
-	// The header and jambs stop short of the leaves' rails; their faces
-	// turned to the hall are lit by its lamps, the others by the sun.
+	if dw > 0 {
+		b.hallDoor(r)
+	}
+}
+
+// hallDoor builds the big door's frame: a hazard header over the opening,
+// jambs, rails on the ground, a gantry over the leaves' path and the
+// pockets' posts. The header and jambs stop short of the leaves' rails;
+// their faces turned to the hall are lit by its lamps, the others by the
+// sun.
+func (b *building) hallDoor(r Room) {
+	hx, hz := r.half()
+	c := r.Center
+	dw, dh := r.Hall.Door[0], r.Hall.Door[1]
+	in := ToWorld(c.Add(vec3{0, 1.2, 0}))
+	wall := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitTowards, in) }
+	inside := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitIndoor, vec3{}) }
+	sun := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitSun, vec3{}) }
+	p := func(x, y, z float64) vec3 { return c.Add(vec3{x, y, z}) }
+	X := vec3{1, 0, 0}
 	wall("hazard").Box(p(hx+0.05, dh+0.25, 0), vec3{0.5, 0.5, dw + 0.6}, X, 0.04)
 	for _, s := range []float64{-1, 1} {
 		wall("steel").Box(p(hx-0.05, dh/2, s*(dw/2+0.2)), vec3{0.7, dh, 0.4}, X, 0.04)

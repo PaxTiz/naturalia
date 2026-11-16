@@ -27,16 +27,16 @@ func TestMigrateOldSave(t *testing.T) {
 
 func TestEventsAndBuildings(t *testing.T) {
 	c := LoadContent()
-	if got := buildingAt(vec3{13, 1, 0}); got != "core:sale" {
-		t.Errorf("in the sale room: %q", got)
+	if got := buildingAt(vec3{-8, 1, -4}); got != "core:hall" {
+		t.Errorf("in the sale corner: %q", got)
 	}
-	if got := buildingAt(vec3{0, 1, -9}); got != "" {
+	if got := buildingAt(vec3{0, 1, -10}); got != "" {
 		t.Errorf("in the airlock corridor: %q", got)
 	}
 	if n := len(base.YardObstacles()); n != 15 {
 		t.Errorf("the core base leaves out yard objects: %d obstacles", n)
 	}
-	if base.Ents.Corridor.Len() != 5 || base.Ents.Building.Len() != 5 || base.Ents.Use.Len() != 5 {
+	if base.Ents.Corridor.Len() != 4 || base.Ents.Building.Len() != 4 || base.Ents.Use.Len() != 5 {
 		t.Errorf("%d corridors, %d rooms, %d interactables", base.Ents.Corridor.Len(), base.Ents.Building.Len(), base.Ents.Use.Len())
 	}
 	var sold float64
@@ -64,19 +64,19 @@ func TestExampleMod(t *testing.T) {
 	if r, _ := c.Tools.Get("serre:rateau"); r.Look.HeadCol.G != 0x8c || r.Look.HandleLen != 0.6 {
 		t.Errorf("rake look: %+v", r.Look)
 	}
-	if base.Ents.Building.Len() != 6 || base.Ents.Corridor.Len() != 6 {
+	if base.Ents.Building.Len() != 5 || base.Ents.Corridor.Len() != 5 {
 		t.Fatalf("%d rooms, %d corridors", base.Ents.Building.Len(), base.Ents.Corridor.Len())
 	}
 	var plans []*content.Blueprint
 	for _, r := range base.Buildings() {
 		plans = append(plans, r.Plan())
 	}
-	bp := plans[5]
+	bp := plans[4]
 	if bp.ID != "serre:serre" || bp.Props[0].Kit != "serre:arbre" || bp.Props[1].Kit != "core:planter" || len(bp.Doors) != 1 {
 		t.Errorf("greenhouse: %+v", bp)
 	}
-	if len(plans[0].Doors) != 5 {
-		t.Errorf("hub doors: %v", plans[0].Doors)
+	if len(plans[0].Doors) != 4 { // the airlock, research, sleep, the greenhouse (linked to the old hub)
+		t.Errorf("great hall doors: %v", plans[0].Doors)
 	}
 	if tk, _ := c.Tokens.Get("serre:leaf"); tk.Col.G != 0xa0 || tk.Scale != 1 {
 		t.Errorf("leaf token: %+v", tk)
@@ -103,7 +103,7 @@ func TestExampleMod(t *testing.T) {
 	if len(c.Debug) != 1 {
 		t.Errorf("%d debug lines", len(c.Debug))
 	}
-	if got := buildingAt(vec3{-10, 1, 10}); got != "serre:serre" {
+	if got := buildingAt(vec3{-8, 1, 17}); got != "serre:serre" {
 		t.Errorf("in the greenhouse: %q", got)
 	}
 }
@@ -157,32 +157,34 @@ func TestStuntMod(t *testing.T) {
 func TestLinks(t *testing.T) {
 	defer LoadContent()
 	LoadContent(content.Pack{ID: "t", Requires: []string{"core"}, Register: func(c *content.Content) {
-		c.Buildings.Add("t:annexe", content.Blueprint{ID: "t:annexe", At: vec3{13, 0, 13}, Shape: content.Dome{Radius: 4, WallH: 2.6},
-			Style: "habitat.white", Accent: "neon.blue", Link: "core:sale", Links: []string{"core:sale", "core:sleep", "t:annexe"}})
+		// Linked twice to the great hall, through both of its old names,
+		// and to itself: one corridor.
+		c.Buildings.Add("t:annexe", content.Blueprint{ID: "t:annexe", At: vec3{22, 0, 0}, Shape: content.Dome{Radius: 4, WallH: 2.6},
+			Style: "habitat.white", Accent: "neon.blue", Link: "core:sale", Links: []string{"core:hub", "t:annexe"}})
 	}})
-	if n := base.Ents.Corridor.Len(); n != 7 {
+	if n := base.Ents.Corridor.Len(); n != 5 {
 		t.Errorf("%d corridors", n)
 	}
 	doors := map[string]int{}
 	for _, r := range base.Buildings() {
 		doors[r.Plan().ID] = len(r.Plan().Doors)
 	}
-	if doors["t:annexe"] != 2 || doors["core:sale"] != 2 || doors["core:sleep"] != 2 {
+	if doors["t:annexe"] != 1 || doors["core:hall"] != 4 || doors["core:sleep"] != 1 {
 		t.Errorf("doors: %v", doors)
 	}
-	if got := buildingAt(vec3{13, 1, 7}); got != "" || !base.Indoors(vec3{13, 1, 7}) {
-		t.Errorf("between the sale room and the annexe: %q", got)
+	if got := buildingAt(vec3{15, 1, 0}); got != "" || !base.Indoors(vec3{15, 1, 0}) {
+		t.Errorf("between the great hall and the annexe: %q", got)
 	}
-	// From the annexe, the two closest are the sale room and itself, in
+	// By the annexe, the two closest are the great hall and itself, in
 	// the order of the content.
 	var near []string
-	for _, id := range base.NearBuildings(vec3{13, 0, 10}, 2) {
+	for _, id := range base.NearBuildings(vec3{17, 0, 0}, 2) {
 		near = append(near, base.Ents.Building.Get(id).Plan().ID)
 	}
-	if len(near) != 2 || near[0] != "core:sale" || near[1] != "t:annexe" {
+	if len(near) != 2 || near[0] != "core:hall" || near[1] != "t:annexe" {
 		t.Errorf("closest buildings: %v", near)
 	}
-	if n := len(base.NearCorridors(vec3{}, 8)); n != 7 {
-		t.Errorf("%d corridors kept out of 7", n)
+	if n := len(base.NearCorridors(vec3{}, 8)); n != 5 {
+		t.Errorf("%d corridors kept out of 5", n)
 	}
 }

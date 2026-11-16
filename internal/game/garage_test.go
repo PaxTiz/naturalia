@@ -29,8 +29,8 @@ func TestBays(t *testing.T) {
 			}
 		}
 	}
-	if base.Covered(vec3{0, 0, 0}) || !base.Covered(vec3{-39, 0, 0}) {
-		t.Error("only the hangar is covered")
+	if base.Covered(vec3{0, 0, 30}) || !base.Covered(vec3{-46, 0, 0}) {
+		t.Error("only the halls are covered")
 	}
 	// The harvester's header fits between the lines.
 	v, _ := c.Vehicles.Get("core:harvester")
@@ -228,14 +228,14 @@ func TestCorridorToHangar(t *testing.T) {
 		}
 		return base.ToLocal(g.Player.Pos)
 	}
-	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{-13, 1, 0}))
-	if at := west(330, true); at.X > -33.9 {
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{-20, 1, 0}))
+	if at := west(330, true); at.X > -40.9 {
 		t.Errorf("stopped at %v", at)
 	}
 	// Shut, it stops them.
-	g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(vec3{-25, 1, 0})), vec3{}
+	g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(vec3{-32, 1, 0})), vec3{}
 	g.InnerOpen = []float64{0}
-	if at := west(30, false); at.X < -26 {
+	if at := west(30, false); at.X < -33 {
 		t.Errorf("went through the shut door: %v", at)
 	}
 	// The bays leave the aisle from the doorway free.

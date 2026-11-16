@@ -9,7 +9,7 @@ import (
 
 const (
 	Radius      = 3389.5 // the real planet at 1/1 000 scale
-	padRadius   = 66.0   // the ground is a plane under the whole base, hangar included
+	padRadius   = 76.0   // the ground is a plane under the whole base, hangar and its apron included
 	clearRadius = 24.0   // and clean around its domes: no dust nor crystals
 	MaxMountain = 420.0  // upper bound of the relief, for horizon culling
 	plainRadius = 160.0  // around the base, only gentle plains

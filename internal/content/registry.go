@@ -41,10 +41,24 @@ type Registry[T any] struct {
 	items map[string]*T
 	owner map[string]string // pack that last set each entry
 	pack  string            // pack being registered
+	alias map[string]string // old IDs, and the entry each stands for now
 }
 
 func (r *Registry[T]) init(kind string) {
-	r.kind, r.items, r.owner = kind, map[string]*T{}, map[string]string{}
+	r.kind, r.items, r.owner, r.alias = kind, map[string]*T{}, map[string]string{}, map[string]string{}
+}
+
+// Alias has an old ID stand for another entry: Get and Patch find it by
+// either, unless an entry is added under the old one.
+func (r *Registry[T]) Alias(old, id string) { r.alias[Qualify(old)] = Qualify(id) }
+
+// resolve is the ID an entry is kept under.
+func (r *Registry[T]) resolve(id string) string {
+	id = Qualify(id)
+	if _, ok := r.items[id]; !ok && r.alias[id] != "" {
+		return r.alias[id]
+	}
+	return id
 }
 
 // Add registers an entry, or overrides the one with the same ID.
@@ -63,7 +77,7 @@ func (r *Registry[T]) Add(id string, v T) {
 
 // Patch changes an entry registered earlier; it reports whether it exists.
 func (r *Registry[T]) Patch(id string, f func(*T)) bool {
-	id = Qualify(id)
+	id = r.resolve(id)
 	v, ok := r.items[id]
 	if ok {
 		f(v)
@@ -82,7 +96,7 @@ func (r *Registry[T]) Remove(id string) {
 }
 
 func (r *Registry[T]) Get(id string) (*T, bool) {
-	v, ok := r.items[Qualify(id)]
+	v, ok := r.items[r.resolve(id)]
 	return v, ok
 }
 
