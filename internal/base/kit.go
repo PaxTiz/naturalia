@@ -259,6 +259,15 @@ func (r Room) roof(at vec3) float64 {
 	return r.vault(r.Unturn(at).X-r.Center.X) + 0.24
 }
 
+// HubTop is how high the hub's roof rises over the ground.
+func HubTop() float64 {
+	_, hub := Hub()
+	if hub.Hall != nil {
+		return hub.WallH + hub.Hall.Rise
+	}
+	return hub.WallH + hub.Radius*0.55
+}
+
 // mast and dish are where the hub's antenna and dish stand on its roof.
 func mast() vec3 { _, hub := Hub(); return hub.Center.Add(vec3{1.5, 0, 1.5}) }
 func dish() vec3 { _, hub := Hub(); return hub.Center.Add(vec3{-1.8, 0, -1.2}) }

@@ -494,6 +494,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.drawGems(g)
 	gfx.drawDevils(g)
 	gfx.drawGhost(g)
+	gfx.drawGlass()
 	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}

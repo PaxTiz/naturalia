@@ -15,6 +15,7 @@ const (
 	LitIndoor  = 1 // ceiling lamps
 	LitBack    = 2 // shells: sun outside, lamps on the back faces seen from inside
 	LitTowards = 3 // walls: lamps on the faces turned toward the room's center
+	LitGlass   = 4 // panes: seen through, drawn after the rest; the room's center tells their inside
 )
 
 // Parts holds merged meshes by piece, in the order they appear.

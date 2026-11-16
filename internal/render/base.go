@@ -269,12 +269,37 @@ func (gfx *Graphics) uploadBase(parts *mesh.Parts, sh rl.Shader) *baseModels {
 
 func (b *baseModels) draw(gfx *Graphics) {
 	for i, k := range b.Keys {
+		if k.Lit == mesh.LitGlass {
+			continue // drawGlass
+		}
 		t := b.toks[i]
 		gfx.setMat(t.Mat, t.Scale, false)
 		gfx.setLighting(k.Lit, k.At)
 		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
 		rl.DrawModel(b.models[i], rl.Vector3{}, 1, t.Col)
 	}
+}
+
+// drawGlass draws the base's panes of glass over the scene, seen
+// through: after everything opaque, without hiding what comes behind.
+// Only their faces turned to the viewer: one layer of glass each.
+func (gfx *Graphics) drawGlass() {
+	if gfx.base == nil {
+		return
+	}
+	rl.DrawRenderBatchActive()
+	rl.DisableDepthMask()
+	gfx.setMat(content.MtPlain, 1, false)
+	for i, k := range gfx.base.Keys {
+		if k.Lit != mesh.LitGlass {
+			continue
+		}
+		gfx.setLighting(k.Lit, k.At)
+		rl.DrawModel(gfx.base.models[i], rl.Vector3{}, 1, gfx.base.toks[i].Col)
+	}
+	rl.DrawRenderBatchActive()
+	rl.EnableDepthMask()
+	gfx.setLighting(mesh.LitSun, vec3{})
 }
 
 // drawIncinerator: the window glows harder while it burns dust.

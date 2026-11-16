@@ -20,12 +20,15 @@ import (
 var padSpot = vec3{11, 0, -12.5}
 
 const (
-	// While the player is at the base, followers circle above the hub...
-	dockAltitude = 7.5
-	dockRadius   = 3.5
+	// While the player is at the base, followers circle above the hub
+	// (dockAltitude)...
+	dockRadius = 3.5
 	// ...and anywhere near it, they fly over the domes, not through them.
 	domesReach = base.Reach + 6
 )
+
+// dockAltitude is how high the followers circle: clear of the hub's roof.
+func dockAltitude() float64 { return math.Max(7.5, base.HubTop()+2.5) }
 
 // buyVehicle adds one to the fleet.
 func (g *Game) buyVehicle(v *content.Vehicle) {
@@ -155,12 +158,12 @@ func (g *Game) updateFleet(dt float64) {
 			alt := v.Hover
 			switch {
 			case docked:
-				alt = dockAltitude
+				alt = dockAltitude()
 			case g.TankFull():
 				alt += 0.5 // waiting
 			}
 			if planet.ArcDist(e.Dir, planet.BaseUp) < domesReach {
-				alt = math.Max(alt, dockAltitude)
+				alt = math.Max(alt, dockAltitude())
 			}
 			if v.Hover > 0 {
 				alt = math.Max(alt, g.clearance(id)) // over what stands below

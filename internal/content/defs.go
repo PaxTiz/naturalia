@@ -32,6 +32,16 @@ type Blueprint struct {
 	Props  []Prop   `json:"props"`
 	Floors []Floor  `json:"floors"` // up in it: a mezzanine, the stairs to it
 	Signs  []Sign   `json:"signs"`  // names painted on its walls, inside
+	// Glazed openings in a hall's walls, seen through.
+	Windows []Window `json:"windows"`
+}
+
+// Window is a pane of glass in a wall of a hall, in its frame (before its
+// Yaw): At is the middle of its sill, on the wall.
+type Window struct {
+	At     vec3    `json:"at"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // Sign is a name on a wall of a building, in its frame (before its Yaw).

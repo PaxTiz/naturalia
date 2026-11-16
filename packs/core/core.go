@@ -142,6 +142,7 @@ var coreTokens = map[string]content.Token{
 	"fabric.rug":     {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	// Greebles and the yard (internal/base/greeble.go).
 	"glass.dark":    {color.RGBA{26, 38, 54, 255}, content.MtPlain, 1, 1.0, 0},
+	"glass.pane":    {color.RGBA{150, 205, 220, 255}, content.MtPlain, 1, 1.0, 0},
 	"pipe.yellow":   {color.RGBA{214, 164, 52, 255}, content.MtPlain, 1, 0.5, 0},
 	"pipe.blue":     {color.RGBA{62, 112, 168, 255}, content.MtPlain, 1, 0.5, 0},
 	"pipe.red":      {color.RGBA{178, 58, 48, 255}, content.MtPlain, 1, 0.5, 0},
@@ -173,9 +174,11 @@ var coreBuildings = []content.Blueprint{
 	content.Blueprint{
 		ID:     "core:hall",
 		Accent: "neon.cyan",
-		Hall:   &content.Hall{Size: [2]float64{24, 16}, WallH: 5, Rise: 2},
+		Hall:   &content.Hall{Size: [2]float64{24, 16}, WallH: 6, Rise: 2},
 		Style:  "habitat.white",
-		Signs:  []content.Sign{{Text: "VENTE", At: vec3{-11.82, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"}},
+		// The bay window, all along the east wall: the plain, the sunrise.
+		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 5.2}},
+		Signs:   []content.Sign{{Text: "VENTE", At: vec3{-11.82, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"}},
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},

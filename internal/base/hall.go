@@ -1,6 +1,7 @@
 package base
 
 import (
+	"cmp"
 	"math"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
@@ -144,6 +145,57 @@ func (r Room) spans(a, b vec3) [][2]vec3 {
 	}
 	if t0 < l {
 		out = append(out, [2]vec3{a.Add(along.Scale(t0)), b})
+	}
+	return out
+}
+
+// pane is a window in a hall's wall: its ends at floor level (in the
+// hall's own frame), from its sill up to its head.
+type pane struct {
+	a, b   vec3
+	y0, y1 float64
+}
+
+// panes are the hall's windows in the stretch of wall from a to b, in
+// order along it, kept within it and under the top of the wall.
+func (r Room) panes(a, b vec3) []pane {
+	along := b.Sub(a)
+	l := along.Length()
+	along = along.Scale(1 / l)
+	var out []pane
+	end := 0.0 // of the last one, along the wall
+	wins := slices.Clone(r.plan.Windows)
+	slices.SortFunc(wins, func(v, w content.Window) int { return cmp.Compare(v.At.Sub(w.At).Dot(along), 0) })
+	for _, w := range wins {
+		p := r.Center.Add(vec3{w.At.X, 0, w.At.Z})
+		t := p.Sub(a).Dot(along)
+		if off := p.Sub(a.Add(along.Scale(t))).Length(); off > 0.5 {
+			continue // on another wall
+		}
+		t0, t1 := math.Max(math.Max(0.3, end), t-w.Width/2), math.Min(l-0.3, t+w.Width/2)
+		y0, y1 := math.Max(0, w.At.Y), math.Min(r.WallH-0.2, w.At.Y+w.Height)
+		if t1-t0 < 0.3 || y1-y0 < 0.3 {
+			continue
+		}
+		out = append(out, pane{a.Add(along.Scale(t0)), a.Add(along.Scale(t1)), y0, y1})
+		end = t1
+	}
+	return out
+}
+
+// solid are the stretches of the wall from a to b left standing full
+// height beside its windows.
+func (r Room) solid(a, b vec3) [][2]vec3 {
+	var out [][2]vec3
+	from := a
+	for _, pn := range r.panes(a, b) {
+		if pn.a.Sub(from).Length() > 0.01 {
+			out = append(out, [2]vec3{from, pn.a})
+		}
+		from = pn.b
+	}
+	if b.Sub(from).Length() > 0.01 {
+		out = append(out, [2]vec3{from, b})
 	}
 	return out
 }
@@ -537,9 +589,19 @@ func (b *building) hallShell(r Room) {
 			wall(style(i)).Box(mid.Add(vec3{0, (y0 + y1) / 2, 0}), vec3{l / float64(n) * 1.005, y1 - y0, hallWall}, d, 0.03)
 		}
 	}
+	// Around the windows: the wall under the sill and over the head.
 	for _, w := range r.straightWalls() {
 		for _, s := range r.spans(w[0], w[1]) {
-			panels(s[0], s[1], 0, r.WallH)
+			for _, sd := range r.solid(s[0], s[1]) {
+				panels(sd[0], sd[1], 0, r.WallH)
+			}
+			for _, pn := range r.panes(s[0], s[1]) {
+				if pn.y0 > 0.01 {
+					panels(pn.a, pn.b, 0, pn.y0)
+				}
+				panels(pn.a, pn.b, pn.y1, r.WallH)
+				b.window(r, pn)
+			}
 		}
 	}
 	if dw > 0 {
@@ -646,7 +708,16 @@ func (b *building) hallShell(r Room) {
 	for k, w := range r.straightWalls() {
 		nrm := []vec3{X, Z, Z.Scale(-1), X.Scale(-1), X.Scale(-1)}[k]
 		for _, s := range r.spans(w[0], w[1]) {
-			strip(s[0], s[1], nrm)
+			for _, sd := range r.solid(s[0], s[1]) {
+				strip(sd[0], sd[1], nrm)
+			}
+			// Under a window, the base of the wall up to its sill.
+			for _, pn := range r.panes(s[0], s[1]) {
+				if h := math.Min(pn.y0, 1.2); h > 0.05 {
+					mid := pn.a.Lerp(pn.b, 0.5).Add(nrm.Scale(hallWall/2 + 0.03))
+					inside("wall.lower").Box(mid.Add(vec3{0, h / 2, 0}), vec3{pn.b.Sub(pn.a).Length(), h, 0.05}, pn.b.Sub(pn.a), 0.01)
+				}
+			}
 		}
 	}
 
@@ -660,6 +731,30 @@ func (b *building) hallShell(r Room) {
 
 	if dw > 0 {
 		b.hallDoor(r)
+	}
+}
+
+// window glazes pane pn of hall r: the glass, a steel frame around it,
+// mullions about every 2.4 m and transoms about every 2.6 m.
+func (b *building) window(r Room, pn pane) {
+	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
+	steel := b.Part("steel", mesh.LitTowards, in)
+	d := pn.b.Sub(pn.a)
+	l, h := d.Length(), pn.y1-pn.y0
+	mid := pn.a.Lerp(pn.b, 0.5).Add(vec3{0, (pn.y0 + pn.y1) / 2, 0})
+	b.Part("glass.pane", mesh.LitGlass, in).Box(mid, vec3{l, h, 0.04}, d, 0)
+	const bar, deep = 0.14, hallWall + 0.12
+	for _, s := range []float64{-1, 1} {
+		steel.Box(mid.Add(vec3{0, s * (h - bar) / 2, 0}), vec3{l, bar, deep}, d, 0.02)
+	}
+	cols := max(1, int(math.Round(l/2.4)))
+	for i := 0; i <= cols; i++ {
+		at := pn.a.Lerp(pn.b, float64(i)/float64(cols))
+		steel.Box(vec3{at.X, mid.Y, at.Z}, vec3{bar, h, deep}, d, 0.02)
+	}
+	rows := max(1, int(math.Round(h/2.6)))
+	for j := 1; j < rows; j++ {
+		steel.Box(mid.Add(vec3{0, h * (float64(j)/float64(rows) - 0.5), 0}), vec3{l, 0.08, deep - 0.06}, d, 0.01)
 	}
 }
 

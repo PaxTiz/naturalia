@@ -271,3 +271,14 @@ func TestCrashIntoCrate(t *testing.T) {
 		t.Errorf("a crate stopped the buggy: %.1f m/s", after)
 	}
 }
+
+// The bay window is glass: seen through, not walked through.
+func TestBayWindowStops(t *testing.T) {
+	g := baseGame(t)
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{9, 1, 3}))
+	g.Player.vel = vec3{}
+	walk(g, vec3{1, 0, 0}, 2)
+	if at := base.ToLocal(g.Player.Pos); at.X > 11.7 || at.X < 11 {
+		t.Errorf("walking into the bay window: ended at %v", at)
+	}
+}

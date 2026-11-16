@@ -144,10 +144,31 @@ vec3 paint(vec3 base, vec3 n, out float h) {
     return c * (0.75 + 0.35 * t.b);
 }
 
+// glass paints a pane seen through, in flat colors: a tint that thickens
+// at a slant, and two crisp bands of light across it, at an angle, that
+// slide as the viewer walks by. From outside, it takes the color of the
+// sky it faces; from inside, a little of the lamps'.
+vec4 glass(vec3 n, vec3 v, float dist) {
+    if (dot(n, v) < 0.0) n = -n;
+    vec3 up = normalize(fragPos);
+    bool inside = dot(n, (room - origin) - fragRel) > 0.0;
+    float slant = pow(1.0 - dot(n, v), 3.0);
+    vec3 along = normalize(cross(n, up));
+    float s = dot(fragRel + origin, along) + dot(fragRel + origin, up) * 0.6 + dot(viewRel + origin, along) * 0.35;
+    float f = fract(s / 6.5), e = fwidth(s / 6.5);
+    float band = smoothstep(0.0, e, f) * (1.0 - smoothstep(0.17, 0.17 + e, f))
+               + smoothstep(0.23, 0.23 + e, f) * (1.0 - smoothstep(0.26, 0.26 + e, f));
+    vec3 light = inside ? lampCol * 0.5 : skyColor(reflect(-v, n), up);
+    vec3 col = colDiffuse.rgb * light * (1.0 + 0.8 * band);
+    float a = inside ? 0.05 + 0.3 * slant + 0.07 * band : 0.22 + 0.5 * slant + 0.16 * band;
+    return vec4(finish(col, dist), a);
+}
+
 void main() {
     if (shadowPass > 0.5) { finalColor = vec4(gl_FragCoord.z); return; }
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewRel - fragRel);
+    if (lighting > 3.5) { finalColor = glass(n, v, length(viewRel - fragRel)); return; }
     bool inside = lighting > 0.5 && lighting < 1.5;
     if (lighting > 1.5 && lighting < 2.5 && !gl_FrontFacing) { inside = true; n = -n; }
     if (lighting > 2.5 && dot(n, (room - origin) - fragRel) > 0.0) inside = true;
