@@ -118,6 +118,12 @@ func TestGarage(t *testing.T) {
 	if d := planet.ArcDist(e.Dir, base.ToWorld(bay.At)); d > 0.01 {
 		t.Errorf("the yard rover is %f m from its bay", d)
 	}
+	// So is one in the hangar when it stood east of the base.
+	e.Dir = base.ToWorld(vec3{45, 0, 20}).Norm()
+	g.garageYard()
+	if d := planet.ArcDist(e.Dir, base.ToWorld(bay.At)); d > 0.01 {
+		t.Errorf("the rover of the old hangar is %f m from its bay", d)
+	}
 
 	// Getting out in the hangar parks it; out on Mars, it stays there.
 	g.Riding = rover

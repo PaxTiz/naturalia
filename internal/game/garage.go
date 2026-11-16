@@ -42,13 +42,13 @@ func (g *Game) park(v *content.Vehicle, id ecs.ID) bool {
 	return true
 }
 
-// garageYard puts away the driven vehicles standing in the base's yard,
-// where they used to wait, and those in the hangar, in their bays as they
-// are now.
+// garageYard puts away the driven vehicles standing anywhere among the
+// base's buildings: in the yard, where they used to wait, in the hangar,
+// in their bays as they are now, or where an older base had its hangar.
 func (g *Game) garageYard() {
 	for id, e := range g.Ents.Transform.All() {
 		v, ok := g.vehicleOf(id)
-		home := planet.ArcDist(e.Dir, planet.BaseUp) < base.Reach+10 || base.Covered(base.ToLocal(e.Dir.Scale(planet.Radius)))
+		home := planet.ArcDist(e.Dir, planet.BaseUp) < base.Extent || base.Covered(base.ToLocal(e.Dir.Scale(planet.Radius)))
 		if !ok || v.Auto() || id == g.Riding || !home {
 			continue
 		}
