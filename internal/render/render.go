@@ -248,6 +248,11 @@ func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 			Projection: rl.CameraPerspective,
 		}
 	}
+	if s := &g.Scope; g.Mode == game.ModeScope {
+		f := s.Forward()
+		gfx.camEye, gfx.camLook, gfx.camUp = s.Eye, s.Eye.Add(f), vec3{0, 1, 0}
+		return rl.Camera3D{Position: ToRL(s.Eye), Target: ToRL(s.Eye.Add(f)), Up: ToRL(vec3{0, 1, 0}), Fovy: float32(s.Fov), Projection: rl.CameraPerspective}
+	}
 	p := &g.Player
 	eye := p.Eye()
 	walk := p.MoveAmount
@@ -337,8 +342,10 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	}
 	var blobs []float32
 	obs := base.Obstacles()
-	for _, ob := range obs[:min(len(obs), 48)] {
-		blobs = append(blobs, float32(ob.At.X), float32(ob.At.Z), float32(ob.Radius), 0)
+	for _, ob := range obs {
+		if ob.At.Y < 0.5 && len(blobs) < 48*4 { // on the ground floor
+			blobs = append(blobs, float32(ob.At.X), float32(ob.At.Z), float32(ob.Radius), 0)
+		}
 	}
 	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
@@ -557,7 +564,7 @@ func (gfx *Graphics) clipPlanes(g *game.Game) {
 
 // drawTool draws the held tool, in the lower right corner of the view.
 func (gfx *Graphics) drawTool(g *game.Game) {
-	if g.Mode == game.ModePaused || g.Mode == game.ModePhoto || g.Player.Fly || g.Chase() {
+	if g.Mode == game.ModePaused || g.Mode == game.ModePhoto || g.Mode == game.ModeScope || g.Player.Fly || g.Chase() {
 		return
 	}
 	look := g.Tool().Look

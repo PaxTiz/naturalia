@@ -357,6 +357,10 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.drawPhoto(g)
 		return
 	}
+	if g.Mode == game.ModeScope {
+		hud.drawScope(g)
+		return
+	}
 	if g.Mode == game.ModePlay || g.Mode == game.ModeMap || g.Mode == game.ModeShop {
 		hud.drawVisor(g)
 	}

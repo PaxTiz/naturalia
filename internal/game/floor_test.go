@@ -9,7 +9,8 @@ import (
 )
 
 // floorGame is a base with a workshop east of it: a hall with a
-// mezzanine along its west wall, 3 m up, and stairs rising to it.
+// mezzanine along its west wall, 3 m up, and stairs rising to it; the
+// mezzanine's open edges have guard rails.
 func floorGame(t *testing.T) *Game {
 	t.Cleanup(func() { LoadContent() })
 	c := LoadContent(content.Pack{ID: "t", Requires: []string{"core"}, Register: func(c *content.Content) {
@@ -45,7 +46,7 @@ func standAt(g *Game, x, z float64) {
 
 func TestStairsAndMezzanine(t *testing.T) {
 	g := floorGame(t)
-	if base.Ents.Floor.Len() != 2 {
+	if base.Ents.Floor.Len() != 4 { // and the great hall's
 		t.Fatalf("%d floors", base.Ents.Floor.Len())
 	}
 	ground := base.ToLocal(g.World.Relief.Surface(base.ToWorld(vec3{33, 0, 0}))).Y
@@ -61,11 +62,16 @@ func TestStairsAndMezzanine(t *testing.T) {
 	if at.Z > 0 || at.Y-ground < 2.95 {
 		t.Errorf("along the mezzanine: at %v", at)
 	}
-	// Off its edge, down to the floor.
+	// Its guard rail holds them up there, at its edge (x = 31).
 	at = walkFor(g, vec3{1, 0, 0}, 60)
-	at = walkFor(g, vec3{}, 90)            // falling 3 m takes 1.3 s on Mars
-	if at.X < 31.3 || at.Y-ground > 0.05 { // past the edge, at x = 31
-		t.Errorf("off the edge: at %v", at)
+	if at.X < 30.4 || at.X > 31 || at.Y-ground < 2.95 {
+		t.Errorf("at the guard rail: at %v", at)
+	}
+	// Along the rail to where the stairs arrive, and down them.
+	walkFor(g, vec3{0, 0, 1}, 150)
+	at = walkFor(g, vec3{1, 0, 0}, 150)
+	if at.X < 34 || at.Y-ground > 0.05 {
+		t.Errorf("down the stairs: at %v", at)
 	}
 
 	// Under it, on the ground, walking about.
@@ -91,5 +97,36 @@ func TestStairsAndMezzanine(t *testing.T) {
 	at = walkFor(g, vec3{0, 0, 1}, 90)
 	if at.Z > 4.2-0.3 || at.Y-ground > 0.05 {
 		t.Errorf("into the side of the stairs: at %v", at)
+	}
+}
+
+// The great hall's lookout: up the stairs along the south wall, onto the
+// gallery, where the telescope is in reach; from under it, it is not.
+func TestLookout(t *testing.T) {
+	g := baseGame(t)
+	ground := base.ToLocal(g.World.Relief.Surface(base.ToWorld(vec3{3, 0, -5}))).Y
+	usable := func() bool {
+		it, ok := g.NearbyUse()
+		return ok && it.Kit == "core:telescope"
+	}
+	standAt(g, 9.4, -3.5)
+	g.Player.Heading = vec3{1, 0, 0}
+	if usable() {
+		t.Error("the telescope is in reach from under the gallery")
+	}
+	standAt(g, 1.5, -6.9)
+	at := walkFor(g, vec3{1, 0, 0}, 150)
+	if at.X < 8 || at.Y-ground < 2.95 {
+		t.Fatalf("up the stairs: at %v", at)
+	}
+	at = walkFor(g, vec3{0, 0, 1}, 80)
+	g.Player.Heading = vec3{1, 0, 0}
+	if !usable() {
+		t.Errorf("the telescope is out of reach on the gallery, at %v", at)
+	}
+	// The rail along the gallery's west edge holds them.
+	at = walkFor(g, vec3{-1, 0, 0}, 90)
+	if at.X < 7.75 || at.Y-ground < 2.95 {
+		t.Errorf("through the guard rail: at %v", at)
 	}
 }

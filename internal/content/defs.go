@@ -478,7 +478,8 @@ type Game interface {
 	OpenShop()   // the research lab: tools, upgrades, drones and robots, items
 	OpenGarage() // the garage's terminal: the vehicles to drive, bought and sold back
 	Sleep()
-	Deposit(at vec3) // sells the tank at the incinerator standing at a local point
+	Deposit(at vec3)     // sells the tank at the incinerator standing at a local point
+	LookThrough(at vec3) // puts the eye to the telescope standing at a local point
 
 	// The driven vehicle: what it does, and a push in m/s along its nose
 	// and up.

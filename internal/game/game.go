@@ -38,6 +38,7 @@ const (
 	ModeMap   // map table: state of Mars
 	ModeSleep // fading out, sleeping, waking up
 	ModePhoto // free camera, no interface (photo.go)
+	ModeScope // through the telescope (scope.go)
 )
 
 // Sleep timeline, in seconds: fade out, sleep (the game saves), fade in.
@@ -105,6 +106,7 @@ type Game struct {
 	chase       bool               // the camera follows the driven vehicle from behind (V)
 	fleetHeld   bool               // automatic vehicles stand still (LineUp)
 	Photo       Photo              // the photo mode's camera and settings
+	Scope       Scope              // the view through the telescope
 
 	walls    []base.Segment // the base's walls, for collisions
 	phys     *phys          // the collisions' plane (physics.go)
@@ -174,7 +176,7 @@ func New(c *content.Content) *Game {
 
 func (g *Game) setMode(m Mode) {
 	g.Mode = m
-	if m == ModePlay || m == ModePhoto {
+	if m == ModePlay || m == ModePhoto || m == ModeScope {
 		rl.DisableCursor()
 	} else {
 		rl.EnableCursor()
@@ -235,6 +237,8 @@ func (g *Game) Update(dt float64) {
 		if closeKeys {
 			g.setMode(ModePlay)
 		}
+	case ModeScope:
+		g.updateScope()
 	case ModeSleep:
 		g.updateSleep(dt)
 	}

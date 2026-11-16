@@ -359,6 +359,7 @@ func (k KitJSON) Kit() Kit {
 		"garage":  func(g Game, _ vec3) { g.OpenGarage() },
 		"sleep":   func(g Game, _ vec3) { g.Sleep() },
 		"deposit": Game.Deposit,
+		"scope":   Game.LookThrough,
 	}
 	if f, ok := use[k.Use]; ok {
 		kp.Use = f

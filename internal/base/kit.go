@@ -50,6 +50,7 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		}
 		b.floors(id)
+		b.rails(id)
 		i++
 	}
 	i = 0

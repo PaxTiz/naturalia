@@ -178,7 +178,13 @@ var coreBuildings = []content.Blueprint{
 		Style:  "habitat.white",
 		// The bay window, all along the east wall: the plain, the sunrise.
 		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 5.2}},
-		Signs:   []content.Sign{{Text: "VENTE", At: vec3{-11.82, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"}},
+		// The lookout: a gallery 3 m up along the bay window, stairs
+		// rising east to it along the south wall.
+		Floors: []content.Floor{
+			{From: vec3{9.75, 3, -7.8}, To: vec3{9.75, 3, 7.8}, Width: 4, Thick: 0.3},
+			{From: vec3{2.2, 0, -6.9}, To: vec3{7.75, 3, -6.9}, Width: 1.3},
+		},
+		Signs: []content.Sign{{Text: "VENTE", At: vec3{-11.82, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"}},
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},
@@ -187,6 +193,9 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "crate.stack", At: vec3{10.6, 0, -6.6}, Seed: 4},
 			{Kit: "crate.stack", At: vec3{-7.2, 0, -7.0}, Seed: 3},
 			{Kit: "crate.stack", At: vec3{-10.9, 0, -7.2}, Seed: 8},
+			{Kit: "telescope", At: vec3{10.5, 3, -3.5}}, // between two mullions
+			{Kit: "bench", At: vec3{9.4, 3, 2.4}},
+			{Kit: "lowtable", At: vec3{10.5, 3, 2.4}},
 		},
 	},
 	content.Blueprint{
@@ -259,4 +268,8 @@ var coreKits = map[string]content.Kit{
 	"workbench":   {Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
 	"planter":     {Build: base.KitBuild(base.BuildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
 	"desk":        {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
+	"bench":       {Build: base.KitBuild(base.BuildBench), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.35}, {vec3{0, 0, 0.5}, 0.35}}},
+	"lowtable":    {Build: base.KitBuild(base.BuildLowTable), Obstacles: []content.Obstacle{{vec3{}, 0.45}}},
+	"telescope": {Build: base.KitBuild(base.BuildTelescope), Obstacles: []content.Obstacle{{vec3{}, 0.5}},
+		Reach: 2.2, Use: content.Game.LookThrough, Prompt: "[E] Regarder dans la longue-vue"},
 }

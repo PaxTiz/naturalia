@@ -659,6 +659,11 @@ func (b *building) clutter(bp *content.Blueprint) {
 		b.coil(at(vec3{-8.2, FloorTop, -2.4}), 0.3, "rubber")
 		b.toolbox(at(vec3{-7.4, FloorTop, -4.4}), 2.1)
 		b.papers(at(vec3{-10.9, 1.35, -7.2}), 0.4, 3)
+		// Up on the lookout: a mug and a tablet on the low table, a
+		// helmet set down by the bench.
+		b.mug(at(vec3{10.35, 3.44, 2.55}), "pipe.red", 0.6)
+		b.tablet(at(vec3{10.6, 3.44, 2.2}), 2.2)
+		b.helmet(at(vec3{9.3, 3, 3.6}), 0.4)
 	case "core:research":
 		// On the console's desk, turned like it.
 		c := at(vec3{0, 0, -2.3})

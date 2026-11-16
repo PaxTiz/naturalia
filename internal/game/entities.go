@@ -229,7 +229,7 @@ func (g *Game) NearbyUse() (base.Interactable, bool) {
 	for _, it := range base.Ents.Use.All() {
 		to := vec3{it.At.X, 0, it.At.Z}.Sub(flat)
 		d := to.Length()
-		if d > it.Reach || d >= bestDist {
+		if d > it.Reach || d >= bestDist || math.Abs(it.At.Y-local.Y) > 1.5 { // up on a mezzanine, or under it
 			continue
 		}
 		heading := base.ToLocal(g.Player.Pos.Add(g.Player.Heading)).Sub(local)

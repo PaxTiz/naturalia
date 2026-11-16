@@ -487,6 +487,9 @@ func (g *Game) layPlane() {
 		for _, f := range base.Ents.Floor.All() {
 			g.addFloor(*f)
 		}
+		for _, r := range base.Rails() {
+			g.addRail(r)
+		}
 	}
 	p.doorSegs, p.doors = nil, nil
 	for _, r := range g.World.RocksNear(up.Scale(p.r0), physReach+reanchor) {
@@ -546,6 +549,18 @@ func (g *Game) addWall(s base.Segment) *physics.Body {
 	return p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Capsule(pa.Sub(mid), pb.Sub(mid), base.WallThick/2), Pos: mid,
 		Bottom: p.height(base.ToWorld(a)) - bodyFeet, Top: p.height(base.ToWorld(a.Add(vec3{0, top, 0}))), Layer: layerStatic, Mask: ^uint32(0),
 		Friction: frictionWall, Restitution: bounceWall})
+}
+
+// addRail adds a guard rail: a wall at the height of its slab, which those
+// underneath walk under.
+func (g *Game) addRail(r base.Rail) {
+	p := g.phys
+	pa, pb := p.plane(base.ToWorld(r.A)), p.plane(base.ToWorld(r.B))
+	mid := pa.Lerp(pb, 0.5)
+	foot := vec3{r.A.X, 0, r.A.Z}
+	p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Capsule(pa.Sub(mid), pb.Sub(mid), 0.05), Pos: mid,
+		Bottom: p.height(base.ToWorld(foot.Add(vec3{0, r.Y0, 0}))), Top: p.height(base.ToWorld(foot.Add(vec3{0, r.Y1, 0}))),
+		Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
 }
 
 // syncDoors sets the doors' walls where the leaves stand.

@@ -52,6 +52,8 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		s.mode = game.ModePaused
 	case "photo":
 		s.mode = game.ModePhoto
+	case "scope":
+		s.mode = game.ModeScope
 	}
 	// NA_SHOT_TOOL=n holds tool n (0 is the toothbrush) for the shot.
 	var tool int
@@ -106,12 +108,27 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	if v := os.Getenv("NA_SHOT_AT"); s.file != "" && v != "" {
 		var x, z, yaw float64
 		fmt.Sscanf(v, "%f,%f,%f", &x, &z, &yaw)
-		g.Player.Pos = base.ToWorld(vec3{x, base.FloorTop, z})
+		// NA_SHOT_Y=meters stands that high, on a mezzanine.
+		var y float64
+		fmt.Sscanf(os.Getenv("NA_SHOT_Y"), "%f", &y)
+		g.Player.Pos = base.ToWorld(vec3{x, base.FloorTop + y, z})
 		g.Player.Heading = vec3{math.Cos(yaw), 0, math.Sin(yaw)}
 		g.Player.Pitch = 0.05
 		fmt.Sscanf(os.Getenv("NA_SHOT_PITCH"), "%f", &g.Player.Pitch)
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
+	}
+	// Through the telescope, NA_SHOT_SCOPE=fov,yaw,pitch (degrees) aims it.
+	if s.mode == game.ModeScope && s.file != "" {
+		for _, it := range base.Interactables() {
+			if it.Kit == "core:telescope" {
+				g.LookThrough(it.At)
+			}
+		}
+		var fov, yaw, pitch float64
+		if _, err := fmt.Sscanf(os.Getenv("NA_SHOT_SCOPE"), "%f,%f,%f", &fov, &yaw, &pitch); err == nil {
+			g.Scope.Fov, g.Scope.Yaw, g.Scope.Pitch = fov, yaw*math.Pi/180, pitch*math.Pi/180
+		}
 	}
 	// In the photo mode, NA_SHOT_PHOTO=key=value,... sets its settings
 	// (game.PhotoKeys), and NA_SHOT_PHOTO_HIDE=1 hides its panel.
