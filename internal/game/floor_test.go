@@ -63,7 +63,7 @@ func TestStairsAndMezzanine(t *testing.T) {
 	}
 	// Off its edge, down to the floor.
 	at = walkFor(g, vec3{1, 0, 0}, 60)
-	at = walkFor(g, vec3{}, 90) // falling 3 m takes 1.3 s on Mars
+	at = walkFor(g, vec3{}, 90)            // falling 3 m takes 1.3 s on Mars
 	if at.X < 31.3 || at.Y-ground > 0.05 { // past the edge, at x = 31
 		t.Errorf("off the edge: at %v", at)
 	}
