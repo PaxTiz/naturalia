@@ -323,11 +323,15 @@ func LeafModel() *mesh.Builder {
 }
 
 // hallLamps: the first hangs in the middle (it casts shadows), the others
-// along the ridge and down both sides of the vault.
+// along the ridge and down both sides of the vault. They are as bright as
+// it takes for the hangar (26 × 64 m), less in a smaller hall, and reach
+// across it.
 func (r Room) hallLamps() []Lamp {
 	hx, hz := r.half()
+	power := 12 * math.Max(0.12, math.Min(1, 4*hx*hz/(26*64)))
+	reach := math.Min(24, 2*math.Max(hx, hz)+4)
 	at := func(u, w float64) Lamp {
-		return Lamp{r.Center.Add(vec3{u, r.vault(u) - hallLampDrop, w}), 12, 24}
+		return Lamp{r.Center.Add(vec3{u, r.vault(u) - hallLampDrop, w}), power, reach}
 	}
 	lamps := []Lamp{at(0, 0)}
 	for _, w := range []float64{-0.66, 0.66} {
