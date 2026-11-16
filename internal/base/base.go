@@ -83,22 +83,27 @@ func Setup(c *content.Content) {
 		c        Corridor
 	}
 	var links []link
+	linked := func(a, b *content.Blueprint) bool {
+		return slices.ContainsFunc(links, func(l link) bool { return (l.from == a && l.to == b) || (l.from == b && l.to == a) })
+	}
 	for _, bp := range plans {
-		if bp.Link == "" {
-			continue
+		for _, id := range bp.AllLinks() {
+			to, ok := c.Buildings.Get(id)
+			if !ok || !slices.Contains(plans, to) {
+				log.Printf("base: %s links to %s, which isn't built", bp.ID, id)
+				continue
+			}
+			if to == bp || linked(bp, to) {
+				continue
+			}
+			d := to.At.Sub(bp.At)
+			d = vec3{d.X, 0, d.Z}.Norm()
+			addDoor(bp, math.Atan2(d.Z, d.X))
+			addDoor(to, math.Atan2(-d.Z, -d.X))
+			links = append(links, link{bp, to, Corridor{
+				From: to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), To: bp.At.Add(d.Scale(edge(bp, d))), Width: DoorWidth, Height: 2.4,
+			}})
 		}
-		to, ok := c.Buildings.Get(bp.Link)
-		if !ok || !slices.Contains(plans, to) {
-			log.Printf("base: %s links to %s, which isn't built", bp.ID, bp.Link)
-			continue
-		}
-		d := to.At.Sub(bp.At)
-		d = vec3{d.X, 0, d.Z}.Norm()
-		addDoor(bp, math.Atan2(d.Z, d.X))
-		addDoor(to, math.Atan2(-d.Z, -d.X))
-		links = append(links, link{bp, to, Corridor{
-			From: to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), To: bp.At.Add(d.Scale(edge(bp, d))), Width: DoorWidth, Height: 2.4,
-		}})
 	}
 	Ents = newEntities()
 	ids := map[*content.Blueprint]ecs.ID{}

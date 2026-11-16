@@ -227,8 +227,15 @@ func (m *modFile) register(c *Content) {
 	}
 	// Links once all are added: a mod's building may link to another.
 	for _, bp := range m.Buildings {
-		if b, _ := c.Buildings.Get(m.own(bp.ID)); b != nil && b.Link != "" {
+		b, _ := c.Buildings.Get(m.own(bp.ID))
+		if b == nil {
+			continue
+		}
+		if b.Link != "" {
 			b.Link = m.ref(b.Link, isBld)
+		}
+		for i := range b.Links {
+			b.Links[i] = m.ref(b.Links[i], isBld)
 		}
 	}
 

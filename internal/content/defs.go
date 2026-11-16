@@ -17,17 +17,26 @@ type Token struct {
 
 // Blueprint is a building as data.
 type Blueprint struct {
-	ID     string `json:"id"`
-	At     vec3   `json:"at"`   // local, center of the floor
-	Link   string `json:"link"` // building a corridor leads to; doors are added at both ends
-	Sign   string `json:"sign"` // painted over the door that leads here from the hub
-	Shape  Dome   `json:"shape"`
-	Hall   *Hall  `json:"hall"`   // a big rectangular hall instead of a dome
-	Garage bool   `json:"garage"` // its floor has a parking bay for each driven vehicle
-	Style  string `json:"style"`  // token of the walls and roof
-	Accent string `json:"accent"` // token of the glowing stripes inside
-	Doors  []Door `json:"doors"`
-	Props  []Prop `json:"props"`
+	ID     string   `json:"id"`
+	At     vec3     `json:"at"`    // local, center of the floor
+	Link   string   `json:"link"`  // building a corridor leads to; doors are added at both ends
+	Links  []string `json:"links"` // more of them
+	Sign   string   `json:"sign"`  // painted over the door that leads here from the hub
+	Shape  Dome     `json:"shape"`
+	Hall   *Hall    `json:"hall"`   // a big rectangular hall instead of a dome
+	Garage bool     `json:"garage"` // its floor has a parking bay for each driven vehicle
+	Style  string   `json:"style"`  // token of the walls and roof
+	Accent string   `json:"accent"` // token of the glowing stripes inside
+	Doors  []Door   `json:"doors"`
+	Props  []Prop   `json:"props"`
+}
+
+// AllLinks are the buildings corridors lead to from bp: Link, then Links.
+func (bp *Blueprint) AllLinks() []string {
+	if bp.Link == "" {
+		return bp.Links
+	}
+	return append([]string{bp.Link}, bp.Links...)
 }
 
 // Hall is a rectangular building, like an aircraft hangar: walls around

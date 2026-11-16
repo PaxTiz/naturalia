@@ -153,3 +153,24 @@ func TestStuntMod(t *testing.T) {
 		t.Error("empty debug line")
 	}
 }
+
+func TestLinks(t *testing.T) {
+	defer LoadContent()
+	LoadContent(content.Pack{ID: "t", Requires: []string{"core"}, Register: func(c *content.Content) {
+		c.Buildings.Add("t:annexe", content.Blueprint{ID: "t:annexe", At: vec3{-13, 0, 13}, Shape: content.Dome{Radius: 4, WallH: 2.6},
+			Style: "habitat.white", Accent: "neon.blue", Link: "core:sale", Links: []string{"core:sale", "core:sleep", "t:annexe"}})
+	}})
+	if n := base.Ents.Corridor.Len(); n != 7 {
+		t.Errorf("%d corridors", n)
+	}
+	doors := map[string]int{}
+	for _, r := range base.Buildings() {
+		doors[r.Plan().ID] = len(r.Plan().Doors)
+	}
+	if doors["t:annexe"] != 2 || doors["core:sale"] != 2 || doors["core:sleep"] != 2 {
+		t.Errorf("doors: %v", doors)
+	}
+	if got := buildingAt(vec3{-13, 1, 7}); got != "" || !base.Indoors(vec3{-13, 1, 7}) {
+		t.Errorf("between the sale room and the annexe: %q", got)
+	}
+}
