@@ -52,7 +52,7 @@ func (gfx *Graphics) baseSigns() []sign {
 		bp := r.Plan()
 		hx := r.Hall.Size[0] / 2
 		if bp.Sign != "" {
-			signs = append(signs, sign{at: r.Center.Add(vec3{-hx - 0.17, 7.5, 0}), facing: vec3{-1, 0, 0}, width: 11, height: 1.8,
+			signs = append(signs, sign{at: r.Turn(r.Center.Add(vec3{-hx - 0.17, 7.5, 0})), facing: r.TurnDir(vec3{-1, 0, 0}), width: 11, height: 1.8,
 				text: bp.Sign, accent: gfx.tok(bp.Accent).Col})
 		}
 	}
@@ -63,12 +63,10 @@ func (gfx *Graphics) baseSigns() []sign {
 			continue
 		}
 		r := base.Ents.Building.Get(i)
-		hx := r.Hall.Size[0] / 2
 		if bay.SignW < 1 {
 			continue // no room between the arches
 		}
-		at := vec3{r.Center.X - hx + 0.17, 3.4, bay.SignZ}
-		signs = append(signs, sign{at: at, facing: vec3{1, 0, 0}, width: bay.SignW, height: 0.55,
+		signs = append(signs, sign{at: bay.SignAt, facing: bay.Nose, width: bay.SignW, height: 0.55,
 			text: strings.ToUpper(v.Name), accent: gfx.tok(r.Plan().Accent).Col})
 	}
 	return append(signs,

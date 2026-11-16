@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/base"
+	"naturalia/internal/content"
 	"naturalia/internal/planet"
 	_ "naturalia/packs/core"
 	"testing"
@@ -316,5 +317,46 @@ func TestGarageTerminal(t *testing.T) {
 	g.Player.Heading = vec3{-1, 0, 0}
 	if it, ok := g.NearbyUse(); !ok || it.Kit != "core:garage.terminal" {
 		t.Errorf("E in front of the terminal: %q", it.Kit)
+	}
+}
+
+// A hall turned a quarter turn: its door, leaves, walls and bays turn with
+// it.
+func TestTurnedHall(t *testing.T) {
+	defer LoadContent()
+	LoadContent(content.Pack{ID: "t", Requires: []string{"core"}, Register: func(c *content.Content) {
+		h, _ := c.Buildings.Get("core:hangar")
+		h.Yaw, h.At, h.Link = 90, vec3{0, 0, -75}, ""
+	}})
+	i := base.Halls()[0]
+	r := base.Ents.Building.Get(i)
+	mid, closed := base.HallDoor(i)
+	if mid.Sub(vec3{0, 0, -62}).Length() > 1e-9 {
+		t.Errorf("door at %v", mid)
+	}
+	if a, b, _ := closed.Ends(); math.Abs(a.Z+62) > 1e-9 || math.Abs(b.Z+62) > 1e-9 || math.Abs(a.X-b.X) < 50 {
+		t.Errorf("door's wall from %v to %v", a, b)
+	}
+	if !base.Covered(vec3{30, 0, -75}) || base.Covered(vec3{0, 0, -96}) {
+		t.Error("the hall's floor didn't turn")
+	}
+	for _, l := range base.HallLeaves(i, 0) {
+		if out := l.At.Z + 62; l.Yaw != 90 || out < 0 || out > 3 || math.Abs(l.At.X) > 26 { // on their rails, outside
+			t.Errorf("closed leaf at %v", l.At)
+		}
+	}
+	if n := len(base.HallDoorWalls(i, 0.5)); n != 2 {
+		t.Errorf("%d walls half open", n)
+	}
+	for _, b := range base.Bays {
+		if !r.Plan().Garage || !base.Covered(b.At) || b.Nose.Sub(vec3{0, 0, 1}).Length() > 1e-9 || !base.Covered(b.Spot) {
+			t.Errorf("bay %s at %v, nose %v", b.ID, b.At, b.Nose)
+		}
+	}
+	for _, s := range base.Walls() {
+		a, b, _ := s.Ends()
+		if a.Z < -60 && math.Abs(a.Z-b.Z) > 1e-6 && math.Abs(a.X-b.X) > 1e-6 {
+			t.Errorf("a hall wall askew: %v to %v", a, b)
+		}
 	}
 }

@@ -37,7 +37,7 @@ func (g *Game) park(v *content.Vehicle, id ecs.ID) bool {
 	}
 	e := g.Ents.Transform.Get(id)
 	e.Dir = base.ToWorld(bay.Spot).Norm()
-	e.Yaw = yawOf(e.Dir, vec3{1, 0, 0}) // nose to the door
+	e.Yaw = yawOf(e.Dir, bay.Nose) // nose to the door
 	e.Alt, e.Pitch, e.Roll = v.Hover, 0, 0
 	return true
 }
@@ -67,8 +67,11 @@ func (g *Game) updateHallDoors(dt float64) {
 		mid, closed := base.HallDoor(i)
 		want := 0.0
 		inside := base.RoomAt(vec3{at.X, 1, at.Z}) == i
+		// Across the door and along it, in the hall's own frame.
+		r := base.Ents.Building.Get(i)
+		d := r.Unturn(at).Sub(r.Unturn(mid))
 		switch {
-		case inside && math.Abs(at.X-mid.X) < hallDoorInner && math.Abs(at.Z-mid.Z) < closed.Half()+4:
+		case inside && math.Abs(d.X) < hallDoorInner && math.Abs(d.Z) < closed.Half()+4:
 			want = 1 // walking or driving up to it
 		case !inside && math.Hypot(at.X-mid.X, at.Z-mid.Z) < hallDoorReach:
 			want = 1
@@ -141,7 +144,8 @@ func (g *Game) CanDock() bool {
 	if !ok || !base.Covered(at) {
 		return false
 	}
-	return math.Abs(at.X-bay.At.X) < bay.Length/2+dockReach && math.Abs(at.Z-bay.At.Z) < bay.Width/2+dockReach
+	d := at.Sub(bay.At)
+	return math.Abs(d.Dot(bay.Nose)) < bay.Length/2+dockReach && math.Abs(d.Dot(bay.Side())) < bay.Width/2+dockReach
 }
 
 // startDock sets the driven vehicle gliding into its bay.
@@ -161,7 +165,9 @@ func (g *Game) glideDock(v *content.Vehicle, dt float64) {
 	d.dock.t = math.Min(1, d.dock.t+dt/dockTime)
 	k := d.dock.t * d.dock.t * (3 - 2*d.dock.t)
 	at := d.dock.from.Lerp(vec3{bay.Spot.X, 0, bay.Spot.Z}, k)
-	yaw := d.dock.yaw * (1 - k) // toward 0: the nose to the door
+	nose := math.Atan2(bay.Nose.Z, bay.Nose.X)
+	turn := math.Remainder(nose-d.dock.yaw, 2*math.Pi)
+	yaw := d.dock.yaw + turn*k // the nose to the door
 	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(at))
 	up := g.Player.LocalUp()
 	d.fwd = planet.TangentAt(up, vec3{math.Cos(yaw), 0, math.Sin(yaw)})

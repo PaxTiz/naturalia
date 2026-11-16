@@ -137,7 +137,7 @@ func (g *Game) getOut() {
 	// aisle in front of it.
 	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r != 0 && base.Ents.Building.Get(r).Hall != nil && g.park(v, id) {
 		bay, _ := base.BayOf(v.ID)
-		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(vec3{bay.Length/2 + 1.5, 0, 0})))
+		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(bay.Nose.Scale(bay.Length/2 + 1.5))))
 		g.Say(v.Name + " rangé au garage")
 	} else {
 		side := g.Player.Right().Scale(content.OrZero(v.Radius, 1.2) + 0.6)

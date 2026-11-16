@@ -3,6 +3,7 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 )
@@ -23,7 +24,8 @@ func grnd(seed, k int) float64 {
 var yUp = vec3{0, 1, 0}
 
 // greebleRoom dresses one room, outside and inside.
-func (b *building) greebleRoom(bp *content.Blueprint, r Room, seed int) {
+func (b *building) greebleRoom(id ecs.ID, r Room, seed int) {
+	bp := r.plan
 	panels := r.panels()
 	ladder := false
 	for i, p := range panels {
@@ -41,8 +43,8 @@ func (b *building) greebleRoom(bp *content.Blueprint, r Room, seed int) {
 			}
 		}
 		blocked := false
-		for _, pr := range bp.Props {
-			if d := bp.At.Add(pr.At).Sub(inner); math.Hypot(d.X, d.Z) < 1.7 {
+		for _, f := range FurnitureOf(id) {
+			if d := f.At.Sub(inner); math.Hypot(d.X, d.Z) < 1.7 {
 				blocked = true
 			}
 		}
@@ -424,7 +426,7 @@ func yardFree(p vec3, r float64) bool {
 		if rm.Hall != nil {
 			// The hall, and the door's rails in front of it.
 			hx, hz := rm.half()
-			d := flat.Sub(rm.Center)
+			d := rm.Unturn(flat).Sub(rm.Center)
 			if math.Abs(d.X) < hx+r+margin+3 && math.Abs(d.Z) < hz+r+margin {
 				return false
 			}
@@ -641,7 +643,7 @@ func (b *building) helmet(p vec3, a float64) {
 	b.Part("visor.gold", mesh.LitIndoor, vec3{}).BoxBasis(p.Add(d.Scale(0.13)).Add(vec3{0, 0.14, 0}), [3]vec3{{-d.Z, 0, d.X}, vec3{0, 1, 0}, d}, vec3{0.2, 0.12, 0.06}, 0.03)
 }
 
-// clutter dresses a room according to what it is.
+// clutter dresses a room according to what it is, in its own frame.
 func (b *building) clutter(bp *content.Blueprint) {
 	at := func(v vec3) vec3 { return bp.At.Add(v) }
 	switch bp.ID {

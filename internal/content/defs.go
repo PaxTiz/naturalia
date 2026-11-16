@@ -19,6 +19,7 @@ type Token struct {
 type Blueprint struct {
 	ID     string   `json:"id"`
 	At     vec3     `json:"at"`    // local, center of the floor
+	Yaw    float64  `json:"yaw"`   // degrees, turning it around At, its X toward Z: doors, props, a hall's big door
 	Link   string   `json:"link"`  // building a corridor leads to; doors are added at both ends
 	Links  []string `json:"links"` // more of them
 	Sign   string   `json:"sign"`  // painted over the door that leads here from the hub
@@ -56,7 +57,7 @@ type Dome struct {
 }
 
 type Door struct {
-	Facing float64 `json:"facing"` // angle, atan2(z, x)
+	Facing float64 `json:"facing"` // angle, atan2(z, x), in the building's frame (before its Yaw)
 }
 
 // Prop is a kit piece placed in a building, relative to its center; Seed

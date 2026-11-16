@@ -19,6 +19,10 @@ import (
 //	   │  west wall          bays, nose to the door      ▐▐▐ │ east wall
 //	   │                      ▭  ▭  ▭  ▭  ▭  ▭       door    │ (+X)
 //	   └─────────────────────────────────────────────────────┘
+//
+// That is in the hall's own frame: turned (Room.Yaw), its door faces
+// elsewhere. The methods below lay it out in that frame; what the rest of
+// the game reads (walls, doors, leaves, lamps, bays) is turned with it.
 
 const (
 	hallWall     = 0.3 // the walls' thickness
@@ -61,7 +65,7 @@ func (r Room) leaves() (n int, width float64) {
 // margin.
 func (r Room) inHall(local vec3, margin float64) bool {
 	hx, hz := r.half()
-	d := local.Sub(r.Center)
+	d := r.Unturn(local).Sub(r.Center)
 	return math.Abs(d.X) < hx+margin && math.Abs(d.Z) < hz+margin
 }
 
@@ -75,7 +79,7 @@ func (r Room) hallWalls() []Segment {
 	var out []Segment
 	for _, w := range r.straightWalls() {
 		for _, s := range r.spans(w[0], w[1]) {
-			out = append(out, Segment{s[0], s[1], top})
+			out = append(out, Segment{r.Turn(s[0]), r.Turn(s[1]), top})
 		}
 	}
 	return out
@@ -100,12 +104,12 @@ func (r Room) straightWalls() [][2]vec3 {
 const hallGap = DoorWidth/2 + WallThick + 0.05
 
 // doorways are where corridors open into the hall: on its walls, at floor
-// level (local).
+// level (in its own frame).
 func (r Room) doorways() []vec3 {
 	var out []vec3
 	for _, a := range r.openings {
 		d := vec3{math.Cos(a), 0, math.Sin(a)}
-		out = append(out, r.Center.Add(d.Scale(edge(r.plan, d))))
+		out = append(out, r.Center.Add(content.Turn(d, -r.Yaw).Scale(edge(r.plan, d))))
 	}
 	return out
 }
@@ -158,7 +162,7 @@ func InnerDoors() []InnerDoor {
 		}
 		for _, w := range r.doorways() {
 			o := r.wallOut(w)
-			out = append(out, InnerDoor{w, vec3{-o.Z, 0, o.X}, o})
+			out = append(out, InnerDoor{r.Turn(w), r.TurnDir(vec3{-o.Z, 0, o.X}), r.TurnDir(o)})
 		}
 	}
 	return out
@@ -213,6 +217,13 @@ func (r Room) nearDoorway(p vec3, m float64) bool {
 // (local), and the wall it closes, for collisions while it isn't open.
 func HallDoor(i ecs.ID) (mid vec3, closed Segment) {
 	r := Ents.Building.Get(i)
+	mid, closed = r.door()
+	return r.Turn(mid), Segment{r.Turn(closed.a), r.Turn(closed.b), closed.top}
+}
+
+// door is the big door's middle and the wall it closes, in the hall's
+// own frame.
+func (r Room) door() (mid vec3, closed Segment) {
 	hx, _ := r.half()
 	dw := r.Hall.Door[0] / 2
 	mid = r.Center.Add(vec3{hx, 0, 0})
@@ -223,10 +234,11 @@ func HallDoor(i ecs.ID) (mid vec3, closed Segment) {
 // from 0 to 1: on each side, from the jamb to the inner edge of its leaves,
 // so the opening lets through as soon as it is wide enough.
 func HallDoorWalls(i ecs.ID, open float64) []Segment {
-	mid, closed := HallDoor(i)
-	half := Ents.Building.Get(i).Hall.Door[0] / 2
+	r := Ents.Building.Get(i)
+	mid, closed := r.door()
+	half := r.Hall.Door[0] / 2
 	gap := half // how far from the middle the leaves start, on each side
-	for _, l := range HallLeaves(i, open) {
+	for _, l := range r.doorLeaves(open) {
 		gap = math.Min(gap, math.Abs(l.At.Z-mid.Z)-l.Size.Z/2)
 	}
 	if gap >= half-0.1 {
@@ -235,7 +247,7 @@ func HallDoorWalls(i ecs.ID, open float64) []Segment {
 	gap = math.Max(gap, 0)
 	var out []Segment
 	for _, s := range []float64{-1, 1} {
-		out = append(out, Segment{mid.Add(vec3{0, 0, s * gap}), mid.Add(vec3{0, 0, s * half}), closed.top})
+		out = append(out, Segment{r.Turn(mid.Add(vec3{0, 0, s * gap})), r.Turn(mid.Add(vec3{0, 0, s * half})), closed.top})
 	}
 	return out
 }
@@ -251,9 +263,12 @@ func Halls() []ecs.ID {
 	return out
 }
 
-// Leaf is a door leaf where it stands: its middle (local) and its size.
+// Leaf is a door leaf where it stands: its middle (local), its size along
+// the hall's own axes, and how the hall is turned (degrees, as
+// content.Turn).
 type Leaf struct {
 	At, Size vec3
+	Yaw      float64
 }
 
 // HallLeaves are where the door leaves of hall building i stand, open
@@ -261,6 +276,15 @@ type Leaf struct {
 // pockets.
 func HallLeaves(i ecs.ID, open float64) []Leaf {
 	r := Ents.Building.Get(i)
+	leaves := r.doorLeaves(open)
+	for k := range leaves {
+		leaves[k].At, leaves[k].Yaw = r.Turn(leaves[k].At), r.Yaw
+	}
+	return leaves
+}
+
+// doorLeaves are the door's leaves in the hall's own frame.
+func (r Room) doorLeaves(open float64) []Leaf {
 	hx, hz := r.half()
 	dw, dh := r.Hall.Door[0], r.Hall.Door[1]
 	n, lw := r.leaves()
@@ -279,7 +303,7 @@ func HallLeaves(i ecs.ID, open float64) []Leaf {
 			away := s * math.Min(math.Max(dw/2+w/2+0.3, hz-0.3-lw/2), hz-0.1-w/2)
 			x := hx + hallWall/2 + 0.3 + 0.32*float64(k) // the outer ones against the wall, behind the jambs
 			z := shut + (away-shut)*smooth(open)
-			out = append(out, Leaf{r.Center.Add(vec3{x, (dh + rise) / 2, z}), vec3{0.22, dh + rise, w}})
+			out = append(out, Leaf{At: r.Center.Add(vec3{x, (dh + rise) / 2, z}), Size: vec3{0.22, dh + rise, w}})
 		}
 	}
 	return out
@@ -318,18 +342,23 @@ func (r Room) hallLamps() []Lamp {
 }
 
 // Bay is where a driven vehicle parks in the garage: the rectangle marked
-// on the floor around it (its middle, local, and its size along X and Z),
-// and its spot, where the vehicle stands in the middle of it, nose toward
-// the door (+X).
+// on the floor around it (its middle, local, and its size along and
+// across Nose), and its spot, where the vehicle stands in the middle of
+// it, nose toward the door (+X in the hall's own frame).
 type Bay struct {
 	ID            string
 	At            vec3
 	Length, Width float64
 	Spot          vec3
+	Nose          vec3 // toward the door, unit
 	// Its name on the wall behind it, between the arches: the middle of
-	// the sign along the wall (z, local) and its width.
-	SignZ, SignW float64
+	// the sign (local) and its width.
+	SignAt vec3
+	SignW  float64
 }
+
+// Side is the unit vector across the bay, to the nose's right.
+func (b Bay) Side() vec3 { return vec3{-b.Nose.Z, 0, b.Nose.X} }
 
 // bayMargin is the room around a vehicle in its bay, on each side.
 const bayMargin = 1.2
@@ -404,8 +433,9 @@ func layBays(c *content.Content) []Bay {
 			b.At = r.Center.Add(vec3{back + b.Length/2, 0, b.At.Z})
 			b.Spot = b.Spot.Add(b.At)
 			b.Spot.Y = 0
-			b.SignZ, b.SignW = r.signSpot(b.At.Z-r.Center.Z, b.Width)
-			b.SignZ += r.Center.Z
+			z, w := r.signSpot(b.At.Z-r.Center.Z, b.Width)
+			b.SignAt, b.SignW = r.Turn(r.Center.Add(vec3{-hx + 0.17, 3.4, z})), w
+			b.At, b.Spot, b.Nose = r.Turn(b.At), r.Turn(b.Spot), r.TurnDir(vec3{1, 0, 0})
 			out = append(out, b)
 		}
 		back += depth + 6 // and an aisle
@@ -452,8 +482,16 @@ func BayOf(id string) (Bay, bool) {
 }
 
 // hall builds a hall: floor, walls, vault, ribs, lamps, the door's rails
-// and pockets, and the parking bays.
+// and pockets, its furniture and the parking bays.
 func (b *building) hall(id ecs.ID, r Room) {
+	b.turned(r, func(b *building) { b.hallShell(r) })
+	b.props(id)
+	b.turned(r, func(b *building) { b.hallBays(r) })
+}
+
+// hallShell builds all of a hall but its furniture and bays, in its own
+// frame.
+func (b *building) hallShell(r Room) {
 	bp := r.plan
 	hx, hz := r.half()
 	c := r.Center
@@ -628,13 +666,19 @@ func (b *building) hall(id ecs.ID, r Room) {
 		sun("steel").Box(p(railX+deep/2-0.3, (dh+0.7)/2, s*(reach-0.2)), vec3{deep + 0.4, dh + 0.7, 0.35}, X, 0.04)
 		sun("lamp.warm").Box(p(hx+0.5, dh+0.05, s*(dw/2-1)), vec3{0.3, 0.06, 1.2}, X, 0)
 	}
+}
 
-	b.props(id)
-
-	// The bays: yellow lines on the floor, and a stop bar at the back.
+// hallBays marks the parking bays on the floor of a hall, in its own
+// frame: yellow lines, and a stop bar at the back.
+func (b *building) hallBays(r Room) {
+	inside := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitIndoor, vec3{}) }
+	X := vec3{1, 0, 0}
 	for _, bay := range Bays {
+		if !r.inHall(bay.At, 0) {
+			continue
+		}
 		w, l := bay.Width-0.3, bay.Length
-		at := bay.At.Add(vec3{0, FloorTop + 0.005, 0})
+		at := r.Unturn(bay.At).Add(vec3{0, FloorTop + 0.005, 0})
 		for _, s := range []float64{-1, 1} {
 			inside("pipe.yellow").Box(at.Add(vec3{0, 0, s * w / 2}), vec3{l, 0.012, 0.15}, X, 0)
 		}

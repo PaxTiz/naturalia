@@ -16,12 +16,12 @@ import (
 func roomOf(bp *content.Blueprint) Room {
 	var openings []float64
 	for _, d := range bp.Doors {
-		openings = append(openings, d.Facing)
+		openings = append(openings, d.Facing+bp.Yaw*math.Pi/180)
 	}
 	if bp.Hall != nil {
-		return Room{Center: bp.At, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, plan: bp}
+		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, plan: bp}
 	}
-	return Room{bp.At, bp.Shape.Radius, bp.Shape.WallH, nil, openings, bp}
+	return Room{bp.At, bp.Yaw, bp.Shape.Radius, bp.Shape.WallH, nil, openings, bp}
 }
 
 // KitBuild lets a kit piece use the base's building helpers.
@@ -45,8 +45,8 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 			b.hall(id, *r)
 		} else {
 			b.room(id, *r)
-			b.greebleRoom(r.plan, *r, i*97+3)
-			b.clutter(r.plan)
+			b.greebleRoom(id, *r, i*97+3)
+			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		}
 		i++
 	}
@@ -66,6 +66,18 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	b.outside()
 	b.Unfight()
 	return b.Parts
+}
+
+// turned builds what build makes in building r's own frame, facing east,
+// turned with r around its center.
+func (b *building) turned(r Room, build func(b *building)) {
+	if r.Yaw == 0 {
+		build(b)
+		return
+	}
+	alone := &building{Parts: mesh.NewParts(vec3{}), kits: b.kits}
+	build(alone)
+	b.MergeTurned(alone.Parts, r.Turn)
 }
 
 // DoorPanel is one sliding leaf of the airlock, built around its center so
@@ -98,8 +110,8 @@ func (b *building) room(id ecs.ID, r Room) {
 	// Door frames: steel jambs and a hazard header. They stand a little
 	// into the opening: flush with the corridor's walls and ceiling, they
 	// would fight them for the depth and flicker.
-	for _, d := range bp.Doors {
-		out := vec3{math.Cos(d.Facing), 0, math.Sin(d.Facing)}
+	for _, a := range r.openings {
+		out := vec3{math.Cos(a), 0, math.Sin(a)}
 		tangent := vec3{-out.Z, 0, out.X}
 		w := r.Center.Add(out.Scale(r.Radius))
 		for _, s := range []float64{-1, 1} {

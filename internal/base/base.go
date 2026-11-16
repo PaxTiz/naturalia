@@ -22,7 +22,8 @@ import (
 // Room is a round building: panel walls with openings, under a dome roof;
 // or, with Hall set, a big rectangular one (hall.go).
 type Room struct {
-	Center   vec3 // local, on the floor
+	Center   vec3    // local, on the floor
+	Yaw      float64 // degrees, as its blueprint's
 	Radius   float64
 	WallH    float64
 	Hall     *content.Hall
@@ -32,6 +33,16 @@ type Room struct {
 
 // Plan is the blueprint the room is laid out from.
 func (r Room) Plan() *content.Blueprint { return r.plan }
+
+// Turn takes a point of the room's own frame (laid out unturned, around
+// its center) to the base's: it turns it by the room's yaw.
+func (r Room) Turn(p vec3) vec3 { return r.Center.Add(content.Turn(p.Sub(r.Center), r.Yaw)) }
+
+// Unturn takes a point of the base to the room's own frame.
+func (r Room) Unturn(p vec3) vec3 { return r.Center.Add(content.Turn(p.Sub(r.Center), -r.Yaw)) }
+
+// TurnDir turns a direction of the room's own frame to the base's.
+func (r Room) TurnDir(d vec3) vec3 { return content.Turn(d, r.Yaw) }
 
 // Corridor is a straight rectangular tube between two rooms (or outside).
 type Corridor struct {
@@ -128,7 +139,7 @@ func Setup(c *content.Content) {
 // where it stands, what stops the player around it, what E does with it.
 func addFurniture(kits *content.Registry[content.Kit], in ecs.ID, bp *content.Blueprint, p content.Prop) {
 	id := Ents.New()
-	f := Ents.Furniture.Set(id, Furniture{Kit: content.Qualify(p.Kit), At: bp.At.Add(p.At), Yaw: p.Yaw, Seed: p.Seed, In: in})
+	f := Ents.Furniture.Set(id, Furniture{Kit: content.Qualify(p.Kit), At: bp.At.Add(content.Turn(p.At, bp.Yaw)), Yaw: p.Yaw + bp.Yaw, Seed: p.Seed, In: in})
 	k, _ := kits.Get(p.Kit)
 	if k == nil {
 		return
@@ -136,7 +147,7 @@ func addFurniture(kits *content.Registry[content.Kit], in ecs.ID, bp *content.Bl
 	if len(k.Obstacles) > 0 {
 		var obs []content.Obstacle
 		for _, o := range k.Obstacles {
-			obs = append(obs, content.Obstacle{f.At.Add(content.Turn(o.At, p.Yaw)), o.Radius})
+			obs = append(obs, content.Obstacle{f.At.Add(content.Turn(o.At, f.Yaw)), o.Radius})
 		}
 		Ents.Obstacles.Set(id, obs)
 	}
@@ -151,6 +162,7 @@ func edge(bp *content.Blueprint, d vec3) float64 {
 	if bp.Hall == nil {
 		return bp.Shape.Radius - 0.2
 	}
+	d = content.Turn(d, -bp.Yaw)
 	t := math.Inf(1)
 	if d.X != 0 {
 		t = bp.Hall.Size[0] / 2 / math.Abs(d.X)
@@ -161,8 +173,10 @@ func edge(bp *content.Blueprint, d vec3) float64 {
 	return t
 }
 
-// addDoor opens a door of bp facing angle a, unless there is one already.
+// addDoor opens a door of bp facing angle a (in the base), unless there is
+// one already.
 func addDoor(bp *content.Blueprint, a float64) {
+	a -= bp.Yaw * math.Pi / 180
 	for _, d := range bp.Doors {
 		if angleDist(d.Facing, a) < 0.05 {
 			return
@@ -195,7 +209,7 @@ func (r Room) panels() []panel {
 	width := 2 * r.Radius * math.Sin(math.Pi/float64(n)) * 1.02
 	var out []panel
 	for i := range n {
-		a := (float64(i) + 0.5) * 2 * math.Pi / float64(n)
+		a := (float64(i)+0.5)*2*math.Pi/float64(n) + r.Yaw*math.Pi/180
 		mid := r.Center.Add(vec3{math.Cos(a) * r.Radius, 0, math.Sin(a) * r.Radius})
 		p := panel{mid: mid, angle: a, width: width, y0: 0, y1: r.WallH}
 		for _, o := range r.openings {
@@ -393,7 +407,7 @@ func Lamps(rooms, corridors []ecs.ID) []Lamp {
 		case id == hub:
 			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10})
 		case r.Hall != nil:
-			lamps = append(lamps, r.hallLamps()[0])
+			lamps = append(lamps, r.turnLamp(r.hallLamps()[0]))
 		default:
 			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
 		}
@@ -404,10 +418,18 @@ func Lamps(rooms, corridors []ecs.ID) []Lamp {
 	}
 	for _, id := range rooms {
 		if r := Ents.Building.Get(id); r.Hall != nil {
-			lamps = append(lamps, r.hallLamps()[1:]...)
+			for _, l := range r.hallLamps()[1:] {
+				lamps = append(lamps, r.turnLamp(l))
+			}
 		}
 	}
 	return lamps
+}
+
+// turnLamp takes a lamp laid out in the room's own frame to the base.
+func (r Room) turnLamp(l Lamp) Lamp {
+	l.At = r.Turn(l.At)
+	return l
 }
 
 // Interactable is something the player can use with E.
