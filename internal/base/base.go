@@ -4,6 +4,7 @@ import (
 	"log"
 	"math"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/planet"
 	"slices"
 )
@@ -29,11 +30,15 @@ type Room struct {
 	plan     *content.Blueprint // drawn from the kit when set
 }
 
+// Plan is the blueprint the room is laid out from.
+func (r Room) Plan() *content.Blueprint { return r.plan }
+
 // Corridor is a straight rectangular tube between two rooms (or outside).
 type Corridor struct {
 	From, To vec3 // local, on the floor, along its axis
 	Width    float64
 	Height   float64
+	Rooms    [2]ecs.ID // the buildings at From and To; 0 outside
 }
 
 const (
@@ -52,38 +57,38 @@ var (
 	SpawnSpot  = vec3{0, 0, 11.6}  // wake up next to the bed
 )
 
-// The base as laid out from the buildings in the content (Setup).
+// The base as laid out from the buildings in the content (Setup), besides
+// its entities (Ents).
 var (
-	Plans         []*content.Blueprint // the hub first
-	Rooms         []Room               // in the order of plans
-	HubRoom       Room
-	Corridors     []Corridor // one per linked building, then the airlock's
-	TableSpot     vec3       // the map table, under the hologram
-	Obstacles     []content.Obstacle
-	Interactables []Interactable
-	Bays          []Bay   // where each driven vehicle parks in the garage
-	Extent        float64 // how far from the origin the buildings reach, in m
+	Bays   []Bay   // where each driven vehicle parks in the garage
+	Extent float64 // how far from the origin the buildings reach, in m
 )
 
 // The shaders hold this many rooms, and as many corridors (baseAO, lamps):
 // more buildings are left out.
 const maxRooms = 8
 
-// Setup lays the base out from the buildings of c: rooms, doors and
-// corridors along the links, what blocks the player, what they can use.
+// Setup lays the base out from the buildings of c, as entities: rooms,
+// corridors along the links, their doors, the furniture, what blocks the
+// player and what they can use.
 func Setup(c *content.Content) {
-	Plans = c.Buildings.All()
-	if len(Plans) > maxRooms {
-		log.Printf("base: %d buildings, only the first %d are built", len(Plans), maxRooms)
-		Plans = Plans[:maxRooms]
+	plans := c.Buildings.All()
+	if len(plans) > maxRooms {
+		log.Printf("base: %d buildings, only the first %d are built", len(plans), maxRooms)
+		plans = plans[:maxRooms]
 	}
-	Corridors = nil
-	for _, bp := range Plans {
+	// The links open the doors first: a room is laid out with them.
+	type link struct {
+		from, to *content.Blueprint
+		c        Corridor
+	}
+	var links []link
+	for _, bp := range plans {
 		if bp.Link == "" {
 			continue
 		}
 		to, ok := c.Buildings.Get(bp.Link)
-		if !ok || !slices.Contains(Plans, to) {
+		if !ok || !slices.Contains(plans, to) {
 			log.Printf("base: %s links to %s, which isn't built", bp.ID, bp.Link)
 			continue
 		}
@@ -91,31 +96,56 @@ func Setup(c *content.Content) {
 		d = vec3{d.X, 0, d.Z}.Norm()
 		addDoor(bp, math.Atan2(d.Z, d.X))
 		addDoor(to, math.Atan2(-d.Z, -d.X))
-		Corridors = append(Corridors, Corridor{
-			to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), bp.At.Add(d.Scale(edge(bp, d))), DoorWidth, 2.4,
-		})
+		links = append(links, link{bp, to, Corridor{
+			From: to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), To: bp.At.Add(d.Scale(edge(bp, d))), Width: DoorWidth, Height: 2.4,
+		}})
 	}
-	Corridors = append(Corridors, Corridor{vec3{0, 0, -(Plans[0].Shape.Radius - 0.2)}, AirlockEnd, DoorWidth + 0.2, 2.6})
-	Rooms = nil
-	for _, bp := range Plans {
-		Rooms = append(Rooms, roomOf(bp))
+	Ents = newEntities()
+	ids := map[*content.Blueprint]ecs.ID{}
+	for _, bp := range plans {
+		id := Ents.New()
+		Ents.Building.Set(id, roomOf(bp))
+		ids[bp] = id
 	}
-	HubRoom = Rooms[0]
-	TableSpot = vec3{0, 0, 0}
-	for _, bp := range Plans {
+	for _, l := range links {
+		l.c.Rooms = [2]ecs.ID{ids[l.to], ids[l.from]}
+		Ents.Corridor.Set(Ents.New(), l.c)
+	}
+	hub := plans[0]
+	Ents.Corridor.Set(Ents.New(), Corridor{vec3{0, 0, -(hub.Shape.Radius - 0.2)}, AirlockEnd, DoorWidth + 0.2, 2.6, [2]ecs.ID{ids[hub], 0}})
+	// The yard's clutter keeps clear of the buildings and corridors.
+	Ents.Obstacles.Set(Ents.New(), YardObstacles())
+	for _, bp := range plans {
 		for _, p := range bp.Props {
-			if content.Qualify(p.Kit) == "core:maptable" {
-				TableSpot = bp.At.Add(p.At)
-			}
+			addFurniture(&c.Kits, ids[bp], bp, p)
 		}
 	}
-	Obstacles = planObstacles(&c.Kits)
-	Interactables = planInteractables(&c.Kits)
 	Extent = Reach
-	for _, r := range Rooms {
+	for _, r := range Buildings() {
 		Extent = math.Max(Extent, math.Hypot(r.Center.X, r.Center.Z)+r.reach())
 	}
 	Bays = layBays(c)
+}
+
+// addFurniture puts prop p of blueprint bp in building in, from its kit:
+// where it stands, what stops the player around it, what E does with it.
+func addFurniture(kits *content.Registry[content.Kit], in ecs.ID, bp *content.Blueprint, p content.Prop) {
+	id := Ents.New()
+	f := Ents.Furniture.Set(id, Furniture{Kit: content.Qualify(p.Kit), At: bp.At.Add(p.At), Yaw: p.Yaw, Seed: p.Seed, In: in})
+	k, _ := kits.Get(p.Kit)
+	if k == nil {
+		return
+	}
+	if len(k.Obstacles) > 0 {
+		var obs []content.Obstacle
+		for _, o := range k.Obstacles {
+			obs = append(obs, content.Obstacle{f.At.Add(content.Turn(o.At, p.Yaw)), o.Radius})
+		}
+		Ents.Obstacles.Set(id, obs)
+	}
+	if k.Use != nil {
+		Ents.Use.Set(id, Interactable{f.Kit, f.At, k.Reach, k.Use, k.Prompt})
+	}
 }
 
 // edge is how far from its middle a corridor leaving bp along d starts:
@@ -197,10 +227,10 @@ type plate struct {
 
 func junctionPlates() []plate {
 	var out []plate
-	for _, c := range Corridors {
+	for _, c := range Corridors() {
 		axis := c.To.Sub(c.From).Norm()
 		side := c.side()
-		for _, r := range Rooms {
+		for _, r := range Buildings() {
 			if r.Hall != nil {
 				continue
 			}
@@ -217,7 +247,7 @@ func junctionPlates() []plate {
 				reach := half
 				for _, s := range []float64{-1, 1} {
 					a := wall.Add(side.Scale(s * half))
-					e := nearestPanelEdge(r, a)
+					e := nearestPanelEdge(*r, a)
 					d := e.Sub(a)
 					l := d.Length()
 					d = d.Scale(1 / l)
@@ -270,7 +300,7 @@ func (s Segment) Ends() (a, b vec3, top float64) { return s.a, s.b, s.top }
 // Walls lists every wall the player bumps into.
 func Walls() []Segment {
 	var walls []Segment
-	for _, r := range Rooms {
+	for _, r := range Buildings() {
 		for _, p := range r.panels() {
 			if p.y0 > 0 {
 				continue // doorway
@@ -280,7 +310,7 @@ func Walls() []Segment {
 		}
 		walls = append(walls, r.hallWalls()...)
 	}
-	for _, c := range Corridors {
+	for _, c := range Corridors() {
 		side := c.side().Scale(c.Width/2 + WallThick/2)
 		top := c.Height + 0.2
 		walls = append(walls, Segment{c.From.Add(side), c.To.Add(side), top}, Segment{c.From.Sub(side), c.To.Sub(side), top})
@@ -303,13 +333,13 @@ func (c Corridor) side() vec3 {
 
 // Indoors tells whether a local point is inside a room or a corridor.
 func Indoors(local vec3) bool {
-	if RoomAt(local) >= 0 {
+	if RoomAt(local) != 0 {
 		return true
 	}
 	if local.Y > 3.5 {
 		return false
 	}
-	for _, c := range Corridors {
+	for _, c := range Corridors() {
 		d := c.To.Sub(c.From)
 		t := vec3{local.X, 0, local.Z}.Sub(c.From).Dot(d) / d.Dot(d)
 		across := math.Abs(vec3{local.X, 0, local.Z}.Sub(c.From).Dot(c.side()))
@@ -320,26 +350,26 @@ func Indoors(local vec3) bool {
 	return false
 }
 
-// RoomAt is the index of the room holding a local point, or -1.
-func RoomAt(local vec3) int {
-	for i, r := range Rooms {
+// RoomAt is the building whose room holds a local point, or 0.
+func RoomAt(local vec3) ecs.ID {
+	for id, r := range Buildings() {
 		if r.Hall != nil {
 			if r.inHall(local, 0) && local.Y < r.WallH+r.Hall.Rise {
-				return i
+				return id
 			}
 			continue
 		}
 		if local.Y < 3.5 && math.Hypot(local.X-r.Center.X, local.Z-r.Center.Z) < r.Radius {
-			return i
+			return id
 		}
 	}
-	return -1
+	return 0
 }
 
 // Covered tells whether a local point of the ground is under a building
 // beyond the base's round footprint: its floor hides the dust.
 func Covered(local vec3) bool {
-	for _, r := range Rooms {
+	for _, r := range Buildings() {
 		if r.Hall != nil && r.inHall(local, 0.5) {
 			return true
 		}
@@ -358,17 +388,21 @@ type Lamp struct {
 // then one per corridor, then the halls' others.
 func Lamps() []Lamp {
 	lamps := []Lamp{{vec3{0, 2.7, 0}, 1.4, 10}}
-	for _, r := range Rooms[1:] {
+	hub, _ := Hub()
+	for id, r := range Buildings() {
+		if id == hub {
+			continue
+		}
 		if r.Hall != nil {
 			lamps = append(lamps, r.hallLamps()[0])
 			continue
 		}
 		lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
 	}
-	for _, c := range Corridors {
+	for _, c := range Corridors() {
 		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10})
 	}
-	for _, r := range Rooms {
+	for _, r := range Buildings() {
 		if r.Hall != nil {
 			lamps = append(lamps, r.hallLamps()[1:]...)
 		}

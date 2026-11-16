@@ -143,9 +143,10 @@ func TestHangarDoor(t *testing.T) {
 	outside := base.ToWorld(mid.Add(vec3{3, base.FloorTop, 0}))
 
 	// Open, the leaves stand within the hangar's ends.
-	_, hz := base.Rooms[i].Hall.Size[0], base.Rooms[i].Hall.Size[1]/2
+	hall := base.Ents.Building.Get(i)
+	hz := hall.Hall.Size[1] / 2
 	for _, l := range base.HallLeaves(i, 1) {
-		if d := math.Abs(l.At.Z-base.Rooms[i].Center.Z) + l.Size.Z/2; d > hz {
+		if d := math.Abs(l.At.Z-hall.Center.Z) + l.Size.Z/2; d > hz {
 			t.Errorf("a leaf sticks out %.1f m", d-hz)
 		}
 	}
@@ -189,7 +190,7 @@ func TestHangarDoor(t *testing.T) {
 	if stopped(0) || stopped(2) {
 		t.Error("can't go through the opening door")
 	}
-	if !stopped(base.Rooms[i].Hall.Door[0]/2 - 1) {
+	if !stopped(hall.Hall.Door[0]/2 - 1) {
 		t.Error("went through a leaf")
 	}
 	for range 5 {
@@ -306,7 +307,7 @@ func TestGarageTerminal(t *testing.T) {
 	// In front of it, facing it, every vehicle in its bay: E opens the
 	// garage, not a vehicle.
 	var at vec3
-	for _, it := range base.Interactables {
+	for _, it := range base.Interactables() {
 		if it.Kit == "core:garage.terminal" {
 			at = it.At
 		}

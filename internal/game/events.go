@@ -43,8 +43,8 @@ func (g *Game) updateEvents(dt float64) {
 
 // buildingAt is the ID of the building whose room holds a local point.
 func buildingAt(local vec3) string {
-	if i := base.RoomAt(local); i >= 0 {
-		return base.Plans[i].ID
+	if id := base.RoomAt(local); id != 0 {
+		return base.Ents.Building.Get(id).Plan().ID
 	}
 	return ""
 }

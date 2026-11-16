@@ -226,7 +226,7 @@ func (g *Game) NearbyUse() (base.Interactable, bool) {
 	flat := vec3{local.X, 0, local.Z}
 	best, found := base.Interactable{}, false
 	bestDist := math.Inf(1)
-	for _, it := range base.Interactables {
+	for _, it := range base.Ents.Use.All() {
 		to := vec3{it.At.X, 0, it.At.Z}.Sub(flat)
 		d := to.Length()
 		if d > it.Reach || d >= bestDist {
@@ -236,7 +236,7 @@ func (g *Game) NearbyUse() (base.Interactable, bool) {
 		if d > 0.8 && heading.Dot(to.Norm()) < 0.3 {
 			continue // standing next to it but looking away
 		}
-		best, found, bestDist = it, true, d
+		best, found, bestDist = *it, true, d
 	}
 	return best, found
 }

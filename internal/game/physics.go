@@ -476,7 +476,7 @@ func (g *Game) layPlane() {
 		for _, s := range g.walls {
 			g.addWall(s)
 		}
-		for _, o := range base.Obstacles {
+		for _, o := range base.Obstacles() {
 			at := base.ToWorld(o.At)
 			bottom, top := p.slice(at, thingH)
 			p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(o.Radius), Pos: p.plane(at),

@@ -420,7 +420,7 @@ var (
 func yardFree(p vec3, r float64) bool {
 	const margin = 0.6
 	flat := vec3{p.X, 0, p.Z}
-	for _, rm := range Rooms {
+	for _, rm := range Buildings() {
 		if rm.Hall != nil {
 			// The hall, and the door's rails in front of it.
 			hx, hz := rm.half()
@@ -434,7 +434,7 @@ func yardFree(p vec3, r float64) bool {
 			return false
 		}
 	}
-	for _, c := range Corridors {
+	for _, c := range Corridors() {
 		d := c.To.Sub(c.From)
 		t := mathx.Clamp01(flat.Sub(c.From).Dot(d) / d.Dot(d))
 		if flat.Sub(c.From.Add(d.Scale(t))).Length() < c.Width/2+r+margin {

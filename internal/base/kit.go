@@ -3,6 +3,7 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mesh"
 )
 
@@ -28,33 +29,6 @@ func KitBuild(f func(b *building, at vec3, seed int)) func(*mesh.Parts, vec3, in
 	return func(p *mesh.Parts, at vec3, seed int) { f(&building{Parts: p}, at, seed) }
 }
 
-func planObstacles(kits *content.Registry[content.Kit]) (out []content.Obstacle) {
-	out = YardObstacles()
-	for _, bp := range Plans {
-		for _, p := range bp.Props {
-			k, _ := kits.Get(p.Kit)
-			if k == nil {
-				continue
-			}
-			for _, o := range k.Obstacles {
-				out = append(out, content.Obstacle{bp.At.Add(p.At).Add(content.Turn(o.At, p.Yaw)), o.Radius})
-			}
-		}
-	}
-	return out
-}
-
-func planInteractables(kits *content.Registry[content.Kit]) (out []Interactable) {
-	for _, bp := range Plans {
-		for _, p := range bp.Props {
-			if k, _ := kits.Get(p.Kit); k != nil && k.Use != nil {
-				out = append(out, Interactable{content.Qualify(p.Kit), bp.At.Add(p.At), k.Reach, k.Use, k.Prompt})
-			}
-		}
-	}
-	return out
-}
-
 // building builds the base's meshes, with its helpers for walls, greebles
 // and furniture.
 type building struct {
@@ -65,18 +39,22 @@ type building struct {
 // Build builds every static piece of the base, furniture from kits.
 func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	b := &building{Parts: mesh.NewParts(Origin), kits: kits}
-	for i, bp := range Plans {
-		if bp.Hall != nil {
-			b.hall(bp, roomOf(bp))
-			continue
+	i := 0
+	for id, r := range Buildings() {
+		if r.Hall != nil {
+			b.hall(id, *r)
+		} else {
+			b.room(id, *r)
+			b.greebleRoom(r.plan, *r, i*97+3)
+			b.clutter(r.plan)
 		}
-		b.room(bp)
-		b.greebleRoom(bp, roomOf(bp), i*97+3)
-		b.clutter(bp)
+		i++
 	}
-	for i, c := range Corridors {
-		b.corridor(c)
-		b.greebleCorridor(c, i*31+5)
+	i = 0
+	for _, c := range Corridors() {
+		b.corridor(*c)
+		b.greebleCorridor(*c, i*31+5)
+		i++
 	}
 	b.yard()
 	for _, p := range junctionPlates() {
@@ -98,8 +76,8 @@ func DoorPanel() *mesh.Builder {
 	return m
 }
 
-func (b *building) room(bp *content.Blueprint) {
-	r := roomOf(bp)
+func (b *building) room(id ecs.ID, r Room) {
+	bp := r.plan
 	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
 	// Walls: bevelled panels, a dark plinth, a steel collar under the dome.
 	for i, p := range r.panels() {
@@ -131,25 +109,25 @@ func (b *building) room(bp *content.Blueprint) {
 		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(w.Add(vec3{0, DoorHeight + 0.12, 0}).Sub(out.Scale(0.22)), vec3{DoorWidth * 0.6, 0.05, 0.02}, tangent, 0)
 	}
 	b.interior(bp, r)
-	b.props(bp)
+	b.props(id)
 }
 
-// props builds the furniture of a building, turned as each piece is.
-func (b *building) props(bp *content.Blueprint) {
-	for _, p := range bp.Props {
-		k, _ := b.kits.Get(p.Kit)
+// props builds the furniture of building in, turned as each piece is.
+func (b *building) props(in ecs.ID) {
+	for _, f := range FurnitureOf(in) {
+		k, _ := b.kits.Get(f.Kit)
 		if k == nil || k.Build == nil {
 			continue
 		}
-		at := bp.At.Add(p.At)
-		if p.Yaw == 0 {
-			k.Build(b.Parts, at, p.Seed)
+		at, yaw := f.At, f.Yaw
+		if yaw == 0 {
+			k.Build(b.Parts, at, f.Seed)
 			continue
 		}
 		// Turned: built apart, then turned around its spot.
 		alone := mesh.NewParts(vec3{})
-		k.Build(alone, at, p.Seed)
-		b.MergeTurned(alone, func(q vec3) vec3 { return at.Add(content.Turn(q.Sub(at), p.Yaw)) })
+		k.Build(alone, at, f.Seed)
+		b.MergeTurned(alone, func(q vec3) vec3 { return at.Add(content.Turn(q.Sub(at), yaw)) })
 	}
 }
 
@@ -260,7 +238,8 @@ func (b *building) airlock() {
 
 // outside: an antenna and a dish on the hub, solar panels nearby.
 func (b *building) outside() {
-	top := HubRoom.WallH + HubRoom.Radius*0.55
+	_, hub := Hub()
+	top := hub.WallH + hub.Radius*0.55
 	up := vec3{0, 1, 0}
 	steel := b.Part("steel", mesh.LitSun, vec3{})
 	steel.Prism(vec3{1.5, top - 0.8, 1.5}, up, 0.05, 0.05, 3.0, 6, 0)

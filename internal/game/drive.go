@@ -135,7 +135,7 @@ func (g *Game) getOut() {
 	}
 	// In a garage, it goes to its bay; the player steps out into the
 	// aisle in front of it.
-	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r >= 0 && base.Rooms[r].Hall != nil && g.park(v, id) {
+	if r := base.RoomAt(base.ToLocal(g.Player.Pos)); r != 0 && base.Ents.Building.Get(r).Hall != nil && g.park(v, id) {
 		bay, _ := base.BayOf(v.ID)
 		g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.At.Add(vec3{bay.Length/2 + 1.5, 0, 0})))
 		g.Say(v.Name + " rangé au garage")

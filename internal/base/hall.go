@@ -3,6 +3,7 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mesh"
 	"slices"
 )
@@ -151,7 +152,7 @@ const InnerLeaf = (DoorWidth + 0.2) / 2
 // InnerDoors are the halls' corridor doors.
 func InnerDoors() []InnerDoor {
 	var out []InnerDoor
-	for _, r := range Rooms {
+	for _, r := range Buildings() {
 		if r.Hall == nil {
 			continue
 		}
@@ -208,22 +209,22 @@ func (r Room) nearDoorway(p vec3, m float64) bool {
 	return false
 }
 
-// HallDoor is the big door of hall room i: its middle on the floor (local),
-// and the wall it closes, for collisions while it isn't open.
-func HallDoor(i int) (mid vec3, closed Segment) {
-	r := Rooms[i]
+// HallDoor is the big door of hall building i: its middle on the floor
+// (local), and the wall it closes, for collisions while it isn't open.
+func HallDoor(i ecs.ID) (mid vec3, closed Segment) {
+	r := Ents.Building.Get(i)
 	hx, _ := r.half()
 	dw := r.Hall.Door[0] / 2
 	mid = r.Center.Add(vec3{hx, 0, 0})
 	return mid, Segment{mid.Add(vec3{0, 0, -dw}), mid.Add(vec3{0, 0, dw}), r.Hall.Door[1]}
 }
 
-// HallDoorWalls are the walls the door of hall room i makes, open from 0
-// to 1: on each side, from the jamb to the inner edge of its leaves, so
-// the opening lets through as soon as it is wide enough.
-func HallDoorWalls(i int, open float64) []Segment {
+// HallDoorWalls are the walls the door of hall building i makes, open
+// from 0 to 1: on each side, from the jamb to the inner edge of its leaves,
+// so the opening lets through as soon as it is wide enough.
+func HallDoorWalls(i ecs.ID, open float64) []Segment {
 	mid, closed := HallDoor(i)
-	half := Rooms[i].Hall.Door[0] / 2
+	half := Ents.Building.Get(i).Hall.Door[0] / 2
 	gap := half // how far from the middle the leaves start, on each side
 	for _, l := range HallLeaves(i, open) {
 		gap = math.Min(gap, math.Abs(l.At.Z-mid.Z)-l.Size.Z/2)
@@ -239,12 +240,12 @@ func HallDoorWalls(i int, open float64) []Segment {
 	return out
 }
 
-// Halls are the indexes of the hall rooms.
-func Halls() []int {
-	var out []int
-	for i, r := range Rooms {
+// Halls are the hall buildings.
+func Halls() []ecs.ID {
+	var out []ecs.ID
+	for id, r := range Buildings() {
 		if r.Hall != nil {
-			out = append(out, i)
+			out = append(out, id)
 		}
 	}
 	return out
@@ -255,10 +256,11 @@ type Leaf struct {
 	At, Size vec3
 }
 
-// HallLeaves are where the door leaves of hall room i stand, open from 0
-// (closed) to 1. Each runs on its own rail, so they stack in the pockets.
-func HallLeaves(i int, open float64) []Leaf {
-	r := Rooms[i]
+// HallLeaves are where the door leaves of hall building i stand, open
+// from 0 (closed) to 1. Each runs on its own rail, so they stack in the
+// pockets.
+func HallLeaves(i ecs.ID, open float64) []Leaf {
+	r := Ents.Building.Get(i)
 	hx, hz := r.half()
 	dw, dh := r.Hall.Door[0], r.Hall.Door[1]
 	n, lw := r.leaves()
@@ -338,9 +340,9 @@ const bayMargin = 1.2
 // back wall to the big door.
 func layBays(c *content.Content) []Bay {
 	var r *Room
-	for i := range Rooms {
-		if Rooms[i].Hall != nil && Rooms[i].plan.Garage {
-			r = &Rooms[i]
+	for _, h := range Buildings() {
+		if h.Hall != nil && h.plan.Garage {
+			r = h
 			break
 		}
 	}
@@ -451,7 +453,8 @@ func BayOf(id string) (Bay, bool) {
 
 // hall builds a hall: floor, walls, vault, ribs, lamps, the door's rails
 // and pockets, and the parking bays.
-func (b *building) hall(bp *content.Blueprint, r Room) {
+func (b *building) hall(id ecs.ID, r Room) {
+	bp := r.plan
 	hx, hz := r.half()
 	c := r.Center
 	dw, dh := r.Hall.Door[0], r.Hall.Door[1]
@@ -626,7 +629,7 @@ func (b *building) hall(bp *content.Blueprint, r Room) {
 		sun("lamp.warm").Box(p(hx+0.5, dh+0.05, s*(dw/2-1)), vec3{0.3, 0.06, 1.2}, X, 0)
 	}
 
-	b.props(bp)
+	b.props(id)
 
 	// The bays: yellow lines on the floor, and a stop bar at the back.
 	for _, bay := range Bays {

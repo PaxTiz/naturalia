@@ -64,11 +64,9 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	// Red dust settles on the faces turned up and at the foot of the walls.
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(base.Origin.Y)}, rl.ShaderUniformVec2)
 	gfx.base.draw(gfx)
-	for _, bp := range base.Plans {
-		for _, p := range bp.Props {
-			if draw := kitDraws[content.Qualify(p.Kit)]; draw != nil {
-				draw(gfx, g, kitSpot{bp.At.Add(p.At), p.Yaw})
-			}
+	for _, f := range base.AllFurniture() {
+		if draw := kitDraws[f.Kit]; draw != nil {
+			draw(gfx, g, kitSpot{f.At, f.Yaw})
 		}
 	}
 
@@ -136,7 +134,7 @@ func (gfx *Graphics) drawHallDoors(g *game.Game) {
 		if k < len(g.HallOpen) {
 			open = g.HallOpen[k]
 		}
-		r := base.Rooms[i]
+		r := base.Ents.Building.Get(i)
 		gfx.setLighting(mesh.LitTowards, base.ToWorld(r.Center.Add(vec3{0, 1.2, 0})))
 		for j, l := range base.HallLeaves(i, open) {
 			tok := plates[j%2]
@@ -169,12 +167,13 @@ func (gfx *Graphics) drawBeacon(g *game.Game) {
 
 // beaconTop is where the blinking light sits, for its glow.
 func beaconTop() vec3 {
-	return base.ToWorld(vec3{1.5, base.HubRoom.WallH + base.HubRoom.Radius*0.55 + 2.25, 1.5})
+	_, hub := base.Hub()
+	return base.ToWorld(vec3{1.5, hub.WallH + hub.Radius*0.55 + 2.25, 1.5})
 }
 
 // drawGlobe draws the hologram of Mars above the map table.
 func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
-	center := base.ToWorld(base.TableSpot.Add(vec3{0, globeHeight, 0}))
+	center := base.ToWorld(base.TableSpot().Add(vec3{0, globeHeight, 0}))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
 	// Turn the player's spot on Mars toward the viewer, a bit raised,
 	// with a slow sway so the hologram feels alive.
@@ -197,7 +196,7 @@ func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
 	// Soft light rising from the table to the globe.
 	for i := range 6 {
 		f := float64(i) / 5
-		p := base.ToWorld(base.TableSpot.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
+		p := base.ToWorld(base.TableSpot().Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
 		rl.DrawBillboard(cam, gfx.glow, ToRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
 	}
 	rl.EndBlendMode()

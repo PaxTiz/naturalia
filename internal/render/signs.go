@@ -28,23 +28,28 @@ type sign struct {
 const signHeight = 0.34
 
 func (gfx *Graphics) baseSigns() []sign {
+	hubID, hub := base.Hub()
 	inHub := func(angle float64, text string, accent color.RGBA) sign {
 		dir := vec3{math.Cos(angle), 0, math.Sin(angle)}
-		at := dir.Scale(base.HubRoom.Radius - base.WallThick/2 - 0.03).Add(vec3{0, 2.6, 0})
+		at := dir.Scale(hub.Radius - base.WallThick/2 - 0.03).Add(vec3{0, 2.6, 0})
 		return sign{at: at, facing: dir.Scale(-1), width: 1.9, text: text, accent: accent}
 	}
 	// Over each door of the hub, the name of the building it leads to.
 	var signs []sign
-	for _, bp := range base.Plans[1:] {
-		if bp.Sign != "" && bp.Link == base.Plans[0].ID {
-			d := bp.At.Sub(base.Plans[0].At)
+	for _, c := range base.Corridors() {
+		if c.Rooms[0] != hubID || c.Rooms[1] == 0 {
+			continue
+		}
+		if bp := base.Ents.Building.Get(c.Rooms[1]).Plan(); bp.Sign != "" {
+			d := bp.At.Sub(hub.Center)
 			signs = append(signs, inHub(math.Atan2(d.Z, d.X), bp.Sign, gfx.tok(bp.Accent).Col))
 		}
 	}
 	// On the halls: their name outside, and over each bay of a garage the
 	// name of the vehicle that parks there.
 	for _, i := range base.Halls() {
-		r, bp := base.Rooms[i], base.Plans[i]
+		r := base.Ents.Building.Get(i)
+		bp := r.Plan()
 		hx := r.Hall.Size[0] / 2
 		if bp.Sign != "" {
 			signs = append(signs, sign{at: r.Center.Add(vec3{-hx - 0.17, 7.5, 0}), facing: vec3{-1, 0, 0}, width: 11, height: 1.8,
@@ -54,16 +59,17 @@ func (gfx *Graphics) baseSigns() []sign {
 	for _, bay := range base.Bays {
 		i := base.RoomAt(bay.At.Add(vec3{0, 1, 0}))
 		v, ok := gfx.content.Vehicles.Get(bay.ID)
-		if i < 0 || !ok {
+		if i == 0 || !ok {
 			continue
 		}
-		hx := base.Rooms[i].Hall.Size[0] / 2
+		r := base.Ents.Building.Get(i)
+		hx := r.Hall.Size[0] / 2
 		if bay.SignW < 1 {
 			continue // no room between the arches
 		}
-		at := vec3{base.Rooms[i].Center.X - hx + 0.17, 3.4, bay.SignZ}
+		at := vec3{r.Center.X - hx + 0.17, 3.4, bay.SignZ}
 		signs = append(signs, sign{at: at, facing: vec3{1, 0, 0}, width: bay.SignW, height: 0.55,
-			text: strings.ToUpper(v.Name), accent: gfx.tok(base.Plans[i].Accent).Col})
+			text: strings.ToUpper(v.Name), accent: gfx.tok(r.Plan().Accent).Col})
 	}
 	return append(signs,
 		inHub(base.South, "SAS 01 - SORTIE", palette.Gold),

@@ -161,7 +161,7 @@ func clearRun(t *testing.T, g *Game) (a, n, start vec3) {
 					}
 				}
 			}
-			for _, o := range base.Obstacles {
+			for _, o := range base.Obstacles() {
 				if d := o.At.Sub(mid); math.Abs(d.Dot(along)) < 4 && d.Dot(n) > 0 && d.Dot(n) < 26 {
 					clear = false
 				}
