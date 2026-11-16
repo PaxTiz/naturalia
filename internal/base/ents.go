@@ -1,9 +1,13 @@
 package base
 
 import (
+	"cmp"
 	"iter"
+	"math"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
+	"naturalia/internal/mathx"
+	"slices"
 )
 
 // The base as entities (package ecs): each building, each corridor between
@@ -76,6 +80,48 @@ func ordered[T any](s *ecs.Store[T]) iter.Seq2[ecs.ID, *T] {
 			}
 		}
 	}
+}
+
+// NearBuildings are the n buildings closest to a local point (by their
+// walls), in the order of Buildings.
+func NearBuildings(at vec3, n int) []ecs.ID {
+	return nearest(Ents.Building, n, func(r *Room) float64 {
+		return math.Hypot(at.X-r.Center.X, at.Z-r.Center.Z) - r.reach()
+	})
+}
+
+// NearCorridors are the n corridors closest to a local point, in the order
+// of Corridors.
+func NearCorridors(at vec3, n int) []ecs.ID {
+	return nearest(Ents.Corridor, n, func(c *Corridor) float64 {
+		flat := vec3{at.X, 0, at.Z}
+		d := c.To.Sub(c.From)
+		t := mathx.Clamp01(flat.Sub(c.From).Dot(d) / d.Dot(d))
+		return flat.Sub(c.From.Add(d.Scale(t))).Length()
+	})
+}
+
+// nearest keeps the n entities of s closest by dist, in creation order.
+func nearest[T any](s *ecs.Store[T], n int, dist func(*T) float64) []ecs.ID {
+	type near struct {
+		id ecs.ID
+		d  float64
+		k  int
+	}
+	var all []near
+	for id, c := range ordered(s) {
+		all = append(all, near{id, dist(c), len(all)})
+	}
+	if len(all) > n {
+		slices.SortStableFunc(all, func(a, b near) int { return cmp.Compare(a.d, b.d) })
+		all = all[:n]
+		slices.SortFunc(all, func(a, b near) int { return a.k - b.k })
+	}
+	out := make([]ecs.ID, len(all))
+	for i, a := range all {
+		out[i] = a.id
+	}
+	return out
 }
 
 // Hub is the first building, where the airlock leads.

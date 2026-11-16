@@ -64,19 +64,11 @@ var (
 	Extent float64 // how far from the origin the buildings reach, in m
 )
 
-// The shaders hold this many rooms, and as many corridors (baseAO, lamps):
-// more buildings are left out.
-const maxRooms = 8
-
 // Setup lays the base out from the buildings of c, as entities: rooms,
 // corridors along the links, their doors, the furniture, what blocks the
 // player and what they can use.
 func Setup(c *content.Content) {
 	plans := c.Buildings.All()
-	if len(plans) > maxRooms {
-		log.Printf("base: %d buildings, only the first %d are built", len(plans), maxRooms)
-		plans = plans[:maxRooms]
-	}
 	// The links open the doors first: a room is laid out with them.
 	type link struct {
 		from, to *content.Blueprint
@@ -389,26 +381,29 @@ type Lamp struct {
 	Power, Range float64
 }
 
-// Lamps lists the ceiling lamps: one per room first (they cast shadows),
-// then one per corridor, then the halls' others.
-func Lamps() []Lamp {
-	lamps := []Lamp{{vec3{0, 2.7, 0}, 1.4, 10}}
+// Lamps lists the ceiling lamps of some buildings and corridors: one per
+// room first (they cast shadows), then one per corridor, then the halls'
+// others.
+func Lamps(rooms, corridors []ecs.ID) []Lamp {
+	var lamps []Lamp
 	hub, _ := Hub()
-	for id, r := range Buildings() {
-		if id == hub {
-			continue
-		}
-		if r.Hall != nil {
+	for _, id := range rooms {
+		r := Ents.Building.Get(id)
+		switch {
+		case id == hub:
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10})
+		case r.Hall != nil:
 			lamps = append(lamps, r.hallLamps()[0])
-			continue
+		default:
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
 		}
-		lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
 	}
-	for _, c := range Corridors() {
+	for _, id := range corridors {
+		c := Ents.Corridor.Get(id)
 		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10})
 	}
-	for _, r := range Buildings() {
-		if r.Hall != nil {
+	for _, id := range rooms {
+		if r := Ents.Building.Get(id); r.Hall != nil {
 			lamps = append(lamps, r.hallLamps()[1:]...)
 		}
 	}

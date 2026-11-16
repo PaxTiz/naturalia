@@ -173,4 +173,16 @@ func TestLinks(t *testing.T) {
 	if got := buildingAt(vec3{-13, 1, 7}); got != "" || !base.Indoors(vec3{-13, 1, 7}) {
 		t.Errorf("between the sale room and the annexe: %q", got)
 	}
+	// From the annexe, the two closest are the sale room and itself, in
+	// the order of the content.
+	var near []string
+	for _, id := range base.NearBuildings(vec3{-13, 0, 10}, 2) {
+		near = append(near, base.Ents.Building.Get(id).Plan().ID)
+	}
+	if len(near) != 2 || near[0] != "core:sale" || near[1] != "t:annexe" {
+		t.Errorf("closest buildings: %v", near)
+	}
+	if n := len(base.NearCorridors(vec3{}, 8)); n != 7 {
+		t.Errorf("%d corridors kept out of 7", n)
+	}
 }

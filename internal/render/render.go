@@ -6,11 +6,13 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/game"
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
+	"slices"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -20,6 +22,7 @@ import (
 const (
 	maxCasters = 16
 	maxLamps   = 24 // lights in object.frag
+	maxRooms   = 8  // rooms and corridors in the shaders (baseAO), lamps casting shadows
 )
 
 type shaderLocs struct {
@@ -54,7 +57,8 @@ type Graphics struct {
 	post                                              *postFX
 	shadow                                            *shadowMap
 	lampShadow                                        *lampShadow
-	dust                                              dustGPU // the dust tiles near the player, on the GPU
+	nearRooms, nearCorrs                              []ecs.ID // the base's buildings and corridors in the shaders (selectBase)
+	dust                                              dustGPU  // the dust tiles near the player, on the GPU
 	base                                              *baseModels
 	doorPanel                                         rl.Model
 	hallLeaf                                          rl.Model                 // a door leaf of the halls, scaled to size
@@ -159,7 +163,7 @@ func New(g *game.Game) *Graphics {
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 	gfx.shadow = newShadowMap()
-	gfx.lampShadow = newLampShadow(base.Ents.Building.Len())
+	gfx.lampShadow = newLampShadow(min(base.Ents.Building.Len(), maxRooms))
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(gfx.terrainSh, "shadowMap"))
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
 
@@ -188,18 +192,7 @@ func New(g *game.Game) *Graphics {
 	gfx.near, gfx.far = 0.15, 9000
 	rl.SetClipPlanes(gfx.near, gfx.far)
 
-	// The base's ceiling lamps never move.
-	var lights, ranges []float32
-	for _, l := range base.Lamps()[:min(len(base.Lamps()), maxLamps)] {
-		p := base.ToWorld(l.At)
-		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
-		ranges = append(ranges, float32(l.Range))
-	}
-	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(base.Ents.Building.Len())}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampGrid"), []float32{float32(gfx.lampShadow.grid)}, rl.ShaderUniformFloat)
-	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "tilesPerFace"), []float32{planet.TilesPerFace}, rl.ShaderUniformFloat)
 	gfx.Terrain.Warm(g.Player.Eye(), 5*time.Second)
 	return gfx
@@ -283,7 +276,32 @@ func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 	}
 }
 
+// selectBase picks the base's buildings and corridors closest to the
+// camera for the shaders, and their ceiling lamps. The lamps' shadows are
+// drawn again when the pick changes.
+func (gfx *Graphics) selectBase() {
+	at := base.ToLocal(gfx.camEye)
+	rooms, corrs := base.NearBuildings(at, maxRooms), base.NearCorridors(at, maxRooms)
+	if gfx.nearRooms != nil && slices.Equal(rooms, gfx.nearRooms) && slices.Equal(corrs, gfx.nearCorrs) {
+		return
+	}
+	gfx.nearRooms, gfx.nearCorrs = rooms, corrs
+	gfx.lampShadow.reset()
+	var lights, ranges []float32
+	lamps := base.Lamps(rooms, corrs)
+	for _, l := range lamps[:min(len(lamps), maxLamps)] {
+		p := base.ToWorld(l.At)
+		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
+		ranges = append(ranges, float32(l.Range))
+	}
+	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(len(rooms))}, rl.ShaderUniformFloat)
+	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
+}
+
 func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
+	gfx.selectBase()
 	eye := []float32{cam.Position.X, cam.Position.Y, cam.Position.Z}
 	t := []float32{float32(g.Elapsed)}
 	for _, s := range gfx.shaders() {
@@ -297,12 +315,13 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	}
 	// The base's shapes, for its ambient occlusion (baseAO).
 	var rms, crs, csz []float32
-	for _, r := range base.Buildings() {
-		if r.Hall == nil { // halls aren't round: no occlusion from them
+	for _, id := range gfx.nearRooms {
+		if r := base.Ents.Building.Get(id); r.Hall == nil { // halls aren't round: no occlusion from them
 			rms = append(rms, float32(r.Center.X), float32(r.Center.Z), float32(r.Radius), float32(r.WallH))
 		}
 	}
-	for _, c := range base.Corridors() {
+	for _, id := range gfx.nearCorrs {
+		c := base.Ents.Corridor.Get(id)
 		crs = append(crs, float32(c.From.X), float32(c.From.Z), float32(c.To.X), float32(c.To.Z))
 		csz = append(csz, float32(c.Width), float32(c.Height), 0, 0)
 	}
@@ -339,7 +358,8 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	// Soft round shadows of the base's domes, for when the base is beyond
 	// the shadow map.
 	var casters []float32
-	for _, r := range base.Buildings() {
+	for _, id := range base.NearBuildings(base.ToLocal(gfx.camEye), maxCasters) {
+		r := base.Ents.Building.Get(id)
 		c := base.ToWorld(r.Center.Add(vec3{0, r.WallH * 0.7, 0}))
 		radius := r.Radius * 1.05
 		if r.Hall != nil {
@@ -419,7 +439,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.setUniforms(g, cam)
 	if gfx.base != nil {
 		var lamps []vec3
-		for _, l := range base.Lamps()[:base.Ents.Building.Len()] {
+		for _, l := range base.Lamps(gfx.nearRooms, nil) {
 			lamps = append(lamps, base.ToWorld(l.At).Sub(vec3{0, 0.12, 0}))
 		}
 		gfx.lampShadow.render(gfx, lamps, func() { gfx.drawBase(g) })

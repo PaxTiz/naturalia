@@ -109,8 +109,9 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 
 // lampShadow holds the shadows of the rooms' ceiling lamps: one wide
 // perspective view straight down from each lamp, in the cells of a grid
-// on one texture (2×2 for the core base). The base never moves: they are drawn once. Every room keeps
-// its shadows, so nothing pops in when the player walks in.
+// on one texture (3×3 at most). The base never moves: they are drawn once,
+// and again only when other rooms come closer (selectBase). Every room
+// kept keeps its shadows, so nothing pops in when the player walks in.
 type lampShadow struct {
 	target rl.RenderTexture2D
 	lamps  []vec3 // where the cameras stand, looking down
@@ -152,7 +153,10 @@ func (s *lampShadow) cols(o vec3) []float32 {
 	return c
 }
 
-// render draws every lamp's view into its quarter, once.
+// reset has the lamps' views drawn again.
+func (s *lampShadow) reset() { s.done, s.lamps = false, nil }
+
+// render draws every lamp's view into its cell, once.
 func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 	if s.done {
 		return
