@@ -48,6 +48,7 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 			b.greebleRoom(id, *r, i*97+3)
 			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		}
+		b.floors(id)
 		i++
 	}
 	i = 0

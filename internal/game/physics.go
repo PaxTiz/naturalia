@@ -72,8 +72,9 @@ type phys struct {
 	side       float64 // +1 if a vehicle's right side (+Z) is the plane's left of its nose
 	doorSegs   []base.Segment
 	doors      []*physics.Body
-	carried    map[ecs.ID]moving  // from the plane before, until put back
-	bounds     map[string][2]vec3 // the box around each kind's parts
+	floors     map[*physics.Body]base.Floor // the base's floors, which the player walks up (allow)
+	carried    map[ecs.ID]moving            // from the plane before, until put back
+	bounds     map[string][2]vec3           // the box around each kind's parts
 }
 
 // partsBounds is the box around the parts of an entity of that kind,
@@ -184,6 +185,7 @@ func (g *Game) stepPhysics(dt float64) {
 		pl.Pos = p.dir(b.Pos).Scale(r)
 		pl.vel = p.vecWorld(pl.Pos, b.Vel)
 		pl.floor = g.floorUnder(pl.Pos)
+		pl.ceiling = g.ceilingOver(pl.Pos)
 	}
 	for _, hit := range p.w.Impacts {
 		for _, o := range [2]*physics.Body{hit.A, hit.B} {
@@ -482,6 +484,9 @@ func (g *Game) layPlane() {
 			p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(o.Radius), Pos: p.plane(at),
 				Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
 		}
+		for _, f := range base.Ents.Floor.All() {
+			g.addFloor(*f)
+		}
 	}
 	p.doorSegs, p.doors = nil, nil
 	for _, r := range g.World.RocksNear(up.Scale(p.r0), physReach+reanchor) {
@@ -504,6 +509,32 @@ func mix(a, b *physics.Body) (friction, bounce float64) {
 		bounce = 0 // pushed, not kicked
 	}
 	return friction, bounce
+}
+
+// addFloor adds one of the base's floors: the outline of its top seen from
+// above, from its bottom to the top of its top.
+func (g *Game) addFloor(f base.Floor) {
+	p := g.phys
+	var pts []physics.V2
+	var mid physics.V2
+	corners := f.Corners()
+	for _, c := range corners {
+		mid = mid.Add(p.plane(base.ToWorld(c)).Scale(0.25))
+	}
+	for _, c := range corners {
+		pts = append(pts, p.plane(base.ToWorld(c)).Sub(mid))
+	}
+	bottom := p.height(base.ToWorld(corners[0].Add(vec3{0, f.Bottom(), 0})))
+	if f.Thick <= 0 {
+		bottom -= bodyFeet
+	}
+	b := p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Hull(pts, 0.02), Pos: mid,
+		Bottom: bottom, Top: p.height(base.ToWorld(corners[0].Add(vec3{0, f.Top(), 0}))),
+		Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
+	if p.floors == nil {
+		p.floors = map[*physics.Body]base.Floor{}
+	}
+	p.floors[b] = f
 }
 
 // addWall adds one of the base's walls.

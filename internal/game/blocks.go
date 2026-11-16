@@ -2,10 +2,12 @@ package game
 
 import (
 	"math"
+	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/physics"
+	"naturalia/internal/planet"
 )
 
 // Blocks (docs/CONSTRUCTION.md) are entities to build with: fixed where
@@ -208,14 +210,35 @@ func (g *Game) topUnder(at vec3, from float64, things bool) float64 {
 // stands on an edge.
 func (g *Game) floorUnder(pos vec3) float64 {
 	t1, t2 := mathx.TangentBasis(pos.Norm())
+	atBase := planet.ArcDist(pos.Norm(), planet.BaseUp) < base.Extent
 	floor := 0.0
 	for _, off := range [...]vec3{{}, t1.Scale(0.22), t1.Scale(-0.22), t2.Scale(0.22), t2.Scale(-0.22)} {
 		at := pos.Add(off)
 		if top := g.topUnder(at, pos.Length()+stepUp, true); top > 0 {
 			floor = math.Max(floor, top-g.World.Relief.Surface(at).Length())
 		}
+		// The base's floors: a mezzanine, its stairs.
+		if !atBase {
+			continue
+		}
+		if top, ok := base.TopUnder(base.ToLocal(at).Add(vec3{0, stepUp, 0})); ok {
+			floor = math.Max(floor, top-base.ToLocal(g.World.Relief.Surface(at)).Y)
+		}
 	}
 	return floor
+}
+
+// ceilingOver is how high over the ground at pos the lowest of the base's
+// floors over the player's head starts: 0 for none.
+func (g *Game) ceilingOver(pos vec3) float64 {
+	if planet.ArcDist(pos.Norm(), planet.BaseUp) >= base.Extent {
+		return 0
+	}
+	c := base.Ceiling(base.ToLocal(pos).Add(vec3{0, 0.5, 0}))
+	if math.IsInf(c, 1) {
+		return 0
+	}
+	return c - base.ToLocal(g.World.Relief.Surface(pos)).Y
 }
 
 // allow tells the engine whether the walking player, or the vehicle they
@@ -228,7 +251,13 @@ func (g *Game) allow(a, b *physics.Body, m *physics.Manifold) bool {
 	if b == p.player || b == p.car {
 		a, b, n = b, a, n.Scale(-1)
 	}
-	if (a != p.player && a != p.car) || b.Kind != physics.Static || b.ID == 0 {
+	if (a != p.player && a != p.car) || b.Kind != physics.Static {
+		return true
+	}
+	if f, ok := p.floors[b]; ok {
+		return a == p.car || !g.walkOnto(f, a, n)
+	}
+	if b.ID == 0 {
 		return true
 	}
 	id := ecs.ID(b.ID)
@@ -254,6 +283,21 @@ func (g *Game) allow(a, b *physics.Body, m *physics.Manifold) bool {
 		}
 	}
 	return false
+}
+
+// walkOnto tells if the walking player, its body a, steps onto floor f
+// going along n: where they stand and just ahead, the floor is at most a
+// step up, or not there; and if it is high, it is above their head.
+func (g *Game) walkOnto(f base.Floor, a *physics.Body, n physics.V2) bool {
+	p := g.phys
+	feet := p.r0 + a.Bottom - personStep // from Mars' center
+	for _, at := range []physics.V2{a.Pos, a.Pos.Add(n.Scale(a.Shape.Radius + 0.2))} {
+		l := base.ToLocal(p.dir(at).Scale(feet))
+		if top, over := f.TopAt(l); over && top > l.Y+stepUp && f.Bottom() < l.Y+personH {
+			return false
+		}
+	}
+	return true
 }
 
 // blockBody is a block's body: the outline of the box around its parts

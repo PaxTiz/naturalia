@@ -28,6 +28,7 @@ type Player struct {
 	vr         float64 // radial (vertical) speed
 	onGround   bool
 	floor      float64 // what the feet stand on, over the ground: a block's top (stepPhysics)
+	ceiling    float64 // over the ground, where a floor over the head starts; 0 for none
 	WalkPhase  float64
 	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 	seated     bool    // driving: the vehicle moves the player, who only looks around
@@ -131,6 +132,10 @@ func (p *Player) fall(dt float64, t planet.Relief) {
 	}
 	p.vr -= marsGravity * dt
 	p.Pos = p.Pos.Add(p.LocalUp().Scale(p.vr * dt))
+	// The head bumps into a floor overhead.
+	if over := t.Altitude(p.Pos) + personH - p.ceiling; p.ceiling > 0 && over > 0 && p.vr > 0 {
+		p.Pos, p.vr = p.Pos.Sub(p.LocalUp().Scale(over)), 0
+	}
 
 	alt := t.Altitude(p.Pos) - p.floor
 	ground := func() vec3 { s := t.Surface(p.Pos); return s.Add(s.Norm().Scale(p.floor)) }

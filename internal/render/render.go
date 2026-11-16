@@ -325,6 +325,16 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		crs = append(crs, float32(c.From.X), float32(c.From.Z), float32(c.To.X), float32(c.To.Z))
 		csz = append(csz, float32(c.Width), float32(c.Height), 0, 0)
 	}
+	// The slabs over the floors: no lamp shines through them.
+	var slabs, slabSize []float32
+	for _, f := range base.Ents.Floor.All() {
+		if !f.Level() || f.Thick <= 0 || !slices.Contains(gfx.nearRooms, f.In) || len(slabs) >= 8*4 {
+			continue
+		}
+		mid, along, half, width := f.Slab()
+		slabs = append(slabs, float32(mid.X), float32(mid.Z), float32(along.X), float32(along.Z))
+		slabSize = append(slabSize, float32(half), float32(width/2), float32(f.Bottom()), float32(f.Top()))
+	}
 	var blobs []float32
 	obs := base.Obstacles()
 	for _, ob := range obs[:min(len(obs), 48)] {
@@ -333,6 +343,11 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "blobCount"), []float32{float32(len(blobs) / 4)}, rl.ShaderUniformFloat)
+		if len(slabs) > 0 { // raylib takes no empty array
+			rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseSlabs"), slabs, rl.ShaderUniformVec4, int32(len(slabs)/4))
+			rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseSlabSize"), slabSize, rl.ShaderUniformVec4, int32(len(slabSize)/4))
+		}
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "slabCount"), []float32{float32(len(slabs) / 4)}, rl.ShaderUniformFloat)
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(base.Origin.Sub(o)), rl.ShaderUniformVec3)
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseRooms"), rms, rl.ShaderUniformVec4, int32(len(rms)/4))
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrs"), crs, rl.ShaderUniformVec4, int32(len(crs)/4))

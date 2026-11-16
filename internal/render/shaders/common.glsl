@@ -141,6 +141,30 @@ uniform vec4 baseCorrSize[8];  // width, height
 uniform float roomCount, corrCount;
 uniform vec4 baseBlobs[48];    // furniture and yard objects: local x, z, radius
 uniform float blobCount;
+uniform vec4 baseSlabs[8];     // the floors up in the base: local middle x, z, the way along x, z
+uniform vec4 baseSlabSize[8];  // half their length, half their width, their bottom and top
+uniform float slabCount;
+
+// slabEdge is how far outside slab i the local point p stands, seen from
+// above: below 0 under it.
+float slabEdge(int i, vec2 p) {
+    vec2 d = p - baseSlabs[i].xy, ax = baseSlabs[i].zw;
+    return max(abs(dot(d, ax)) - baseSlabSize[i].x, abs(dot(d, vec2(-ax.y, ax.x))) - baseSlabSize[i].y);
+}
+
+// slabShade is how much of the light from a lamp reaches the local point p
+// past the base's slabs: none from behind one, soft at their edges.
+float slabShade(vec3 p, vec3 lamp) {
+    float s = 1.0;
+    for (int i = 0; i < 8; i++) {
+        if (float(i) >= slabCount) break;
+        float y = 0.5 * (baseSlabSize[i].z + baseSlabSize[i].w);
+        if ((p.y - y) * (lamp.y - y) >= 0.0) continue; // both on the same side
+        vec3 q = mix(p, lamp, (y - p.y) / (lamp.y - p.y));
+        s *= smoothstep(-0.3, 0.3, slabEdge(i, q.xz));
+    }
+    return s;
+}
 
 float occ(float d, float r, vec3 n, vec3 pn) {
     d = max(d, 0.0);
@@ -169,6 +193,15 @@ float baseAO(vec3 n) {
             ao *= 1.0 - 0.7 * occ(h - p.y, 0.8, n, vec3(0, -1, 0));
         } else if (abs(across) > hw + 0.1) {
             ao *= 1.0 - 0.65 * occ(abs(across) - hw - 0.17, 1.4, n, sn) * (1.0 - smoothstep(h, h + 0.8, p.y));
+        }
+    }
+    // Under a slab, the floor darkens toward its middle.
+    for (int i = 0; i < 8; i++) {
+        if (float(i) >= slabCount) break;
+        float bottom = baseSlabSize[i].z;
+        if (p.y < bottom) {
+            float under = 1.0 - smoothstep(-0.8, 1.2, slabEdge(i, p.xz));
+            ao *= 1.0 - 0.6 * under * occ(bottom - p.y, 3.0, n, vec3(0, -1, 0));
         }
     }
     // Under and around what stands on the floor, the floor darkens.

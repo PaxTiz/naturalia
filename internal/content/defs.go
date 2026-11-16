@@ -30,6 +30,18 @@ type Blueprint struct {
 	Accent string   `json:"accent"` // token of the glowing stripes inside
 	Doors  []Door   `json:"doors"`
 	Props  []Prop   `json:"props"`
+	Floors []Floor  `json:"floors"` // up in it: a mezzanine, the stairs to it
+}
+
+// Floor is somewhere to walk up in a building, in its frame (before its
+// Yaw): a rectangle from one end to the other, From and To the middles of
+// its ends on its top. Level, it is a slab the player walks under; rising,
+// a flight of stairs they walk up.
+type Floor struct {
+	From  vec3    `json:"from"`
+	To    vec3    `json:"to"`
+	Width float64 `json:"width"`
+	Thick float64 `json:"thick"` // under its top; 0: down to the ground, like stairs
 }
 
 // AllLinks are the buildings corridors lead to from bp: Link, then Links.

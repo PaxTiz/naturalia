@@ -128,6 +128,11 @@ func Setup(c *content.Content) {
 			addFurniture(&c.Kits, ids[bp], bp, p)
 		}
 	}
+	for _, bp := range plans {
+		for _, fl := range bp.Floors {
+			addFloor(ids[bp], bp, fl)
+		}
+	}
 	Extent = Reach
 	for _, r := range Buildings() {
 		Extent = math.Max(Extent, math.Hypot(r.Center.X, r.Center.Z)+r.reach())

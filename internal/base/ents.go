@@ -22,12 +22,13 @@ type Entities struct {
 	Furniture *ecs.Store[Furniture]
 	Use       *ecs.Store[Interactable]       // furniture the player uses with E
 	Obstacles *ecs.Store[[]content.Obstacle] // what stops the player (local): furniture, the yard's clutter
+	Floor     *ecs.Store[Floor]
 }
 
 func newEntities() *Entities {
 	w := ecs.NewWorld()
 	return &Entities{World: w, Building: ecs.NewStore[Room](w), Corridor: ecs.NewStore[Corridor](w),
-		Furniture: ecs.NewStore[Furniture](w), Use: ecs.NewStore[Interactable](w), Obstacles: ecs.NewStore[[]content.Obstacle](w)}
+		Furniture: ecs.NewStore[Furniture](w), Use: ecs.NewStore[Interactable](w), Obstacles: ecs.NewStore[[]content.Obstacle](w), Floor: ecs.NewStore[Floor](w)}
 }
 
 // Ents is the base laid out by Setup.

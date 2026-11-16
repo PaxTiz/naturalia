@@ -68,6 +68,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
                 lit = mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
             }
         }
+        lit *= slabShade(fragRel - baseRel + n * 0.05, lights[i].xyz - origin - baseRel);
         light += lampCol * att * lightRamp(dot(n, l)) * lit;
         glints += glint(n, v, l, max(spec, metal)) * att * lit;
     }
