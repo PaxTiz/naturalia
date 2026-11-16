@@ -27,7 +27,7 @@ func TestMigrateOldSave(t *testing.T) {
 
 func TestEventsAndBuildings(t *testing.T) {
 	c := LoadContent()
-	if got := buildingAt(vec3{-13, 1, 0}); got != "core:sale" {
+	if got := buildingAt(vec3{13, 1, 0}); got != "core:sale" {
 		t.Errorf("in the sale room: %q", got)
 	}
 	if got := buildingAt(vec3{0, 1, -9}); got != "" {
@@ -157,7 +157,7 @@ func TestStuntMod(t *testing.T) {
 func TestLinks(t *testing.T) {
 	defer LoadContent()
 	LoadContent(content.Pack{ID: "t", Requires: []string{"core"}, Register: func(c *content.Content) {
-		c.Buildings.Add("t:annexe", content.Blueprint{ID: "t:annexe", At: vec3{-13, 0, 13}, Shape: content.Dome{Radius: 4, WallH: 2.6},
+		c.Buildings.Add("t:annexe", content.Blueprint{ID: "t:annexe", At: vec3{13, 0, 13}, Shape: content.Dome{Radius: 4, WallH: 2.6},
 			Style: "habitat.white", Accent: "neon.blue", Link: "core:sale", Links: []string{"core:sale", "core:sleep", "t:annexe"}})
 	}})
 	if n := base.Ents.Corridor.Len(); n != 7 {
@@ -170,13 +170,13 @@ func TestLinks(t *testing.T) {
 	if doors["t:annexe"] != 2 || doors["core:sale"] != 2 || doors["core:sleep"] != 2 {
 		t.Errorf("doors: %v", doors)
 	}
-	if got := buildingAt(vec3{-13, 1, 7}); got != "" || !base.Indoors(vec3{-13, 1, 7}) {
+	if got := buildingAt(vec3{13, 1, 7}); got != "" || !base.Indoors(vec3{13, 1, 7}) {
 		t.Errorf("between the sale room and the annexe: %q", got)
 	}
 	// From the annexe, the two closest are the sale room and itself, in
 	// the order of the content.
 	var near []string
-	for _, id := range base.NearBuildings(vec3{-13, 0, 10}, 2) {
+	for _, id := range base.NearBuildings(vec3{13, 0, 10}, 2) {
 		near = append(near, base.Ents.Building.Get(id).Plan().ID)
 	}
 	if len(near) != 2 || near[0] != "core:sale" || near[1] != "t:annexe" {

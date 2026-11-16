@@ -29,7 +29,7 @@ func TestBays(t *testing.T) {
 			}
 		}
 	}
-	if base.Covered(vec3{0, 0, 0}) || !base.Covered(vec3{39, 0, 0}) {
+	if base.Covered(vec3{0, 0, 0}) || !base.Covered(vec3{-39, 0, 0}) {
 		t.Error("only the hangar is covered")
 	}
 	// The harvester's header fits between the lines.
@@ -70,8 +70,8 @@ func TestDock(t *testing.T) {
 	g.getIn(rover)
 	bay, _ := base.BayOf("core:rover")
 	// Askew, 4 m off its bay, turned away from the door.
-	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.Spot.Add(vec3{3, 0, 2.5})))
-	g.drive.fwd = vec3{-0.6, 0, 0.8}
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(bay.Spot.Add(bay.Nose.Scale(3)).Add(bay.Side().Scale(2.5))))
+	g.drive.fwd = bay.Nose.Scale(-0.6).Add(bay.Side().Scale(0.8))
 	if !g.CanDock() {
 		t.Fatal("can't park next to its bay")
 	}
@@ -84,7 +84,7 @@ func TestDock(t *testing.T) {
 		g.updateVehicle(1.0 / 60)
 	}
 	at := base.ToLocal(g.Player.Pos)
-	if math.Hypot(at.X-bay.Spot.X, at.Z-bay.Spot.Z) > 0.05 || g.drive.fwd.X < 0.999 || g.drive.dock != nil || g.Riding != rover {
+	if math.Hypot(at.X-bay.Spot.X, at.Z-bay.Spot.Z) > 0.05 || g.drive.fwd.Dot(bay.Nose) < 0.999 || g.drive.dock != nil || g.Riding != rover {
 		t.Errorf("%s parked at %v, facing %v", v.ID, at, g.drive.fwd)
 	}
 	// And it drives off again: the base's ground is a plane, rising a
@@ -121,8 +121,8 @@ func TestGarage(t *testing.T) {
 
 	// Getting out in the hangar parks it; out on Mars, it stays there.
 	g.Riding = rover
-	e.Dir = base.ToWorld(vec3{40, 0, 10}).Norm()
-	g.Player.Pos = base.ToWorld(vec3{40, base.FloorTop, 10})
+	e.Dir = base.ToWorld(vec3{-40, 0, 10}).Norm()
+	g.Player.Pos = base.ToWorld(vec3{-40, base.FloorTop, 10})
 	g.getOut()
 	if d := planet.ArcDist(e.Dir, base.ToWorld(bay.At)); d > 0.01 {
 		t.Errorf("got out in the hangar: the rover is %f m from its bay", d)
@@ -141,10 +141,11 @@ func TestHangarDoor(t *testing.T) {
 	g := baseGame(t)
 	i := base.Halls()[0]
 	mid, _ := base.HallDoor(i)
-	outside := base.ToWorld(mid.Add(vec3{3, base.FloorTop, 0}))
+	hall := base.Ents.Building.Get(i)
+	out := hall.TurnDir(vec3{1, 0, 0}) // through the door, outward
+	outside := base.ToWorld(mid.Add(out.Scale(3)).Add(vec3{0, base.FloorTop, 0}))
 
 	// Open, the leaves stand within the hangar's ends.
-	hall := base.Ents.Building.Get(i)
 	hz := hall.Hall.Size[1] / 2
 	for _, l := range base.HallLeaves(i, 1) {
 		if d := math.Abs(l.At.Z-hall.Center.Z) + l.Size.Z/2; d > hz {
@@ -158,9 +159,9 @@ func TestHangarDoor(t *testing.T) {
 	// z m from its middle.
 	stopped := func(z float64) bool {
 		was := g.Player.Pos
-		g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(mid.Add(vec3{1, 1, z}))), vec3{}
-		walk(g, vec3{-1, 0, 0}, 0.5)
-		in := base.ToLocal(g.Player.Pos).X < mid.X+0.3
+		g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(mid.Add(out).Add(vec3{0, 1, z}))), vec3{}
+		walk(g, out.Scale(-1), 0.5)
+		in := base.ToLocal(g.Player.Pos).Sub(mid).Dot(out) < 0.3
 		g.Player.Pos = was
 		return !in
 	}
@@ -169,12 +170,12 @@ func TestHangarDoor(t *testing.T) {
 	}
 
 	// From inside, only close to it: not from the middle of the hangar.
-	g.Player.Pos = base.ToWorld(mid.Add(vec3{-15, base.FloorTop, 0}))
+	g.Player.Pos = base.ToWorld(mid.Add(out.Scale(-15)).Add(vec3{0, base.FloorTop, 0}))
 	g.updateHallDoors(1)
 	if g.HallOpen[0] != 0 {
 		t.Errorf("opens from 15 m inside: %f", g.HallOpen[0])
 	}
-	g.Player.Pos = base.ToWorld(mid.Add(vec3{-8, base.FloorTop, 0}))
+	g.Player.Pos = base.ToWorld(mid.Add(out.Scale(-8)).Add(vec3{0, base.FloorTop, 0}))
 	g.updateHallDoors(1)
 	if g.HallOpen[0] == 0 {
 		t.Error("doesn't open from 8 m inside")
@@ -204,15 +205,15 @@ func TestHangarDoor(t *testing.T) {
 
 func TestCorridorToHangar(t *testing.T) {
 	g := baseGame(t)
-	// From the research room, east through the corridor, into the hangar,
+	// From the research room, west through the corridor, into the hangar,
 	// indoors all the way.
 	// Its door at the hangar's end opens as they come, walking at 4 m/s.
-	east := func(steps int, doors bool) vec3 {
+	west := func(steps int, doors bool) vec3 {
 		for range steps {
 			if doors {
 				g.updateInnerDoors(1.0 / 60)
 			}
-			g.Player.want = planet.TangentAt(g.Player.LocalUp(), vec3{1, 0, 0}).Scale(4)
+			g.Player.want = planet.TangentAt(g.Player.LocalUp(), vec3{-1, 0, 0}).Scale(4)
 			g.stepPhysics(1.0 / 60)
 			g.Player.fall(1.0/60, g.World.Relief)
 			if at := base.ToLocal(g.Player.Pos); !base.Indoors(vec3{at.X, 1, at.Z}) {
@@ -221,14 +222,14 @@ func TestCorridorToHangar(t *testing.T) {
 		}
 		return base.ToLocal(g.Player.Pos)
 	}
-	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{13, 1, 0}))
-	if at := east(330, true); at.X < 33.9 {
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{-13, 1, 0}))
+	if at := west(330, true); at.X > -33.9 {
 		t.Errorf("stopped at %v", at)
 	}
 	// Shut, it stops them.
-	g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(vec3{25, 1, 0})), vec3{}
+	g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(vec3{-25, 1, 0})), vec3{}
 	g.InnerOpen = []float64{0}
-	if at := east(30, false); at.X > 26 {
+	if at := west(30, false); at.X < -26 {
 		t.Errorf("went through the shut door: %v", at)
 	}
 	// The bays leave the aisle from the doorway free.

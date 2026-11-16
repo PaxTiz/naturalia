@@ -159,7 +159,9 @@ var coreTokens = map[string]content.Token{
 }
 
 // coreBuildings: the hub first, the rooms around it, then the hangar. The
-// hub's south door leads to the airlock.
+// hub's south door leads to the airlock. The sale and research rooms and
+// the hangar keep the layout they had on the other side of the hub,
+// turned half a turn (Yaw).
 var coreBuildings = []content.Blueprint{
 	content.Blueprint{
 		ID:     "core:hub",
@@ -180,7 +182,8 @@ var coreBuildings = []content.Blueprint{
 		Link:   "core:hub",
 		Sign:   "VENTE",
 		Accent: "neon.orange",
-		At:     vec3{-13, 0, 0},
+		At:     vec3{13, 0, 0},
+		Yaw:    180,
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []content.Door{{base.East}},
@@ -195,7 +198,8 @@ var coreBuildings = []content.Blueprint{
 		Link:   "core:hub",
 		Sign:   "RECHERCHE",
 		Accent: "neon.blue",
-		At:     vec3{13, 0, 0},
+		At:     vec3{-13, 0, 0},
+		Yaw:    180,
 		Shape:  content.Dome{Radius: 4, WallH: 2.6},
 		Style:  "habitat.white",
 		Doors:  []content.Door{{base.West}},
@@ -224,14 +228,16 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "planter", At: vec3{-2.8, 0, 0.6}, Seed: 2},
 		},
 	},
-	// The vehicles' hangar, east of the base, its door facing away; a
-	// corridor leads there from the research room.
+	// The vehicles' hangar, west of the base, turned so its door (east in
+	// its own frame) faces away; a corridor leads there from the research
+	// room.
 	content.Blueprint{
 		ID:     "core:hangar",
 		Link:   "core:research",
 		Sign:   "HANGAR 01",
 		Accent: "neon.orange",
-		At:     vec3{39, 0, 0},
+		At:     vec3{-39, 0, 0},
+		Yaw:    180,
 		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
 		Garage: true,
 		Style:  "habitat.white",

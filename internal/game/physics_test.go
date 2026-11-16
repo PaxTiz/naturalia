@@ -4,6 +4,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
 	"testing"
 )
@@ -43,8 +44,17 @@ func TestWalkIntoWalls(t *testing.T) {
 			g.Player.Pos = g.World.Relief.Surface(base.ToWorld(start.Add(vec3{0, 1, 0})))
 			g.Player.vel = vec3{}
 			walk(g, n.Scale(-side), 1.5)
+			// How far from the wall it ended, on the side it started:
+			// sliding off the end of a wall shorter than the player
+			// brings it closer to its line, not to the wall.
 			at := base.ToLocal(g.Player.Pos)
-			if d := at.Sub(a).Dot(n) * side; d < 0.35+base.WallThick/2-0.03 {
+			ab := b.Sub(a)
+			foot := a.Add(ab.Scale(mathx.Clamp01(at.Sub(a).Dot(ab) / ab.Dot(ab))))
+			d := math.Hypot(at.X-foot.X, at.Z-foot.Z)
+			if at.Sub(a).Dot(n)*side < 0 {
+				d = -d
+			}
+			if d < 0.35+base.WallThick/2-0.03 {
 				crossed++
 				t.Errorf("wall %d (%v–%v), side %v: ended %.2f m from it, at %v", i, a, b, side, d, at)
 			}
