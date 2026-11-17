@@ -314,3 +314,105 @@ func BuildBooks(b *building, at vec3, seed int) {
 		y += thick
 	}
 }
+
+// The plant on the desk grows a stage each night slept (content.Kit's
+// Grow): a sprout, a seedling, a young plant, a bush, then a plant that
+// spills over its pot and climbs: a vine runs 0.6 m along +Z, then up
+// 1.1 m and along the top of what stands there (the shelf, in the
+// bedroom).
+
+// PlantStages is how many stages the plant goes through.
+const PlantStages = 5
+
+// BuildPlantPot: a clay pot with a rim and a saucer, earth in it.
+func BuildPlantPot(b *building, at vec3, _ int) {
+	b.in("clay").Prism(at, yUp, 0.1, 0.1, 0.012, 16, 0.003)
+	b.in("clay").Prism(at.Add(vec3{0, 0.012, 0}), yUp, 0.065, 0.085, 0.12, 16, 0.004)
+	b.in("clay").Prism(at.Add(vec3{0, 0.12, 0}), yUp, 0.095, 0.095, 0.035, 16, 0.006)
+	b.in("soil").Prism(at.Add(vec3{0, 0.13, 0}), yUp, 0.083, 0.083, 0.02, 16, 0)
+}
+
+// plantTop is the earth in the pot, over its spot.
+const plantTop = 0.15
+
+// BuildPlantStage: what has grown of the plant at a stage, from 0.
+func BuildPlantStage(b *building, at vec3, stage int) {
+	stage = min(max(stage, 0), PlantStages-1)
+	height := []float64{0.035, 0.09, 0.17, 0.25, 0.3}[stage]
+	leaves := []int{2, 4, 7, 12, 18}[stage]
+	size := []float64{0.025, 0.045, 0.065, 0.085, 0.095}[stage]
+	base := at.Add(vec3{0, plantTop - 0.01, 0})
+	stem := b.in("planter.green")
+	stem.Prism(base, yUp, 0.006+0.002*float64(stage), 0.004, height, 6, 0)
+	for i := range leaves {
+		f := float64(i) / float64(max(1, leaves-1))
+		a := float64(i)*2.4 + 0.3
+		out := vec3{math.Cos(a), 0, math.Sin(a)}
+		// The low ones of a grown plant hang over the rim.
+		lift := 1.2 - 0.9*f
+		if stage >= 3 && i%3 == 0 && f < 0.6 {
+			lift = -0.5 - 0.3*grnd(stage, i)
+		}
+		from := base.Add(vec3{0, height * (0.25 + 0.75*(1-f)), 0})
+		if stage == 0 {
+			from = base.Add(vec3{0, height, 0})
+			lift = 0.5
+		}
+		tok := "planter.green"
+		if i%3 == 1 {
+			tok = "planter.lime"
+		}
+		l := size * (0.75 + 0.4*grnd(stage+3, i))
+		if lift < 0 {
+			l *= 1.5
+			from = from.Add(out.Scale(0.06)) // from the rim
+		}
+		leaf(b.in(tok), from, out.Add(vec3{0, lift, 0}).Norm(), l)
+	}
+	if stage < 3 {
+		return
+	}
+	// The vine, toward the shelf and up it: started at the fourth stage,
+	// there at the fifth.
+	path := []vec3{{0, 0.2, 0.03}, {-0.02, 0.28, 0.6}, {-0.02, 0.75, 0.63}, {-0.02, 1.17, 0.63}, {0.1, 1.165, 1.15}}
+	if stage == 3 {
+		path = []vec3{{0, 0.2, 0.03}, {-0.01, 0.25, 0.3}}
+	}
+	vine := b.in("planter.green")
+	k := 0
+	for i := 0; i+1 < len(path); i++ {
+		p0, p1 := at.Add(path[i]), at.Add(path[i+1])
+		d := p1.Sub(p0)
+		vine.Prism(p0, d.Norm(), 0.006, 0.005, d.Length()+0.005, 5, 0)
+		n := max(1, int(d.Length()/0.05))
+		for j := range n {
+			p := p0.Add(d.Scale((float64(j) + 0.5) / float64(n)))
+			side := vec3{0, 0, 1} // up the shelf's edge: to both sides of it
+			if math.Hypot(d.X, d.Z) > 0.01 {
+				side = vec3{-d.Z, 0, d.X}.Norm()
+			}
+			s := float64(k%2*2 - 1)
+			tok := "planter.green"
+			if k%3 == 2 {
+				tok = "planter.lime"
+			}
+			leaf(b.in(tok), p, side.Scale(s).Add(vec3{0, 0.5, 0}).Add(xAxis.Scale(-0.4)).Norm(), 0.06+0.03*grnd(9, k))
+			k++
+		}
+	}
+}
+
+// leaf lays a flat pointed leaf from p along dir, l long: a thin diamond
+// on a short stalk.
+func leaf(m *mesh.Builder, p, dir vec3, l float64) {
+	across := dir.Cross(yUp)
+	if across.Length() < 0.01 {
+		across = xAxis
+	}
+	across = across.Norm()
+	n := across.Cross(dir).Norm()
+	m.Prism(p, dir, 0.003, 0.003, l*0.25, 4, 0)
+	// A square turned a quarter on its corner, stretched along dir.
+	u, v := dir.Add(across.Scale(0.6)).Norm(), dir.Sub(across.Scale(0.6)).Norm()
+	m.BoxBasis(p.Add(dir.Scale(l*0.6)), [3]vec3{u, v.Sub(u.Scale(v.Dot(u))).Norm(), n}, vec3{l * 0.5, l * 0.5, 0.004}, 0.001)
+}

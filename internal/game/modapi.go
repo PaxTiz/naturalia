@@ -28,6 +28,7 @@ func (g *Game) OpenMap()               { g.setMode(ModeMap) }
 func (g *Game) OpenShop()              { g.Garage = false; g.setMode(ModeShop) }
 func (g *Game) OpenGarage()            { g.Garage = true; g.setMode(ModeShop) }
 func (g *Game) Sleep()                 { g.Mode, g.SleepT = ModeSleep, 0 }
+func (g *Game) Nights() int            { return g.State.Nights }
 func (g *Game) Spawn(kind string) bool { return g.spawn(kind, g.placeAt()) != 0 }
 
 func (g *Game) Driving() string {

@@ -5,6 +5,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/game"
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
@@ -63,6 +64,7 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	// Red dust settles on the faces turned up and at the foot of the walls.
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(base.Origin.Y)}, rl.ShaderUniformVec2)
 	gfx.base.draw(gfx)
+	gfx.drawGrowth(g)
 	for _, f := range base.AllFurniture() {
 		if draw := kitDraws[f.Kit]; draw != nil {
 			draw(gfx, g, kitSpot{f.At, f.Yaw})
@@ -77,6 +79,32 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
+}
+
+// grown is a piece of furniture that grows, at a stage.
+type grown struct {
+	id    ecs.ID
+	stage int
+}
+
+// drawGrowth draws what grows in the base (a plant) as it has grown after
+// the nights slept: each stage is built the first time it shows.
+func (gfx *Graphics) drawGrowth(g *game.Game) {
+	if gfx.growth == nil {
+		gfx.growth = map[grown]*baseModels{}
+	}
+	for id := range base.Ents.Grows.All() {
+		k := grown{id, base.Stage(id, g.State.Nights)}
+		m := gfx.growth[k]
+		if m == nil {
+			m = gfx.uploadBase(base.BuildGrowth(&g.Content.Kits, k.id, k.stage), gfx.objectSh)
+			for _, md := range m.models {
+				gfx.bindMaps(md)
+			}
+			gfx.growth[k] = m
+		}
+		m.draw(gfx)
+	}
 }
 
 // drawInnerDoors draws the halls' corridor doors: two leaves sliding into

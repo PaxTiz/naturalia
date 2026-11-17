@@ -159,6 +159,7 @@ func (s *script) api(c *content.Content) map[string]any {
 		"isDay":  func() bool { return s.game().SunHeight() > 0.05 },
 		"inside": func() string { return s.game().Inside() },
 		"clock":  func() float64 { return s.game().Clock() },
+		"nights": func() int { return s.game().Nights() },
 		// distanceToBase: in meters along the ground.
 		"distanceToBase": func() float64 { return planet.ArcDist(s.game().PlayerPos().Norm(), planet.BaseUp) },
 		"player":         func() jsVec { return jsVec(s.game().PlayerPos()) },

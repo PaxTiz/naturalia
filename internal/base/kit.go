@@ -134,16 +134,41 @@ func (b *building) props(in ecs.ID) {
 		if k == nil || k.Build == nil {
 			continue
 		}
-		at, yaw := f.At, f.Yaw
-		if yaw == 0 {
-			k.Build(b.Parts, at, f.Seed)
-			continue
-		}
-		// Turned: built apart, then turned around its spot.
-		alone := mesh.NewParts(vec3{})
-		k.Build(alone, at, f.Seed)
-		b.MergeTurned(alone, func(q vec3) vec3 { return at.Add(content.Turn(q.Sub(at), yaw)) })
+		b.piece(*f, func(p *mesh.Parts) { k.Build(p, f.At, f.Seed) })
 	}
+}
+
+// piece builds a piece of furniture f, turned around its spot.
+func (b *building) piece(f Furniture, build func(p *mesh.Parts)) {
+	if f.Yaw == 0 {
+		build(b.Parts)
+		return
+	}
+	alone := mesh.NewParts(vec3{})
+	build(alone)
+	b.MergeTurned(alone, func(q vec3) vec3 { return f.At.Add(content.Turn(q.Sub(f.At), f.Yaw)) })
+}
+
+// Stage is the stage furniture id has grown to after some nights: one
+// more each night, up to its last.
+func Stage(id ecs.ID, nights int) int {
+	n := Ents.Grows.Get(id)
+	if n == nil {
+		return 0
+	}
+	return min(max(nights, 0), *n-1)
+}
+
+// BuildGrowth builds what has grown of furniture id at a stage, apart
+// from the rest of the base: it changes night after night.
+func BuildGrowth(kits *content.Registry[content.Kit], id ecs.ID, stage int) *mesh.Parts {
+	b := &building{Parts: mesh.NewParts(Origin), kits: kits}
+	f := Ents.Furniture.Get(id)
+	if k, _ := kits.Get(f.Kit); k != nil && k.Grow != nil {
+		b.piece(*f, func(p *mesh.Parts) { k.Grow(p, f.At, stage) })
+	}
+	b.Unfight()
+	return b.Parts
 }
 
 // interior: a flat floor with a steel-ringed inlay, a glowing stripe along

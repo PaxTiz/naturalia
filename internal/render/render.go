@@ -60,6 +60,7 @@ type Graphics struct {
 	nearRooms, nearCorrs                              []ecs.ID // the base's buildings and corridors in the shaders (selectBase)
 	dust                                              dustGPU  // the dust tiles near the player, on the GPU
 	base                                              *baseModels
+	growth                                            map[grown]*baseModels // what grows in the base, by stage
 	doorPanel                                         rl.Model
 	hallLeaf                                          rl.Model                 // a door leaf of the halls, scaled to size
 	entities                                          map[string][]entityModel // by entity ID, built on first draw

@@ -118,6 +118,10 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}
+	// NA_SHOT_NIGHTS=n counts n nights slept: what grows has grown.
+	if s.file != "" {
+		fmt.Sscanf(os.Getenv("NA_SHOT_NIGHTS"), "%d", &g.State.Nights)
+	}
 	// Through the telescope, NA_SHOT_SCOPE=fov,yaw,pitch (degrees) aims it.
 	if s.mode == game.ModeScope && s.file != "" {
 		for _, it := range base.Interactables() {

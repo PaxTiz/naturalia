@@ -172,6 +172,7 @@ var coreTokens = map[string]content.Token{
 	"rock.red":     {color.RGBA{150, 72, 48, 255}, content.MtPlain, 1, 0.1, 0},
 	"earth.blue":   {color.RGBA{50, 110, 205, 255}, content.MtPlain, 1, 0.5, 0.15},
 	"earth.green":  {color.RGBA{96, 150, 80, 255}, content.MtPlain, 1, 0.5, 0.1},
+	"clay":         {color.RGBA{176, 98, 64, 255}, content.MtPlain, 1, 0.15, 0},
 }
 
 // coreBuildings: the great hall first, the rooms around it, then the
@@ -251,6 +252,7 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "nightstand", At: vec3{1.15, 0, 2.0}, Yaw: -90},
 			{Kit: "books", At: vec3{1.15, 0.56, 2.0}, Seed: 2},
 			{Kit: "writing.desk", At: vec3{2.95, 0, -0.2}, Yaw: 180},
+			{Kit: "plant", At: vec3{2.97, 0.76, 0.25}}, // grows toward the shelf, night after night
 			{Kit: "chair", At: vec3{2.25, 0, -0.2}},
 			{Kit: "shelf", At: vec3{3.12, 0, 1.35}, Yaw: 180},
 			{Kit: "lockers", At: vec3{-3.03, 0, 1.4}},
@@ -301,13 +303,15 @@ var coreKits = map[string]content.Kit{
 	"guitar":       {Build: base.KitBuild(base.BuildGuitar), Obstacles: []content.Obstacle{{vec3{-0.05, 0, 0}, 0.22}}},
 	"photo.earth":  {Build: base.KitBuild(base.BuildPhotoEarth)},
 	"books":        {Build: base.KitBuild(base.BuildBooks)},
-	"crate.stack":  {Build: base.KitBuild(base.BuildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
-	"chair":        {Build: base.KitBuild(base.BuildChair), Obstacles: []content.Obstacle{{vec3{}, 0.35}}},
-	"workbench":    {Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
-	"planter":      {Build: base.KitBuild(base.BuildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
-	"desk":         {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
-	"bench":        {Build: base.KitBuild(base.BuildBench), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.35}, {vec3{0, 0, 0.5}, 0.35}}},
-	"lowtable":     {Build: base.KitBuild(base.BuildLowTable), Obstacles: []content.Obstacle{{vec3{}, 0.45}}},
+	"plant": {Build: base.KitBuild(base.BuildPlantPot), Stages: base.PlantStages,
+		Grow: base.KitBuild(base.BuildPlantStage)},
+	"crate.stack": {Build: base.KitBuild(base.BuildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
+	"chair":       {Build: base.KitBuild(base.BuildChair), Obstacles: []content.Obstacle{{vec3{}, 0.35}}},
+	"workbench":   {Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
+	"planter":     {Build: base.KitBuild(base.BuildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
+	"desk":        {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
+	"bench":       {Build: base.KitBuild(base.BuildBench), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.35}, {vec3{0, 0, 0.5}, 0.35}}},
+	"lowtable":    {Build: base.KitBuild(base.BuildLowTable), Obstacles: []content.Obstacle{{vec3{}, 0.45}}},
 	"telescope": {Build: base.KitBuild(base.BuildTelescope), Obstacles: []content.Obstacle{{vec3{}, 0.5}},
 		Reach: 2.2, Use: content.Game.LookThrough, Prompt: "[E] Regarder dans la longue-vue"},
 }

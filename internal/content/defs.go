@@ -124,9 +124,13 @@ type Kit struct {
 	Build     func(b *mesh.Parts, at vec3, seed int)
 	Obstacles []Obstacle
 	Lamps     []KitLamp // the light it gives, amber
-	Reach     float64
-	Use       func(g Game, at vec3) // what E does; at is the prop's local position
-	Prompt    string
+	// A kit that grows, like a plant: Grow builds what grows, at a
+	// stage from 0 to Stages-1, one more for each night slept.
+	Stages int
+	Grow   func(b *mesh.Parts, at vec3, stage int)
+	Reach  float64
+	Use    func(g Game, at vec3) // what E does; at is the prop's local position
+	Prompt string
 }
 
 // KitLamp is a lamp of a piece of furniture: where its light comes from,
@@ -504,4 +508,5 @@ type Game interface {
 
 	// ModData is what a pack keeps in the save, by key.
 	ModData(pack string) map[string]any
+	Nights() int // slept since the game began
 }

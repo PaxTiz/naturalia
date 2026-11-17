@@ -192,6 +192,9 @@ func addFurniture(kits *content.Registry[content.Kit], in ecs.ID, bp *content.Bl
 	if len(lamps) > 0 {
 		Ents.Lamps.Set(id, lamps)
 	}
+	if k.Grow != nil && k.Stages > 0 {
+		Ents.Grows.Set(id, k.Stages)
+	}
 	if k.Use != nil {
 		Ents.Use.Set(id, Interactable{f.Kit, f.At, k.Reach, k.Use, k.Prompt})
 	}

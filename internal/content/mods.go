@@ -300,10 +300,13 @@ type KitJSON struct {
 		At     vec3    `json:"at"`
 		Radius float64 `json:"radius"`
 	} `json:"obstacles"`
-	Lamps  []KitLamp `json:"lamps"` // power 0.4 and range 4 if left out
-	Use    string    `json:"use"`   // "map", "shop", "garage", "sleep", "deposit"; any other only sends "use"
-	Prompt string    `json:"prompt"`
-	Reach  float64   `json:"reach"`
+	Lamps []KitLamp `json:"lamps"` // power 0.4 and range 4 if left out
+	// Stages are what grows, one list of parts per stage: the first the
+	// first night, one more each night slept, the last one staying.
+	Stages [][]PartJSON `json:"stages"`
+	Use    string       `json:"use"` // "map", "shop", "garage", "sleep", "deposit"; any other only sends "use"
+	Prompt string       `json:"prompt"`
+	Reach  float64      `json:"reach"`
 }
 
 // PartJSON is one shape: a bevelled box, or a prism (a cylinder or a
@@ -333,29 +336,10 @@ func (k KitJSON) Kit() Kit {
 	for _, l := range k.Lamps {
 		kp.Lamps = append(kp.Lamps, KitLamp{l.At, OrZero(l.Power, 0.4), OrZero(l.Range, 4)})
 	}
-	parts := k.Parts
-	kp.Build = func(b *mesh.Parts, at vec3, _ int) {
-		for _, p := range parts {
-			lit := float32(mesh.LitIndoor)
-			if p.Lit == "outdoor" {
-				lit = mesh.LitSun
-			}
-			m := b.Part(p.Token, lit, vec3{})
-			switch p.Shape {
-			case "prism":
-				axis := p.Axis
-				if axis == (vec3{}) {
-					axis = vec3{0, 1, 0}
-				}
-				m.Prism(at.Add(p.At), axis.Norm(), p.R0, OrZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
-			case "wedge":
-				a := p.Yaw * math.Pi / 180
-				m.Wedge(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)})
-			default:
-				a := p.Yaw * math.Pi / 180
-				m.Box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
-			}
-		}
+	kp.Build = func(b *mesh.Parts, at vec3, _ int) { buildParts(b, at, k.Parts) }
+	if n := len(k.Stages); n > 0 {
+		kp.Stages = n
+		kp.Grow = func(b *mesh.Parts, at vec3, stage int) { buildParts(b, at, k.Stages[min(max(stage, 0), n-1)]) }
 	}
 	use := map[string]func(g Game, at vec3){
 		"map":     func(g Game, _ vec3) { g.OpenMap() },
@@ -371,6 +355,31 @@ func (k KitJSON) Kit() Kit {
 		kp.Use = func(Game, vec3) {} // only the "use" event, for scripts
 	}
 	return kp
+}
+
+// buildParts adds parts to b, standing at at.
+func buildParts(b *mesh.Parts, at vec3, parts []PartJSON) {
+	for _, p := range parts {
+		lit := float32(mesh.LitIndoor)
+		if p.Lit == "outdoor" {
+			lit = mesh.LitSun
+		}
+		m := b.Part(p.Token, lit, vec3{})
+		switch p.Shape {
+		case "prism":
+			axis := p.Axis
+			if axis == (vec3{}) {
+				axis = vec3{0, 1, 0}
+			}
+			m.Prism(at.Add(p.At), axis.Norm(), p.R0, OrZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
+		case "wedge":
+			a := p.Yaw * math.Pi / 180
+			m.Wedge(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)})
+		default:
+			a := p.Yaw * math.Pi / 180
+			m.Box(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)}, p.Bevel)
+		}
+	}
 }
 
 func OrZero(v, def float64) float64 {

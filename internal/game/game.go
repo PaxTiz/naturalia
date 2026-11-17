@@ -27,6 +27,7 @@ type State struct {
 	OldTier     int                       `json:"tool_tier,omitempty"` // before IDs: index of the tool
 	TotalDust   float64                   `json:"total_dust"`
 	TotalEarned float64                   `json:"total_earned"`
+	Nights      int                       `json:"nights,omitempty"` // slept: what grows in the base grows with them
 }
 
 type Mode int
@@ -435,6 +436,7 @@ func (g *Game) updateSleep(dt float64) {
 	before := g.SleepT
 	g.SleepT += dt
 	if before < SleepSave && g.SleepT >= SleepSave {
+		g.State.Nights++
 		g.Save()
 	}
 	if g.SleepT >= SleepEnd {
