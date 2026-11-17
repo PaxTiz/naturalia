@@ -238,7 +238,7 @@ var coreBuildings = []content.Blueprint{
 		Link:    "core:hall",
 		Sign:    "CHAMBRE",
 		Accent:  "neon.amber",
-		At:      vec3{0, 0, 22.5},
+		At:      vec3{0, 0, 19.5}, // 9 m of corridor from the hall
 		Hall:    &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1},
 		Style:   "habitat.white",
 		Light:   "warm",
