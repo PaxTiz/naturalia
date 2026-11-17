@@ -292,14 +292,20 @@ func (gfx *Graphics) selectBase() {
 	}
 	gfx.nearRooms, gfx.nearCorrs = rooms, corrs
 	gfx.lampShadow.reset()
-	var lights, ranges []float32
+	var lights, ranges, warm []float32
 	lamps := base.Lamps(rooms, corrs)
 	for _, l := range lamps[:min(len(lamps), maxLamps)] {
 		p := base.ToWorld(l.At)
 		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
 		ranges = append(ranges, float32(l.Range))
+		w := float32(0)
+		if l.Warm {
+			w = 1
+		}
+		warm = append(warm, w)
 	}
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
+	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightWarm"), warm, rl.ShaderUniformFloat, int32(len(warm)))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(len(rooms))}, rl.ShaderUniformFloat)
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)

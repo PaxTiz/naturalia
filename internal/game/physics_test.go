@@ -32,7 +32,7 @@ func TestWalkIntoWalls(t *testing.T) {
 	g := baseGame(t)
 	crossed, tried := 0, 0
 	for i, s := range g.walls {
-		if i%5 != 0 {
+		if i%4 != 0 {
 			continue
 		}
 		a, b, _ := s.Ends()

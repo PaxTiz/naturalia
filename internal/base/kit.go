@@ -395,22 +395,3 @@ func BuildGarageTerminal(b *building, c vec3, _ int) {
 	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.05, 1.4, 0}), vec3{0.2, 0.75, 1.1}, x, 0.04)
 	b.Part("pipe.yellow", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.05, 1.82, 0}), vec3{0.3, 0.08, 1.2}, x, 0.02)
 }
-
-// BuildBed: a bed against the far wall, a bedside table and a rug.
-func BuildBed(b *building, at vec3, _ int) {
-	x := vec3{1, 0, 0}
-	wood := b.Part("wood.brown", mesh.LitIndoor, vec3{})
-	wood.Box(at.Add(vec3{0, 0.2, 0}), vec3{2.1, 0.4, 1.05}, x, 0.04)
-	wood.Box(at.Add(vec3{1.45, 0.3, 0.2}), vec3{0.5, 0.6, 0.5}, x, 0.04)
-	white := b.Part("fabric.white", mesh.LitIndoor, vec3{})
-	white.Box(at.Add(vec3{0, 0.48, 0}), vec3{2.0, 0.16, 0.98}, x, 0.05)
-	white.Box(at.Add(vec3{-0.72, 0.62, 0}), vec3{0.42, 0.12, 0.7}, x, 0.05)
-	b.Part("fabric.purple", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0.32, 0.58, 0}), vec3{1.36, 0.06, 1.0}, x, 0.02)
-	b.Part("fabric.rug", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0, FloorTop + 0.005, -1.3}), vec3{1.8, 0.01, 1.1}, x, 0)
-	// A padded headboard with a reading light, the blanket folded back.
-	wood.Box(at.Add(vec3{-1.08, 0.55, 0}), vec3{0.08, 1.1, 1.1}, x, 0.02)
-	b.Part("fabric.seat", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{-1.02, 0.78, 0}), vec3{0.06, 0.5, 0.95}, x, 0.03)
-	b.Part("fabric.purple", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{-0.33, 0.62, 0}), vec3{0.24, 0.08, 1.02}, x, 0.03)
-	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{1.45, 0.62, 0.2}), vec3{0.3, 0.03, 0.3}, x, 0)
-	b.Part("pipe.blue", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{1.4, 0.65, 0.03}), vec3{0.2, 0.04, 0.14}, x, 0.005)
-}

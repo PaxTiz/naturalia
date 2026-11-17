@@ -13,7 +13,7 @@ import (
 // flat over the whole base: everything here is laid out in local
 // coordinates (x, y, z) relative to Origin, with y up.
 //
-//	                            [ Sleep ]
+//	                            [ Bedroom ]
 //	                                ║
 //	[ Hangar ]═══[ Research ]═══( Great hall: map table, sale )
 //	                                ║
@@ -33,6 +33,9 @@ type Room struct {
 
 // Plan is the blueprint the room is laid out from.
 func (r Room) Plan() *content.Blueprint { return r.plan }
+
+// warm tells a room lit low and amber, like the bedroom.
+func (r Room) warm() bool { return r.plan != nil && r.plan.Light == "warm" }
 
 // Turn takes a point of the room's own frame (laid out unturned, around
 // its center) to the base's: it turns it by the room's yaw.
@@ -149,13 +152,13 @@ func Setup(c *content.Content) {
 			addFloor(ids[bp], bp, fl)
 		}
 	}
-	// Wake up 3.5 m from the bed, toward the middle of its room.
+	// Wake up 2.4 m from the bed, toward the middle of its room.
 	for _, f := range AllFurniture() {
 		if f.Kit != "core:bed" {
 			continue
 		}
 		if d := Ents.Building.Get(f.In).Center.Sub(f.At); d.Length() > 0.1 {
-			SpawnSpot = f.At.Add(d.Norm().Scale(3.5))
+			SpawnSpot = f.At.Add(d.Norm().Scale(2.4))
 		}
 		break
 	}
@@ -181,6 +184,13 @@ func addFurniture(kits *content.Registry[content.Kit], in ecs.ID, bp *content.Bl
 			obs = append(obs, content.Obstacle{f.At.Add(content.Turn(o.At, f.Yaw)), o.Radius})
 		}
 		Ents.Obstacles.Set(id, obs)
+	}
+	var lamps []Lamp
+	for _, l := range k.Lamps {
+		lamps = append(lamps, Lamp{f.At.Add(content.Turn(l.At, f.Yaw)), l.Power, l.Range, true})
+	}
+	if len(lamps) > 0 {
+		Ents.Lamps.Set(id, lamps)
 	}
 	if k.Use != nil {
 		Ents.Use.Set(id, Interactable{f.Kit, f.At, k.Reach, k.Use, k.Prompt})
@@ -419,16 +429,18 @@ func Covered(local vec3) bool {
 	return false
 }
 
-// Lamp is a ceiling lamp: where it hangs, how bright it is, how far it
-// reaches.
+// Lamp is a lamp of the base: where it hangs, how bright it is, how far
+// it reaches, and whether it is amber (a warm room's, a piece of
+// furniture's) rather than white.
 type Lamp struct {
 	At           vec3 // local
 	Power, Range float64
+	Warm         bool
 }
 
-// Lamps lists the ceiling lamps of some buildings and corridors: one per
-// room first (they cast shadows), then one per corridor, then the halls'
-// others.
+// Lamps lists the lamps of some buildings and corridors: one per room
+// first, on its ceiling (they cast shadows), then one per corridor, then
+// their furniture's, then the halls' other ceiling lamps.
 func Lamps(rooms, corridors []ecs.ID) []Lamp {
 	var lamps []Lamp
 	hub, _ := Hub()
@@ -437,15 +449,24 @@ func Lamps(rooms, corridors []ecs.ID) []Lamp {
 		switch {
 		case r.Hall != nil:
 			lamps = append(lamps, r.turnLamp(r.hallLamps()[0]))
+		case r.warm():
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 0.6, 8, true})
 		case id == hub:
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10})
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10, false})
 		default:
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10})
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10, false})
 		}
 	}
 	for _, id := range corridors {
 		c := Ents.Corridor.Get(id)
-		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10})
+		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10, false})
+	}
+	for _, id := range rooms {
+		for f := range FurnitureOf(id) {
+			if l := Ents.Lamps.Get(f); l != nil {
+				lamps = append(lamps, *l...)
+			}
+		}
 	}
 	for _, id := range rooms {
 		if r := Ents.Building.Get(id); r.Hall != nil {

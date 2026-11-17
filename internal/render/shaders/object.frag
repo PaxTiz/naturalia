@@ -10,6 +10,7 @@ uniform float lighting;   // 0 sun, 1 lamps, 2 lamps on back faces, 3 lamps on f
 uniform vec3 room;
 uniform vec4 lights[24];  // ceiling lamps: xyz position, w intensity
 uniform float lightRange[24]; // how far each reaches: its room's walls are in the way
+uniform float lightWarm[24];  // 1 for an amber lamp (a warm room's, furniture's), 0 white
 uniform float lightCount;
 uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a cell of a grid each (shadow.go)
 uniform vec4 lampVP[32];         // their cameras about origin, four columns each
@@ -28,13 +29,16 @@ out vec4 finalColor;
 // pool that fades softly with distance (faded out by its range: 10 m in
 // the domes, more in the halls), with the same soft-edged ramp as the sun.
 // The shade is a cool blue bounce, lighter on faces turned up to the white
-// walls and dome, deeper on ceilings and under things.
+// walls and dome, deeper on ceilings and under things. Amber lamps (a warm
+// room's, the furniture's) lay an orange pool and turn the shade plum.
 const vec3 lampCol = vec3(1.0, 0.86, 0.68);
+const vec3 amberCol = vec3(1.0, 0.62, 0.34);
 const vec3 roomShade = vec3(0.40, 0.42, 0.62);
+const vec3 warmShade = vec3(0.52, 0.36, 0.46);
 
 vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
-    vec3 light = vec3(0.0);
-    float glints = 0.0, bounce = 0.0;
+    vec3 light = vec3(0.0), glints = vec3(0.0), tint = vec3(0.0);
+    float bounce = 0.0, warmth = 0.0;
     for (int i = 0; i < 24; i++) {
         if (float(i) >= lightCount) break;
         vec3 l = (lights[i].xyz - origin) - fragRel;
@@ -45,7 +49,11 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
         l /= d;
         float win = clamp(1.0 - pow(d / range, 4.0), 0.0, 1.0);
         float att = lights[i].w * win * win * 7.0 / (d * d * 0.5 + 3.0);
-        bounce += lights[i].w * win * win / (d * d * 0.3 + 5.0);
+        float b = lights[i].w * win * win / (d * d * 0.3 + 5.0);
+        vec3 lc = mix(lampCol, amberCol, lightWarm[i]);
+        bounce += b;
+        tint += lc * b;
+        warmth += lightWarm[i] * b;
         float lit = 1.0;
         if (float(i) < lampCount && att > 0.01) {
             // Pushed a little off the surface, then looked up in the lamp's
@@ -69,14 +77,16 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
             }
         }
         lit *= slabShade(fragRel - baseRel + n * 0.05, lights[i].xyz - origin - baseRel);
-        light += lampCol * att * lightRamp(dot(n, l)) * lit;
-        glints += glint(n, v, l, max(spec, metal)) * att * lit;
+        light += lc * att * lightRamp(dot(n, l)) * lit;
+        glints += lc * glint(n, v, l, max(spec, metal)) * att * lit;
     }
-    vec3 above = mix(roomShade, lampCol, 0.2) * bounce * 1.2;
-    vec3 below = roomShade * 0.5 * bounce;
+    vec3 hue = bounce > 0.0 ? tint / bounce : lampCol;
+    vec3 shade = mix(roomShade, warmShade, bounce > 0.0 ? warmth / bounce : 0.0);
+    vec3 above = mix(shade, hue, 0.2) * bounce * 1.2;
+    vec3 below = shade * 0.5 * bounce;
     vec3 amb = mix(below, above, smoothstep(-0.6, 0.6, n.y)) * ao;
     vec3 col = albedo * (1.0 - 0.45 * metal) * (light + amb);
-    col += lampCol * glints * mix(vec3(0.45), albedo * 1.4, metal);
+    col += glints * mix(vec3(0.45), albedo * 1.4, metal);
     vec3 env = mix(below, above, smoothstep(-0.3, 0.3, reflect(-v, n).y));
     return col + env * albedo * metal * 0.5 * ao;
 }

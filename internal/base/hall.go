@@ -28,6 +28,7 @@ import (
 const (
 	hallWall     = 0.3 // the walls' thickness
 	hallLampDrop = 1.2 // how far the lamps hang under the vault
+	pendantDrop  = 1.0 // a warm hall's lamp
 )
 
 func (r Room) half() (hx, hz float64) { return r.Hall.Size[0] / 2, r.Hall.Size[1] / 2 }
@@ -384,12 +385,16 @@ func LeafModel() *mesh.Builder {
 // along the ridge and down both sides of the vault. They are as bright as
 // it takes for the hangar (26 × 64 m), less in a smaller hall, and reach
 // across it.
+// A warm hall has only one, a dim amber pendant hanging lower.
 func (r Room) hallLamps() []Lamp {
 	hx, hz := r.half()
+	if r.warm() {
+		return []Lamp{{r.Center.Add(vec3{0, r.vault(0) - pendantDrop, 0}), 0.6, 2*math.Max(hx, hz) + 2, true}}
+	}
 	power := 12 * math.Max(0.12, math.Min(1, 4*hx*hz/(26*64)))
 	reach := math.Min(24, 2*math.Max(hx, hz)+4)
 	at := func(u, w float64) Lamp {
-		return Lamp{r.Center.Add(vec3{u, r.vault(u) - hallLampDrop, w}), power, reach}
+		return Lamp{r.Center.Add(vec3{u, r.vault(u) - hallLampDrop, w}), power, reach, false}
 	}
 	lamps := []Lamp{at(0, 0)}
 	for _, w := range []float64{-0.66, 0.66} {
@@ -661,7 +666,10 @@ func (b *building) hallShell(r Room) {
 	}
 	// A ridge cap, and skylight vents along it.
 	sun("steel").Box(p(0, r.vault(0)+0.42, 0), vec3{1.2, 0.14, 2*hz + 0.9}, X, 0.04)
-	for k := -2; k <= 2; k++ {
+	if hz < 6 { // a small one has room for one
+		sun("steel.dark").Box(p(0, r.vault(0)+0.62, 0), vec3{1.6, 0.3, math.Min(3, hz)}, X, 0.05)
+	}
+	for k := -2; k <= 2 && hz >= 6; k++ {
 		sun("steel.dark").Box(p(0, r.vault(0)+0.62, float64(k)*hz*0.38), vec3{2.2, 0.35, 3}, X, 0.05)
 	}
 
@@ -721,9 +729,17 @@ func (b *building) hallShell(r Room) {
 		}
 	}
 
-	// The lamps: a housing on a rod from the vault.
+	// The lamps: a housing on a rod from the vault; in a warm hall, a
+	// cord and a glowing drum shade.
 	for _, l := range r.hallLamps() {
 		top := r.vault(l.At.X - c.X)
+		if r.warm() {
+			inside("rubber").Prism(l.At.Add(vec3{0, 0.2, 0}), yUp, 0.008, 0.008, top-l.At.Y-0.2, 6, 0)
+			inside("lamp.shade").Prism(l.At.Sub(vec3{0, 0.08, 0}), yUp, 0.32, 0.26, 0.3, 24, 0)
+			inside("steel.dark").Prism(l.At.Add(vec3{0, 0.2, 0}), yUp, 0.05, 0.03, 0.06, 10, 0)
+			inside("lamp.amber").Prism(l.At.Sub(vec3{0, 0.06, 0}), yUp, 0.1, 0.1, 0.02, 12, 0)
+			continue
+		}
 		inside("steel").Prism(l.At.Add(vec3{0, 0.25, 0}), yUp, 0.04, 0.04, top-(l.At.Y)-0.2, 6, 0)
 		inside("steel.dark").Prism(l.At.Sub(vec3{0, 0.05, 0}), yUp, 0.75, 0.3, 0.45, 16, 0.03)
 		inside("lamp.warm").Prism(l.At.Sub(vec3{0, 0.08, 0}), yUp, 0.6, 0.6, 0.04, 16, 0)

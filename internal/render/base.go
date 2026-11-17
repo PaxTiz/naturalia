@@ -45,7 +45,6 @@ func (k kitSpot) dir(d vec3) vec3  { return content.Turn(d, k.yaw) }
 var kitDraws = map[string]func(gfx *Graphics, g *game.Game, k kitSpot){
 	"core:incinerator":     drawIncinerator,
 	"core:console":         drawConsole,
-	"core:bed":             drawBed,
 	"core:garage.terminal": drawGarageTerminal,
 }
 
@@ -336,12 +335,6 @@ func drawConsole(gfx *Graphics, g *game.Game, c kitSpot) {
 func drawGarageTerminal(gfx *Graphics, g *game.Game, t kitSpot) {
 	gfx.setLighting(mesh.LitIndoor, vec3{})
 	gfx.drawScreen(t.pt(vec3{0.06, 1.4, 0}), t.dir(vec3{1, 0, 0}), 0.95, 0.6, gfx.screens[3], 0.9)
-}
-
-func drawBed(gfx *Graphics, g *game.Game, at kitSpot) {
-	gfx.setLighting(mesh.LitIndoor, vec3{})
-	gfx.setMat(content.MtPlain, 1, false)
-	gfx.put(gfx.sphere, base.ToWorld(at.pt(vec3{1.45, 0.75, 0.2})), vec3{0.13, 0.13, 0.13}, vec3{0, 1, 0}, 0, palette.LampWarm, 0, 1)
 }
 
 // upload sends the triangles to the GPU. raylib keeps pointers to the slices in C

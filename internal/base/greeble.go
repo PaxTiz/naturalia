@@ -677,11 +677,12 @@ func (b *building) clutter(bp *content.Blueprint) {
 		b.coil(at(vec3{-2.4, FloorTop, 0.4}), 0.28, "pipe.blue")
 		b.helmet(at(vec3{-2.9, FloorTop, 2.0}), 3.5)
 	case "core:sleep":
-		b.mug(at(vec3{1.4, 0.63, 2.0}), "fabric.purple", 4)
-		desk := at(vec3{2.75, 0, 0.6})
-		b.papers(desk.Add(vec3{0.05, 0.77, 0.3}), 2.0, 3)
-		b.tablet(desk.Add(vec3{0.1, 0.77, -0.05}), 1.8)
-		b.mug(desk.Add(vec3{-0.05, 0.77, -0.45}), "pipe.red", 2)
-		b.helmet(at(vec3{-1.4, FloorTop, 2.9}), 5.2)
+		// A mug by the bed, papers by the laptop, the helmet put away on
+		// the lockers, a tablet left on the armchair.
+		b.mug(at(vec3{-1.0, 0.56, 2.12}), "habitat.white", 3.6)
+		b.papers(at(vec3{2.85, 0.76, -0.62}), 1.4, 3)
+		b.mug(at(vec3{2.78, 0.76, -0.95 + 0.2}), "fabric.duvet", 0.4)
+		b.helmet(at(vec3{-3.03, 1.9, 1.62}), 0)
+		b.tablet(at(vec3{-2.4, 0.49, -1.45}), 0.8)
 	}
 }

@@ -34,6 +34,9 @@ type Blueprint struct {
 	Signs  []Sign   `json:"signs"`  // names painted on its walls, inside
 	// Glazed openings in a hall's walls, seen through.
 	Windows []Window `json:"windows"`
+	// Light is how it is lit: "warm" gives it one dim amber pendant
+	// instead of its ceiling lamps, its furniture's lamps doing the rest.
+	Light string `json:"light"`
 }
 
 // Window is a pane of glass in a wall of a hall, in its frame (before its
@@ -120,9 +123,18 @@ func Polar(r, a float64) vec3 { return vec3{math.Cos(a) * r, 0, math.Sin(a) * r}
 type Kit struct {
 	Build     func(b *mesh.Parts, at vec3, seed int)
 	Obstacles []Obstacle
+	Lamps     []KitLamp // the light it gives, amber
 	Reach     float64
 	Use       func(g Game, at vec3) // what E does; at is the prop's local position
 	Prompt    string
+}
+
+// KitLamp is a lamp of a piece of furniture: where its light comes from,
+// how bright it is (a dome's ceiling lamp is 1) and how far it reaches.
+type KitLamp struct {
+	At    vec3    `json:"at"`
+	Power float64 `json:"power"`
+	Range float64 `json:"range"`
 }
 
 type headShape int

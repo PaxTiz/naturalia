@@ -300,9 +300,10 @@ type KitJSON struct {
 		At     vec3    `json:"at"`
 		Radius float64 `json:"radius"`
 	} `json:"obstacles"`
-	Use    string  `json:"use"` // "map", "shop", "garage", "sleep", "deposit"; any other only sends "use"
-	Prompt string  `json:"prompt"`
-	Reach  float64 `json:"reach"`
+	Lamps  []KitLamp `json:"lamps"` // power 0.4 and range 4 if left out
+	Use    string    `json:"use"`   // "map", "shop", "garage", "sleep", "deposit"; any other only sends "use"
+	Prompt string    `json:"prompt"`
+	Reach  float64   `json:"reach"`
 }
 
 // PartJSON is one shape: a bevelled box, or a prism (a cylinder or a
@@ -328,6 +329,9 @@ func (k KitJSON) Kit() Kit {
 	kp := Kit{Reach: OrZero(k.Reach, 2.6), Prompt: k.Prompt}
 	for _, o := range k.Obstacles {
 		kp.Obstacles = append(kp.Obstacles, Obstacle{o.At, o.Radius})
+	}
+	for _, l := range k.Lamps {
+		kp.Lamps = append(kp.Lamps, KitLamp{l.At, OrZero(l.Power, 0.4), OrZero(l.Range, 4)})
 	}
 	parts := k.Parts
 	kp.Build = func(b *mesh.Parts, at vec3, _ int) {
