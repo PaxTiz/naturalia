@@ -2,6 +2,7 @@ package game
 
 import (
 	"naturalia/internal/base"
+	"naturalia/internal/mesh"
 	"testing"
 )
 
@@ -10,9 +11,20 @@ import (
 // otherwise they would flicker as the camera moves.
 func TestBaseZFighting(t *testing.T) {
 	c := LoadContent()
-	parts := base.Build(&c.Kits)
+	checkFights(t, "the base", base.Build(&c.Kits))
+	// What grows is built apart, stage by stage.
+	for id, n := range base.Ents.Grows.All() {
+		for s := range *n {
+			checkFights(t, base.Ents.Furniture.Get(id).Kit, base.BuildGrowth(&c.Kits, id, s))
+		}
+	}
+}
+
+// checkFights checks the surfaces of parts lying on top of each other.
+func checkFights(t *testing.T, what string, parts *mesh.Parts) {
+	t.Helper()
 	tris, fights := parts.Fights()
-	if len(fights) == 0 {
+	if len(fights) == 0 && what == "the base" {
 		t.Fatal("no surfaces on top of each other: the test sees nothing")
 	}
 	first := map[int]int{} // a triangle of each piece
@@ -32,11 +44,11 @@ func TestBaseZFighting(t *testing.T) {
 			continue
 		}
 		if bad++; bad <= 10 {
-			t.Logf("%s (layer %d) on %s (layer %d), near %.2f (base coordinates)",
-				parts.Keys[top.Mesh].Tok, top.Layer, parts.Keys[low.Mesh].Tok, low.Layer, top.P[0])
+			t.Logf("%s: %s (layer %d) on %s (layer %d), near %.2f (base coordinates)",
+				what, parts.Keys[top.Mesh].Tok, top.Layer, parts.Keys[low.Mesh].Tok, low.Layer, top.P[0])
 		}
 	}
 	if bad > 0 {
-		t.Errorf("%d of %d pairs of surfaces on top of each other would fight", bad, len(fights))
+		t.Errorf("%s: %d of %d pairs of surfaces on top of each other would fight", what, bad, len(fights))
 	}
 }

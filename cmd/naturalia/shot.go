@@ -108,9 +108,13 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	if v := os.Getenv("NA_SHOT_AT"); s.file != "" && v != "" {
 		var x, z, yaw float64
 		fmt.Sscanf(v, "%f,%f,%f", &x, &z, &yaw)
-		// NA_SHOT_Y=meters stands that high, on a mezzanine.
+		// NA_SHOT_Y=meters stands that high, on a mezzanine;
+		// NA_SHOT_ALT=meters flies that high over the base.
 		var y float64
 		fmt.Sscanf(os.Getenv("NA_SHOT_Y"), "%f", &y)
+		if _, err := fmt.Sscanf(os.Getenv("NA_SHOT_ALT"), "%f", &y); err == nil {
+			g.Player.SetFly(true, g.World.Relief)
+		}
 		g.Player.Pos = base.ToWorld(vec3{x, base.FloorTop + y, z})
 		g.Player.Heading = vec3{math.Cos(yaw), 0, math.Sin(yaw)}
 		g.Player.Pitch = 0.05
