@@ -12,7 +12,7 @@ import (
 // has a lighter path from each doorway to the middle, the arches are
 // smooth white ribs and the ducts run boxed in along the ceiling. The
 // shell outside doesn't change. Its finishes are tokens (home.*): a mod
-// can repaint them.
+// can repaint them. Warmer finishes are laid as kits (cosy.go).
 
 const (
 	lining    = 0.05 // the panels' thickness
@@ -70,9 +70,13 @@ func (c Corridor) home() bool {
 	return true
 }
 
-// floorTok is the token of the room's floor.
+// floorTok is the token of the room's floor: in a living space a
+// seamless warm floor, a carpet in a warm room (the bedroom).
 func (r Room) floorTok() string {
-	if r.home() {
+	switch {
+	case r.home() && r.warm():
+		return "carpet.oat"
+	case r.home():
 		return "home.floor"
 	}
 	return "floor.slate"
@@ -227,7 +231,7 @@ func (r Room) domeLining() (a, bh float64) {
 
 // corridorLining lines a corridor between two living spaces: its walls
 // and ceiling, a duct casing along the top of each wall, lit underneath,
-// a line of light at the foot of the walls, the floor and its path.
+// a line of light at the foot of the walls, the floor.
 func (b *building) corridorLining(c Corridor) {
 	mid := c.From.Lerp(c.To, 0.5)
 	dir := c.To.Sub(c.From)
@@ -245,7 +249,6 @@ func (b *building) corridorLining(c Corridor) {
 	}
 	b.in("home.panel").Box(mid.Add(vec3{0, c.Height - liningGap - lining/2, 0}), vec3{length, lining, c.Width - 2*in}, dir, 0)
 	b.in(c.floorTok()).Box(mid.Add(vec3{0, FloorTop - 0.05, 0}), vec3{length, 0.1, c.Width}, dir, 0)
-	b.in("home.path").Box(mid.Add(vec3{0, FloorTop - 0.01, 0}), vec3{length, 0.02, 1.0}, dir, 0)
 }
 
 // floorTok is the token of the corridor's floor.

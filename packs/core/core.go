@@ -181,7 +181,7 @@ var coreTokens = map[string]content.Token{
 	"home.panel":  {color.RGBA{230, 226, 218, 255}, content.MtPlain, 1, 0.35, 0},
 	"home.panel2": {color.RGBA{218, 214, 206, 255}, content.MtPlain, 1, 0.35, 0},
 	"home.rib":    {color.RGBA{246, 245, 240, 255}, content.MtPlain, 1, 0.45, 0},
-	"home.floor":  {color.RGBA{76, 72, 70, 255}, content.MtPanel, 1, 0.15, 0},
+	"home.floor":  {color.RGBA{104, 94, 86, 255}, content.MtPaint, 1 / content.PaintTile, 0.2, 0},
 	"home.path":   {color.RGBA{104, 99, 94, 255}, content.MtPanel, 1, 0.15, 0},
 	// Its joinery: rounded anthracite profiles, glass guard rails, the
 	// warm white of the lights built in.
@@ -193,9 +193,9 @@ var coreTokens = map[string]content.Token{
 	"home.accent": {color.RGBA{255, 160, 96, 255}, content.MtPlain, 1, 0, 0.9},
 	// Their warm materials: a ceramic fired on site from the regolith's
 	// clay, in three tones; acoustic felt panels; a woollen carpet.
-	"ceramic":         {color.RGBA{178, 104, 76, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
-	"ceramic.dark":    {color.RGBA{146, 82, 62, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
-	"ceramic.sand":    {color.RGBA{204, 168, 132, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
+	"ceramic":         {color.RGBA{168, 110, 88, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
+	"ceramic.dark":    {color.RGBA{146, 96, 80, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
+	"ceramic.sand":    {color.RGBA{184, 140, 112, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
 	"felt.terracotta": {color.RGBA{168, 92, 68, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	"felt.sand":       {color.RGBA{198, 172, 136, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	"felt.sage":       {color.RGBA{124, 140, 116, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
@@ -237,13 +237,22 @@ var coreBuildings = []content.Blueprint{
 		},
 		Signs: []content.Sign{
 			{Text: "VENTE", At: vec3{-11.74, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"},
-			{Text: "RECHERCHE", At: vec3{-8.2, 3.2, 7.74}, Facing: base.South, Width: 3.4, Height: 0.6, Accent: "neon.blue"},
+			{Text: "RECHERCHE", At: vec3{-8.2, 3.95, 7.74}, Facing: base.South, Width: 3.4, Height: 0.6, Accent: "neon.blue"},
 		},
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},
 			// Built-in storage along the walls: by the sale corner, and
 			// either side of the bedroom's door.
+			// Its zones, by their floors and walls: the entry by the
+			// airlock's door tiled in the ceramic fired on site, a wall of
+			// it beside; the lab on a technical floor, sage felt over the
+			// console; terracotta felt behind the lounge.
+			{Kit: "floor.ceramic", At: vec3{-1.5, 0, -6.28}, Seed: 3},
+			{Kit: "ceramic.wall", At: vec3{-3.2, 0, -7.78}, Yaw: 90, Seed: 5},
+			{Kit: "floor.tech", At: vec3{-9.28, 0, 5.28}},
+			{Kit: "felt.wall", At: vec3{-8.2, 1.0, 7.78}, Yaw: -90, Seed: 2},
+			{Kit: "felt.wall", At: vec3{6, 0.15, 7.78}, Yaw: -90},
 			{Kit: "storage", At: vec3{-6.5, 0, -7.53}, Yaw: 90, Seed: 1},
 			{Kit: "storage", At: vec3{-3, 0, 7.53}, Yaw: -90, Seed: 2},
 			{Kit: "storage", At: vec3{3, 0, 7.53}, Yaw: -90, Seed: 3},
@@ -302,6 +311,7 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "chair", At: vec3{2.25, 0, -0.2}},
 			{Kit: "shelf", At: vec3{3.12, 0, 1.35}, Yaw: 180},
 			{Kit: "banquette", At: vec3{-2.97, 0, -0.9}},
+			{Kit: "felt.low", At: vec3{-3.28, 1.0, -0.9}, Seed: 1},
 			{Kit: "guitar", At: vec3{-2.98, 0, 0.9}},
 			{Kit: "books", At: vec3{-1.8, 0, -2.0}, Seed: 4},
 			{Kit: "garland", At: vec3{0, 2.45, 1.62}, Seed: 44},
@@ -337,12 +347,17 @@ var coreKits = map[string]content.Kit{
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.OpenGarage() }, Prompt: "[E] Acheter ou revendre un véhicule"},
 	"bed": {Build: base.KitBuild(base.BuildBed), Obstacles: []content.Obstacle{{vec3{-0.55, 0, 0}, 0.8}, {vec3{0.55, 0, 0}, 0.8}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.Sleep() }, Prompt: "[E] Dormir"},
-	"nightstand":   {Build: base.KitBuild(base.BuildNightstand), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"bedlamp":      {Build: base.KitBuild(base.BuildBedLamp), Lamps: []content.KitLamp{{base.BedLampLight, 0.45, 4}}},
-	"writing.desk": {Build: base.KitBuild(base.BuildWritingDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.42}, {vec3{0, 0, 0.35}, 0.42}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
-	"shelf":        {Build: base.KitBuild(base.BuildShelf), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.3}, {vec3{0, 0, 0.3}, 0.3}}},
-	"armchair":     {Build: base.KitBuild(base.BuildArmchair), Obstacles: []content.Obstacle{{vec3{}, 0.5}}},
-	"lockers":      {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
+	"nightstand":    {Build: base.KitBuild(base.BuildNightstand), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"bedlamp":       {Build: base.KitBuild(base.BuildBedLamp), Lamps: []content.KitLamp{{base.BedLampLight, 0.45, 4}}},
+	"writing.desk":  {Build: base.KitBuild(base.BuildWritingDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.42}, {vec3{0, 0, 0.35}, 0.42}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
+	"shelf":         {Build: base.KitBuild(base.BuildShelf), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.3}, {vec3{0, 0, 0.3}, 0.3}}},
+	"armchair":      {Build: base.KitBuild(base.BuildArmchair), Obstacles: []content.Obstacle{{vec3{}, 0.5}}},
+	"lockers":       {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
+	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},
+	"felt.low":      {Build: base.KitBuild(base.BuildFeltLow)},
+	"ceramic.wall":  {Build: base.KitBuild(base.BuildCeramicWall)},
+	"floor.ceramic": {Build: base.KitBuild(base.BuildCeramicFloor)},
+	"floor.tech":    {Build: base.KitBuild(base.BuildTechFloor)},
 	"bed.niche": {Build: base.KitBuild(base.BuildBedNiche), Obstacles: obstacles(base.NicheObstacles, 0.33),
 		Lamps: []content.KitLamp{{base.NicheLights[0], 0.3, 3}, {base.NicheLights[1], 0.3, 3}}},
 	"desk.wall":   {Build: base.KitBuild(base.BuildWallDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.38}, {vec3{0, 0, 0.35}, 0.38}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},

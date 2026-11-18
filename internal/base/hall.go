@@ -581,9 +581,6 @@ func (b *building) hallShell(r Room) {
 
 	// Floor, and a concrete apron before the door.
 	inside(r.floorTok()).Box(p(0, FloorTop-0.05, 0), vec3{2 * hx, 0.1, 2 * hz}, X, 0)
-	if r.home() {
-		b.paths(c, r.doorways(), math.Min(2.4, math.Min(hx, hz)/2))
-	}
 	// The arches and pilasters inside: steel, or in a home smooth white
 	// ribs that stand less into the room, through its lining.
 	rib, ribIn, ribDeep := "steel", 0.38, 0.5
