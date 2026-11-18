@@ -1,8 +1,11 @@
 package base
 
+import "math"
+
 // Warm finishes for the living spaces, laid as kits where they are wanted:
 // acoustic felt panels on a wall, a wall of tiles in the ceramic fired on
-// site, a tiled or technical floor over a zone. Each stands at its spot
+// site, a tiled or technical floor over a zone; and lamps low down, where
+// one sits, for an evening light. Each stands at its spot
 // with its back against the wall at -X (a floor, centered on it), facing
 // +X, unless said otherwise.
 
@@ -103,4 +106,49 @@ func BuildTechFloor(b *building, at vec3, _ int) {
 	base := at.Add(vec3{0, FloorTop, 0})
 	b.in("home.path").Box(base.Add(vec3{0, th / 2, 0}), vec3{w, th, d}, xAxis, 0)
 	b.floorEdge(base, w, d, th)
+}
+
+// arcReach is how far an arc lamp's shade hangs from its foot, along +X,
+// and arcShade how high.
+const arcReach, arcShade = 2.3, 1.95
+
+// ArcLight is where an arc lamp's light is, from its foot.
+var ArcLight = vec3{arcReach, arcShade - 0.12, 0}
+
+// BuildArcLamp: a floor lamp whose arm arcs over to hang its shade above
+// a low table: a heavy ceramic foot, a slim anthracite arm, a wide shade
+// lit amber inside.
+func BuildArcLamp(b *building, at vec3, _ int) {
+	b.in("ceramic.dark").Prism(at, yUp, 0.2, 0.18, 0.06, 24, 0.02)
+	const n = 14
+	pt := func(k int) vec3 {
+		// A quarter ellipse up from the foot, over and down to the shade.
+		a := float64(k) / n * math.Pi / 2
+		return at.Add(vec3{arcReach * (1 - math.Cos(a)), 0.06 + (arcShade+0.35)*math.Sin(a), 0})
+	}
+	arm := b.in("home.trim")
+	for k := range n {
+		p0, p1 := pt(k), pt(k+1)
+		d := p1.Sub(p0)
+		arm.Prism(p0, d.Norm(), 0.014, 0.014, d.Length()+0.004, 8, 0)
+	}
+	top := pt(n)
+	shade := at.Add(vec3{arcReach, arcShade, 0})
+	arm.Prism(shade.Add(vec3{0, 0.12, 0}), yUp, 0.01, 0.01, top.Y-shade.Y-0.12, 6, 0)
+	b.in("home.trim").Prism(shade.Add(vec3{0, 0.14, 0}), vec3{0, -1, 0}, 0.06, 0.3, 0.16, 24, 0)
+	b.in("lamp.amber").Prism(shade.Sub(vec3{0, 0.025, 0}), yUp, 0.27, 0.27, 0.01, 24, 0)
+}
+
+// FloorLight is where a floor lamp's light is, over its foot.
+var FloorLight = vec3{0, 1.35, 0}
+
+// BuildFloorLamp: a slim floor lamp, an oat fabric drum on an anthracite
+// rod over a ceramic foot, glowing amber top and bottom.
+func BuildFloorLamp(b *building, at vec3, _ int) {
+	b.in("ceramic.dark").Prism(at, yUp, 0.16, 0.14, 0.04, 20, 0.015)
+	b.in("home.trim").Prism(at.Add(vec3{0, 0.04, 0}), yUp, 0.012, 0.012, 1.2, 8, 0)
+	b.in("fabric.oat").Prism(at.Add(vec3{0, 1.18, 0}), yUp, 0.2, 0.2, 0.36, 24, 0)
+	for _, y := range []float64{1.175, 1.545} {
+		b.in("lamp.amber").Prism(at.Add(vec3{0, y, 0}), yUp, 0.185, 0.185, 0.01, 24, 0)
+	}
 }
