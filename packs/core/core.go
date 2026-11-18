@@ -271,6 +271,11 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "sofa.arc", At: vec3{5, 0, 3.8}, Yaw: -45},
 			{Kit: "coffee.table", At: vec3{5, 0, 3.8}},
 			{Kit: "lamp.arc", At: vec3{3.3, 0, 5.55}, Yaw: -45},
+			// A canopy over it lowers the ceiling there; low bookcases
+			// close it from the map table and the lab from the middle.
+			{Kit: "canopy", At: vec3{5, 3.0, 3.8}},
+			{Kit: "divider", At: vec3{2.0, 0, 3.6}, Seed: 1},
+			{Kit: "divider", At: vec3{-6.3, 0, 4.2}, Seed: 3},
 			// Lamps low down: by the entry, by the lookout's bench.
 			{Kit: "lamp.floor", At: vec3{-4.75, 0, -7.3}},
 			{Kit: "lamp.floor", At: vec3{11.35, 3, 1.4}},
@@ -359,6 +364,8 @@ var coreKits = map[string]content.Kit{
 	"lockers":       {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
 	"lamp.arc":      {Build: base.KitBuild(base.BuildArcLamp), Obstacles: []content.Obstacle{{vec3{}, 0.25}}, Lamps: []content.KitLamp{{base.ArcLight, 1.1, 6}}},
 	"lamp.floor":    {Build: base.KitBuild(base.BuildFloorLamp), Obstacles: []content.Obstacle{{vec3{}, 0.22}}, Lamps: []content.KitLamp{{base.FloorLight, 0.7, 5}}},
+	"canopy":        {Build: base.KitBuild(base.BuildCanopy)},
+	"divider":       {Build: base.KitBuild(base.BuildDivider), Obstacles: obstacles(base.DividerObstacles, 0.3)},
 	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},
 	"felt.low":      {Build: base.KitBuild(base.BuildFeltLow)},
 	"ceramic.wall":  {Build: base.KitBuild(base.BuildCeramicWall)},
