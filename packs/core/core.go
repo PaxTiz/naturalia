@@ -187,6 +187,7 @@ var coreTokens = map[string]content.Token{
 	"home.led":       {color.RGBA{255, 228, 194, 255}, content.MtPlain, 1, 0, 1},
 	"home.led.amber": {color.RGBA{255, 178, 100, 255}, content.MtPlain, 1, 0, 0.9},
 	// Its soft furnishings: slate cushions, a felt rug.
+	"crystal.blue": {color.RGBA{120, 200, 255, 255}, content.MtPlain, 1, 0.8, 0.35},
 	"fabric.slate": {color.RGBA{72, 80, 94, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
 	"fabric.felt":  {color.RGBA{92, 96, 104, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	"fabric.felt2": {color.RGBA{116, 118, 122, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
@@ -257,7 +258,10 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "console", At: vec3{0, 0, -2.3}, Yaw: -90},
 			{Kit: "chair", At: vec3{0.5, 0, -1.2}, Seed: 0, Yaw: -90},
 			{Kit: "workbench", At: vec3{-0.6, 0, 3.0}, Seed: 6},
-			{Kit: "planter", At: vec3{2.3, 0, 2.6}, Seed: 2},
+			{Kit: "planter.home", At: vec3{1.6, 0, 2.5}, Yaw: 90, Seed: 2},
+			// Samples brought back from outside, behind glass, facing
+			// the middle of the room.
+			{Kit: "showcase", At: vec3{-2.9, 0, 1.6}, Yaw: -29, Seed: 1},
 		},
 	},
 	// The bedroom wing, at the end of a corridor north of the hall: one
@@ -344,6 +348,7 @@ var coreKits = map[string]content.Kit{
 	"desk":         {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
 	"bench":        {Build: base.KitBuild(base.BuildBench), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.35}, {vec3{0, 0, 0.5}, 0.35}}},
 	"lowtable":     {Build: base.KitBuild(base.BuildLowTable), Obstacles: []content.Obstacle{{vec3{}, 0.45}}},
+	"showcase":     {Build: base.KitBuild(base.BuildShowcase), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.4}, {vec3{0, 0, 0.3}, 0.4}}},
 	"sofa.arc":     {Build: base.KitBuild(base.BuildSofaArc), Obstacles: obstacles(base.SofaObstacles(), 0.45)},
 	"coffee.table": {Build: base.KitBuild(base.BuildCoffeeTable), Obstacles: []content.Obstacle{{vec3{}, 0.6}}},
 	"rug.felt":     {Build: base.KitBuild(base.BuildFeltRug)},

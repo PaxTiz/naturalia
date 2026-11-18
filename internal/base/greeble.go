@@ -498,12 +498,13 @@ func YardObstacles() []content.Obstacle {
 // hydroponic planter and a desk.
 
 // BuildChair: a swivel chair facing toward -X (rotate with the seed: the
-// angle is seed × 45°).
+// angle is seed × 45°), slate cushions on a white shell.
 func BuildChair(b *building, at vec3, seed int) {
 	a := float64(seed) * math.Pi / 4
 	f := vec3{math.Cos(a), 0, math.Sin(a)}
 	sd := vec3{-f.Z, 0, f.X}
-	dark, seat := b.Part("steel.dark", mesh.LitIndoor, vec3{}), b.Part("fabric.seat", mesh.LitIndoor, vec3{})
+	dark, seat := b.Part("home.trim", mesh.LitIndoor, vec3{}), b.Part("fabric.slate", mesh.LitIndoor, vec3{})
+	b.in("home.panel2").Box(at.Add(vec3{0, 0.44, 0}), vec3{0.52, 0.04, 0.52}, f, 0.015)
 	for k := range 5 {
 		t := float64(k) * 2 * math.Pi / 5
 		leg := vec3{math.Cos(t), 0, math.Sin(t)}
@@ -515,30 +516,44 @@ func BuildChair(b *building, at vec3, seed int) {
 	dark.Box(at.Sub(f.Scale(0.22)).Add(vec3{0, 0.6, 0}), vec3{0.06, 0.2, 0.04}, sd, 0.01)
 }
 
-// BuildWorkbench: a steel bench with a pegboard, tools and a specimen jar.
+// BuildWorkbench: a white lab bench, its drawers toward the user (the
+// seed turns it by 45° steps), a lit shelf of sample jars on its upstand,
+// a microscope and a sample under a bell jar.
 func BuildWorkbench(b *building, at vec3, seed int) {
 	a := float64(seed) * math.Pi / 4
 	f := vec3{math.Cos(a), 0, math.Sin(a)} // toward the user
 	sd := vec3{-f.Z, 0, f.X}
-	steel, dark := b.Part("steel", mesh.LitIndoor, vec3{}), b.Part("steel.dark", mesh.LitIndoor, vec3{})
-	b.Part("wood.brown", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0, 0.9, 0}), vec3{1.8, 0.06, 0.75}, sd, 0.015)
-	for _, x := range []float64{-0.82, 0.82} {
-		for _, z := range []float64{-0.3, 0.3} {
-			dark.Box(at.Add(sd.Scale(x)).Add(f.Scale(z)).Add(vec3{0, 0.44, 0}), vec3{0.06, 0.88, 0.06}, sd, 0.01)
+	p := func(x, y, z float64) vec3 { return at.Add(sd.Scale(x)).Add(f.Scale(z)).Add(vec3{0, y, 0}) }
+	b.in("home.trim").Box(p(0, 0.05, -0.04), vec3{1.7, 0.1, 0.6}, sd, 0.01)
+	b.in("home.panel2").Box(p(0, 0.5, 0), vec3{1.76, 0.8, 0.7}, sd, 0.02)
+	for _, x := range []float64{-0.59, 0, 0.59} {
+		for _, y := range []float64{0.3, 0.68} {
+			b.in("home.panel").Box(p(x, y, 0.351), vec3{0.57, 0.36, 0.012}, sd, 0.004)
+			b.in("home.trim").Box(p(x, y+0.15, 0.36), vec3{0.2, 0.015, 0.012}, sd, 0)
 		}
 	}
-	steel.Box(at.Add(vec3{0, 0.25, 0}), vec3{1.7, 0.03, 0.65}, sd, 0.01)
-	b.Part("crate.slate", mesh.LitIndoor, vec3{}).Box(at.Add(sd.Scale(-0.45)).Add(vec3{0, 0.42, 0}), vec3{0.6, 0.3, 0.45}, sd, 0.02)
-	board := at.Sub(f.Scale(0.38)).Add(vec3{0, 1.45, 0})
-	b.Part("wall.lower", mesh.LitIndoor, vec3{}).Box(board, vec3{1.7, 0.9, 0.04}, sd, 0.015)
-	for k := range 5 {
-		x := -0.6 + float64(k)*0.3
-		steel.Box(board.Add(sd.Scale(x)).Add(f.Scale(0.04)).Add(vec3{0, 0.1 * float64(k%2), 0}), vec3{0.04, 0.32, 0.03}, sd, 0.005)
+	b.in("home.panel").Box(p(0, 0.915, 0), vec3{1.8, 0.03, 0.75}, sd, 0.01)
+	// A shelf on the upstand behind, its jars of samples lit from under.
+	b.in("home.panel").Box(p(0, 1.2, -0.33), vec3{1.8, 0.56, 0.06}, sd, 0.015)
+	b.in("home.panel").Box(p(0, 1.48, -0.24), vec3{1.8, 0.03, 0.22}, sd, 0.01)
+	b.in("home.led").Box(p(0, 1.46, -0.17), vec3{1.7, 0.008, 0.03}, sd, 0)
+	for k := range 7 {
+		r := grnd(seed, k+40)
+		x := -0.75 + float64(k)*0.25
+		tok := []string{"rock.red", "planter.green", "clay", "planter.lime"}[(seed+k)%4]
+		b.in("glass.dark").Prism(p(x, 1.495, -0.24), yUp, 0.05, 0.05, 0.12+0.06*r, 12, 0.01)
+		b.in(tok).Prism(p(x, 1.5, -0.24), yUp, 0.045, 0.045, 0.06+0.04*r, 12, 0)
+		b.in("home.trim").Prism(p(x, 1.62+0.06*r, -0.24), yUp, 0.052, 0.052, 0.02, 12, 0.005)
 	}
-	b.Part("pipe.red", mesh.LitIndoor, vec3{}).Box(at.Add(sd.Scale(0.5)).Add(vec3{0, 0.99, 0}), vec3{0.42, 0.12, 0.22}, sd, 0.02)
-	b.Part("glass.dark", mesh.LitIndoor, vec3{}).Prism(at.Add(sd.Scale(-0.1)).Add(vec3{0, 0.93, 0}), yUp, 0.1, 0.1, 0.24, 12, 0.02)
-	b.Part("planter.green", mesh.LitIndoor, vec3{}).Prism(at.Add(sd.Scale(-0.1)).Add(vec3{0, 0.95, 0}), yUp, 0.07, 0.05, 0.1, 6, 0)
-	steel.Prism(at.Add(sd.Scale(-0.1)).Add(vec3{0, 1.17, 0}), yUp, 0.11, 0.11, 0.03, 12, 0.01)
+	// A microscope, and a sample under a bell jar.
+	m := p(0.45, 0.93, 0.05)
+	b.in("home.panel").Box(m.Add(vec3{0, 0.02, 0}), vec3{0.2, 0.04, 0.26}, f, 0.01)
+	b.in("home.panel").BoxBasis(m.Add(f.Scale(-0.08)).Add(vec3{0, 0.18, 0}), [3]vec3{sd, vec3{0, 1, 0}, f.Scale(-1)}, vec3{0.06, 0.3, 0.06}, 0.02)
+	b.in("home.trim").Prism(m.Add(f.Scale(-0.03)).Add(vec3{0, 0.3, 0}), f.Add(vec3{0, -1.2, 0}).Norm(), 0.035, 0.03, 0.18, 10, 0)
+	b.in("home.trim").Box(m.Add(vec3{0, 0.1, 0}), vec3{0.14, 0.015, 0.12}, f, 0)
+	b.in("glass.dark").Prism(p(-0.1, 0.93, 0.05), yUp, 0.1, 0.1, 0.24, 16, 0.02)
+	b.in("planter.green").Prism(p(-0.1, 0.95, 0.05), yUp, 0.07, 0.05, 0.1, 6, 0)
+	b.in("home.trim").Prism(p(-0.1, 0.93, 0.05), yUp, 0.12, 0.12, 0.02, 16, 0.005)
 }
 
 // BuildPlanter: a hydroponic trough on legs with rows of faceted plants
@@ -694,10 +709,8 @@ func (b *building) clutter(bp *content.Blueprint) {
 		b.papers(desk(vec3{-0.35, 0.81, -0.75}), 0.2-math.Pi/2, 4)
 		b.tablet(desk(vec3{-0.45, 0.81, 0.35}), 1.4-math.Pi/2)
 		wb := at(vec3{-0.6, 0, 3.0})
-		b.mug(wb.Add(vec3{0.65, 0.93, 0.1}), "barrel.ochre", 0.3)
-		b.papers(wb.Add(vec3{0.2, 0.93, 0.15}), 1.2, 2)
-		b.coil(at(vec3{-2.4, FloorTop, 0.4}), 0.28, "pipe.blue")
-		b.helmet(at(vec3{-2.9, FloorTop, 2.0}), 3.5)
+		b.mug(wb.Add(vec3{0.65, 0.93, -0.1}), "barrel.ochre", 0.3)
+		b.papers(wb.Add(vec3{0.2, 0.93, -0.15}), 1.2, 2)
 	case "core:sleep":
 		// A mug by the bed, papers by the laptop, the helmet put away on
 		// the lockers, a tablet left on the armchair.

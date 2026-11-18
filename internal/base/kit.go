@@ -422,14 +422,23 @@ func BuildIncinerator(b *building, in vec3, _ int) {
 	b.in("neon.orange").Box(p(1.045, 1.6, 0.25), vec3{0.01, 0.025, 2.2}, xAxis, 0)
 }
 
-// BuildConsole: a desk between two server racks.
+// BuildConsole: a white desk between two white server cabinets, their
+// lights behind a dark strip (drawConsole), the screens on slim stands.
 func BuildConsole(b *building, c vec3, _ int) {
-	b.Part("steel", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.2, 0.78, 0}), vec3{0.9, 0.06, 2.2}, vec3{1, 0, 0}, 0.02)
+	p := func(x, y, z float64) vec3 { return c.Add(vec3{x, y, z}) }
+	b.in("home.panel").Box(p(-0.2, 0.78, 0), vec3{0.9, 0.06, 2.2}, xAxis, 0.025)
 	for _, z := range []float64{-0.95, 0.95} {
-		b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{-0.2, 0.38, z}), vec3{0.8, 0.76, 0.08}, vec3{1, 0, 0}, 0.02)
+		b.in("home.panel2").Box(p(-0.15, 0.375, z), vec3{0.75, 0.75, 0.08}, xAxis, 0.02)
+	}
+	b.in("home.trim").Box(p(0.18, 0.4, 0), vec3{0.04, 0.6, 1.82}, xAxis, 0.01)
+	for _, z := range []float64{-0.75, 0, 0.75} {
+		b.in("home.trim").Prism(p(0.16, 0.81, z), yUp, 0.1, 0.1, 0.012, 16, 0)
+		b.in("home.trim").Box(p(0.16, 1.0, z), vec3{0.03, 0.4, 0.05}, xAxis, 0)
 	}
 	for _, z := range []float64{-2.3, 2.3} {
-		b.Part("rack.slate", mesh.LitIndoor, vec3{}).Box(c.Add(vec3{0, 0.95, z}), vec3{0.7, 1.9, 0.7}, vec3{1, 0, 0}, 0.05)
+		b.in("home.trim").Box(p(0, 0.05, z), vec3{0.6, 0.1, 0.6}, xAxis, 0.01)
+		b.in("home.panel").Box(p(0, 1.0, z), vec3{0.7, 1.8, 0.7}, xAxis, 0.05)
+		b.in("home.trim").Box(p(-0.345, 1.0, z), vec3{0.02, 1.6, 0.58}, xAxis, 0.005)
 	}
 }
 
