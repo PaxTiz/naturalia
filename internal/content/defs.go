@@ -37,6 +37,10 @@ type Blueprint struct {
 	// Light is how it is lit: "warm" gives it one dim amber pendant
 	// instead of its ceiling lamps, its furniture's lamps doing the rest.
 	Light string `json:"light"`
+	// Interior is how it is finished inside: "home" lines a living space
+	// like a well-made habitat (composite panels, warm grey floor, ducts
+	// boxed in); left out, it stays industrial. The outside doesn't change.
+	Interior string `json:"interior"`
 }
 
 // Window is a pane of glass in a wall of a hall, in its frame (before its

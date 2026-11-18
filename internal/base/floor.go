@@ -117,6 +117,10 @@ func FloorOf(id ecs.ID) (Floor, bool) {
 // top; stairs, steel steps with a yellow nosing.
 func (b *building) floors(in ecs.ID) {
 	steel := b.Part("steel", mesh.LitIndoor, vec3{})
+	slab, top := steel, "floor.slate"
+	if r := Ents.Building.Get(in); r.home() {
+		slab, top = b.Part("home.panel", mesh.LitIndoor, vec3{}), r.floorTok()
+	}
 	for _, f := range ordered(Ents.Floor) {
 		if f.In != in {
 			continue
@@ -124,8 +128,8 @@ func (b *building) floors(in ecs.ID) {
 		along, l, _ := f.frame()
 		if f.Level() {
 			mid := f.From.Lerp(f.To, 0.5)
-			steel.Box(mid.Sub(vec3{0, f.Thick / 2, 0}), vec3{l, f.Thick - 0.04, f.Width}, along, 0.03)
-			b.Part("floor.slate", mesh.LitIndoor, vec3{}).Box(mid.Sub(vec3{0, 0.02, 0}), vec3{l - 0.04, 0.04, f.Width - 0.04}, along, 0.005)
+			slab.Box(mid.Sub(vec3{0, f.Thick / 2, 0}), vec3{l, f.Thick - 0.04, f.Width}, along, 0.03)
+			b.Part(top, mesh.LitIndoor, vec3{}).Box(mid.Sub(vec3{0, 0.02, 0}), vec3{l - 0.04, 0.04, f.Width - 0.04}, along, 0.005)
 			continue
 		}
 		// Steps of about 20 cm, from the low end up, each as high as the slope

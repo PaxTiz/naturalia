@@ -173,6 +173,14 @@ var coreTokens = map[string]content.Token{
 	"earth.blue":   {color.RGBA{50, 110, 205, 255}, content.MtPlain, 1, 0.5, 0.15},
 	"earth.green":  {color.RGBA{96, 150, 80, 255}, content.MtPlain, 1, 0.5, 0.1},
 	"clay":         {color.RGBA{176, 98, 64, 255}, content.MtPlain, 1, 0.15, 0},
+	// The living spaces' finishes (interior: "home"): off-white composite
+	// panels, smooth white ribs, a warm grey matte floor and its lighter
+	// paths.
+	"home.panel":  {color.RGBA{236, 233, 226, 255}, content.MtPlain, 1, 0.35, 0},
+	"home.panel2": {color.RGBA{224, 221, 214, 255}, content.MtPlain, 1, 0.35, 0},
+	"home.rib":    {color.RGBA{246, 245, 240, 255}, content.MtPlain, 1, 0.45, 0},
+	"home.floor":  {color.RGBA{76, 72, 70, 255}, content.MtPanel, 1, 0.15, 0},
+	"home.path":   {color.RGBA{104, 99, 94, 255}, content.MtPanel, 1, 0.15, 0},
 }
 
 // coreBuildings: the great hall first, the rooms around it, then the
@@ -188,6 +196,8 @@ var coreBuildings = []content.Blueprint{
 		Accent: "neon.cyan",
 		Hall:   &content.Hall{Size: [2]float64{24, 16}, WallH: 6, Rise: 2},
 		Style:  "habitat.white",
+		// A living space: finished like a home inside.
+		Interior: "home",
 		// The bay window, all along the east wall: the plain, the sunrise.
 		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 5.2}},
 		// The lookout: a gallery 3 m up along the bay window, stairs
@@ -211,15 +221,16 @@ var coreBuildings = []content.Blueprint{
 		},
 	},
 	content.Blueprint{
-		ID:     "core:research",
-		Link:   "core:hall",
-		Sign:   "RECHERCHE",
-		Accent: "neon.blue",
-		At:     vec3{-20, 0, 0},
-		Yaw:    180,
-		Shape:  content.Dome{Radius: 4, WallH: 2.6},
-		Style:  "habitat.white",
-		Doors:  []content.Door{{base.West}},
+		ID:       "core:research",
+		Link:     "core:hall",
+		Sign:     "RECHERCHE",
+		Accent:   "neon.blue",
+		At:       vec3{-20, 0, 0},
+		Yaw:      180,
+		Shape:    content.Dome{Radius: 4, WallH: 2.6},
+		Style:    "habitat.white",
+		Interior: "home",
+		Doors:    []content.Door{{base.West}},
 		// The console against the south wall, facing north: the way from
 		// the hall to the hangar runs across the room.
 		Props: []content.Prop{
@@ -234,15 +245,16 @@ var coreBuildings = []content.Blueprint{
 	// against the north wall under a porthole, the desk and the shelf
 	// east, the lockers, the guitar and the armchair west.
 	content.Blueprint{
-		ID:      "core:sleep",
-		Link:    "core:hall",
-		Sign:    "CHAMBRE",
-		Accent:  "neon.amber",
-		At:      vec3{0, 0, 19.5}, // 9 m of corridor from the hall
-		Hall:    &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1},
-		Style:   "habitat.white",
-		Light:   "warm",
-		Windows: []content.Window{{At: vec3{0, 1.35, 2.5}, Width: 1.5, Height: 0.8}},
+		ID:       "core:sleep",
+		Link:     "core:hall",
+		Sign:     "CHAMBRE",
+		Accent:   "neon.amber",
+		At:       vec3{0, 0, 19.5}, // 9 m of corridor from the hall
+		Hall:     &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1},
+		Style:    "habitat.white",
+		Light:    "warm",
+		Interior: "home",
+		Windows:  []content.Window{{At: vec3{0, 1.35, 2.5}, Width: 1.5, Height: 0.8}},
 		Props: []content.Prop{
 			{Kit: "rug", At: vec3{0, 0, -0.4}},
 			{Kit: "bed", At: vec3{0, 0, 1.2}, Yaw: -90},

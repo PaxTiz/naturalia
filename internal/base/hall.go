@@ -577,7 +577,16 @@ func (b *building) hallShell(r Room) {
 	X, Z := vec3{1, 0, 0}, vec3{0, 0, 1}
 
 	// Floor, and a concrete apron before the door.
-	inside("floor.slate").Box(p(0, FloorTop-0.05, 0), vec3{2 * hx, 0.1, 2 * hz}, X, 0)
+	inside(r.floorTok()).Box(p(0, FloorTop-0.05, 0), vec3{2 * hx, 0.1, 2 * hz}, X, 0)
+	if r.home() {
+		b.paths(c, r.doorways(), math.Min(2.4, math.Min(hx, hz)/2))
+	}
+	// The arches and pilasters inside: steel, or in a home smooth white
+	// ribs that stand less into the room, through its lining.
+	rib, ribIn, ribDeep := "steel", 0.38, 0.5
+	if r.home() {
+		rib, ribIn, ribDeep = "home.rib", 0.32, 0.3
+	}
 	if dw > 0 {
 		sun("pad.concrete").Box(p(hx+5, 0.02, 0), vec3{10, 0.1, dw + 4}, X, 0.02)
 		sun("hazard").Box(p(hx+0.6, 0.075, 0), vec3{0.5, 0.02, dw}, X, 0)
@@ -629,6 +638,9 @@ func (b *building) hallShell(r Room) {
 			}
 			lit.Box(face.Add(vec3{0, DoorHeight + 0.22, 0}), vec3{2*hallGap + 0.04, 0.24, 0.14}, along, 0.03)
 		}
+		if r.home() {
+			continue // lined (hallLining)
+		}
 		wall("hazard").Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.5, 0}), vec3{2 * hallGap, 0.25, 0.04}, along, 0)
 		wall(bp.Accent).Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.75, 0}), vec3{2 * hallGap, 0.06, 0.03}, along, 0)
 	}
@@ -661,7 +673,7 @@ func (b *building) hallShell(r Room) {
 			z := -hz + 2*hz*float64(k)/float64(ribs)
 			z = math.Max(-hz+0.6, math.Min(hz-0.6, z))
 			sun("steel").BoxBasis(mid.Add(nrm.Scale(0.2)).Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l + 0.06, 0.16, 0.5}, 0.03)
-			inside("steel").BoxBasis(mid.Sub(nrm.Scale(0.38)).Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l + 0.06, 0.5, 0.35}, 0.03)
+			inside(rib).BoxBasis(mid.Sub(nrm.Scale(ribIn)).Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l + 0.06, ribDeep, 0.35}, 0.03)
 		}
 	}
 	// A ridge cap, and skylight vents along it.
@@ -685,7 +697,7 @@ func (b *building) hallShell(r Room) {
 				continue
 			}
 			sun("steel").Box(p(x+s*0.3, r.WallH/2, z), vec3{0.3, r.WallH, 0.6}, X, 0.04)
-			inside("steel").Box(p(x-s*0.35, r.WallH/2, z), vec3{0.4, r.WallH, 0.45}, X, 0.04)
+			inside(rib).Box(p(x-s*(hallWall/2+(ribDeep-0.1)/2), r.WallH/2, z), vec3{ribDeep - 0.1, r.WallH, 0.45}, X, 0.04)
 		}
 	}
 	for k, w := range r.straightWalls() {
@@ -706,7 +718,11 @@ func (b *building) hallShell(r Room) {
 		}
 	}
 
-	// Inside: the two-tone base of the walls and the accent strip.
+	// Inside: the two-tone base of the walls and the accent strip, or a
+	// home's lining.
+	if r.home() {
+		b.hallLining(r)
+	}
 	strip := func(from, to vec3, nrm vec3) {
 		d := to.Sub(from)
 		mid := from.Lerp(to, 0.5).Add(nrm.Scale(hallWall/2 + 0.03))
@@ -714,6 +730,9 @@ func (b *building) hallShell(r Room) {
 		inside(bp.Accent).Box(mid.Add(vec3{0, 1.24, 0}).Add(nrm.Scale(0.02)), vec3{d.Length(), 0.08, 0.04}, d, 0)
 	}
 	for k, w := range r.straightWalls() {
+		if r.home() {
+			break
+		}
 		nrm := []vec3{X, Z, Z.Scale(-1), X.Scale(-1), X.Scale(-1)}[k]
 		for _, s := range r.spans(w[0], w[1]) {
 			for _, sd := range r.solid(s[0], s[1]) {

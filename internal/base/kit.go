@@ -123,6 +123,9 @@ func (b *building) room(id ecs.ID, r Room) {
 		b.Part("hazard", mesh.LitTowards, in).Box(w.Add(vec3{0, DoorHeight + 0.12, 0}), vec3{DoorWidth + 0.42, 0.22, 0.42}, tangent, 0.05)
 		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(w.Add(vec3{0, DoorHeight + 0.12, 0}).Sub(out.Scale(0.22)), vec3{DoorWidth * 0.6, 0.05, 0.02}, tangent, 0)
 	}
+	if r.home() {
+		b.domeLining(r)
+	}
 	b.interior(bp, r)
 	b.props(id)
 }
@@ -172,15 +175,25 @@ func BuildGrowth(kits *content.Registry[content.Kit], id ecs.ID, stage int) *mes
 }
 
 // interior: a flat floor with a steel-ringed inlay, a glowing stripe along
-// the walls, steel ribs under the dome and a ceiling lamp.
+// the walls, steel ribs under the dome and a ceiling lamp. A home's floor
+// has paths instead of the inlay, its walls are lined (domeLining) and its
+// ribs are white, under its inner shell.
 func (b *building) interior(bp *content.Blueprint, r Room) {
 	up := vec3{0, 1, 0}
 	floor := r.Center.Add(vec3{0, FloorTop - 0.1, 0})
-	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius, r.Radius, 0.1, 48, 0)
-	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius*0.47, r.Radius*0.47, 0.104, 40, 0)
-	b.Part("floor.inlay", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius*0.44, r.Radius*0.44, 0.106, 40, 0)
+	b.Part(r.floorTok(), mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius, r.Radius, 0.1, 48, 0)
+	if r.home() {
+		var doors []vec3
+		for _, o := range r.openings {
+			doors = append(doors, r.Center.Add(vec3{math.Cos(o), 0, math.Sin(o)}.Scale(r.Radius)))
+		}
+		b.paths(r.Center, doors, r.Radius*0.4)
+	} else {
+		b.Part("steel", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius*0.47, r.Radius*0.47, 0.104, 40, 0)
+		b.Part("floor.inlay", mesh.LitIndoor, vec3{}).Prism(floor, up, r.Radius*0.44, r.Radius*0.44, 0.106, 40, 0)
+	}
 	for _, p := range r.panels() {
-		if p.y0 > 0 {
+		if p.y0 > 0 || r.home() {
 			continue
 		}
 		out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
@@ -195,6 +208,11 @@ func (b *building) interior(bp *content.Blueprint, r Room) {
 	}
 	// Ribs follow the inside of the dome up to the lamp's collar.
 	a, bh := r.Radius+0.02, r.Radius*0.55-0.06
+	rib := "steel"
+	if r.home() {
+		a, bh = r.domeLining()
+		a, bh, rib = a-0.02, bh-0.02, "home.rib"
+	}
 	top := r.Center.Add(vec3{0, r.WallH, 0})
 	const ribs, steps = 8, 7
 	for k := range ribs {
@@ -210,7 +228,7 @@ func (b *building) interior(bp *content.Blueprint, r Room) {
 			along := p1.Sub(p0)
 			l := along.Length()
 			along = along.Scale(1 / l)
-			b.Part("steel", mesh.LitIndoor, vec3{}).BoxBasis(p0.Lerp(p1, 0.5).Sub(along.Cross(side).Scale(0.05)), [3]vec3{side, along, side.Cross(along)}, vec3{0.12, l + 0.02, 0.1}, 0.02)
+			b.Part(rib, mesh.LitIndoor, vec3{}).BoxBasis(p0.Lerp(p1, 0.5).Sub(along.Cross(side).Scale(0.05)), [3]vec3{side, along, side.Cross(along)}, vec3{0.12, l + 0.02, 0.1}, 0.02)
 		}
 	}
 	lamp := r.Center.Add(vec3{0, r.WallH + r.Radius*0.5, 0})
@@ -251,7 +269,11 @@ func (b *building) corridor(c Corridor) {
 		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.Height + 0.14, 0}), vec3{0.14, 0.1, c.Width + 2*WallThick + 0.16}, dir, 0.03)
 	}
 	// Inside: two-tone walls like the rooms, a flat floor edged with steel,
-	// a lamp strip under the roof.
+	// a lamp strip under the roof; or a home's lining and paths.
+	if c.home() {
+		b.corridorLining(c)
+		return
+	}
 	for _, s := range []float64{-1, 1} {
 		inner := mid.Add(side.Scale(s * (c.Width/2 - 0.02)))
 		b.Part("wall.lower", mesh.LitIndoor, vec3{}).Box(inner.Add(vec3{0, 0.5, 0}), vec3{length, 0.96, 0.04}, dir, 0.012)

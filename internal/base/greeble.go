@@ -62,7 +62,15 @@ func (b *building) greebleRoom(id ecs.ID, r Room, seed int) {
 		b.Part("steel.dark", mesh.LitSun, vec3{}).Box(outer.Add(out.Scale(0.07)).Add(vec3{0, 1.95, 0}), vec3{0.08, 0.3, 0.14}, along, 0.015)
 		b.outsidePiece(kind, outer, out, along, p.width, seed+i)
 
-		// Inside: conduits under the dome, then the panel's piece.
+		// Inside: conduits under the dome, then the panel's piece. A home
+		// has its ducts boxed in (domeLining), and only its portholes and
+		// screens.
+		if r.home() {
+			if !blocked && (kind == 0 || kind == 3) {
+				b.insidePiece(kind, inner.Sub(out.Scale(liningGap+lining)), out, along, seed+i, bp.Accent)
+			}
+			continue
+		}
 		ceil := r.WallH - 0.28
 		pipeRun(b.Part("steel", mesh.LitIndoor, vec3{}), inner.Sub(out.Scale(0.1)).Add(vec3{0, ceil, 0}), along, p.width, 0.05)
 		pipeRun(b.Part("pipe.blue", mesh.LitIndoor, vec3{}), inner.Sub(out.Scale(0.22)).Add(vec3{0, ceil + 0.1, 0}), along, p.width, 0.04)
@@ -267,6 +275,9 @@ func (b *building) greebleCorridor(c Corridor, seed int) {
 		wall := mid.Add(side.Scale(s * (c.Width/2 + WallThick)))
 		pipeRun(b.Part("pipe.yellow", mesh.LitSun, vec3{}), wall.Add(side.Scale(s*0.1)).Add(vec3{0, 1.95, 0}), dir, length, 0.045)
 		pipeRun(b.Part("pipe.blue", mesh.LitSun, vec3{}), wall.Add(side.Scale(s*0.09)).Add(vec3{0, 1.8, 0}), dir, length, 0.035)
+		if c.home() {
+			continue // boxed in (corridorLining)
+		}
 		in := mid.Add(side.Scale(s * (c.Width/2 - 0.12)))
 		pipeRun(b.Part("steel", mesh.LitIndoor, vec3{}), in.Add(vec3{0, c.Height - 0.18, 0}), dir, length*0.98, 0.05)
 		pipeRun(b.Part("pipe.blue", mesh.LitIndoor, vec3{}), in.Add(side.Scale(-s*0.13)).Add(vec3{0, c.Height - 0.12, 0}), dir, length*0.98, 0.04)
@@ -279,7 +290,14 @@ func (b *building) greebleCorridor(c Corridor, seed int) {
 			s = -1
 		}
 		face := at.Add(side.Scale(s * (c.Width/2 - 0.04)))
-		switch int(grnd(seed, i+50) * 3) {
+		kind := int(grnd(seed, i+50) * 3)
+		if c.home() {
+			if kind != 0 {
+				continue // a screen, but no vent
+			}
+			face = face.Sub(side.Scale(s * (liningGap + lining)))
+		}
+		switch kind {
 		case 0:
 			b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(face.Add(vec3{0, 1.6, 0}), vec3{0.5, 0.32, 0.06}, dir, 0.015)
 			b.Part("screen.dim", mesh.LitIndoor, vec3{}).Box(face.Add(vec3{0, 1.6, 0}).Sub(side.Scale(s*0.032)), vec3{0.42, 0.24, 0.01}, dir, 0)
