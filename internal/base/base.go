@@ -457,16 +457,16 @@ func Lamps(rooms, corridors []ecs.ID) []Lamp {
 		case id == hub:
 			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10, r.lampWarmth()})
 		default:
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10, r.lampWarmth()})
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), r.lampPower(), 10, r.lampWarmth()})
 		}
 	}
 	for _, id := range corridors {
 		c := Ents.Corridor.Get(id)
-		w := 0.0
+		w, power := 0.0, 1.0
 		if c.home() {
-			w = homeWarm
+			w, power = homeWarm, homeDim
 		}
-		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10, w})
+		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), power, 10, w})
 	}
 	for _, id := range rooms {
 		for f := range FurnitureOf(id) {

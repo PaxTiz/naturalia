@@ -393,7 +393,7 @@ func (r Room) hallLamps() []Lamp {
 	}
 	power := 12 * math.Max(0.12, math.Min(1, 4*hx*hz/(26*64)))
 	if r.home() {
-		power *= 0.8 // its white lining and lines of light do the rest
+		power *= homeDim // its white lining and lines of light do the rest
 	}
 	reach := math.Min(24, 2*math.Max(hx, hz)+4)
 	at := func(u, w float64) Lamp {

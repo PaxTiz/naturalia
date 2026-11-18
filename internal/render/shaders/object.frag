@@ -172,6 +172,7 @@ vec4 glass(vec3 n, vec3 v, float dist) {
     vec3 light = inside ? lampCol * 0.5 : skyColor(reflect(-v, n), up);
     vec3 col = colDiffuse.rgb * light * (1.0 + 0.8 * band);
     float a = inside ? 0.05 + 0.3 * slant + 0.07 * band : 0.22 + 0.5 * slant + 0.16 * band;
+    if (dot(room, room) < 1.0) a = 0.16 + 0.4 * slant + 0.12 * band; // a guard rail: there to be seen
     return vec4(finish(col, dist), a);
 }
 

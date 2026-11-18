@@ -25,6 +25,18 @@ const (
 // the base's white and amber (Lamp.Warm).
 const homeWarm = 0.3
 
+// homeDim is how bright a living space's lamps are, against the base's:
+// its white lining and lines of light do the rest.
+const homeDim = 0.6
+
+// lampPower is how bright a dome's ceiling lamp is.
+func (r Room) lampPower() float64 {
+	if r.home() {
+		return homeDim
+	}
+	return 1
+}
+
 // lampWarmth is how warm the room's ceiling lamps are.
 func (r Room) lampWarmth() float64 {
 	switch {
