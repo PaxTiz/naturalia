@@ -9,28 +9,18 @@ import (
 // The lookout up on the great hall's mezzanine, behind the bay window: a
 // bench, a low table, and a telescope on its tripod looking east.
 
-// BuildBench: a steel frame under a padded seat, along Z.
+// BuildBench: a white block on a recessed plinth under a slate cushion,
+// along Z.
 func BuildBench(b *building, at vec3, _ int) {
-	steel := b.Part("steel", mesh.LitIndoor, vec3{})
-	for _, z := range []float64{-0.7, 0.7} {
-		for _, x := range []float64{-0.18, 0.18} {
-			steel.Box(at.Add(vec3{x, 0.2, z}), vec3{0.05, 0.4, 0.05}, vec3{1, 0, 0}, 0.01)
-		}
-		steel.Box(at.Add(vec3{0, 0.06, z}), vec3{0.41, 0.04, 0.05}, vec3{1, 0, 0}, 0.01)
-	}
-	steel.Box(at.Add(vec3{0, 0.39, 0}), vec3{0.46, 0.04, 1.6}, vec3{1, 0, 0}, 0.01)
-	b.Part("fabric.seat", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0, 0.45, 0}), vec3{0.44, 0.08, 1.56}, vec3{1, 0, 0}, 0.03)
+	b.in("home.trim").Box(at.Add(vec3{0, 0.04, 0}), vec3{0.36, 0.08, 1.5}, xAxis, 0.01)
+	b.in("home.panel2").Box(at.Add(vec3{0, 0.23, 0}), vec3{0.48, 0.3, 1.64}, xAxis, 0.04)
+	b.in("fabric.slate").Box(at.Add(vec3{0, 0.43, 0}), vec3{0.46, 0.1, 1.6}, xAxis, 0.04)
 }
 
-// BuildLowTable: a slate top on four legs.
+// BuildLowTable: a white top on an anthracite base.
 func BuildLowTable(b *building, at vec3, _ int) {
-	steel := b.Part("steel.dark", mesh.LitIndoor, vec3{})
-	for _, x := range []float64{-0.38, 0.38} {
-		for _, z := range []float64{-0.24, 0.24} {
-			steel.Box(at.Add(vec3{x, 0.2, z}), vec3{0.04, 0.4, 0.04}, vec3{1, 0, 0}, 0.01)
-		}
-	}
-	b.Part("floor.slate", mesh.LitIndoor, vec3{}).Box(at.Add(vec3{0, 0.42, 0}), vec3{0.9, 0.04, 0.6}, vec3{1, 0, 0}, 0.01)
+	b.in("home.trim").Box(at.Add(vec3{0, 0.2, 0}), vec3{0.5, 0.4, 0.3}, xAxis, 0.02)
+	b.in("home.panel").Box(at.Add(vec3{0, 0.42, 0}), vec3{0.9, 0.04, 0.6}, xAxis, 0.015)
 }
 
 // The telescope's tube, along the kit's +X: tipped up, its eyepiece at

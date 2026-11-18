@@ -132,6 +132,13 @@ func (b *building) floors(in ecs.ID) {
 			mid := f.From.Lerp(f.To, 0.5)
 			slab.Box(mid.Sub(vec3{0, f.Thick / 2, 0}), vec3{l, f.Thick - 0.04, f.Width}, along, 0.03)
 			b.Part(top, mesh.LitIndoor, vec3{}).Box(mid.Sub(vec3{0, 0.02, 0}), vec3{l - 0.04, 0.04, f.Width - 0.04}, along, 0.005)
+			if home { // two lines of light underneath
+				_, _, across := f.frame()
+				for _, s := range []float64{-1, 1} {
+					under := mid.Add(across.Scale(s * (f.Width/2 - 0.4))).Sub(vec3{0, f.Thick - 0.016, 0})
+					b.Part("home.led", mesh.LitIndoor, vec3{}).Box(under, vec3{l - 0.6, 0.01, 0.05}, along, 0)
+				}
+			}
 			continue
 		}
 		// Steps of about 20 cm, from the low end up, each as high as the slope

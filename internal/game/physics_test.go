@@ -275,7 +275,8 @@ func TestCrashIntoCrate(t *testing.T) {
 // The bay window is glass: seen through, not walked through.
 func TestBayWindowStops(t *testing.T) {
 	g := baseGame(t)
-	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{9, 1, 3}))
+	// North of the planters under the lookout.
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{9, 1, 5.5}))
 	g.Player.vel = vec3{}
 	walk(g, vec3{1, 0, 0}, 2)
 	if at := base.ToLocal(g.Player.Pos); at.X > 11.7 || at.X < 11 {

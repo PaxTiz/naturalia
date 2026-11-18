@@ -558,10 +558,16 @@ func BuildPlanter(b *building, at vec3, seed int) {
 	lamp := at.Add(vec3{0, 1.82, 0})
 	dark.Box(lamp, vec3{1.6, 0.06, 0.32}, sd, 0.015)
 	b.Part("lamp.grow", mesh.LitIndoor, vec3{}).Box(lamp.Add(vec3{0, -0.035, 0}), vec3{1.5, 0.01, 0.24}, sd, 0)
-	for k := range 6 {
+	b.tufts(at.Add(vec3{0, 0.87, 0}), sd, f, seed, 6)
+}
+
+// tufts plants two rows of n tufts of leaves along sd, 26 cm apart,
+// across f, around c on the soil.
+func (b *building) tufts(c, sd, f vec3, seed, n int) {
+	for k := range n {
 		for j, z := range []float64{-0.12, 0.12} {
 			r := grnd(seed, k*2+j)
-			p := at.Add(sd.Scale(-0.65 + float64(k)*0.26)).Add(f.Scale(z)).Add(vec3{0, 0.87, 0})
+			p := c.Add(sd.Scale((float64(k) - float64(n-1)/2) * 0.26)).Add(f.Scale(z))
 			h := 0.18 + 0.22*r
 			tok := "planter.green"
 			if (k+j)%3 == 0 {
@@ -668,15 +674,13 @@ func (b *building) clutter(bp *content.Blueprint) {
 	at := func(v vec3) vec3 { return bp.At.Add(v) }
 	switch bp.ID {
 	case "core:hall":
-		b.coil(at(vec3{-6.5, FloorTop, 4.2}), 0.26, "pipe.yellow")
-		b.toolbox(at(vec3{3.5, FloorTop, 6.6}), 0.4)
-		b.helmet(at(vec3{-10.6, 1.24, 6.6}), 3.9)
-		b.tablet(at(vec3{0.6, 0.94, 0.6}), 0.7)
-		b.mug(at(vec3{-0.75, 0.93, -0.45}), "pipe.blue", 1)
-		// The sale corner, by the incinerator.
-		b.coil(at(vec3{-8.2, FloorTop, -2.4}), 0.3, "rubber")
-		b.toolbox(at(vec3{-7.4, FloorTop, -4.4}), 2.1)
-		b.papers(at(vec3{-10.9, 1.35, -7.2}), 0.4, 3)
+		// On the lounge's low table, a mug and a tablet; on the map
+		// table's rim, another mug.
+		b.mug(at(vec3{-6.8, 0.45, 4.4}), "pipe.blue", 1)
+		b.tablet(at(vec3{-7.25, 0.45, 4.75}), 0.7)
+		b.mug(at(vec3{-0.75, 0.92, -0.85}), "habitat.white", 2)
+		// The sale corner: papers on the storage's top.
+		b.papers(at(vec3{-6.9, 2.31, -7.5}), 0.4, 3)
 		// Up on the lookout: a mug and a tablet on the low table, a
 		// helmet set down by the bench.
 		b.mug(at(vec3{10.35, 3.44, 2.55}), "pipe.red", 0.6)

@@ -399,35 +399,27 @@ func BuildCrates(b *building, at vec3, seed int) {
 	}
 }
 
-// BuildMapTable: a faceted pedestal, a steel top and a glowing disc under
-// the hologram (drawGlobe).
+// BuildMapTable: a smooth white island, a line of light round its dark
+// top, and a glowing disc under the hologram (drawGlobe).
 func BuildMapTable(b *building, t vec3, _ int) {
-	up := vec3{0, 1, 0}
-	b.Part("steel.dark", mesh.LitIndoor, vec3{}).Prism(t, up, 0.85, 0.85, 0.85, 20, 0.03)
-	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(t.Add(vec3{0, 0.85, 0}), up, 1.2, 1.2, 0.08, 24, 0.02)
-	b.Part("neon.cyan", mesh.LitIndoor, vec3{}).Prism(t.Add(vec3{0, 0.93, 0}), up, 1.0, 1.0, 0.02, 24, 0)
+	b.in("home.trim").Prism(t, yUp, 0.8, 0.8, 0.08, 40, 0)
+	b.in("home.panel2").Prism(t.Add(vec3{0, 0.08, 0}), yUp, 0.9, 1.05, 0.76, 48, 0.04)
+	b.in("home.led").Prism(t.Add(vec3{0, 0.84, 0}), yUp, 1.18, 1.18, 0.02, 48, 0)
+	b.in("home.trim").Prism(t.Add(vec3{0, 0.86, 0}), yUp, 1.2, 1.2, 0.06, 48, 0.02)
+	b.in("neon.cyan").Prism(t.Add(vec3{0, 0.92, 0}), yUp, 0.55, 0.55, 0.01, 40, 0)
 }
 
+// BuildIncinerator: a white casing round the furnace, its window and its
+// screen in the front (+X, drawIncinerator), a hatch on top, a line of the
+// sale's orange.
 func BuildIncinerator(b *building, in vec3, _ int) {
-	up := vec3{0, 1, 0}
-	steel, dark := b.Part("steel", mesh.LitIndoor, vec3{}), b.Part("steel.dark", mesh.LitIndoor, vec3{})
-	steel.Prism(in, up, 1.1, 1.1, 1.9, 20, 0.04)
-	steel.Prism(in.Add(vec3{0, 1.9, 0}), up, 0.12, 0.95, 0.85, 20, 0.03)
-	dark.Prism(in.Add(vec3{0, 0.25, 0}), up, 1.14, 1.14, 0.12, 20, 0.02)
-	dark.Prism(in.Add(vec3{-0.6, 1.5, 0.6}), up, 0.18, 0.18, 3.4, 10, 0.03)
-	dark.Box(in.Add(vec3{1.0, 1.0, 1.25}), vec3{0.5, 0.7, 0.3}, vec3{0, 0, 1}, 0.04)
-	b.Part("hazard", mesh.LitIndoor, vec3{}).Prism(in.Add(vec3{0, 1.6, 0}), up, 1.14, 1.14, 0.14, 20, 0.02)
-	// A framed furnace window with bars, rivets around the body, a gauge.
-	dark.Box(in.Add(vec3{1.03, 0.95, 0}), vec3{0.98, 0.72, 0.08}, vec3{0, 0, 1}, 0.03)
-	for _, z := range []float64{-0.2, 0, 0.2} {
-		steel.Box(in.Add(vec3{1.13, 0.95, z}), vec3{0.03, 0.56, 0.03}, vec3{0, 0, 1}, 0.005)
-	}
-	for k := range 20 {
-		a := (float64(k) + 0.5) * 2 * math.Pi / 20
-		dark.Box(in.Add(vec3{math.Cos(a) * 1.11, 1.78, math.Sin(a) * 1.11}), vec3{0.04, 0.04, 0.04}, vec3{-math.Sin(a), 0, math.Cos(a)}, 0)
-	}
-	b.Part("pipe.red", mesh.LitIndoor, vec3{}).Prism(in.Add(vec3{0.75, 1.3, -0.75}), vec3{1, 0, -1}, 0.12, 0.12, 0.05, 14, 0.01)
-	b.Part("habitat.white", mesh.LitIndoor, vec3{}).Prism(in.Add(vec3{0.77, 1.3, -0.77}), vec3{1, 0, -1}, 0.09, 0.09, 0.05, 14, 0)
+	p := func(x, y, z float64) vec3 { return in.Add(vec3{x, y, z}) }
+	b.in("home.trim").Box(p(0, 0.05, 0.25), vec3{1.9, 0.1, 2.4}, xAxis, 0)
+	b.in("home.panel").Box(p(0.02, 1.1, 0.25), vec3{2.04, 2.0, 2.5}, xAxis, 0.1)
+	b.in("home.trim").Box(p(1.04, 0.95, 0), vec3{0.04, 0.78, 1.0}, xAxis, 0.02)
+	b.in("home.trim").Box(p(1.07, 1.1, 1.25), vec3{0.06, 0.4, 0.5}, xAxis, 0.02)
+	b.in("home.trim").Box(p(0.1, 2.11, 0.25), vec3{1.2, 0.03, 1.4}, xAxis, 0.01)
+	b.in("neon.orange").Box(p(1.045, 1.6, 0.25), vec3{0.01, 0.025, 2.2}, xAxis, 0)
 }
 
 // BuildConsole: a desk between two server racks.

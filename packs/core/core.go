@@ -186,7 +186,11 @@ var coreTokens = map[string]content.Token{
 	"home.trim":      {color.RGBA{56, 58, 64, 255}, content.MtPlain, 1, 0.5, 0},
 	"home.led":       {color.RGBA{255, 228, 194, 255}, content.MtPlain, 1, 0, 1},
 	"home.led.amber": {color.RGBA{255, 178, 100, 255}, content.MtPlain, 1, 0, 0.9},
-	"glass.rail":     {color.RGBA{185, 212, 218, 255}, content.MtPlain, 1, 1.0, 0},
+	// Its soft furnishings: slate cushions, a felt rug.
+	"fabric.slate": {color.RGBA{72, 80, 94, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.felt":  {color.RGBA{92, 96, 104, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"fabric.felt2": {color.RGBA{116, 118, 122, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"glass.rail":   {color.RGBA{185, 212, 218, 255}, content.MtPlain, 1, 1.0, 0},
 }
 
 // coreBuildings: the great hall first, the rooms around it, then the
@@ -216,11 +220,21 @@ var coreBuildings = []content.Blueprint{
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},
-			{Kit: "crate.stack", At: vec3{-10.6, 0, 6.6}, Seed: 1},
-			{Kit: "crate.stack", At: vec3{10.6, 0, 6.6}, Seed: 2},
-			{Kit: "crate.stack", At: vec3{10.6, 0, -6.6}, Seed: 4},
-			{Kit: "crate.stack", At: vec3{-7.2, 0, -7.0}, Seed: 3},
-			{Kit: "crate.stack", At: vec3{-10.9, 0, -7.2}, Seed: 8},
+			// Built-in storage along the walls: by the sale corner, and
+			// either side of the bedroom's door.
+			{Kit: "storage", At: vec3{-6.5, 0, -7.53}, Yaw: 90, Seed: 1},
+			{Kit: "storage", At: vec3{-4.5, 0, 7.53}, Yaw: -90, Seed: 2},
+			{Kit: "storage", At: vec3{4.5, 0, 7.53}, Yaw: -90, Seed: 3},
+			// The lounge, in the north-west corner, open toward the
+			// middle of the hall.
+			{Kit: "rug.felt", At: vec3{-7, 0, 4.6}},
+			{Kit: "sofa.arc", At: vec3{-7, 0, 4.6}, Yaw: -45},
+			{Kit: "coffee.table", At: vec3{-7, 0, 4.6}},
+			// Hydroponic planters under the lookout, along the bay window.
+			{Kit: "planter.home", At: vec3{10.8, 0, -3}, Seed: 1},
+			{Kit: "planter.home", At: vec3{10.8, 0, -1}, Seed: 4},
+			{Kit: "planter.home", At: vec3{10.8, 0, 1}, Seed: 7},
+			{Kit: "planter.home", At: vec3{10.8, 0, 3}, Seed: 2},
 			{Kit: "telescope", At: vec3{10.5, 3, -3.5}}, // between two mullions
 			{Kit: "bench", At: vec3{9.4, 3, 2.4}},
 			{Kit: "lowtable", At: vec3{10.5, 3, 2.4}},
@@ -301,7 +315,7 @@ var coreBuildings = []content.Blueprint{
 var coreKits = map[string]content.Kit{
 	"maptable": {Build: base.KitBuild(base.BuildMapTable), Obstacles: []content.Obstacle{{vec3{}, 1.25}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.OpenMap() }, Prompt: "[E] Consulter l'état de Mars"},
-	"incinerator": {Build: base.KitBuild(base.BuildIncinerator), Obstacles: []content.Obstacle{{vec3{}, 1.4}},
+	"incinerator": {Build: base.KitBuild(base.BuildIncinerator), Obstacles: []content.Obstacle{{vec3{0, 0, -0.2}, 1.3}, {vec3{0, 0, 0.8}, 1.3}},
 		Reach: 2.8, Use: content.Game.Deposit, Prompt: "[E] Déposer la poussière dans l'incinérateur"},
 	"console": {Build: base.KitBuild(base.BuildConsole),
 		Obstacles: []content.Obstacle{{vec3{-0.3, 0, 0}, 1.0}, {vec3{0, 0, 2.3}, 0.6}, {vec3{0, 0, -2.3}, 0.6}},
@@ -323,13 +337,27 @@ var coreKits = map[string]content.Kit{
 	"books":        {Build: base.KitBuild(base.BuildBooks)},
 	"plant": {Build: base.KitBuild(base.BuildPlantPot), Stages: base.PlantStages,
 		Grow: base.KitBuild(base.BuildPlantStage)},
-	"crate.stack": {Build: base.KitBuild(base.BuildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
-	"chair":       {Build: base.KitBuild(base.BuildChair), Obstacles: []content.Obstacle{{vec3{}, 0.35}}},
-	"workbench":   {Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
-	"planter":     {Build: base.KitBuild(base.BuildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
-	"desk":        {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
-	"bench":       {Build: base.KitBuild(base.BuildBench), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.35}, {vec3{0, 0, 0.5}, 0.35}}},
-	"lowtable":    {Build: base.KitBuild(base.BuildLowTable), Obstacles: []content.Obstacle{{vec3{}, 0.45}}},
+	"crate.stack":  {Build: base.KitBuild(base.BuildCrates), Obstacles: []content.Obstacle{{vec3{}, 0.55}}},
+	"chair":        {Build: base.KitBuild(base.BuildChair), Obstacles: []content.Obstacle{{vec3{}, 0.35}}},
+	"workbench":    {Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}}},
+	"planter":      {Build: base.KitBuild(base.BuildPlanter), Obstacles: []content.Obstacle{{vec3{}, 0.85}}},
+	"desk":         {Build: base.KitBuild(base.BuildDesk), Obstacles: []content.Obstacle{{vec3{}, 0.65}}},
+	"bench":        {Build: base.KitBuild(base.BuildBench), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.35}, {vec3{0, 0, 0.5}, 0.35}}},
+	"lowtable":     {Build: base.KitBuild(base.BuildLowTable), Obstacles: []content.Obstacle{{vec3{}, 0.45}}},
+	"sofa.arc":     {Build: base.KitBuild(base.BuildSofaArc), Obstacles: obstacles(base.SofaObstacles(), 0.45)},
+	"coffee.table": {Build: base.KitBuild(base.BuildCoffeeTable), Obstacles: []content.Obstacle{{vec3{}, 0.6}}},
+	"rug.felt":     {Build: base.KitBuild(base.BuildFeltRug)},
+	"storage":      {Build: base.KitBuild(base.BuildStorage), Obstacles: obstacles(base.StorageObstacles, 0.45)},
+	"planter.home": {Build: base.KitBuild(base.BuildHomePlanter), Obstacles: []content.Obstacle{{vec3{0, 0, -0.5}, 0.45}, {vec3{0, 0, 0.5}, 0.45}}},
 	"telescope": {Build: base.KitBuild(base.BuildTelescope), Obstacles: []content.Obstacle{{vec3{}, 0.5}},
 		Reach: 2.2, Use: content.Game.LookThrough, Prompt: "[E] Regarder dans la longue-vue"},
+}
+
+// obstacles are round obstacles of radius r at the points at.
+func obstacles(at []vec3, r float64) []content.Obstacle {
+	var out []content.Obstacle
+	for _, p := range at {
+		out = append(out, content.Obstacle{At: p, Radius: r})
+	}
+	return out
 }
