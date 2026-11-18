@@ -307,6 +307,27 @@ func (b *baseModels) draw(gfx *Graphics) {
 	}
 }
 
+// baseDepth lays the depth of the base's static pieces, without color:
+// drawn after it, only what is seen of them runs the costly shader (the
+// depth test lets equal depths through).
+func (gfx *Graphics) baseDepth() {
+	if gfx.base == nil {
+		return
+	}
+	rl.DisableBackfaceCulling()
+	rl.ColorMask(false, false, false, false)
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
+	for i, k := range gfx.base.Keys {
+		if k.Lit != mesh.LitGlass {
+			rl.DrawModel(gfx.base.models[i], rl.Vector3{}, 1, rl.White)
+		}
+	}
+	rl.DrawRenderBatchActive()
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
+	rl.ColorMask(true, true, true, true)
+	rl.EnableBackfaceCulling()
+}
+
 // drawGlass draws the base's panes of glass over the scene, seen
 // through: after everything opaque, without hiding what comes behind.
 // Only their faces turned to the viewer: one layer of glass each.

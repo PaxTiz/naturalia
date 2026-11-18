@@ -490,7 +490,9 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	rl.EnableBackfaceCulling()
 
 	// The base first: the terrain it hides then fails the depth test before
-	// its costly shader runs (most of the screen, indoors).
+	// its costly shader runs (most of the screen, indoors). Its depth is laid
+	// first: a wall behind a home's lining isn't shaded for nothing.
+	gfx.baseDepth()
 	gfx.drawBase(g)
 	gfx.drawEntities(g)
 	// Culling is off: patch winding differs from one cube face to the next.
