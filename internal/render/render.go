@@ -359,9 +359,13 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		}
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "slabCount"), []float32{float32(len(slabs) / 4)}, rl.ShaderUniformFloat)
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseRel"), v3f(base.Origin.Sub(o)), rl.ShaderUniformVec3)
-		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseRooms"), rms, rl.ShaderUniformVec4, int32(len(rms)/4))
-		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrs"), crs, rl.ShaderUniformVec4, int32(len(crs)/4))
-		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrSize"), csz, rl.ShaderUniformVec4, int32(len(csz)/4))
+		if len(rms) > 0 { // the core base has no dome left
+			rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseRooms"), rms, rl.ShaderUniformVec4, int32(len(rms)/4))
+		}
+		if len(crs) > 0 {
+			rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrs"), crs, rl.ShaderUniformVec4, int32(len(crs)/4))
+			rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseCorrSize"), csz, rl.ShaderUniformVec4, int32(len(csz)/4))
+		}
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "roomCount"), []float32{float32(len(rms) / 4)}, rl.ShaderUniformFloat)
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "corrCount"), []float32{float32(len(crs) / 4)}, rl.ShaderUniformFloat)
 	}

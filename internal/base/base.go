@@ -13,11 +13,11 @@ import (
 // flat over the whole base: everything here is laid out in local
 // coordinates (x, y, z) relative to Origin, with y up.
 //
-//	                            [ Bedroom ]
-//	                                ║
-//	[ Hangar ]═══[ Research ]═══( Great hall: map table, sale )
-//	                                ║
-//	                            [ Airlock ] → outside
+//	                   [ Bedroom ]
+//	                       ║
+//	[ Hangar ]═══( Great hall: map table, sale, lab, lounge )
+//	                       ║
+//	                   [ Airlock ] → outside
 
 // Room is a round building: panel walls with openings, under a dome roof;
 // or, with Hall set, a big rectangular one (hall.go).

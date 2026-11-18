@@ -211,7 +211,7 @@ func TestHangarDoor(t *testing.T) {
 
 func TestCorridorToHangar(t *testing.T) {
 	g := baseGame(t)
-	// From the research room, west through the corridor, into the hangar,
+	// From the great hall, west through the corridor, into the hangar,
 	// indoors all the way.
 	// Its door at the hangar's end opens as they come, walking at 4 m/s.
 	west := func(steps int, doors bool) vec3 {
@@ -228,14 +228,14 @@ func TestCorridorToHangar(t *testing.T) {
 		}
 		return base.ToLocal(g.Player.Pos)
 	}
-	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{-20, 1, 0}))
-	if at := west(330, true); at.X > -40.9 {
+	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(vec3{-9, 1, 0}))
+	if at := west(330, true); at.X > -29.9 {
 		t.Errorf("stopped at %v", at)
 	}
 	// Shut, it stops them.
-	g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(vec3{-32, 1, 0})), vec3{}
+	g.Player.Pos, g.Player.vel = g.World.Relief.Surface(base.ToWorld(vec3{-21, 1, 0})), vec3{}
 	g.InnerOpen = []float64{0}
-	if at := west(30, false); at.X < -33 {
+	if at := west(30, false); at.X < -22 {
 		t.Errorf("went through the shut door: %v", at)
 	}
 	// The bays leave the aisle from the doorway free.

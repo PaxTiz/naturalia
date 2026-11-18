@@ -691,8 +691,8 @@ func (b *building) clutter(bp *content.Blueprint) {
 	case "core:hall":
 		// On the lounge's low table, a mug and a tablet; on the map
 		// table's rim, another mug.
-		b.mug(at(vec3{-6.8, 0.45, 4.4}), "pipe.blue", 1)
-		b.tablet(at(vec3{-7.25, 0.45, 4.75}), 0.7)
+		b.mug(at(vec3{5.2, 0.45, 3.6}), "pipe.blue", 1)
+		b.tablet(at(vec3{4.75, 0.45, 3.95}), 0.7)
 		b.mug(at(vec3{-0.75, 0.92, -0.85}), "habitat.white", 2)
 		// The sale corner: papers on the storage's top.
 		b.papers(at(vec3{-6.9, 2.31, -7.5}), 0.4, 3)
@@ -701,16 +701,16 @@ func (b *building) clutter(bp *content.Blueprint) {
 		b.mug(at(vec3{10.35, 3.44, 2.55}), "pipe.red", 0.6)
 		b.tablet(at(vec3{10.6, 3.44, 2.2}), 2.2)
 		b.helmet(at(vec3{9.3, 3, 3.6}), 0.4)
-	case "core:research":
-		// On the console's desk, turned like it.
-		c := at(vec3{0, 0, -2.3})
+		// The lab corner: on the console's desk, turned like it, and on
+		// the bench.
+		c := at(vec3{-8.2, 0, 7.38})
 		desk := func(v vec3) vec3 { return c.Add(content.Turn(v, -90)) }
 		b.mug(desk(vec3{-0.4, 0.81, 0.85}), "habitat.white", 2.5)
 		b.papers(desk(vec3{-0.35, 0.81, -0.75}), 0.2-math.Pi/2, 4)
 		b.tablet(desk(vec3{-0.45, 0.81, 0.35}), 1.4-math.Pi/2)
-		wb := at(vec3{-0.6, 0, 3.0})
-		b.mug(wb.Add(vec3{0.65, 0.93, -0.1}), "barrel.ochre", 0.3)
-		b.papers(wb.Add(vec3{0.2, 0.93, -0.15}), 1.2, 2)
+		wb := at(vec3{-11.5, 0, 4.2})
+		b.mug(wb.Add(vec3{0.1, 0.93, -0.75}), "barrel.ochre", 0.3)
+		b.papers(wb.Add(vec3{0.1, 0.93, -0.45}), 1.2, 2)
 	case "core:sleep":
 		// A mug by the bed, papers by the laptop, the helmet and a
 		// tablet left on the reading seat.

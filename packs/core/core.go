@@ -64,6 +64,8 @@ func registerCore(c *content.Content) {
 	// linked to them is linked to it.
 	c.Buildings.Alias("core:hub", "core:hall")
 	c.Buildings.Alias("core:sale", "core:hall")
+	// The research lab moved into a corner of the great hall.
+	c.Buildings.Alias("core:research", "core:hall")
 
 	c.Entities.Add("core:flag", content.EntityDef{Name: "Drapeau", Pickup: true, Radius: 0.15, Parts: []content.PartJSON{
 		{Shape: "prism", Token: "steel.dark", R0: 0.16, R1: 0.12, H: 0.08, Sides: 8, Lit: "outdoor"},
@@ -194,14 +196,14 @@ var coreTokens = map[string]content.Token{
 	"glass.rail":   {color.RGBA{185, 212, 218, 255}, content.MtPlain, 1, 1.0, 0},
 }
 
-// coreBuildings: the great hall first, the rooms around it, then the
-// hangar. The hall's south door leads to the airlock; its east wall is
-// kept for the bay window. The research room and the hangar stand west,
-// turned half a turn (Yaw): they keep the layout they had on the other
-// side.
+// coreBuildings: the great hall first, the bedroom, then the hangar. The
+// hall's south door leads to the airlock; its east wall is kept for the
+// bay window. The hangar stands west, turned half a turn (Yaw): its door
+// faces away.
 var coreBuildings = []content.Blueprint{
-	// The hub and the sale room in one: the map table in the middle, the
-	// incinerator in the south-west corner under its sign.
+	// The hub, the sale room and the research lab in one: the map table
+	// in the middle, the incinerator in the south-west corner and the lab
+	// in the north-west one, under their signs, the lounge north-east.
 	content.Blueprint{
 		ID:     "core:hall",
 		Accent: "neon.cyan",
@@ -217,20 +219,32 @@ var coreBuildings = []content.Blueprint{
 			{From: vec3{9.75, 3, -7.8}, To: vec3{9.75, 3, 7.8}, Width: 4, Thick: 0.3},
 			{From: vec3{2.2, 0, -6.9}, To: vec3{7.75, 3, -6.9}, Width: 1.3},
 		},
-		Signs: []content.Sign{{Text: "VENTE", At: vec3{-11.82, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"}},
+		Signs: []content.Sign{
+			{Text: "VENTE", At: vec3{-11.74, 3.6, -6.3}, Facing: base.East, Width: 2.6, Height: 0.6, Accent: "neon.orange"},
+			{Text: "RECHERCHE", At: vec3{-8.2, 3.2, 7.74}, Facing: base.South, Width: 3.4, Height: 0.6, Accent: "neon.blue"},
+		},
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},
 			// Built-in storage along the walls: by the sale corner, and
 			// either side of the bedroom's door.
 			{Kit: "storage", At: vec3{-6.5, 0, -7.53}, Yaw: 90, Seed: 1},
-			{Kit: "storage", At: vec3{-4.5, 0, 7.53}, Yaw: -90, Seed: 2},
-			{Kit: "storage", At: vec3{4.5, 0, 7.53}, Yaw: -90, Seed: 3},
-			// The lounge, in the north-west corner, open toward the
-			// middle of the hall.
-			{Kit: "rug.felt", At: vec3{-7, 0, 4.6}},
-			{Kit: "sofa.arc", At: vec3{-7, 0, 4.6}, Yaw: -45},
-			{Kit: "coffee.table", At: vec3{-7, 0, 4.6}},
+			{Kit: "storage", At: vec3{-3, 0, 7.53}, Yaw: -90, Seed: 2},
+			{Kit: "storage", At: vec3{3, 0, 7.53}, Yaw: -90, Seed: 3},
+			// The research lab, in the north-west corner: the console
+			// against the north wall, the bench and the samples' showcase
+			// against the west one, a planter between it and the way to
+			// the hangar.
+			{Kit: "console", At: vec3{-8.2, 0, 7.38}, Yaw: -90},
+			{Kit: "chair", At: vec3{-7.7, 0, 6.3}, Yaw: -90},
+			{Kit: "workbench", At: vec3{-11.5, 0, 4.2}},
+			{Kit: "showcase", At: vec3{-11.6, 0, 6.2}, Seed: 1},
+			{Kit: "planter.home", At: vec3{-7, 0, 2.0}, Yaw: 90, Seed: 2},
+			// The lounge, in the north-east corner, open toward the bay
+			// window.
+			{Kit: "rug.felt", At: vec3{5, 0, 3.8}},
+			{Kit: "sofa.arc", At: vec3{5, 0, 3.8}, Yaw: -45},
+			{Kit: "coffee.table", At: vec3{5, 0, 3.8}},
 			// Hydroponic planters under the lookout, along the bay window.
 			{Kit: "planter.home", At: vec3{10.8, 0, -3}, Seed: 1},
 			{Kit: "planter.home", At: vec3{10.8, 0, -1}, Seed: 4},
@@ -239,29 +253,6 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "telescope", At: vec3{10.5, 3, -3.5}}, // between two mullions
 			{Kit: "bench", At: vec3{9.4, 3, 2.4}},
 			{Kit: "lowtable", At: vec3{10.5, 3, 2.4}},
-		},
-	},
-	content.Blueprint{
-		ID:       "core:research",
-		Link:     "core:hall",
-		Sign:     "RECHERCHE",
-		Accent:   "neon.blue",
-		At:       vec3{-20, 0, 0},
-		Yaw:      180,
-		Shape:    content.Dome{Radius: 4, WallH: 2.6},
-		Style:    "habitat.white",
-		Interior: "home",
-		Doors:    []content.Door{{base.West}},
-		// The console against the south wall, facing north: the way from
-		// the hall to the hangar runs across the room.
-		Props: []content.Prop{
-			{Kit: "console", At: vec3{0, 0, -2.3}, Yaw: -90},
-			{Kit: "chair", At: vec3{0.5, 0, -1.2}, Seed: 0, Yaw: -90},
-			{Kit: "workbench", At: vec3{-0.6, 0, 3.0}, Seed: 6},
-			{Kit: "planter.home", At: vec3{1.6, 0, 2.5}, Yaw: 90, Seed: 2},
-			// Samples brought back from outside, behind glass, facing
-			// the middle of the room.
-			{Kit: "showcase", At: vec3{-2.9, 0, 1.6}, Yaw: -29, Seed: 1},
 		},
 	},
 	// The bedroom wing, at the end of a corridor north of the hall: one
@@ -301,14 +292,14 @@ var coreBuildings = []content.Blueprint{
 		},
 	},
 	// The vehicles' hangar, west of the base, turned so its door (east in
-	// its own frame) faces away; a corridor leads there from the research
-	// room.
+	// its own frame) faces away; a corridor leads there from the great
+	// hall.
 	content.Blueprint{
 		ID:     "core:hangar",
-		Link:   "core:research",
+		Link:   "core:hall",
 		Sign:   "HANGAR 01",
 		Accent: "neon.orange",
-		At:     vec3{-46, 0, 0},
+		At:     vec3{-35, 0, 0}, // 10 m of corridor from the hall
 		Yaw:    180,
 		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
 		Garage: true,
