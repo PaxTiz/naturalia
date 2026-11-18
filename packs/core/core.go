@@ -250,6 +250,7 @@ var coreBuildings = []content.Blueprint{
 			// console; terracotta felt behind the lounge.
 			{Kit: "floor.ceramic", At: vec3{-1.5, 0, -6.28}, Seed: 3},
 			{Kit: "ceramic.wall", At: vec3{-3.2, 0, -7.78}, Yaw: 90, Seed: 5},
+			{Kit: "entry", At: vec3{-3.2, 0, -7.76}, Yaw: 90},
 			{Kit: "floor.tech", At: vec3{-9.28, 0, 5.28}},
 			{Kit: "felt.wall", At: vec3{-8.2, 1.0, 7.78}, Yaw: -90, Seed: 2},
 			{Kit: "felt.wall", At: vec3{6, 0.15, 7.78}, Yaw: -90},
@@ -270,6 +271,8 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "rug.felt", At: vec3{5, 0, 3.8}},
 			{Kit: "sofa.arc", At: vec3{5, 0, 3.8}, Yaw: -45},
 			{Kit: "coffee.table", At: vec3{5, 0, 3.8}},
+			{Kit: "pouf", At: vec3{6.22, 0, 3.36}},
+			{Kit: "pouf", At: vec3{5.44, 0, 2.58}, Seed: 1},
 			{Kit: "lamp.arc", At: vec3{3.3, 0, 5.55}, Yaw: -45},
 			// A canopy over it lowers the ceiling there; low bookcases
 			// close it from the map table and the lab from the middle.
@@ -366,6 +369,8 @@ var coreKits = map[string]content.Kit{
 	"lamp.floor":    {Build: base.KitBuild(base.BuildFloorLamp), Obstacles: []content.Obstacle{{vec3{}, 0.22}}, Lamps: []content.KitLamp{{base.FloorLight, 0.7, 5}}},
 	"canopy":        {Build: base.KitBuild(base.BuildCanopy)},
 	"divider":       {Build: base.KitBuild(base.BuildDivider), Obstacles: obstacles(base.DividerObstacles, 0.3)},
+	"entry":         {Build: base.KitBuild(base.BuildEntry), Obstacles: obstacles(base.EntryObstacles, 0.32)},
+	"pouf":          {Build: base.KitBuild(base.BuildPouf), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
 	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},
 	"felt.low":      {Build: base.KitBuild(base.BuildFeltLow)},
 	"ceramic.wall":  {Build: base.KitBuild(base.BuildCeramicWall)},

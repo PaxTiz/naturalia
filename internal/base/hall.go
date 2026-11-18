@@ -207,12 +207,17 @@ func (r Room) solid(a, b vec3) [][2]vec3 {
 // way out of the hall.
 type InnerDoor struct {
 	Mid, Along, Out vec3
+	// Home: the door of a living space onto a corridor to a working
+	// building, finished like the space and as high as its frame.
+	Home bool
 }
 
 // InnerLeaf is the width of each of an inner door's two leaves.
 const InnerLeaf = (DoorWidth + 0.2) / 2
 
-// InnerDoors are the corridor doors of the halls with a big door.
+// InnerDoors are the corridor doors of the halls with a big door, then
+// those of the living halls onto a corridor to a working building (the
+// hangar): its industry stays behind them.
 func InnerDoors() []InnerDoor {
 	var out []InnerDoor
 	for _, r := range Buildings() {
@@ -221,7 +226,23 @@ func InnerDoors() []InnerDoor {
 		}
 		for _, w := range r.doorways() {
 			o := r.wallOut(w)
-			out = append(out, InnerDoor{r.Turn(w), r.TurnDir(vec3{-o.Z, 0, o.X}), r.TurnDir(o)})
+			out = append(out, InnerDoor{r.Turn(w), r.TurnDir(vec3{-o.Z, 0, o.X}), r.TurnDir(o), false})
+		}
+	}
+	for _, c := range ordered(Ents.Corridor) {
+		for i, end := range []vec3{c.From, c.To} {
+			r, other := Ents.Building.Get(c.Rooms[i]), Ents.Building.Get(c.Rooms[1-i])
+			if r == nil || other == nil || r.Hall == nil || !r.home() || other.home() {
+				continue
+			}
+			var best vec3
+			for k, w := range r.doorways() {
+				if k == 0 || r.Turn(w).Sub(end).Length() < r.Turn(best).Sub(end).Length() {
+					best = w
+				}
+			}
+			o := r.wallOut(best)
+			out = append(out, InnerDoor{r.Turn(best), r.TurnDir(vec3{-o.Z, 0, o.X}), r.TurnDir(o), true})
 		}
 	}
 	return out

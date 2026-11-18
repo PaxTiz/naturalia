@@ -230,3 +230,53 @@ func BuildDivider(b *building, at vec3, seed int) {
 
 // DividerObstacles stop the player along a divider.
 var DividerObstacles = []vec3{{0, 0, -0.9}, {0, 0, 0}, {0, 0, 0.9}}
+
+// BuildEntry: where one comes in from outside and leaves it behind,
+// against the wall at -X, 2.4 m along Z: a white bench with boots under
+// it (-Z end), a shelf over it with a helmet and pegs below, a jacket
+// and a scarf on them, and at the +Z end a suit hung up to dry.
+func BuildEntry(b *building, at vec3, _ int) {
+	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
+	// The bench, its oat cushion, boots under it.
+	b.in("home.trim").Box(p(0.2, 0.04, -0.5), vec3{0.34, 0.08, 1.36}, xAxis, 0.01)
+	b.in("home.panel2").Box(p(0.21, 0.26, -0.5), vec3{0.4, 0.36, 1.4}, xAxis, 0.03)
+	b.in("fabric.oat").Box(p(0.21, 0.47, -0.5), vec3{0.38, 0.06, 1.36}, xAxis, 0.025)
+	for k, z := range []float64{-1.0, -0.78, -0.3, -0.08} {
+		x := 0.52 + 0.05*grnd(3, k)
+		b.in("fabric.slate").Box(p(x, 0.13, z), vec3{0.26, 0.26, 0.1}, xAxis, 0.03)
+		b.in("fabric.slate").Box(p(x+0.09, 0.04, z), vec3{0.12, 0.08, 0.1}, xAxis, 0.02)
+	}
+	// The shelf and its pegs.
+	b.in("home.panel").Box(p(0.14, 1.8, -0.5), vec3{0.28, 0.03, 1.4}, xAxis, 0.008)
+	b.in("home.led.amber").Box(p(0.2, 1.783, -0.5), vec3{0.03, 0.006, 1.3}, xAxis, 0)
+	b.helmet(p(0.15, 1.815, -0.85), 0.4)
+	for k := range 4 {
+		z := -1.0 + float64(k)*0.33
+		b.in("home.trim").Prism(p(0.02, 1.6, z), xAxis, 0.012, 0.012, 0.1, 8, 0)
+	}
+	// A jacket and a scarf hanging from them.
+	b.in("fabric.rust").Box(p(0.11, 1.28, -0.67), vec3{0.1, 0.62, 0.42}, xAxis, 0.04)
+	b.in("fabric.ochre").Box(p(0.1, 1.33, -0.01), vec3{0.04, 0.5, 0.14}, xAxis, 0.02)
+	// The suit, hung up by its shoulders: torso, arms, legs, gloves.
+	suit, dark := b.in("habitat.white"), b.in("fabric.slate")
+	b.in("home.trim").Box(p(0.06, 1.72, 0.75), vec3{0.12, 0.03, 0.5}, xAxis, 0.01)
+	suit.Box(p(0.2, 1.38, 0.75), vec3{0.26, 0.6, 0.48}, xAxis, 0.08)
+	b.in("fabric.ochre").Box(p(0.335, 1.45, 0.75), vec3{0.01, 0.12, 0.3}, xAxis, 0)
+	for _, s := range []float64{-1, 1} {
+		suit.Box(p(0.2, 1.3, 0.75+s*0.31), vec3{0.15, 0.62, 0.14}, xAxis, 0.06)
+		dark.Box(p(0.2, 0.95, 0.75+s*0.31), vec3{0.12, 0.12, 0.1}, xAxis, 0.03)
+		suit.Box(p(0.2, 0.68, 0.75+s*0.12), vec3{0.18, 0.62, 0.17}, xAxis, 0.06)
+		dark.Box(p(0.22, 0.3, 0.75+s*0.12), vec3{0.2, 0.14, 0.15}, xAxis, 0.04)
+	}
+	dark.Box(p(0.2, 1.06, 0.75), vec3{0.27, 0.06, 0.46}, xAxis, 0.02)
+}
+
+// EntryObstacles stop the player at the bench and the suit.
+var EntryObstacles = []vec3{{0.25, 0, -0.9}, {0.25, 0, -0.2}, {0.25, 0, 0.75}}
+
+// BuildPouf: a round pouf of the seed's fabric, a seam round its middle.
+func BuildPouf(b *building, at vec3, seed int) {
+	tok := []string{"fabric.ochre", "fabric.rust", "fabric.oat"}[seed%3]
+	b.in(tok).Prism(at, yUp, 0.26, 0.26, 0.4, 24, 0.06)
+	b.in("fabric.slate").Prism(at.Add(vec3{0, 0.195, 0}), yUp, 0.262, 0.262, 0.01, 24, 0)
+}

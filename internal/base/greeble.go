@@ -677,6 +677,19 @@ func (b *building) coil(p vec3, r float64, tok string) {
 }
 
 // helmet sets a spare helmet down at p, visor toward a.
+// boardGame lays a board game at p turned by a: a square board, its
+// pieces on it.
+func (b *building) boardGame(p vec3, a float64) {
+	along := vec3{math.Cos(a), 0, math.Sin(a)}
+	side := vec3{-along.Z, 0, along.X}
+	b.in("ceramic.sand").Box(p.Add(vec3{0, 0.006, 0}), vec3{0.36, 0.012, 0.36}, along, 0.003)
+	for k := range 9 {
+		tok := []string{"fabric.rust", "fabric.teal", "fabric.ochre"}[k%3]
+		q := p.Add(along.Scale(0.3 * (grnd(17, k) - 0.5))).Add(side.Scale(0.3 * (grnd(23, k) - 0.5)))
+		b.in(tok).Prism(q.Add(vec3{0, 0.012, 0}), yUp, 0.012, 0.009, 0.03, 8, 0)
+	}
+}
+
 func (b *building) helmet(p vec3, a float64) {
 	d := vec3{math.Cos(a), 0, math.Sin(a)}
 	b.Part("habitat.white", mesh.LitIndoor, vec3{}).Dome(p.Add(vec3{0, 0.06, 0}), 0.16, 0.2)
@@ -693,6 +706,9 @@ func (b *building) clutter(bp *content.Blueprint) {
 		// table's rim, another mug.
 		b.mug(at(vec3{5.2, 0.45, 3.6}), "pipe.blue", 1)
 		b.tablet(at(vec3{4.75, 0.45, 3.95}), 0.7)
+		// A board game left out mid-game, a throw on the banquette.
+		b.boardGame(at(vec3{5.05, 0.45, 3.95}), 0.4)
+		b.in("fabric.wool").BoxBasis(at(vec3{4.0, 0.56, 5.0}), [3]vec3{vec3{1, 0, 1}.Norm(), {0, 1, 0}, vec3{-1, 0, 1}.Norm()}, vec3{0.7, 0.04, 0.5}, 0.015)
 		b.mug(at(vec3{-0.75, 0.92, -0.85}), "habitat.white", 2)
 		// The sale corner: papers on the storage's top.
 		b.papers(at(vec3{-6.9, 2.31, -7.5}), 0.4, 3)

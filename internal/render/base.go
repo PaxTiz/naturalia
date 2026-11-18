@@ -108,19 +108,26 @@ func (gfx *Graphics) drawGrowth(g *game.Game) {
 }
 
 // drawInnerDoors draws the halls' corridor doors: two leaves sliding into
-// the wall, like the airlock's, and a light over them on the hall's side.
+// the wall, like the airlock's, and a light over them on the hall's side;
+// a living space's are white, up to its frame, without the light.
 func (gfx *Graphics) drawInnerDoors(g *game.Game) {
-	steel := gfx.tok("steel")
 	for k, d := range base.InnerDoors() {
 		open := 0.0
 		if k < len(g.InnerOpen) {
 			open = g.InnerOpen[k]
 		}
+		leaf, h := gfx.tok("steel"), base.DoorHeight
+		if d.Home {
+			leaf, h = gfx.tok("home.panel2"), base.DoorHeight+0.1
+		}
 		gfx.setLighting(mesh.LitIndoor, vec3{})
-		gfx.setMat(steel.Mat, steel.Scale, false)
+		gfx.setMat(leaf.Mat, leaf.Scale, false)
 		for _, s := range []float64{-1, 1} {
-			at := d.Mid.Add(d.Along.Scale(s * (base.InnerLeaf/2 + open*base.InnerLeaf))).Add(vec3{0, base.DoorHeight / 2, 0})
-			gfx.put(gfx.doorPanel, base.ToWorld(at), vec3{1, 1, 1}, vec3{0, 1, 0}, yawFor(d.Along)*180/math.Pi, steel.Col, steel.Spec, 0)
+			at := d.Mid.Add(d.Along.Scale(s * (base.InnerLeaf/2 + open*base.InnerLeaf))).Add(vec3{0, h / 2, 0})
+			gfx.put(gfx.doorPanel, base.ToWorld(at), vec3{1, h / base.DoorHeight, 1}, vec3{0, 1, 0}, yawFor(d.Along)*180/math.Pi, leaf.Col, leaf.Spec, 0)
+		}
+		if d.Home {
+			continue
 		}
 		gfx.setMat(content.MtPlain, 1, false)
 		lamp := palette.Green
