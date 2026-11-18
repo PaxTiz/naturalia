@@ -712,12 +712,12 @@ func (b *building) clutter(bp *content.Blueprint) {
 		b.mug(wb.Add(vec3{0.65, 0.93, -0.1}), "barrel.ochre", 0.3)
 		b.papers(wb.Add(vec3{0.2, 0.93, -0.15}), 1.2, 2)
 	case "core:sleep":
-		// A mug by the bed, papers by the laptop, the helmet put away on
-		// the lockers, a tablet left on the armchair.
-		b.mug(at(vec3{-1.0, 0.56, 2.12}), "habitat.white", 3.6)
+		// A mug by the bed, papers by the laptop, the helmet and a
+		// tablet left on the reading seat.
+		b.mug(at(vec3{-0.9, 0.56, 1.95}), "habitat.white", 3.6)
 		b.papers(at(vec3{2.85, 0.76, -0.62}), 1.4, 3)
 		b.mug(at(vec3{2.78, 0.76, -0.95 + 0.2}), "fabric.duvet", 0.4)
-		b.helmet(at(vec3{-3.03, 1.9, 1.62}), 0)
-		b.tablet(at(vec3{-2.4, 0.49, -1.45}), 0.8)
+		b.helmet(at(vec3{-2.95, 0.52, 0.0}), 0.3)
+		b.tablet(at(vec3{-2.85, 0.52, -1.2}), 0.8)
 	}
 }

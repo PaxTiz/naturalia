@@ -17,21 +17,15 @@ func (b *building) in(tok string) *mesh.Builder { return b.Part(tok, mesh.LitInd
 
 var xAxis = vec3{1, 0, 0}
 
-// BuildBed: a double bed, its head toward -X against the wall: a wooden
-// frame on short legs, a padded headboard, the mattress, two pillows, the
-// duvet folded back and a throw across its foot.
+// BuildBed: a double bed built in, its head toward -X against the wall:
+// a white base on a recessed plinth, a padded headboard, the mattress, two
+// pillows, the duvet folded back and a throw across its foot.
 func BuildBed(b *building, at vec3, _ int) {
 	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
-	wood, dark := b.in("wood.light"), b.in("wood.brown")
-	wood.Box(p(0.03, 0.24, 0), vec3{2.08, 0.2, 1.56}, xAxis, 0.03)
-	for _, x := range []float64{-0.95, 1.0} {
-		for _, z := range []float64{-0.7, 0.7} {
-			dark.Box(p(x, 0.07, z), vec3{0.08, 0.14, 0.08}, xAxis, 0.01)
-		}
-	}
-	wood.Box(p(-1.04, 0.6, 0), vec3{0.08, 1.2, 1.62}, xAxis, 0.03)
+	b.in("home.trim").Box(p(0.03, 0.05, 0), vec3{1.9, 0.1, 1.4}, xAxis, 0.01)
+	b.in("home.panel2").Box(p(0.03, 0.22, 0), vec3{2.08, 0.26, 1.6}, xAxis, 0.05)
 	for _, z := range []float64{-0.39, 0.39} {
-		b.in("fabric.teal").Box(p(-0.98, 0.82, z), vec3{0.06, 0.5, 0.74}, xAxis, 0.03)
+		b.in("fabric.teal").Box(p(-1.0, 0.78, z), vec3{0.08, 0.6, 0.76}, xAxis, 0.04)
 	}
 	b.in("fabric.white").Box(p(0.05, 0.43, 0), vec3{1.98, 0.18, 1.48}, xAxis, 0.05)
 	// The pillows lean on the headboard.
@@ -51,6 +45,50 @@ func BuildBed(b *building, at vec3, _ int) {
 	wool.Box(p(0.8, 0.615, 0), vec3{0.42, 0.03, 1.6}, xAxis, 0.01)
 	wool.Box(p(1.095, 0.49, 0), vec3{0.03, 0.27, 1.6}, xAxis, 0.01)
 }
+
+// The bed's niche: built-in wardrobes either side of it, joined over it,
+// facing +X, their backs against the wall at -X.
+const (
+	nicheHalf  = 1.2  // half the niche's width, along Z
+	nicheWard  = 1.0  // each wardrobe's width
+	nicheDeep  = 0.6  // their depth, along X
+	nicheH     = 2.6  // up to the top of the wall
+	nicheUnder = 2.22 // the bridge's underside
+	ledgeTop   = 0.56 // the bedside ledges'
+)
+
+// BuildBedNiche: the wardrobes, white doors with fine joints and a
+// recessed pull, the bridge over the bed lit amber underneath, two
+// rounded bedside ledges at the foot of the wardrobes' inner sides, and
+// two reading lights (NicheLights).
+func BuildBedNiche(b *building, at vec3, _ int) {
+	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
+	for _, s := range []float64{-1, 1} {
+		z := s * (nicheHalf + nicheWard/2)
+		b.in("home.trim").Box(p(-0.03, 0.05, z), vec3{nicheDeep - 0.06, 0.1, nicheWard - 0.04}, xAxis, 0.01)
+		b.in("home.panel").Box(p(0, (nicheH+0.1)/2, z), vec3{nicheDeep, nicheH - 0.1, nicheWard}, xAxis, 0.04)
+		for _, dz := range []float64{-0.25, 0.25} {
+			b.in("home.panel2").Box(p(nicheDeep/2, 1.32, z+dz), vec3{0.02, 2.36, 0.494}, xAxis, 0.006)
+			b.in("home.trim").Box(p(nicheDeep/2+0.012, 1.1, z+dz-s*0.2), vec3{0.008, 0.5, 0.02}, xAxis, 0)
+		}
+		// The ledge, rounded at its corner, lit amber from under the bridge.
+		ledge := p(-0.1, ledgeTop-0.02, s*(nicheHalf-0.19))
+		b.in("home.panel2").Box(ledge, vec3{0.4, 0.04, 0.42}, xAxis, 0.018)
+		b.in("home.trim").Box(ledge.Sub(vec3{0, 0.03, 0}), vec3{0.3, 0.02, 0.3}, xAxis, 0)
+	}
+	b.in("home.panel").Box(p(0, (nicheUnder+nicheH)/2, 0), vec3{nicheDeep, nicheH - nicheUnder, 2*nicheHalf + 0.02}, xAxis, 0.04)
+	b.in("home.led.amber").Box(p(nicheDeep/2-0.08, nicheUnder-0.004, 0), vec3{0.04, 0.01, 2*nicheHalf - 0.1}, xAxis, 0)
+	for _, l := range NicheLights {
+		b.in("home.trim").Prism(p(l.X, nicheUnder-0.03, l.Z), yUp, 0.05, 0.05, 0.03, 16, 0.005)
+		b.in("lamp.amber").Prism(p(l.X, nicheUnder-0.032, l.Z), yUp, 0.035, 0.035, 0.004, 16, 0)
+	}
+}
+
+// NicheLights are the bed niche's reading lights, over the ledges.
+var NicheLights = []vec3{{-0.1, nicheUnder - 0.1, -(nicheHalf - 0.2)}, {-0.1, nicheUnder - 0.1, nicheHalf - 0.2}}
+
+// NicheObstacles stop the player at the wardrobes.
+var NicheObstacles = []vec3{{0, 0, -(nicheHalf + 0.25)}, {0, 0, -(nicheHalf + 0.75)}, {0, 0, nicheHalf + 0.25}, {0, 0, nicheHalf + 0.75}}
 
 // BuildNightstand: a small wooden cabinet, two drawers with knobs.
 func BuildNightstand(b *building, at vec3, _ int) {
@@ -117,20 +155,22 @@ func BuildWritingDesk(b *building, at vec3, _ int) {
 // DeskLight is where a writing desk's lamp lights from, over its spot.
 var DeskLight = vec3{0.06, 0.98, 0.32}
 
-// BuildShelf: a tall open bookcase 1 m wide (along Z), four shelves of
-// books, a rock and a box, its back against the wall at -X.
+// BuildShelf: a tall open bookcase built in, 1 m wide (along Z), white
+// with rounded edges, its back against the wall at -X, lit along its
+// top shelf: four shelves of real books from Earth, a rock and a box.
 func BuildShelf(b *building, at vec3, seed int) {
 	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
-	wood := b.in("wood.light")
+	white := b.in("home.panel")
 	const w, d, h = 1.0, 0.32, 1.9
 	for _, s := range []float64{-1, 1} {
-		wood.Box(p(0, h/2, s*(w/2-0.015)), vec3{d, h, 0.03}, xAxis, 0.008)
+		white.Box(p(0, h/2, s*(w/2-0.015)), vec3{d, h, 0.03}, xAxis, 0.012)
 	}
-	b.in("wood.brown").Box(p(-d/2+0.01, h/2, 0), vec3{0.02, h, w - 0.06}, xAxis, 0)
+	b.in("home.panel2").Box(p(-d/2+0.01, h/2, 0), vec3{0.02, h, w - 0.06}, xAxis, 0)
 	shelves := []float64{0.05, 0.5, 0.95, 1.4, h - 0.015}
 	for _, y := range shelves {
-		wood.Box(p(0.005, y, 0), vec3{d - 0.01, 0.03, w - 0.06}, xAxis, 0.005)
+		white.Box(p(0.005, y, 0), vec3{d - 0.01, 0.03, w - 0.06}, xAxis, 0.01)
 	}
+	b.in("home.led.amber").Box(p(d/2-0.04, 1.4-0.019, 0), vec3{0.02, 0.008, w - 0.1}, xAxis, 0)
 	books := []string{"pipe.red", "fabric.teal", "crate.sand", "pipe.blue", "fabric.duvet", "paper", "wood.brown"}
 	for k, y := range shelves[:4] {
 		if k == 2 {
@@ -161,6 +201,59 @@ func BuildShelf(b *building, at vec3, seed int) {
 		}
 	}
 }
+
+// BuildWallDesk: a desk shelf off the wall at -X, the user's side toward
+// +X: a white top with an anthracite edge, a drawer under its left end
+// (-Z), an open laptop, an articulated lamp at the back right (DeskLight),
+// room at the left end for a pot.
+func BuildWallDesk(b *building, at vec3, _ int) {
+	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
+	b.in("home.panel").Box(p(-0.015, 0.735, 0), vec3{0.66, 0.05, 1.3}, xAxis, 0.02)
+	b.in("home.trim").Box(p(0.315, 0.735, 0), vec3{0.012, 0.04, 1.28}, xAxis, 0)
+	b.in("home.panel2").Box(p(-0.02, 0.6, -0.4), vec3{0.52, 0.2, 0.44}, xAxis, 0.02)
+	b.in("home.trim").Box(p(0.245, 0.62, -0.4), vec3{0.01, 0.015, 0.2}, xAxis, 0)
+	b.in("home.led.amber").Box(p(0.22, 0.705, 0.2), vec3{0.03, 0.008, 0.8}, xAxis, 0)
+	// The laptop, its screen up at the back.
+	b.in("steel.dark").Box(p(0.08, 0.768, -0.05), vec3{0.24, 0.016, 0.34}, xAxis, 0.004)
+	b.in("steel.dark").Box(p(-0.05, 0.89, -0.05), vec3{0.015, 0.22, 0.33}, xAxis, 0.004)
+	b.in("screen.dim").Box(p(-0.0405, 0.89, -0.05), vec3{0.004, 0.19, 0.3}, xAxis, 0)
+	// The lamp: a foot, two arms, a head looking down at the desk.
+	foot, elbow, head := p(-0.2, 0.76, 0.45), p(-0.12, 1.08, 0.42), p(0.06, 1.12, 0.32)
+	dark := b.in("home.trim")
+	dark.Prism(foot, yUp, 0.065, 0.06, 0.025, 14, 0.004)
+	for _, arm := range [][2]vec3{{foot, elbow}, {elbow, head}} {
+		d := arm[1].Sub(arm[0])
+		dark.Prism(arm[0], d.Norm(), 0.012, 0.012, d.Length(), 6, 0)
+	}
+	dark.Prism(elbow.Sub(vec3{0, 0, 0.025}), vec3{0, 0, 1}, 0.022, 0.022, 0.05, 10, 0)
+	b.in("home.panel").Prism(head.Add(vec3{0, 0.04, 0}), vec3{0, -1, 0}, 0.03, 0.09, 0.12, 14, 0)
+	b.in("lamp.amber").Prism(head.Sub(vec3{0, 0.085, 0}), yUp, 0.07, 0.07, 0.01, 12, 0)
+}
+
+// BuildBanquette: a reading seat built in along the wall at -X, 2.4 m
+// long (along Z): a white base on a recessed plinth, a slate cushion,
+// back cushions against the wall, the throw folded at one end.
+func BuildBanquette(b *building, at vec3, _ int) {
+	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
+	const l = 2.4
+	b.in("home.trim").Box(p(0.02, 0.05, 0), vec3{0.5, 0.1, l - 0.06}, xAxis, 0.01)
+	b.in("home.panel2").Box(p(0, 0.26, 0), vec3{0.6, 0.32, l}, xAxis, 0.05)
+	b.in("fabric.slate").Box(p(0.02, 0.47, 0), vec3{0.56, 0.1, l - 0.04}, xAxis, 0.04)
+	t := 10 * math.Pi / 180
+	back := [3]vec3{{math.Cos(t), math.Sin(t), 0}, {-math.Sin(t), math.Cos(t), 0}, {0, 0, 1}}
+	for _, z := range []float64{-0.8, 0, 0.8} {
+		tok := "fabric.slate"
+		if z == 0 {
+			tok = "fabric.teal"
+		}
+		b.in(tok).BoxBasis(p(-0.2, 0.75, z), back, vec3{0.14, 0.44, 0.74}, 0.06)
+	}
+	b.in("fabric.wool").Box(p(0.05, 0.535, -0.95), vec3{0.42, 0.03, 0.4}, xAxis, 0.01)
+	b.in("fabric.wool").Box(p(0.05, 0.57, -0.95), vec3{0.4, 0.03, 0.38}, xAxis, 0.01)
+}
+
+// BanquetteObstacles stop the player at the reading seat.
+var BanquetteObstacles = []vec3{{0, 0, -0.85}, {0, 0, 0}, {0, 0, 0.85}}
 
 // BuildArmchair: a deep fabric armchair on wooden feet, a cushion and a
 // throw over one arm.
