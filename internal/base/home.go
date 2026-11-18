@@ -263,8 +263,8 @@ const homeDoorHalf = DoorWidth/2 - 0.04
 // homeDoorFrame frames a doorway of a living space: w its middle on the
 // floor (in the middle of the wall), out the way out of the room, half
 // the opening's half width and h its height, deep the frame's depth
-// through the wall. A rounded anthracite profile, and a lit line of the
-// building's accent along its inner edge, facing the room.
+// through the wall. A rounded anthracite profile, and a lit line of accent
+// along its inner edge, facing the room.
 func (b *building) homeDoorFrame(w, out vec3, half, h, deep float64, accent string) {
 	along := vec3{-out.Z, 0, out.X}
 	const jamb = 0.26

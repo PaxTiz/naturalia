@@ -631,7 +631,7 @@ func (b *building) hallShell(r Room) {
 		along := vec3{-out.Z, 0, out.X}
 		panels(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), DoorHeight+0.1, r.WallH)
 		if r.home() {
-			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, hallWall+0.2, bp.Accent)
+			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, hallWall+0.2, "home.accent")
 			continue // and lined (hallLining)
 		}
 		for _, f := range []float64{-1, 1} {

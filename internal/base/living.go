@@ -37,8 +37,8 @@ func SofaObstacles() []vec3 {
 }
 
 // BuildSofaArc: a banquette curving round its spot, open toward +X: a
-// recessed plinth, a white base, slate seat and back cushions against a
-// white shell, two cushions of the accent's teal.
+// recessed plinth, a white base, oat seat and back cushions against a
+// white shell, two cushions of rust and ochre.
 func BuildSofaArc(b *building, at vec3, _ int) {
 	const n = 20
 	as := sofaAngles(n)
@@ -56,16 +56,16 @@ func BuildSofaArc(b *building, at vec3, _ int) {
 		b.in("home.trim").Box(c.Add(vec3{0, 0.05, 0}), vec3{l, 0.1, 0.5}, d, 0.01)
 		c, d, l = piece(sofaRadius, 0.04)
 		b.in("home.panel2").Box(c.Add(vec3{0, 0.25, 0}), vec3{l, 0.3, 0.7}, d, 0.03)
-		b.in("fabric.slate").Box(c.Sub(out.Scale(0.04)).Add(vec3{0, 0.46, 0}), vec3{l - 0.02, 0.12, 0.62}, d, 0.04)
+		b.in("fabric.oat").Box(c.Sub(out.Scale(0.04)).Add(vec3{0, 0.46, 0}), vec3{l - 0.02, 0.12, 0.62}, d, 0.04)
 		c, d, l = piece(sofaRadius+0.42, 0.05)
 		b.in("home.panel").Box(c.Add(vec3{0, 0.45, 0}), vec3{l, 0.9, 0.14}, d, 0.05)
 		c, d, l = piece(sofaRadius+0.24, 0.02)
-		b.in("fabric.slate").Box(c.Add(vec3{0, 0.68, 0}), vec3{l - 0.02, 0.38, 0.18}, d, 0.06)
+		b.in("fabric.oat").Box(c.Add(vec3{0, 0.68, 0}), vec3{l - 0.02, 0.38, 0.18}, d, 0.06)
 	}
-	for _, a := range []float64{as[3], as[n-4]} {
+	for k, a := range []float64{as[3], as[n/2], as[n-4]} {
 		p := at.Add(vec3{math.Cos(a), 0, math.Sin(a)}.Scale(sofaRadius + 0.05))
 		out := vec3{math.Cos(a), 0, math.Sin(a)}
-		b.in("fabric.teal").BoxBasis(p.Add(vec3{0, 0.7, 0}), [3]vec3{{-out.Z, 0, out.X}, vec3{0, 0.97, 0}.Add(out.Scale(0.25)).Norm(), out}, vec3{0.42, 0.36, 0.12}, 0.05)
+		b.in([]string{"fabric.rust", "fabric.ochre", "fabric.rust"}[k]).BoxBasis(p.Add(vec3{0, 0.7, 0}), [3]vec3{{-out.Z, 0, out.X}, vec3{0, 0.97, 0}.Add(out.Scale(0.25)).Norm(), out}, vec3{0.42, 0.36, 0.12}, 0.05)
 	}
 }
 

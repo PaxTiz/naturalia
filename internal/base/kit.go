@@ -118,7 +118,7 @@ func (b *building) room(id ecs.ID, r Room) {
 		tangent := vec3{-out.Z, 0, out.X}
 		w := r.Center.Add(out.Scale(r.Radius))
 		if r.home() {
-			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, 0.46, bp.Accent)
+			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, 0.46, "home.accent")
 			continue
 		}
 		for _, s := range []float64{-1, 1} {

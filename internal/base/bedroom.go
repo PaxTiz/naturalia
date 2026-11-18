@@ -231,20 +231,20 @@ func BuildWallDesk(b *building, at vec3, _ int) {
 }
 
 // BuildBanquette: a reading seat built in along the wall at -X, 2.4 m
-// long (along Z): a white base on a recessed plinth, a slate cushion,
+// long (along Z): a white base on a recessed plinth, an oat cushion,
 // back cushions against the wall, the throw folded at one end.
 func BuildBanquette(b *building, at vec3, _ int) {
 	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
 	const l = 2.4
 	b.in("home.trim").Box(p(0.02, 0.05, 0), vec3{0.5, 0.1, l - 0.06}, xAxis, 0.01)
 	b.in("home.panel2").Box(p(0, 0.26, 0), vec3{0.6, 0.32, l}, xAxis, 0.05)
-	b.in("fabric.slate").Box(p(0.02, 0.47, 0), vec3{0.56, 0.1, l - 0.04}, xAxis, 0.04)
+	b.in("fabric.oat").Box(p(0.02, 0.47, 0), vec3{0.56, 0.1, l - 0.04}, xAxis, 0.04)
 	t := 10 * math.Pi / 180
 	back := [3]vec3{{math.Cos(t), math.Sin(t), 0}, {-math.Sin(t), math.Cos(t), 0}, {0, 0, 1}}
 	for _, z := range []float64{-0.8, 0, 0.8} {
-		tok := "fabric.slate"
+		tok := "fabric.oat"
 		if z == 0 {
-			tok = "fabric.teal"
+			tok = "fabric.rust"
 		}
 		b.in(tok).BoxBasis(p(-0.2, 0.75, z), back, vec3{0.14, 0.44, 0.74}, 0.06)
 	}

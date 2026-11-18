@@ -188,11 +188,27 @@ var coreTokens = map[string]content.Token{
 	"home.trim":      {color.RGBA{56, 58, 64, 255}, content.MtPlain, 1, 0.5, 0},
 	"home.led":       {color.RGBA{255, 228, 194, 255}, content.MtPlain, 1, 0, 1},
 	"home.led.amber": {color.RGBA{255, 178, 100, 255}, content.MtPlain, 1, 0, 0.9},
-	// Its soft furnishings: slate cushions, a felt rug.
+	// The accent of the living spaces, round their doorways: a warm amber,
+	// where the base has its cyan.
+	"home.accent": {color.RGBA{255, 160, 96, 255}, content.MtPlain, 1, 0, 0.9},
+	// Their warm materials: a ceramic fired on site from the regolith's
+	// clay, in three tones; acoustic felt panels; a woollen carpet.
+	"ceramic":         {color.RGBA{178, 104, 76, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
+	"ceramic.dark":    {color.RGBA{146, 82, 62, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
+	"ceramic.sand":    {color.RGBA{204, 168, 132, 255}, content.MtPaint, 1 / content.PaintTile, 0.35, 0},
+	"felt.terracotta": {color.RGBA{168, 92, 68, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"felt.sand":       {color.RGBA{198, 172, 136, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"felt.sage":       {color.RGBA{124, 140, 116, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"carpet.oat":      {color.RGBA{170, 154, 132, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	// Its soft furnishings: warm charcoal and oat cushions, cushions and
+	// throws of ochre and rust, a rug of terracotta round sand.
 	"crystal.blue": {color.RGBA{120, 200, 255, 255}, content.MtPlain, 1, 0.8, 0.35},
-	"fabric.slate": {color.RGBA{72, 80, 94, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
-	"fabric.felt":  {color.RGBA{92, 96, 104, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
-	"fabric.felt2": {color.RGBA{116, 118, 122, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"fabric.slate": {color.RGBA{84, 80, 78, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.oat":   {color.RGBA{196, 182, 160, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.ochre": {color.RGBA{204, 146, 70, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.rust":  {color.RGBA{164, 82, 58, 255}, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.felt":  {color.RGBA{156, 90, 68, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	"fabric.felt2": {color.RGBA{196, 170, 136, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	"glass.rail":   {color.RGBA{185, 212, 218, 255}, content.MtPlain, 1, 1.0, 0},
 }
 
