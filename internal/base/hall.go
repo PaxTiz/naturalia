@@ -389,12 +389,15 @@ func LeafModel() *mesh.Builder {
 func (r Room) hallLamps() []Lamp {
 	hx, hz := r.half()
 	if r.warm() {
-		return []Lamp{{r.Center.Add(vec3{0, r.vault(0) - pendantDrop, 0}), 0.6, 2*math.Max(hx, hz) + 2, true}}
+		return []Lamp{{r.Center.Add(vec3{0, r.vault(0) - pendantDrop, 0}), 0.6, 2*math.Max(hx, hz) + 2, 1}}
 	}
 	power := 12 * math.Max(0.12, math.Min(1, 4*hx*hz/(26*64)))
+	if r.home() {
+		power *= 0.8 // its white lining and lines of light do the rest
+	}
 	reach := math.Min(24, 2*math.Max(hx, hz)+4)
 	at := func(u, w float64) Lamp {
-		return Lamp{r.Center.Add(vec3{u, r.vault(u) - hallLampDrop, w}), power, reach, false}
+		return Lamp{r.Center.Add(vec3{u, r.vault(u) - hallLampDrop, w}), power, reach, r.lampWarmth()}
 	}
 	lamps := []Lamp{at(0, 0)}
 	for _, w := range []float64{-0.66, 0.66} {
@@ -675,6 +678,9 @@ func (b *building) hallShell(r Room) {
 			z = math.Max(-hz+0.6, math.Min(hz-0.6, z))
 			sun("steel").BoxBasis(mid.Add(nrm.Scale(0.2)).Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l + 0.06, 0.16, 0.5}, 0.03)
 			inside(rib).BoxBasis(mid.Sub(nrm.Scale(ribIn)).Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l + 0.06, ribDeep, 0.35}, 0.03)
+			if r.home() { // a line of light along the rib's underside
+				inside(r.led()).BoxBasis(mid.Sub(nrm.Scale(ribIn+ribDeep/2)).Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l + 0.06, 0.012, 0.07}, 0)
+			}
 		}
 	}
 	// A ridge cap, and skylight vents along it.
@@ -750,9 +756,16 @@ func (b *building) hallShell(r Room) {
 	}
 
 	// The lamps: a housing on a rod from the vault; in a warm hall, a
-	// cord and a glowing drum shade.
-	for _, l := range r.hallLamps() {
+	// cord and a glowing drum shade; in a home, a ring over the ridge's
+	// (the others shine from the ribs' lines).
+	for i, l := range r.hallLamps() {
 		top := r.vault(l.At.X - c.X)
+		if r.home() && !r.warm() {
+			if math.Abs(l.At.X-c.X) < 0.01 {
+				b.ringPendant(l.At, []float64{1.3, 0.8}[min(i, 1)], top-liningGap-lining)
+			}
+			continue
+		}
 		if r.warm() {
 			inside("rubber").Prism(l.At.Add(vec3{0, 0.2, 0}), yUp, 0.008, 0.008, top-l.At.Y-0.2, 6, 0)
 			inside("lamp.shade").Prism(l.At.Sub(vec3{0, 0.08, 0}), yUp, 0.32, 0.26, 0.3, 24, 0)

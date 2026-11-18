@@ -299,11 +299,7 @@ func (gfx *Graphics) selectBase() {
 		p := base.ToWorld(l.At)
 		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
 		ranges = append(ranges, float32(l.Range))
-		w := float32(0)
-		if l.Warm {
-			w = 1
-		}
-		warm = append(warm, w)
+		warm = append(warm, float32(l.Warm))
 	}
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightWarm"), warm, rl.ShaderUniformFloat, int32(len(warm)))

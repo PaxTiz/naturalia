@@ -187,7 +187,7 @@ func addFurniture(kits *content.Registry[content.Kit], in ecs.ID, bp *content.Bl
 	}
 	var lamps []Lamp
 	for _, l := range k.Lamps {
-		lamps = append(lamps, Lamp{f.At.Add(content.Turn(l.At, f.Yaw)), l.Power, l.Range, true})
+		lamps = append(lamps, Lamp{f.At.Add(content.Turn(l.At, f.Yaw)), l.Power, l.Range, 1})
 	}
 	if len(lamps) > 0 {
 		Ents.Lamps.Set(id, lamps)
@@ -433,12 +433,12 @@ func Covered(local vec3) bool {
 }
 
 // Lamp is a lamp of the base: where it hangs, how bright it is, how far
-// it reaches, and whether it is amber (a warm room's, a piece of
-// furniture's) rather than white.
+// it reaches, and how warm it is: 0 white, 1 amber (a warm room's, a
+// piece of furniture's), a warm white between (a home's, homeWarm).
 type Lamp struct {
 	At           vec3 // local
 	Power, Range float64
-	Warm         bool
+	Warm         float64
 }
 
 // Lamps lists the lamps of some buildings and corridors: one per room
@@ -453,16 +453,20 @@ func Lamps(rooms, corridors []ecs.ID) []Lamp {
 		case r.Hall != nil:
 			lamps = append(lamps, r.turnLamp(r.hallLamps()[0]))
 		case r.warm():
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 0.6, 8, true})
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 0.6, 8, 1})
 		case id == hub:
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10, false})
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.7, 0}), 1.4, 10, r.lampWarmth()})
 		default:
-			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10, false})
+			lamps = append(lamps, Lamp{r.Center.Add(vec3{0, 2.3, 0}), 1, 10, r.lampWarmth()})
 		}
 	}
 	for _, id := range corridors {
 		c := Ents.Corridor.Get(id)
-		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10, false})
+		w := 0.0
+		if c.home() {
+			w = homeWarm
+		}
+		lamps = append(lamps, Lamp{c.From.Lerp(c.To, 0.5).Add(vec3{0, 2.1, 0}), 1, 10, w})
 	}
 	for _, id := range rooms {
 		for f := range FurnitureOf(id) {

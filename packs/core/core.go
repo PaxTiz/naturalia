@@ -176,16 +176,17 @@ var coreTokens = map[string]content.Token{
 	// The living spaces' finishes (interior: "home"): off-white composite
 	// panels, smooth white ribs, a warm grey matte floor and its lighter
 	// paths.
-	"home.panel":  {color.RGBA{236, 233, 226, 255}, content.MtPlain, 1, 0.35, 0},
-	"home.panel2": {color.RGBA{224, 221, 214, 255}, content.MtPlain, 1, 0.35, 0},
+	"home.panel":  {color.RGBA{230, 226, 218, 255}, content.MtPlain, 1, 0.35, 0},
+	"home.panel2": {color.RGBA{218, 214, 206, 255}, content.MtPlain, 1, 0.35, 0},
 	"home.rib":    {color.RGBA{246, 245, 240, 255}, content.MtPlain, 1, 0.45, 0},
 	"home.floor":  {color.RGBA{76, 72, 70, 255}, content.MtPanel, 1, 0.15, 0},
 	"home.path":   {color.RGBA{104, 99, 94, 255}, content.MtPanel, 1, 0.15, 0},
 	// Its joinery: rounded anthracite profiles, glass guard rails, the
 	// warm white of the lights built in.
-	"home.trim":  {color.RGBA{56, 58, 64, 255}, content.MtPlain, 1, 0.5, 0},
-	"home.led":   {color.RGBA{255, 228, 194, 255}, content.MtPlain, 1, 0, 1},
-	"glass.rail": {color.RGBA{185, 212, 218, 255}, content.MtPlain, 1, 1.0, 0},
+	"home.trim":      {color.RGBA{56, 58, 64, 255}, content.MtPlain, 1, 0.5, 0},
+	"home.led":       {color.RGBA{255, 228, 194, 255}, content.MtPlain, 1, 0, 1},
+	"home.led.amber": {color.RGBA{255, 178, 100, 255}, content.MtPlain, 1, 0, 0.9},
+	"glass.rail":     {color.RGBA{185, 212, 218, 255}, content.MtPlain, 1, 1.0, 0},
 }
 
 // coreBuildings: the great hall first, the rooms around it, then the

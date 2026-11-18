@@ -235,6 +235,11 @@ func (b *building) interior(bp *content.Blueprint, r Room) {
 			b.Part(rib, mesh.LitIndoor, vec3{}).BoxBasis(p0.Lerp(p1, 0.5).Sub(along.Cross(side).Scale(0.05)), [3]vec3{side, along, side.Cross(along)}, vec3{0.12, l + 0.02, 0.1}, 0.02)
 		}
 	}
+	if r.home() { // a ring of light, lower
+		_, bh := r.domeLining()
+		b.ringPendant(r.Center.Add(vec3{0, r.WallH + 0.6, 0}), 0.8, r.WallH+bh)
+		return
+	}
 	lamp := r.Center.Add(vec3{0, r.WallH + r.Radius*0.5, 0})
 	b.Part("steel", mesh.LitIndoor, vec3{}).Prism(lamp.Add(vec3{0, -0.02, 0}), up, 0.62, 0.55, 0.12, 24, 0.02)
 	b.Part("lamp.warm", mesh.LitIndoor, vec3{}).Prism(lamp.Add(vec3{0, -0.06, 0}), up, 0.48, 0.48, 0.05, 24, 0)

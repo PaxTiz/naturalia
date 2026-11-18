@@ -21,6 +21,30 @@ const (
 	homePanelW, homePanelH, homeJoint = 1.6, 2.6, 0.008
 )
 
+// homeWarm is how warm a living space's lamps are: a warm white, between
+// the base's white and amber (Lamp.Warm).
+const homeWarm = 0.3
+
+// lampWarmth is how warm the room's ceiling lamps are.
+func (r Room) lampWarmth() float64 {
+	switch {
+	case r.warm():
+		return 1
+	case r.home():
+		return homeWarm
+	}
+	return 0
+}
+
+// led is the token of the lights built into a living space: warm white,
+// amber in a warm room.
+func (r Room) led() string {
+	if r.warm() {
+		return "home.led.amber"
+	}
+	return "home.led"
+}
+
 // home tells a living space, finished like a home.
 func (r Room) home() bool { return r.plan != nil && r.plan.Interior == "home" }
 
@@ -99,6 +123,9 @@ func (b *building) hallLining(r Room) {
 				}
 				b.liningPanel(pn.a, pn.b, nrm, th, pn.y1, r.WallH)
 			}
+			if r.panes(s[0], s[1]) == nil || r.panes(s[0], s[1])[0].y0 > 0.2 {
+				b.footLight(s[0], s[1], nrm, th, r.led())
+			}
 		}
 	}
 	for _, w := range r.doorways() {
@@ -153,6 +180,7 @@ func (b *building) hallLining(r Room) {
 	for _, s := range []float64{-1, 1} {
 		x := s * (hx - in - deep/2)
 		b.in("home.panel2").Box(p(x, r.WallH-tall/2, 0), vec3{deep, tall, 2 * (hz - in)}, X, 0.03)
+		b.casingLight(p(x-s*(deep/2-0.06), r.WallH-tall, 0), Z, 2*(hz-in), r.led())
 	}
 }
 
@@ -172,6 +200,8 @@ func (b *building) domeLining(r Room) {
 		// show.
 		casing := p.mid.Sub(out.Scale(th + liningGap + 0.2)).Add(vec3{0, r.WallH - 0.04, 0})
 		b.in("home.panel2").Box(casing, vec3{p.width, 0.32, 0.36}, along, 0.03)
+		b.casingLight(casing.Sub(out.Scale(0.12)).Sub(vec3{0, 0.16, 0}), along, p.width, r.led())
+		b.footLight(p.mid.Sub(t), p.mid.Add(t), out.Scale(-1), th, r.led())
 	}
 	a, bh := r.domeLining()
 	b.Part("home.panel", mesh.LitBack, vec3{}).Dome(r.Center.Add(vec3{0, r.WallH, 0}), a, bh)
@@ -184,8 +214,8 @@ func (r Room) domeLining() (a, bh float64) {
 }
 
 // corridorLining lines a corridor between two living spaces: its walls
-// and ceiling, a duct casing along the top of each wall, the floor and its
-// path, and the lamp strip lowered under the lining.
+// and ceiling, a duct casing along the top of each wall, lit underneath,
+// a line of light at the foot of the walls, the floor and its path.
 func (b *building) corridorLining(c Corridor) {
 	mid := c.From.Lerp(c.To, 0.5)
 	dir := c.To.Sub(c.From)
@@ -198,13 +228,12 @@ func (b *building) corridorLining(c Corridor) {
 		b.liningPanel(wall.Sub(dir.Scale(length/2)), wall.Add(dir.Scale(length/2)), side.Scale(-s), 0, 0, c.Height)
 		casing := wall.Sub(side.Scale(s * (in + 0.1))).Add(vec3{0, c.Height - in - 0.07, 0})
 		b.in("home.panel2").Box(casing, vec3{length, 0.18, 0.2}, dir, 0.02)
+		b.casingLight(casing.Sub(side.Scale(s*0.04)).Sub(vec3{0, 0.09, 0}), dir, length, "home.led")
+		b.footLight(wall.Sub(dir.Scale(length/2)), wall.Add(dir.Scale(length/2)), side.Scale(-s), 0, "home.led")
 	}
 	b.in("home.panel").Box(mid.Add(vec3{0, c.Height - liningGap - lining/2, 0}), vec3{length, lining, c.Width - 2*in}, dir, 0)
 	b.in(c.floorTok()).Box(mid.Add(vec3{0, FloorTop - 0.05, 0}), vec3{length, 0.1, c.Width}, dir, 0)
 	b.in("home.path").Box(mid.Add(vec3{0, FloorTop - 0.01, 0}), vec3{length, 0.02, 1.0}, dir, 0)
-	drop := c.Height - in
-	b.in("steel").Box(mid.Add(vec3{0, drop - 0.03, 0}), vec3{length * 0.72, 0.06, 0.34}, dir, 0.015)
-	b.in("lamp.warm").Box(mid.Add(vec3{0, drop - 0.07, 0}), vec3{length * 0.7, 0.03, 0.25}, dir, 0)
 }
 
 // floorTok is the token of the corridor's floor.
@@ -327,4 +356,39 @@ func (b *building) homeStairs(in ecs.ID, f Floor) {
 		rise := lo.Y + (hi.Y-lo.Y)/float64(n) + stringerRise
 		b.in("home.panel2").Slab([]vec3{a, e, e.Add(vec3{0, hi.Y + stringerRise, 0}), a.Add(vec3{0, rise, 0})}, across, 0.06)
 	}
+}
+
+// ringPendant hangs a ring of light of radius rad at, on three cables
+// from the ceiling at height top: a white ring, lit underneath.
+func (b *building) ringPendant(at vec3, rad, top float64) {
+	const n = 32
+	for k := range n {
+		a0, a1 := float64(k)*2*math.Pi/n, float64(k+1)*2*math.Pi/n
+		p0 := at.Add(vec3{math.Cos(a0), 0, math.Sin(a0)}.Scale(rad))
+		p1 := at.Add(vec3{math.Cos(a1), 0, math.Sin(a1)}.Scale(rad))
+		d := p1.Sub(p0)
+		mid := p0.Lerp(p1, 0.5)
+		b.in("home.rib").Box(mid, vec3{d.Length() + 0.01, 0.07, 0.12}, d, 0.02)
+		b.in("home.led").Box(mid.Sub(vec3{0, 0.036, 0}), vec3{d.Length() + 0.01, 0.006, 0.07}, d, 0)
+	}
+	for k := range 3 {
+		a := float64(k)*2*math.Pi/3 + 0.3
+		p := at.Add(vec3{math.Cos(a), 0, math.Sin(a)}.Scale(rad))
+		b.in("home.trim").Prism(p.Add(vec3{0, 0.035, 0}), yUp, 0.006, 0.006, top-at.Y-0.035, 4, 0)
+	}
+}
+
+// footLight runs a line of light at the foot of the lining from a to b
+// (as liningPanel), shining down on the floor.
+func (b *building) footLight(a, e, nrm vec3, th float64, tok string) {
+	d := e.Sub(a)
+	face := a.Lerp(e, 0.5).Add(nrm.Scale(th + liningGap + lining)).Add(vec3{0, 0.09, 0})
+	b.in("home.trim").Box(face.Add(nrm.Scale(0.011)).Add(vec3{0, 0.022, 0}), vec3{d.Length(), 0.02, 0.02}, d, 0)
+	b.in(tok).Box(face.Add(nrm.Scale(0.008)), vec3{d.Length(), 0.02, 0.012}, d, 0)
+}
+
+// casingLight is a line of light under a duct casing, its middle at,
+// running l along along: it washes the wall below.
+func (b *building) casingLight(at, along vec3, l float64, tok string) {
+	b.in(tok).Box(at.Sub(vec3{0, 0.004, 0}), vec3{l, 0.01, 0.05}, along, 0)
 }
