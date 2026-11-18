@@ -110,13 +110,17 @@ func (b *building) room(id ecs.ID, r Room) {
 	}
 	// The dome stays a smooth shell: dust settles on its top.
 	b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
-	// Door frames: steel jambs and a hazard header. They stand a little
+	// Door frames: steel jambs and a hazard header (a home's: homeDoorFrame). They stand a little
 	// into the opening: flush with the corridor's walls and ceiling, they
 	// would fight them for the depth and flicker.
 	for _, a := range r.openings {
 		out := vec3{math.Cos(a), 0, math.Sin(a)}
 		tangent := vec3{-out.Z, 0, out.X}
 		w := r.Center.Add(out.Scale(r.Radius))
+		if r.home() {
+			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, 0.46, bp.Accent)
+			continue
+		}
 		for _, s := range []float64{-1, 1} {
 			b.Part("steel", mesh.LitTowards, in).Box(w.Add(tangent.Scale(s*(DoorWidth/2+0.08))).Add(vec3{0, (DoorHeight + 0.1) / 2, 0}), vec3{0.26, DoorHeight + 0.1, 0.42}, tangent, 0.05)
 		}

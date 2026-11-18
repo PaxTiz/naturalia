@@ -627,6 +627,10 @@ func (b *building) hallShell(r Room) {
 		out := r.wallOut(w)
 		along := vec3{-out.Z, 0, out.X}
 		panels(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), DoorHeight+0.1, r.WallH)
+		if r.home() {
+			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, hallWall+0.2, bp.Accent)
+			continue // and lined (hallLining)
+		}
 		for _, f := range []float64{-1, 1} {
 			face := w.Add(out.Scale(f * (hallWall/2 + 0.06)))
 			lit := wall("steel")
@@ -637,9 +641,6 @@ func (b *building) hallShell(r Room) {
 				lit.Box(face.Add(along.Scale(s*(hallGap-0.1))).Add(vec3{0, (DoorHeight + 0.1) / 2, 0}), vec3{0.24, DoorHeight + 0.1, 0.14}, along, 0.03)
 			}
 			lit.Box(face.Add(vec3{0, DoorHeight + 0.22, 0}), vec3{2*hallGap + 0.04, 0.24, 0.14}, along, 0.03)
-		}
-		if r.home() {
-			continue // lined (hallLining)
 		}
 		wall("hazard").Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.5, 0}), vec3{2 * hallGap, 0.25, 0.04}, along, 0)
 		wall(bp.Accent).Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.75, 0}), vec3{2 * hallGap, 0.06, 0.03}, along, 0)
@@ -770,15 +771,19 @@ func (b *building) hallShell(r Room) {
 }
 
 // window glazes pane pn of hall r: the glass, a steel frame around it,
-// mullions about every 2.4 m and transoms about every 2.6 m.
+// mullions about every 2.4 m and transoms about every 2.6 m; in a home,
+// thinner anthracite profiles.
 func (b *building) window(r Room, pn pane) {
 	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
-	steel := b.Part("steel", mesh.LitTowards, in)
+	frame, bar, deep := "steel", 0.14, hallWall+0.12
+	if r.home() { // thin anthracite profiles
+		frame, bar, deep = "home.trim", 0.08, hallWall+0.08
+	}
+	steel := b.Part(frame, mesh.LitTowards, in)
 	d := pn.b.Sub(pn.a)
 	l, h := d.Length(), pn.y1-pn.y0
 	mid := pn.a.Lerp(pn.b, 0.5).Add(vec3{0, (pn.y0 + pn.y1) / 2, 0})
 	b.Part("glass.pane", mesh.LitGlass, in).Box(mid, vec3{l, h, 0.04}, d, 0)
-	const bar, deep = 0.14, hallWall + 0.12
 	for _, s := range []float64{-1, 1} {
 		steel.Box(mid.Add(vec3{0, s * (h - bar) / 2, 0}), vec3{l, bar, deep}, d, 0.02)
 	}

@@ -2,6 +2,7 @@ package base
 
 import (
 	"math"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mesh"
 )
 
@@ -118,7 +119,10 @@ func (b *building) hallLining(r Room) {
 		}
 		b.in("home.panel").Slab(pts, Z, lining)
 	}
+	// A panel spans a few of the vault's plates, about homePanelW across:
+	// a joint only where it ends.
 	arch := func(u float64) vec3 { return vec3{u, r.vault(u), 0} }
+	per := max(1, int(math.Round(homePanelW/arch(hx/steps).Sub(arch(-hx/steps)).Length()*2)))
 	for i := range steps {
 		u0, u1 := -hx+2*hx*float64(i)/steps, -hx+2*hx*float64(i+1)/steps
 		a, e := arch(u0), arch(u1)
@@ -127,11 +131,16 @@ func (b *building) hallLining(r Room) {
 		along = along.Scale(1 / l)
 		nrm := Z.Cross(along) // up and out
 		mid := c.Add(a.Lerp(e, 0.5)).Sub(nrm.Scale(liningGap + lining/2))
+		joint := 0.0
+		if (i+1)%per == 0 || i == steps-1 {
+			joint = homeJoint
+			mid = mid.Sub(along.Scale(joint / 2))
+		}
 		n := max(1, int(math.Round(2*(hz-in)/homePanelH)))
 		w := 2 * (hz - in) / float64(n)
 		for k := range n {
 			z := -hz + in + (float64(k)+0.5)*w
-			b.in("home.panel").BoxBasis(mid.Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l - homeJoint, lining, w - homeJoint}, 0.012)
+			b.in("home.panel").BoxBasis(mid.Add(vec3{0, 0, z}), [3]vec3{along, nrm, Z}, vec3{l - joint, lining, w - homeJoint}, 0)
 		}
 	}
 
@@ -204,4 +213,118 @@ func (c Corridor) floorTok() string {
 		return "home.floor"
 	}
 	return "floor.slate"
+}
+
+// homeDoorHalf is half the opening of a living space's doorway, inside
+// its frame: just wider than the corridor's lining, not flush with it.
+const homeDoorHalf = DoorWidth/2 - 0.04
+
+// homeDoorFrame frames a doorway of a living space: w its middle on the
+// floor (in the middle of the wall), out the way out of the room, half
+// the opening's half width and h its height, deep the frame's depth
+// through the wall. A rounded anthracite profile, and a lit line of the
+// building's accent along its inner edge, facing the room.
+func (b *building) homeDoorFrame(w, out vec3, half, h, deep float64, accent string) {
+	along := vec3{-out.Z, 0, out.X}
+	const jamb = 0.26
+	trim := b.in("home.trim")
+	for _, s := range []float64{-1, 1} {
+		trim.Box(w.Add(along.Scale(s*(half+jamb/2))).Add(vec3{0, (h + jamb) / 2, 0}), vec3{jamb, h + jamb, deep}, along, 0.06)
+	}
+	trim.Box(w.Add(vec3{0, h + jamb/2, 0}), vec3{2 * half, jamb, deep}, along, 0.06)
+	face := w.Sub(out.Scale(deep/2 + 0.002))
+	for _, s := range []float64{-1, 1} {
+		b.in(accent).Box(face.Add(along.Scale(s*(half+0.08))).Add(vec3{0, (h + 0.08) / 2, 0}), vec3{0.025, h + 0.08, 0.012}, along, 0)
+	}
+	b.in(accent).Box(face.Add(vec3{0, h + 0.08, 0}), vec3{2*half + 0.185, 0.025, 0.012}, along, 0)
+}
+
+// glassRails builds the guard rails of a living space: panes of glass
+// between a base channel and an anthracite handrail, along the slab and
+// the stairs' open sides, over their stringer.
+func (b *building) glassRails(in ecs.ID) {
+	for _, f := range ordered(Ents.Floor) {
+		if f.In != in {
+			continue
+		}
+		trim := b.in("home.trim")
+		// Seen from inside on both sides: no room point (mesh.LitGlass).
+		glass := b.Part("glass.rail", mesh.LitGlass, vec3{})
+		for _, rl := range f.rails() {
+			d := rl.B.Sub(rl.A)
+			l := d.Length()
+			mid := rl.A.Lerp(rl.B, 0.5)
+			trim.Box(mid.Add(vec3{0, 0.05, 0}), vec3{l, 0.1, 0.07}, d, 0.015)
+			n := max(1, int(math.Round(l/1.2)))
+			for i := range n {
+				p := rl.A.Lerp(rl.B, (float64(i)+0.5)/float64(n))
+				glass.Box(p.Add(vec3{0, (0.1 + railHeight - 0.03) / 2, 0}), vec3{l/float64(n) - 0.012, railHeight - 0.13, 0.02}, d, 0)
+			}
+			trim.Box(mid.Add(vec3{0, railHeight, 0}), vec3{l + 0.08, 0.05, 0.08}, d, 0.02)
+		}
+		if f.Level() {
+			continue
+		}
+		for _, side := range f.openSides(in) {
+			a, e := f.From.Add(side), f.To.Add(side)
+			d := e.Sub(a)
+			dn := d.Norm()
+			up := vec3{0, 1, 0}.Sub(dn.Scale(dn.Y)).Norm()
+			across := side.Norm()
+			glass.Slab([]vec3{a.Add(vec3{0, stringerRise, 0}), e.Add(vec3{0, stringerRise, 0}), e.Add(vec3{0, railHeight - 0.03, 0}), a.Add(vec3{0, railHeight - 0.03, 0})}, across, 0.02)
+			trim.BoxBasis(a.Lerp(e, 0.5).Add(vec3{0, railHeight, 0}), [3]vec3{dn, up, across}, vec3{d.Length() + 0.08, 0.05, 0.08}, 0.02)
+		}
+	}
+}
+
+// stringerRise is how far the stairs' solid stringer rises over their
+// slope.
+const stringerRise = 0.12
+
+// openSides are the sides of stairs f in building in that are away from
+// the walls, from the middle of their width to their edge.
+func (f Floor) openSides(in ecs.ID) []vec3 {
+	r := Ents.Building.Get(in)
+	_, _, across := f.frame()
+	var out []vec3
+	for _, s := range []float64{-1, 1} {
+		side := across.Scale(s * (f.Width/2 - 0.05))
+		if r != nil && r.againstWall(f.From.Add(side)) && r.againstWall(f.To.Add(side)) {
+			continue
+		}
+		out = append(out, side)
+	}
+	return out
+}
+
+// homeStairs builds stairs f of living space in: white steps under a
+// floor tread whose nosing overhangs a lit strip, and a solid stringer
+// along each open side.
+func (b *building) homeStairs(in ecs.ID, f Floor) {
+	along, l, across := f.frame()
+	lo, hi := f.From, f.To
+	if lo.Y > hi.Y {
+		lo, hi, along = hi, lo, along.Scale(-1)
+	}
+	n := max(1, int(math.Round((hi.Y-lo.Y)/0.2)))
+	run := l / float64(n)
+	const tread, nose = 0.03, 0.03
+	for k := range n {
+		top := lo.Y + (hi.Y-lo.Y)*float64(k+1)/float64(n)
+		bottom := 0.0
+		if f.Thick > 0 {
+			bottom = math.Max(0, top-0.2-f.Thick)
+		}
+		mid := vec3{lo.X, 0, lo.Z}.Add(along.Scale((float64(k) + 0.5) * run))
+		b.in("home.panel").Box(mid.Add(vec3{0, (top - tread + bottom) / 2, 0}), vec3{run, top - tread - bottom, f.Width}, along, 0.008)
+		b.in("home.floor").Box(mid.Sub(along.Scale(nose/2)).Add(vec3{0, top - tread/2, 0}), vec3{run + nose, tread, f.Width}, along, 0.008)
+		led := mid.Sub(along.Scale(run/2 - 0.006)).Add(vec3{0, top - tread - 0.012, 0})
+		b.in("home.led").Box(led, vec3{0.012, 0.016, f.Width - 0.2}, along, 0)
+	}
+	for _, side := range f.openSides(in) {
+		s := across.Scale(math.Copysign(f.Width/2+0.03, side.Dot(across)))
+		a, e := vec3{lo.X, 0, lo.Z}.Add(s), vec3{hi.X, 0, hi.Z}.Add(s)
+		rise := lo.Y + (hi.Y-lo.Y)/float64(n) + stringerRise
+		b.in("home.panel2").Slab([]vec3{a, e, e.Add(vec3{0, hi.Y + stringerRise, 0}), a.Add(vec3{0, rise, 0})}, across, 0.06)
+	}
 }

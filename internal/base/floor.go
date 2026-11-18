@@ -114,12 +114,14 @@ func FloorOf(id ecs.ID) (Floor, bool) {
 }
 
 // floors builds the floors of building in: a slab, steel under a slate
-// top; stairs, steel steps with a yellow nosing.
+// top; stairs, steel steps with a yellow nosing. A home's are white under
+// its floor, its stairs lit under each nosing (homeStairs).
 func (b *building) floors(in ecs.ID) {
 	steel := b.Part("steel", mesh.LitIndoor, vec3{})
 	slab, top := steel, "floor.slate"
-	if r := Ents.Building.Get(in); r.home() {
-		slab, top = b.Part("home.panel", mesh.LitIndoor, vec3{}), r.floorTok()
+	home := Ents.Building.Get(in).home()
+	if home {
+		slab, top = b.Part("home.panel", mesh.LitIndoor, vec3{}), "home.floor"
 	}
 	for _, f := range ordered(Ents.Floor) {
 		if f.In != in {
@@ -134,6 +136,10 @@ func (b *building) floors(in ecs.ID) {
 		}
 		// Steps of about 20 cm, from the low end up, each as high as the slope
 		// at its far edge.
+		if home {
+			b.homeStairs(in, *f)
+			continue
+		}
 		lo, hi := f.From, f.To
 		if lo.Y > hi.Y {
 			lo, hi, along = hi, lo, along.Scale(-1)

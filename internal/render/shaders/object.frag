@@ -157,11 +157,12 @@ vec3 paint(vec3 base, vec3 n, out float h) {
 // glass paints a pane seen through, in flat colors: a tint that thickens
 // at a slant, and two crisp bands of light across it, at an angle, that
 // slide as the viewer walks by. From outside, it takes the color of the
-// sky it faces; from inside, a little of the lamps'.
+// sky it faces; from inside, a little of the lamps'. A pane with no room
+// point (a guard rail) is inside on both sides.
 vec4 glass(vec3 n, vec3 v, float dist) {
     if (dot(n, v) < 0.0) n = -n;
     vec3 up = normalize(fragPos);
-    bool inside = dot(n, (room - origin) - fragRel) > 0.0;
+    bool inside = dot(room, room) < 1.0 || dot(n, (room - origin) - fragRel) > 0.0; // no room: a guard rail, indoors
     float slant = pow(1.0 - dot(n, v), 3.0);
     vec3 along = normalize(cross(n, up));
     float s = dot(fragRel + origin, along) + dot(fragRel + origin, up) * 0.6 + dot(viewRel + origin, along) * 0.35;

@@ -89,6 +89,10 @@ func (r Room) againstWall(p vec3) bool {
 // 1.2 m, a handrail and a mid rail, a kick plate along the slab; and the
 // handrail of its stairs on the sides away from the walls.
 func (b *building) rails(in ecs.ID) {
+	if r := Ents.Building.Get(in); r != nil && r.home() {
+		b.glassRails(in)
+		return
+	}
 	steel := b.Part("steel", mesh.LitIndoor, vec3{})
 	for _, f := range ordered(Ents.Floor) {
 		if f.In != in {
