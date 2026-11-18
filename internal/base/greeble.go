@@ -292,10 +292,7 @@ func (b *building) greebleCorridor(c Corridor, seed int) {
 		face := at.Add(side.Scale(s * (c.Width/2 - 0.04)))
 		kind := int(grnd(seed, i+50) * 3)
 		if c.home() {
-			if kind != 0 {
-				continue // a screen, but no vent
-			}
-			face = face.Sub(side.Scale(s * (liningGap + lining)))
+			continue // neither screens nor vents: pictures (frame kits)
 		}
 		switch kind {
 		case 0:

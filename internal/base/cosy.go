@@ -280,3 +280,105 @@ func BuildPouf(b *building, at vec3, seed int) {
 	b.in(tok).Prism(at, yUp, 0.26, 0.26, 0.4, 24, 0.06)
 	b.in("fabric.slate").Prism(at.Add(vec3{0, 0.195, 0}), yUp, 0.262, 0.262, 0.01, 24, 0)
 }
+
+// BuildFrame: a picture 0.9 m wide, 0.65 m high, in a slim anthracite
+// frame with a white mat, on the wall at -X, its middle at the spot; the
+// seed picks it: a Martian sunset, the Earth seen from here, a mission
+// patch, a map of the region.
+func BuildFrame(b *building, at vec3, seed int) {
+	const w, h = 0.9, 0.65
+	p := func(x, y, z float64) vec3 { return at.Add(vec3{x, y, z}) }
+	b.in("home.trim").Box(p(0.015, 0, 0), vec3{0.03, h, w}, xAxis, 0.004)
+	b.in("home.rib").Box(p(0.031, 0, 0), vec3{0.003, h - 0.05, w - 0.05}, xAxis, 0)
+	iw, ih := w-0.2, h-0.2
+	face := 0.034
+	art := func(tok string, y, z, hh, ww float64) {
+		face += 0.0008
+		b.in(tok).Box(p(face, y, z), vec3{0.0016, hh, ww}, xAxis, 0)
+	}
+	switch seed % 4 {
+	case 0: // a sunset over the plain: a dusky sky, the sun, dunes
+		art("felt.sand", 0.06, 0, ih-0.12, iw)
+		art("fabric.ochre", -0.04, 0, 0.1, iw)
+		b.in("lamp.amber").Prism(p(face+0.002, 0.02, 0.1), xAxis, 0.05, 0.05, 0.002, 16, 0)
+		art("ceramic", -ih/2+0.08, 0, 0.16, iw)
+		art("ceramic.dark", -ih/2+0.03, 0, 0.06, iw)
+	case 1: // the Earth, small, in a dark sky
+		art("fabric.slate", 0, 0, ih, iw)
+		b.in("earth.blue").Prism(p(face+0.002, 0.04, -0.08), xAxis, 0.07, 0.07, 0.002, 20, 0)
+		b.in("earth.green").Prism(p(face+0.003, 0.05, -0.1), xAxis, 0.025, 0.025, 0.002, 10, 0)
+		art("ceramic", -ih/2+0.04, 0, 0.08, iw)
+	case 2: // a mission patch: rings round a red disc
+		art("fabric.oat", 0, 0, ih, iw)
+		b.in("fabric.slate").Prism(p(face+0.001, 0, 0), xAxis, 0.18, 0.18, 0.002, 32, 0)
+		b.in("fabric.ochre").Prism(p(face+0.002, 0, 0), xAxis, 0.15, 0.15, 0.002, 32, 0)
+		b.in("ceramic").Prism(p(face+0.003, 0, 0), xAxis, 0.11, 0.11, 0.002, 32, 0)
+	default: // a map of the region, its contours in bands
+		art("felt.sand", 0, 0, ih, iw)
+		for k := range 5 {
+			art([]string{"felt.sage", "ceramic.sand", "ceramic"}[k%3], -ih/2+0.05+float64(k)*0.085, 0.04*float64(k%2), 0.03, iw-0.1*float64(k))
+		}
+	}
+}
+
+// curtainH is how high a curtain hangs, from its rail down.
+const curtainH = 2.5
+
+// BuildCurtain: a sheer oat curtain drawn back, 1 m wide in its folds,
+// hanging from a slim rail at the spot's height, against a wall or a
+// window at -X.
+func BuildCurtain(b *building, at vec3, _ int) {
+	const n, w, fold = 9, 1.0, 0.07
+	b.in("home.trim").Box(at.Add(vec3{0.1, 0, 0}), vec3{0.025, 0.025, w + 0.3}, xAxis, 0)
+	for k := range n {
+		z0 := -w/2 + float64(k)*w/n
+		z1 := z0 + w/n
+		x0, x1 := 0.06, 0.06+fold
+		if k%2 == 1 {
+			x0, x1 = x1, x0
+		}
+		pts := []vec3{
+			at.Add(vec3{x0, -0.02, z0}), at.Add(vec3{x1, -0.02, z1}),
+			at.Add(vec3{x1, -curtainH, z1}), at.Add(vec3{x0, -curtainH, z0}),
+		}
+		b.in("fabric.oat").Slab(pts, vec3{0, 1, 0}.Cross(at.Add(vec3{x1, 0, z1}).Sub(at.Add(vec3{x0, 0, z0}))).Norm(), 0.008)
+	}
+}
+
+// BuildHangingPlant: a white ceramic bowl hung on three cords from 0.4 m
+// above its spot, vines trailing from it.
+func BuildHangingPlant(b *building, at vec3, seed int) {
+	b.in("home.panel").Prism(at, yUp, 0.1, 0.17, 0.16, 18, 0.02)
+	b.in("soil").Prism(at.Add(vec3{0, 0.14, 0}), yUp, 0.155, 0.155, 0.02, 18, 0)
+	for k := range 3 {
+		a := float64(k) * 2 * math.Pi / 3
+		p := at.Add(vec3{math.Cos(a), 0, math.Sin(a)}.Scale(0.16)).Add(vec3{0, 0.16, 0})
+		top := at.Add(vec3{0, 0.4, 0})
+		d := top.Sub(p)
+		b.in("home.trim").Prism(p, d.Norm(), 0.003, 0.003, d.Length(), 4, 0)
+	}
+	for i := range 9 {
+		a := float64(i)*2.4 + 3*grnd(seed, i)
+		out := vec3{math.Cos(a), 0, math.Sin(a)}
+		from := at.Add(out.Scale(0.13)).Add(vec3{0, 0.15, 0})
+		// A vine falls over the rim, leaves close along it.
+		l := 0.12 + 0.3*grnd(seed, i+10)
+		end := from.Add(out.Scale(0.08)).Sub(vec3{0, l, 0})
+		d := end.Sub(from)
+		b.in("planter.green").Prism(from, d.Norm(), 0.005, 0.004, d.Length(), 5, 0)
+		for j := 0; float64(j)*0.07 < l; j++ {
+			r := grnd(seed*7+i, j)
+			p := from.Add(d.Scale((float64(j)*0.07 + 0.03*r) / l))
+			tok := "planter.green"
+			if r < 0.35 {
+				tok = "planter.lime"
+			}
+			a := float64(j)*2.4 + 6*r
+			side := vec3{math.Cos(a), 0, math.Sin(a)}.Add(out.Scale(0.7)).Norm()
+			leaf(b.in(tok), p, side.Add(vec3{0, 0.3 - 0.9*r, 0}).Norm(), 0.06+0.04*r)
+		}
+	}
+}
+
+// BuildBigPlant: a tall plant in a ceramic pot on the floor.
+func BuildBigPlant(b *building, at vec3, seed int) { b.pottedPlant(at, 0.22, 1.1, seed) }

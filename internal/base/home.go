@@ -231,7 +231,7 @@ func (r Room) domeLining() (a, bh float64) {
 
 // corridorLining lines a corridor between two living spaces: its walls
 // and ceiling, a duct casing along the top of each wall, lit underneath,
-// a line of light at the foot of the walls, the floor.
+// a line of amber light at the foot of the walls, the floor.
 func (b *building) corridorLining(c Corridor) {
 	mid := c.From.Lerp(c.To, 0.5)
 	dir := c.To.Sub(c.From)
@@ -245,7 +245,7 @@ func (b *building) corridorLining(c Corridor) {
 		casing := wall.Sub(side.Scale(s * (in + 0.1))).Add(vec3{0, c.Height - in - 0.07, 0})
 		b.in("home.panel2").Box(casing, vec3{length, 0.18, 0.2}, dir, 0.02)
 		b.casingLight(casing.Sub(side.Scale(s*0.04)).Sub(vec3{0, 0.09, 0}), dir, length, "home.led")
-		b.footLight(wall.Sub(dir.Scale(length/2)), wall.Add(dir.Scale(length/2)), side.Scale(-s), 0, "home.led")
+		b.footLight(wall.Sub(dir.Scale(length/2)), wall.Add(dir.Scale(length/2)), side.Scale(-s), 0, "home.led.amber")
 	}
 	b.in("home.panel").Box(mid.Add(vec3{0, c.Height - liningGap - lining/2, 0}), vec3{length, lining, c.Width - 2*in}, dir, 0)
 	b.in(c.floorTok()).Box(mid.Add(vec3{0, FloorTop - 0.05, 0}), vec3{length, 0.1, c.Width}, dir, 0)

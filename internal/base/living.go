@@ -120,6 +120,10 @@ func BuildStorage(b *building, at vec3, seed int) {
 // StorageObstacles are what stops the player around a cupboard.
 var StorageObstacles = []vec3{{0, 0, -0.85}, {0, 0, 0}, {0, 0, 0.85}}
 
+// PlanterLight is where a home planter's grow light shines from: its
+// light spills a little round it, under the lookout.
+var PlanterLight = vec3{-0.1, 1.6, 0}
+
 // BuildHomePlanter: a hydroponic trough in white composite on a recessed
 // plinth, along Z, its rows of plants, and a slim grow light over it on
 // two thin arms.
