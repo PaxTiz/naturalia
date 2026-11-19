@@ -230,12 +230,14 @@ var coreBuildings = []content.Blueprint{
 	content.Blueprint{
 		ID:     "core:hall",
 		Accent: "neon.cyan",
-		Hall:   &content.Hall{Size: [2]float64{24, 16}, WallH: 6, Rise: 2},
-		Style:  "habitat.white",
+		// Its roof rises toward the bay window, toward the sunrise.
+		Hall:  &content.Hall{Size: [2]float64{24, 16}, WallH: 5.5, Rise: 3.5, Roof: "shed"},
+		Style: "habitat.white",
 		// A living space: finished like a home inside.
 		Interior: "home",
-		// The bay window, all along the east wall: the plain, the sunrise.
-		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 5.2}},
+		// The bay window, all along the east wall, nearly up to the roof:
+		// the plain, the sunrise.
+		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 7.8}},
 		// The lookout: a gallery 3 m up along the bay window, stairs
 		// rising east to it along the south wall.
 		Floors: []content.Floor{
@@ -299,8 +301,8 @@ var coreBuildings = []content.Blueprint{
 			// along the stairs, and on the way to the bedroom.
 			{Kit: "curtain", At: vec3{11.72, 2.62, -6.55}, Yaw: 180},
 			{Kit: "curtain", At: vec3{11.72, 2.62, 6.55}, Yaw: 180},
-			{Kit: "curtain", At: vec3{11.72, 5.55, -6.55}, Yaw: 180},
-			{Kit: "curtain", At: vec3{11.72, 5.55, 6.55}, Yaw: 180},
+			{Kit: "curtain.tall", At: vec3{11.72, 8.15, -6.55}, Yaw: 180},
+			{Kit: "curtain.tall", At: vec3{11.72, 8.15, 6.55}, Yaw: 180},
 			{Kit: "plant.hanging", At: vec3{8.3, 2.3, -4.6}, Seed: 1},
 			{Kit: "plant.hanging", At: vec3{8.3, 2.3, -0.4}, Seed: 2},
 			{Kit: "plant.hanging", At: vec3{8.3, 2.3, 4.2}, Seed: 3},
@@ -314,6 +316,12 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "telescope", At: vec3{10.5, 3, -3.5}}, // between two mullions
 			{Kit: "bench", At: vec3{9.4, 3, 2.4}},
 			{Kit: "lowtable", At: vec3{10.5, 3, 2.4}},
+			// On the roof's low half, solar panels facing the setting sun,
+			// and two extractors.
+			{Kit: "solar.rack", At: vec3{-8, 6.32, -3.6}},
+			{Kit: "solar.rack", At: vec3{-8, 6.32, 2.2}},
+			{Kit: "roof.vent", At: vec3{-3, 7.0, 5.6}},
+			{Kit: "roof.vent", At: vec3{-3, 7.0, -6.0}, Seed: 1},
 		},
 	},
 	// The bedroom wing, at the end of a corridor north of the hall: one
@@ -386,20 +394,24 @@ var coreKits = map[string]content.Kit{
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.OpenGarage() }, Prompt: "[E] Acheter ou revendre un véhicule"},
 	"bed": {Build: base.KitBuild(base.BuildBed), Obstacles: []content.Obstacle{{vec3{-0.55, 0, 0}, 0.8}, {vec3{0.55, 0, 0}, 0.8}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.Sleep() }, Prompt: "[E] Dormir"},
-	"nightstand":    {Build: base.KitBuild(base.BuildNightstand), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"bedlamp":       {Build: base.KitBuild(base.BuildBedLamp), Lamps: []content.KitLamp{{base.BedLampLight, 0.45, 4}}},
-	"writing.desk":  {Build: base.KitBuild(base.BuildWritingDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.42}, {vec3{0, 0, 0.35}, 0.42}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
-	"shelf":         {Build: base.KitBuild(base.BuildShelf), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.3}, {vec3{0, 0, 0.3}, 0.3}}},
-	"armchair":      {Build: base.KitBuild(base.BuildArmchair), Obstacles: []content.Obstacle{{vec3{}, 0.5}}},
-	"lockers":       {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
-	"lamp.arc":      {Build: base.KitBuild(base.BuildArcLamp), Obstacles: []content.Obstacle{{vec3{}, 0.25}}, Lamps: []content.KitLamp{{base.ArcLight, 1.1, 6}}},
-	"lamp.floor":    {Build: base.KitBuild(base.BuildFloorLamp), Obstacles: []content.Obstacle{{vec3{}, 0.22}}, Lamps: []content.KitLamp{{base.FloorLight, 0.7, 5}}},
-	"canopy":        {Build: base.KitBuild(base.BuildCanopy)},
-	"divider":       {Build: base.KitBuild(base.BuildDivider), Obstacles: obstacles(base.DividerObstacles, 0.3)},
-	"entry":         {Build: base.KitBuild(base.BuildEntry), Obstacles: obstacles(base.EntryObstacles, 0.32)},
-	"pouf":          {Build: base.KitBuild(base.BuildPouf), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"frame":         {Build: base.KitBuild(base.BuildFrame)},
-	"curtain":       {Build: base.KitBuild(base.BuildCurtain)},
+	"nightstand":   {Build: base.KitBuild(base.BuildNightstand), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"bedlamp":      {Build: base.KitBuild(base.BuildBedLamp), Lamps: []content.KitLamp{{base.BedLampLight, 0.45, 4}}},
+	"writing.desk": {Build: base.KitBuild(base.BuildWritingDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.42}, {vec3{0, 0, 0.35}, 0.42}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
+	"shelf":        {Build: base.KitBuild(base.BuildShelf), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.3}, {vec3{0, 0, 0.3}, 0.3}}},
+	"armchair":     {Build: base.KitBuild(base.BuildArmchair), Obstacles: []content.Obstacle{{vec3{}, 0.5}}},
+	"lockers":      {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
+	"lamp.arc":     {Build: base.KitBuild(base.BuildArcLamp), Obstacles: []content.Obstacle{{vec3{}, 0.25}}, Lamps: []content.KitLamp{{base.ArcLight, 1.1, 6}}},
+	"lamp.floor":   {Build: base.KitBuild(base.BuildFloorLamp), Obstacles: []content.Obstacle{{vec3{}, 0.22}}, Lamps: []content.KitLamp{{base.FloorLight, 0.7, 5}}},
+	"canopy":       {Build: base.KitBuild(base.BuildCanopy)},
+	"divider":      {Build: base.KitBuild(base.BuildDivider), Obstacles: obstacles(base.DividerObstacles, 0.3)},
+	"entry":        {Build: base.KitBuild(base.BuildEntry), Obstacles: obstacles(base.EntryObstacles, 0.32)},
+	"pouf":         {Build: base.KitBuild(base.BuildPouf), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"frame":        {Build: base.KitBuild(base.BuildFrame)},
+	"curtain":      {Build: base.KitBuild(base.BuildCurtain)},
+	"curtain.tall": {Build: base.KitBuild(base.BuildTallCurtain)},
+	// Outside: on the roofs and around the buildings.
+	"solar.rack":    {Build: base.KitBuild(base.BuildSolarRack)},
+	"roof.vent":     {Build: base.KitBuild(base.BuildRoofVent)},
 	"plant.hanging": {Build: base.KitBuild(base.BuildHangingPlant)},
 	"plant.big":     {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
 	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},

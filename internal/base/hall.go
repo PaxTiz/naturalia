@@ -38,11 +38,51 @@ func (r Room) half() (hx, hz float64) { return r.Hall.Size[0] / 2, r.Hall.Size[1
 func (r Room) bigDoor() bool { return r.Hall != nil && r.Hall.Door[0] > 0 }
 
 // vault is the inside of the roof's height over the floor, u m east of the
-// hall's middle: a parabola from the walls' top to the ridge.
+// hall's middle: a parabola from the walls' top to the ridge, a straight
+// slope up to the east wall, or level with the walls' top.
 func (r Room) vault(u float64) float64 {
 	hx, _ := r.half()
 	k := u / hx
+	switch r.Hall.Roof {
+	case "shed":
+		return r.WallH + r.Hall.Rise*(k+1)/2
+	case "flat":
+		return r.WallH
+	}
 	return r.WallH + r.Hall.Rise*(1-k*k)
+}
+
+// sloped tells a roof that rises from one long wall to the other: the
+// east wall stands higher than the west one.
+func (r Room) sloped() bool { return r.Hall.Roof == "shed" }
+
+// wallTop is how high the wall from a to b (local, in the hall's frame)
+// rises: a long wall up to the roof over it, a gable end up to where the
+// roof starts (the gable fills in above).
+func (r Room) wallTop(a, b vec3) float64 {
+	if math.Abs(a.X-b.X) < 0.01 {
+		return r.vault(a.X - r.Center.X)
+	}
+	return r.WallH
+}
+
+// gable is the outline of a gable end at z (in the hall's frame), y m
+// under the roof, from the top of the gable walls: none under a flat roof.
+func (r Room) gable(z, y float64) []vec3 {
+	hx, _ := r.half()
+	if r.Hall.Roof == "flat" {
+		return nil
+	}
+	const steps = 24
+	var pts []vec3
+	for i := 0; i <= steps; i++ {
+		u := -hx + 2*hx*float64(i)/steps
+		pts = append(pts, r.Center.Add(vec3{u, r.vault(u) - y, z}))
+	}
+	if r.sloped() { // down the east wall to the west one's top
+		pts = append(pts, r.Center.Add(vec3{hx, r.WallH - y, z}))
+	}
+	return pts
 }
 
 // reach is how far the room stands from its center.
@@ -174,7 +214,7 @@ func (r Room) panes(a, b vec3) []pane {
 			continue // on another wall
 		}
 		t0, t1 := math.Max(math.Max(0.3, end), t-w.Width/2), math.Min(l-0.3, t+w.Width/2)
-		y0, y1 := math.Max(0, w.At.Y), math.Min(r.WallH-0.2, w.At.Y+w.Height)
+		y0, y1 := math.Max(0, w.At.Y), math.Min(r.wallTop(a, b)-0.2, w.At.Y+w.Height)
 		if t1-t0 < 0.3 || y1-y0 < 0.3 {
 			continue
 		}
@@ -626,28 +666,29 @@ func (b *building) hallShell(r Room) {
 	}
 	// Around the windows: the wall under the sill and over the head.
 	for _, w := range r.straightWalls() {
+		top := r.wallTop(w[0], w[1])
 		for _, s := range r.spans(w[0], w[1]) {
 			for _, sd := range r.solid(s[0], s[1]) {
-				panels(sd[0], sd[1], 0, r.WallH)
+				panels(sd[0], sd[1], 0, top)
 			}
 			for _, pn := range r.panes(s[0], s[1]) {
 				if pn.y0 > 0.01 {
 					panels(pn.a, pn.b, 0, pn.y0)
 				}
-				panels(pn.a, pn.b, pn.y1, r.WallH)
+				panels(pn.a, pn.b, pn.y1, top)
 				b.window(r, pn)
 			}
 		}
 	}
 	if dw > 0 {
-		panels(p(hx, 0, -dw/2), p(hx, 0, dw/2), dh, r.WallH)
+		panels(p(hx, 0, -dw/2), p(hx, 0, dw/2), dh, r.vault(hx))
 	}
 	// The corridors' doorways: a lintel above, a steel frame on both
 	// faces, hazard stripes over it.
 	for _, w := range r.doorways() {
 		out := r.wallOut(w)
 		along := vec3{-out.Z, 0, out.X}
-		panels(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), DoorHeight+0.1, r.WallH)
+		panels(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), DoorHeight+0.1, r.wallTop(w.Sub(along), w.Add(along)))
 		if r.home() {
 			b.homeDoorFrame(w, out, homeDoorHalf, DoorHeight+0.1, hallWall+0.2, "home.accent")
 			continue // and lined (hallLining)
@@ -667,15 +708,12 @@ func (b *building) hallShell(r Room) {
 		wall(bp.Accent).Box(w.Sub(out.Scale(hallWall/2+0.14)).Add(vec3{0, DoorHeight + 0.75, 0}), vec3{2 * hallGap, 0.06, 0.03}, along, 0)
 	}
 
-	// The gables, up under the vault.
+	// The gables, up under the roof.
 	const steps = 24
 	for _, s := range []float64{-1, 1} {
-		var pts []vec3
-		for i := 0; i <= steps; i++ {
-			u := -hx + 2*hx*float64(i)/steps
-			pts = append(pts, p(u, r.vault(u), s*hz))
+		if pts := r.gable(s*hz, 0); pts != nil {
+			wall(bp.Style).Slab(pts, Z, hallWall)
 		}
-		wall(bp.Style).Slab(pts, Z, hallWall)
 	}
 
 	// The vault: plates across, the outside along the sun, the inside
@@ -701,12 +739,16 @@ func (b *building) hallShell(r Room) {
 			}
 		}
 	}
-	// A ridge cap, and skylight vents along it.
-	sun("steel").Box(p(0, r.vault(0)+0.42, 0), vec3{1.2, 0.14, 2*hz + 0.9}, X, 0.04)
-	if hz < 6 { // a small one has room for one
+	// A ridge cap, and skylight vents along it; on a slope, eaves.
+	if r.sloped() {
+		b.eaves(r)
+	} else {
+		sun("steel").Box(p(0, r.vault(0)+0.42, 0), vec3{1.2, 0.14, 2*hz + 0.9}, X, 0.04)
+	}
+	if hz < 6 && r.Hall.Roof == "" { // a small one has room for one
 		sun("steel.dark").Box(p(0, r.vault(0)+0.62, 0), vec3{1.6, 0.3, math.Min(3, hz)}, X, 0.05)
 	}
-	for k := -2; k <= 2 && hz >= 6; k++ {
+	for k := -2; k <= 2 && hz >= 6 && r.Hall.Roof == ""; k++ {
 		sun("steel.dark").Box(p(0, r.vault(0)+0.62, float64(k)*hz*0.38), vec3{2.2, 0.35, 3}, X, 0.05)
 	}
 
@@ -721,8 +763,9 @@ func (b *building) hallShell(r Room) {
 			if r.nearDoorway(p(x, 0, z), 0.5) {
 				continue
 			}
-			sun("steel").Box(p(x+s*0.3, r.WallH/2, z), vec3{0.3, r.WallH, 0.6}, X, 0.04)
-			inside(rib).Box(p(x-s*(hallWall/2+(ribDeep-0.1)/2), r.WallH/2, z), vec3{ribDeep - 0.1, r.WallH, 0.45}, X, 0.04)
+			h := r.vault(x)
+			sun("steel").Box(p(x+s*0.3, h/2, z), vec3{0.3, h, 0.6}, X, 0.04)
+			inside(rib).Box(p(x-s*(hallWall/2+(ribDeep-0.1)/2), h/2, z), vec3{ribDeep - 0.1, h, 0.45}, X, 0.04)
 		}
 	}
 	for k, w := range r.straightWalls() {
@@ -799,6 +842,26 @@ func (b *building) hallShell(r Room) {
 	if dw > 0 {
 		b.hallDoor(r)
 	}
+}
+
+// hallEaves is how far a sloped roof reaches out over the east wall.
+const hallEaves = 1.6
+
+// eaves finish a sloped roof, in the hall's own frame: along its high
+// edge it reaches out over the east wall, a thin white plate on a steel
+// fascia, shading the wall; along its low one, a steel coping.
+func (b *building) eaves(r Room) {
+	hx, hz := r.half()
+	c := r.Center
+	sun := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitSun, vec3{}) }
+	Z := vec3{0, 0, 1}
+	slope := vec3{2 * hx, r.vault(hx) - r.vault(-hx), 0}.Norm()
+	nrm := Z.Cross(slope) // up and out
+	top := c.Add(vec3{hx, r.vault(hx), 0}).Add(nrm.Scale(0.12))
+	mid := top.Add(slope.Scale(hallEaves / 2))
+	sun(r.plan.Style).BoxBasis(mid, [3]vec3{slope, nrm, Z}, vec3{hallEaves + 0.1, 0.24, 2*hz + 0.8}, 0.02)
+	sun("steel").BoxBasis(top.Add(slope.Scale(hallEaves+0.05)).Sub(nrm.Scale(0.1)), [3]vec3{slope, nrm, Z}, vec3{0.12, 0.5, 2*hz + 0.9}, 0.02)
+	sun("steel").Box(c.Add(vec3{-hx - 0.05, r.vault(-hx) + 0.2, 0}), vec3{0.5, 0.2, 2*hz + 0.9}, vec3{1, 0, 0}, 0.03)
 }
 
 // window glazes pane pn of hall r: the glass, a steel frame around it,

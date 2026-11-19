@@ -90,9 +90,14 @@ func (bp *Blueprint) AllLinks() []string {
 // pockets past the ends.
 type Hall struct {
 	Size  [2]float64 `json:"size"`        // along X and Z, in m
-	WallH float64    `json:"wall_height"` // up to where the vault starts
-	Rise  float64    `json:"rise"`        // the vault's height over the walls
+	WallH float64    `json:"wall_height"` // up to where the roof starts
+	Rise  float64    `json:"rise"`        // how much higher the roof gets
 	Door  [2]float64 `json:"door"`        // the big door's width and height
+	// Roof is its shape: a barrel vault along Z (left out, or "vault"),
+	// rising Rise in the middle; a single slope rising Rise from the west
+	// wall to the east one ("shed"); or flat, behind a parapet Rise high
+	// ("flat").
+	Roof string `json:"roof"`
 }
 
 type Dome struct {

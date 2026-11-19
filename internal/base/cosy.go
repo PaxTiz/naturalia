@@ -321,13 +321,19 @@ func BuildFrame(b *building, at vec3, seed int) {
 	}
 }
 
-// curtainH is how high a curtain hangs, from its rail down.
-const curtainH = 2.5
+// curtainH is how high a curtain hangs, from its rail down; a tall one,
+// from the top of the bay window down to the lookout's floor.
+const curtainH, tallCurtainH = 2.5, 5.1
 
 // BuildCurtain: a sheer oat curtain drawn back, 1 m wide in its folds,
 // hanging from a slim rail at the spot's height, against a wall or a
 // window at -X.
-func BuildCurtain(b *building, at vec3, _ int) {
+func BuildCurtain(b *building, at vec3, _ int) { b.curtain(at, curtainH) }
+
+// BuildTallCurtain: the same, 5.1 m long.
+func BuildTallCurtain(b *building, at vec3, _ int) { b.curtain(at, tallCurtainH) }
+
+func (b *building) curtain(at vec3, curtainH float64) {
 	const n, w, fold = 9, 1.0, 0.07
 	b.in("home.trim").Box(at.Add(vec3{0.1, 0, 0}), vec3{0.025, 0.025, w + 0.3}, xAxis, 0)
 	for k := range n {
