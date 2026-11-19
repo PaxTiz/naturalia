@@ -425,11 +425,11 @@ func (b *building) waterTanks() {
 }
 
 var (
-	yardMasts     = []vec3{{-17.5, 0, 6}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
+	yardMasts     = []vec3{{-14.3, 0, 9.5}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
 	yardBarrels   = []vec3{{5.4, 0, -10.6}, {-9.4, 0, 10.2}}
 	yardTanks     = vec3{-5, 0, -13.3}
 	yardContainer = vec3{10, 0, 13.5}
-	solarX        = -17.0 // the solar panels, west of the great hall
+	solarX        = -14.8 // the solar panels, west of the great hall, clear of the hangar's banks
 	solarPanels   = []float64{-9.5, -12.5}
 )
 
@@ -441,10 +441,11 @@ func yardFree(p vec3, r float64) bool {
 	flat := vec3{p.X, 0, p.Z}
 	for _, rm := range Buildings() {
 		if rm.Hall != nil {
-			// The hall, and the door's rails in front of it.
+			// The hall, the door's rails in front of it, its banks.
 			hx, hz := rm.half()
+			berm := rm.bermRun()
 			d := rm.Unturn(flat).Sub(rm.Center)
-			if math.Abs(d.X) < hx+r+margin+3 && math.Abs(d.Z) < hz+r+margin {
+			if math.Abs(d.X) < hx+r+margin+math.Max(3, berm) && math.Abs(d.Z) < hz+r+margin+berm {
 				return false
 			}
 			continue
@@ -456,7 +457,11 @@ func yardFree(p vec3, r float64) bool {
 	for _, c := range Corridors() {
 		d := c.To.Sub(c.From)
 		t := mathx.Clamp01(flat.Sub(c.From).Dot(d) / d.Dot(d))
-		if flat.Sub(c.From.Add(d.Scale(t))).Length() < c.Width/2+r+margin {
+		banks := 0.0
+		if k := c.banks(); len(k) > 0 {
+			banks = WallThick + k[0].run()
+		}
+		if flat.Sub(c.From.Add(d.Scale(t))).Length() < c.Width/2+r+margin+banks {
 			return false
 		}
 	}

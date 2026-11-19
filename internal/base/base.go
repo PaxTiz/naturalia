@@ -370,6 +370,7 @@ func Walls() []Segment {
 		top := c.Height + 0.2
 		walls = append(walls, Segment{c.From.Add(side), c.To.Add(side), top}, Segment{c.From.Sub(side), c.To.Sub(side), top})
 	}
+	walls = append(walls, bankWalls()...)
 	for _, p := range junctionPlates() {
 		if p.y0 > 0 {
 			continue // above the corridor

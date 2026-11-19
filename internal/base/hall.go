@@ -51,7 +51,7 @@ func (r Room) reach() float64 {
 		return r.Radius
 	}
 	hx, hz := r.half()
-	return math.Hypot(hx+2, hz)
+	return math.Hypot(hx+2+r.bermRun(), hz+r.bermRun())
 }
 
 // leaves is how many leaves the door has on each side, and how wide they

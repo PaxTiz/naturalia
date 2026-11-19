@@ -356,7 +356,8 @@ var coreBuildings = []content.Blueprint{
 	// The vehicles' hangar, west of the base, turned so its door (east in
 	// its own frame) faces away; a corridor leads there from the great
 	// hall. Clad in steel grey, just long and high enough for the fleet in
-	// one row: the great hall stands in front of it.
+	// one row, half buried in regolith: the great hall stands in front of
+	// it.
 	content.Blueprint{
 		ID:     "core:hangar",
 		Link:   "core:hall",
@@ -367,6 +368,7 @@ var coreBuildings = []content.Blueprint{
 		Hall:   &content.Hall{Size: [2]float64{26, 58}, WallH: 9, Rise: 3.5, Door: [2]float64{50, 8.5}},
 		Garage: true,
 		Style:  "clad.sand",
+		Berm:   4.5,
 		// By the corridor's door, the terminal to buy and sell vehicles.
 		Props: []content.Prop{{Kit: "garage.terminal", At: vec3{-12.4, 0, -2.25}}},
 	},

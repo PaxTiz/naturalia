@@ -41,6 +41,10 @@ type Blueprint struct {
 	// like a well-made habitat (composite panels, warm grey floor, ducts
 	// boxed in); left out, it stays industrial. The outside doesn't change.
 	Interior string `json:"interior"`
+	// Berm is how high regolith is banked against a hall's walls, a
+	// shield from the radiation: its big door and doorways are left free,
+	// and its corridors are half buried on their way to it.
+	Berm float64 `json:"berm"`
 }
 
 // Window is a pane of glass in a wall of a hall, in its frame (before its
