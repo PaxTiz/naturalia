@@ -337,7 +337,7 @@ func BeaconTop() vec3 {
 	return mast().Add(vec3{0, hub.roof(mast()) + 3.05, 0})
 }
 
-// outside: an antenna and a dish on the hub, solar panels nearby.
+// outside: an antenna and a dish on the hub.
 func (b *building) outside() {
 	_, hub := Hub()
 	up := vec3{0, 1, 0}
@@ -351,20 +351,6 @@ func (b *building) outside() {
 	d.Y = hub.roof(d)
 	steel.Prism(d.Add(vec3{0, 0.1, 0}), up, 0.08, 0.08, 0.35, 8, 0)
 	b.Part("habitat.white", mesh.LitSun, vec3{}).Prism(d.Add(vec3{0, 0.4, 0}), tilt, 0.15, 0.75, 0.28, 16, 0.03)
-	slope := -30 * math.Pi / 180
-	ax := [3]vec3{{1, 0, 0}, {0, math.Cos(slope), math.Sin(slope)}, {}}
-	ax[2] = ax[0].Cross(ax[1])
-	for _, z := range solarPanels {
-		at := vec3{solarX, 0, z}
-		steel.Prism(at, up, 0.06, 0.06, 1.2, 8, 0)
-		panel := at.Add(vec3{0, 1.28, 0})
-		steel.BoxBasis(panel, ax, vec3{2.7, 0.05, 1.6}, 0.02)
-		cells := panel.Add(ax[1].Scale(0.03))
-		b.Part("solar.blue", mesh.LitSun, vec3{}).BoxBasis(cells, ax, vec3{2.56, 0.03, 1.46}, 0.01)
-		for _, x := range []float64{-0.43, 0.43} {
-			steel.BoxBasis(cells.Add(ax[0].Scale(x)).Add(ax[1].Scale(0.012)), ax, vec3{0.03, 0.02, 1.46}, 0)
-		}
-	}
 }
 
 // BuildCrates stacks two or three bevelled crates, chosen by the seed.

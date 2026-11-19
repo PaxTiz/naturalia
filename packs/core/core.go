@@ -322,6 +322,12 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "solar.rack", At: vec3{-8, 6.32, 2.2}},
 			{Kit: "roof.vent", At: vec3{-3, 7.0, 5.6}},
 			{Kit: "roof.vent", At: vec3{-3, 7.0, -6.0}, Seed: 1},
+			// Outside, on the south side where one arrives: a greenhouse
+			// leaning on the wall west of the entry, green seen from
+			// afar; the life support's annex at the corner, by the
+			// hangar's bank.
+			{Kit: "greenhouse", At: vec3{-7.2, 0, -8.15}, Seed: 3},
+			{Kit: "annex.tech", At: vec3{-13.2, 0, -12.6}},
 		},
 	},
 	// The bedroom wing, at the end of a corridor north of the hall: one
@@ -412,6 +418,8 @@ var coreKits = map[string]content.Kit{
 	// Outside: on the roofs and around the buildings.
 	"solar.rack":    {Build: base.KitBuild(base.BuildSolarRack)},
 	"roof.vent":     {Build: base.KitBuild(base.BuildRoofVent)},
+	"greenhouse":    {Build: base.KitBuild(base.BuildGreenhouse), Obstacles: obstacles(base.GreenhouseObstacles, 2.25)},
+	"annex.tech":    {Build: base.KitBuild(base.BuildAnnex), Obstacles: obstacles(base.AnnexObstacles, 1.9)},
 	"plant.hanging": {Build: base.KitBuild(base.BuildHangingPlant)},
 	"plant.big":     {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
 	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},
