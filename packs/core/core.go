@@ -120,28 +120,35 @@ func crateParts(s float64, tok string) []content.PartJSON {
 var coreTokens = map[string]content.Token{
 	"habitat.white":  {color.RGBA{232, 230, 224, 255}, content.MtPanel, 1, 0.55, 0},
 	"habitat.white2": {color.RGBA{218, 217, 212, 255}, content.MtPanel, 1, 0.55, 0},
-	"steel":          {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
-	"steel.dark":     {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
-	"door.plate":     {color.RGBA{168, 172, 178, 255}, content.MtMetal, 1.2, 0.45, 0}, // the hangar's door leaves
-	"door.plate2":    {color.RGBA{154, 159, 166, 255}, content.MtMetal, 1.2, 0.45, 0},
-	"rack.slate":     {color.RGBA{58, 64, 80, 255}, content.MtPanel, 1, 0.4, 0},
-	"hazard":         {palette.White, content.MtHazard, 2.5, 0.3, 0},
-	"neon.cyan":      {palette.AccentCyan, content.MtPlain, 1, 0, 0.8},
-	"neon.orange":    {palette.AccentOrange, content.MtPlain, 1, 0, 0.8},
-	"neon.blue":      {palette.AccentBlue, content.MtPlain, 1, 0, 0.8},
-	"neon.purple":    {palette.AccentPurple, content.MtPlain, 1, 0, 0.8},
-	"lamp.warm":      {palette.LampWarm, content.MtPlain, 1, 0, 1},
-	"floor.slate":    {color.RGBA{50, 54, 66, 255}, content.MtPanel, 1, 0.25, 0},
-	"wall.lower":     {color.RGBA{86, 100, 118, 255}, content.MtPanel, 1, 0.3, 0},
-	"floor.inlay":    {color.RGBA{68, 74, 90, 255}, content.MtPlain, 1, 0.3, 0},
-	"solar.blue":     {color.RGBA{40, 62, 130, 255}, content.MtPlain, 1, 0.9, 0},
-	"crate.ochre":    {color.RGBA{196, 132, 60, 255}, content.MtPanel, 1, 0.2, 0},
-	"crate.slate":    {color.RGBA{88, 116, 146, 255}, content.MtPanel, 1, 0.2, 0},
-	"crate.sand":     {color.RGBA{158, 148, 118, 255}, content.MtPanel, 1, 0.2, 0},
-	"wood.brown":     {color.RGBA{110, 80, 60, 255}, content.MtPlain, 1, 0.3, 0},
-	"fabric.white":   {palette.MatWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
-	"fabric.purple":  {palette.AccentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
-	"fabric.rug":     {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	// The working buildings' cladding, a warm steel grey that sinks into
+	// the plain where the living spaces stay white; the regolith banked
+	// against them, a shield from the radiation.
+	"clad.sand":     {color.RGBA{148, 140, 126, 255}, content.MtPanel, 1, 0.45, 0},
+	"clad.sand2":    {color.RGBA{138, 131, 118, 255}, content.MtPanel, 1, 0.45, 0},
+	"regolith":      {color.RGBA{172, 92, 54, 255}, content.MtPaint, 1 / content.PaintTile, 0.05, 0},
+	"regolith.dark": {color.RGBA{138, 74, 46, 255}, content.MtPaint, 1 / content.PaintTile, 0.05, 0},
+	"steel":         {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
+	"steel.dark":    {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
+	"door.plate":    {color.RGBA{168, 172, 178, 255}, content.MtMetal, 1.2, 0.45, 0}, // the hangar's door leaves
+	"door.plate2":   {color.RGBA{154, 159, 166, 255}, content.MtMetal, 1.2, 0.45, 0},
+	"rack.slate":    {color.RGBA{58, 64, 80, 255}, content.MtPanel, 1, 0.4, 0},
+	"hazard":        {palette.White, content.MtHazard, 2.5, 0.3, 0},
+	"neon.cyan":     {palette.AccentCyan, content.MtPlain, 1, 0, 0.8},
+	"neon.orange":   {palette.AccentOrange, content.MtPlain, 1, 0, 0.8},
+	"neon.blue":     {palette.AccentBlue, content.MtPlain, 1, 0, 0.8},
+	"neon.purple":   {palette.AccentPurple, content.MtPlain, 1, 0, 0.8},
+	"lamp.warm":     {palette.LampWarm, content.MtPlain, 1, 0, 1},
+	"floor.slate":   {color.RGBA{50, 54, 66, 255}, content.MtPanel, 1, 0.25, 0},
+	"wall.lower":    {color.RGBA{86, 100, 118, 255}, content.MtPanel, 1, 0.3, 0},
+	"floor.inlay":   {color.RGBA{68, 74, 90, 255}, content.MtPlain, 1, 0.3, 0},
+	"solar.blue":    {color.RGBA{40, 62, 130, 255}, content.MtPlain, 1, 0.9, 0},
+	"crate.ochre":   {color.RGBA{196, 132, 60, 255}, content.MtPanel, 1, 0.2, 0},
+	"crate.slate":   {color.RGBA{88, 116, 146, 255}, content.MtPanel, 1, 0.2, 0},
+	"crate.sand":    {color.RGBA{158, 148, 118, 255}, content.MtPanel, 1, 0.2, 0},
+	"wood.brown":    {color.RGBA{110, 80, 60, 255}, content.MtPlain, 1, 0.3, 0},
+	"fabric.white":  {palette.MatWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.purple": {palette.AccentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.rug":    {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	// Greebles and the yard (internal/base/greeble.go).
 	"glass.dark":    {color.RGBA{26, 38, 54, 255}, content.MtPlain, 1, 1.0, 0},
 	"glass.pane":    {color.RGBA{150, 205, 220, 255}, content.MtPlain, 1, 1.0, 0},
@@ -348,7 +355,8 @@ var coreBuildings = []content.Blueprint{
 	},
 	// The vehicles' hangar, west of the base, turned so its door (east in
 	// its own frame) faces away; a corridor leads there from the great
-	// hall.
+	// hall. Clad in steel grey, just long and high enough for the fleet in
+	// one row: the great hall stands in front of it.
 	content.Blueprint{
 		ID:     "core:hangar",
 		Link:   "core:hall",
@@ -356,9 +364,9 @@ var coreBuildings = []content.Blueprint{
 		Accent: "neon.orange",
 		At:     vec3{-35, 0, 0}, // 10 m of corridor from the hall
 		Yaw:    180,
-		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
+		Hall:   &content.Hall{Size: [2]float64{26, 58}, WallH: 9, Rise: 3.5, Door: [2]float64{50, 8.5}},
 		Garage: true,
-		Style:  "habitat.white",
+		Style:  "clad.sand",
 		// By the corridor's door, the terminal to buy and sell vehicles.
 		Props: []content.Prop{{Kit: "garage.terminal", At: vec3{-12.4, 0, -2.25}}},
 	},

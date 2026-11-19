@@ -341,10 +341,10 @@ func TestTurnedHall(t *testing.T) {
 	if mid.Sub(vec3{0, 0, -62}).Length() > 1e-9 {
 		t.Errorf("door at %v", mid)
 	}
-	if a, b, _ := closed.Ends(); math.Abs(a.Z+62) > 1e-9 || math.Abs(b.Z+62) > 1e-9 || math.Abs(a.X-b.X) < 50 {
+	if a, b, _ := closed.Ends(); math.Abs(a.Z+62) > 1e-9 || math.Abs(b.Z+62) > 1e-9 || math.Abs(a.X-b.X) < 48 {
 		t.Errorf("door's wall from %v to %v", a, b)
 	}
-	if !base.Covered(vec3{30, 0, -75}) || base.Covered(vec3{0, 0, -96}) {
+	if !base.Covered(vec3{27, 0, -75}) || base.Covered(vec3{0, 0, -96}) {
 		t.Error("the hall's floor didn't turn")
 	}
 	for _, l := range base.HallLeaves(i, 0) {
