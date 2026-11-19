@@ -377,9 +377,9 @@ var coreBuildings = []content.Blueprint{
 		Link:   "core:hall",
 		Sign:   "HANGAR 01",
 		Accent: "neon.orange",
-		At:     vec3{-35, 0, 0}, // 10 m of corridor from the hall
+		At:     vec3{-33, 0, 0}, // 10 m of corridor from the hall
 		Yaw:    180,
-		Hall:   &content.Hall{Size: [2]float64{26, 58}, WallH: 9, Rise: 3.5, Door: [2]float64{50, 8.5}},
+		Hall:   &content.Hall{Size: [2]float64{22, 58}, WallH: 7.5, Rise: 3, Door: [2]float64{50, 7}},
 		Garage: true,
 		Style:  "clad.sand",
 		// By the corridor's door, the terminal to buy and sell vehicles.

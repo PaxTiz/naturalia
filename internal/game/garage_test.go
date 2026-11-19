@@ -29,7 +29,7 @@ func TestBays(t *testing.T) {
 			}
 		}
 	}
-	if base.Covered(vec3{0, 0, 30}) || !base.Covered(vec3{-46, 0, 0}) {
+	if base.Covered(vec3{0, 0, 30}) || !base.Covered(vec3{-42, 0, 0}) {
 		t.Error("only the halls are covered")
 	}
 	// The harvester's header fits between the lines.
@@ -338,17 +338,17 @@ func TestTurnedHall(t *testing.T) {
 	i := base.Halls()[0]
 	r := base.Ents.Building.Get(i)
 	mid, closed := base.HallDoor(i)
-	if mid.Sub(vec3{0, 0, -62}).Length() > 1e-9 {
+	if mid.Sub(vec3{0, 0, -64}).Length() > 1e-9 {
 		t.Errorf("door at %v", mid)
 	}
-	if a, b, _ := closed.Ends(); math.Abs(a.Z+62) > 1e-9 || math.Abs(b.Z+62) > 1e-9 || math.Abs(a.X-b.X) < 48 {
+	if a, b, _ := closed.Ends(); math.Abs(a.Z+64) > 1e-9 || math.Abs(b.Z+64) > 1e-9 || math.Abs(a.X-b.X) < 48 {
 		t.Errorf("door's wall from %v to %v", a, b)
 	}
 	if !base.Covered(vec3{27, 0, -75}) || base.Covered(vec3{0, 0, -96}) {
 		t.Error("the hall's floor didn't turn")
 	}
 	for _, l := range base.HallLeaves(i, 0) {
-		if out := l.At.Z + 62; l.Yaw != 90 || out < 0 || out > 3 || math.Abs(l.At.X) > 26 { // on their rails, outside
+		if out := l.At.Z + 64; l.Yaw != 90 || out < 0 || out > 3 || math.Abs(l.At.X) > 26 { // on their rails, outside
 			t.Errorf("closed leaf at %v", l.At)
 		}
 	}

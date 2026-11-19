@@ -680,7 +680,7 @@ func (b *building) hallShell(r Room) {
 			}
 		}
 	}
-	if dw > 0 {
+	if dw > 0 && r.vault(hx)-dh > 0.05 {
 		panels(p(hx, 0, -dw/2), p(hx, 0, dw/2), dh, r.vault(hx))
 	}
 	// The corridors' doorways: a lintel above, a steel frame on both
