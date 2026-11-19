@@ -335,12 +335,13 @@ var coreBuildings = []content.Blueprint{
 	// against the north wall under a porthole, the desk and the shelf
 	// east, the lockers, the guitar and the armchair west.
 	content.Blueprint{
-		ID:       "core:sleep",
-		Link:     "core:hall",
-		Sign:     "CHAMBRE",
-		Accent:   "neon.amber",
-		At:       vec3{0, 0, 19.5}, // 9 m of corridor from the hall
-		Hall:     &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1},
+		ID:     "core:sleep",
+		Link:   "core:hall",
+		Sign:   "CHAMBRE",
+		Accent: "neon.amber",
+		At:     vec3{0, 0, 19.5}, // 9 m of corridor from the hall
+		// A roof of its own, a small slope rising east like the hall's.
+		Hall:     &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1.4, Roof: "shed"},
 		Style:    "habitat.white",
 		Light:    "warm",
 		Interior: "home",

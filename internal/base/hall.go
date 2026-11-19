@@ -844,7 +844,8 @@ func (b *building) hallShell(r Room) {
 	}
 }
 
-// hallEaves is how far a sloped roof reaches out over the east wall.
+// hallEaves is how far a sloped roof reaches out over the east wall; a
+// small hall's, less.
 const hallEaves = 1.6
 
 // eaves finish a sloped roof, in the hall's own frame: along its high
@@ -855,6 +856,7 @@ func (b *building) eaves(r Room) {
 	c := r.Center
 	sun := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitSun, vec3{}) }
 	Z := vec3{0, 0, 1}
+	hallEaves := math.Min(hallEaves, 0.3*hx)
 	slope := vec3{2 * hx, r.vault(hx) - r.vault(-hx), 0}.Norm()
 	nrm := Z.Cross(slope) // up and out
 	top := c.Add(vec3{hx, r.vault(hx), 0}).Add(nrm.Scale(0.12))
