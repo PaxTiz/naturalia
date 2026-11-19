@@ -120,28 +120,32 @@ func crateParts(s float64, tok string) []content.PartJSON {
 var coreTokens = map[string]content.Token{
 	"habitat.white":  {color.RGBA{232, 230, 224, 255}, content.MtPanel, 1, 0.55, 0},
 	"habitat.white2": {color.RGBA{218, 217, 212, 255}, content.MtPanel, 1, 0.55, 0},
-	"steel":          {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
-	"steel.dark":     {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
-	"door.plate":     {color.RGBA{168, 172, 178, 255}, content.MtMetal, 1.2, 0.45, 0}, // the hangar's door leaves
-	"door.plate2":    {color.RGBA{154, 159, 166, 255}, content.MtMetal, 1.2, 0.45, 0},
-	"rack.slate":     {color.RGBA{58, 64, 80, 255}, content.MtPanel, 1, 0.4, 0},
-	"hazard":         {palette.White, content.MtHazard, 2.5, 0.3, 0},
-	"neon.cyan":      {palette.AccentCyan, content.MtPlain, 1, 0, 0.8},
-	"neon.orange":    {palette.AccentOrange, content.MtPlain, 1, 0, 0.8},
-	"neon.blue":      {palette.AccentBlue, content.MtPlain, 1, 0, 0.8},
-	"neon.purple":    {palette.AccentPurple, content.MtPlain, 1, 0, 0.8},
-	"lamp.warm":      {palette.LampWarm, content.MtPlain, 1, 0, 1},
-	"floor.slate":    {color.RGBA{50, 54, 66, 255}, content.MtPanel, 1, 0.25, 0},
-	"wall.lower":     {color.RGBA{86, 100, 118, 255}, content.MtPanel, 1, 0.3, 0},
-	"floor.inlay":    {color.RGBA{68, 74, 90, 255}, content.MtPlain, 1, 0.3, 0},
-	"solar.blue":     {color.RGBA{40, 62, 130, 255}, content.MtPlain, 1, 0.9, 0},
-	"crate.ochre":    {color.RGBA{196, 132, 60, 255}, content.MtPanel, 1, 0.2, 0},
-	"crate.slate":    {color.RGBA{88, 116, 146, 255}, content.MtPanel, 1, 0.2, 0},
-	"crate.sand":     {color.RGBA{158, 148, 118, 255}, content.MtPanel, 1, 0.2, 0},
-	"wood.brown":     {color.RGBA{110, 80, 60, 255}, content.MtPlain, 1, 0.3, 0},
-	"fabric.white":   {palette.MatWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
-	"fabric.purple":  {palette.AccentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
-	"fabric.rug":     {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
+	// The working buildings' cladding, a warm steel grey that sinks into
+	// the plain where the living spaces stay white.
+	"clad.sand":     {color.RGBA{148, 140, 126, 255}, content.MtPanel, 1, 0.45, 0},
+	"clad.sand2":    {color.RGBA{138, 131, 118, 255}, content.MtPanel, 1, 0.45, 0},
+	"steel":         {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
+	"steel.dark":    {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
+	"door.plate":    {color.RGBA{168, 172, 178, 255}, content.MtMetal, 1.2, 0.45, 0}, // the hangar's door leaves
+	"door.plate2":   {color.RGBA{154, 159, 166, 255}, content.MtMetal, 1.2, 0.45, 0},
+	"rack.slate":    {color.RGBA{58, 64, 80, 255}, content.MtPanel, 1, 0.4, 0},
+	"hazard":        {palette.White, content.MtHazard, 2.5, 0.3, 0},
+	"neon.cyan":     {palette.AccentCyan, content.MtPlain, 1, 0, 0.8},
+	"neon.orange":   {palette.AccentOrange, content.MtPlain, 1, 0, 0.8},
+	"neon.blue":     {palette.AccentBlue, content.MtPlain, 1, 0, 0.8},
+	"neon.purple":   {palette.AccentPurple, content.MtPlain, 1, 0, 0.8},
+	"lamp.warm":     {palette.LampWarm, content.MtPlain, 1, 0, 1},
+	"floor.slate":   {color.RGBA{50, 54, 66, 255}, content.MtPanel, 1, 0.25, 0},
+	"wall.lower":    {color.RGBA{86, 100, 118, 255}, content.MtPanel, 1, 0.3, 0},
+	"floor.inlay":   {color.RGBA{68, 74, 90, 255}, content.MtPlain, 1, 0.3, 0},
+	"solar.blue":    {color.RGBA{40, 62, 130, 255}, content.MtPlain, 1, 0.9, 0},
+	"crate.ochre":   {color.RGBA{196, 132, 60, 255}, content.MtPanel, 1, 0.2, 0},
+	"crate.slate":   {color.RGBA{88, 116, 146, 255}, content.MtPanel, 1, 0.2, 0},
+	"crate.sand":    {color.RGBA{158, 148, 118, 255}, content.MtPanel, 1, 0.2, 0},
+	"wood.brown":    {color.RGBA{110, 80, 60, 255}, content.MtPlain, 1, 0.3, 0},
+	"fabric.white":  {palette.MatWhite, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.purple": {palette.AccentPurple, content.MtFabric, 1 / content.FabricTile, 0.1, 0},
+	"fabric.rug":    {color.RGBA{150, 70, 60, 255}, content.MtFabric, 1 / content.FabricTile, 0, 0},
 	// Greebles and the yard (internal/base/greeble.go).
 	"glass.dark":    {color.RGBA{26, 38, 54, 255}, content.MtPlain, 1, 1.0, 0},
 	"glass.pane":    {color.RGBA{150, 205, 220, 255}, content.MtPlain, 1, 1.0, 0},
@@ -175,6 +179,11 @@ var coreTokens = map[string]content.Token{
 	"earth.blue":   {color.RGBA{50, 110, 205, 255}, content.MtPlain, 1, 0.5, 0.15},
 	"earth.green":  {color.RGBA{96, 150, 80, 255}, content.MtPlain, 1, 0.5, 0.1},
 	"clay":         {color.RGBA{176, 98, 64, 255}, content.MtPlain, 1, 0.15, 0},
+	// The greenhouse: more greens, and flowers.
+	"leaf.dark":    {color.RGBA{46, 110, 62, 255}, content.MtPlain, 1, 0.2, 0},
+	"leaf.olive":   {color.RGBA{118, 136, 62, 255}, content.MtPlain, 1, 0.2, 0},
+	"bloom.coral":  {color.RGBA{232, 108, 86, 255}, content.MtPlain, 1, 0.2, 0},
+	"bloom.yellow": {color.RGBA{238, 198, 78, 255}, content.MtPlain, 1, 0.2, 0},
 	// The living spaces' finishes (interior: "home"): off-white composite
 	// panels, smooth white ribs, a warm grey matte floor and its lighter
 	// paths.
@@ -223,12 +232,14 @@ var coreBuildings = []content.Blueprint{
 	content.Blueprint{
 		ID:     "core:hall",
 		Accent: "neon.cyan",
-		Hall:   &content.Hall{Size: [2]float64{24, 16}, WallH: 6, Rise: 2},
-		Style:  "habitat.white",
+		// Its roof rises toward the bay window, toward the sunrise.
+		Hall:  &content.Hall{Size: [2]float64{24, 16}, WallH: 5.5, Rise: 3.5, Roof: "shed"},
+		Style: "habitat.white",
 		// A living space: finished like a home inside.
 		Interior: "home",
-		// The bay window, all along the east wall: the plain, the sunrise.
-		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 5.2}},
+		// The bay window, all along the east wall, nearly up to the roof:
+		// the plain, the sunrise.
+		Windows: []content.Window{{At: vec3{12, 0.4, 0}, Width: 14, Height: 7.8}},
 		// The lookout: a gallery 3 m up along the bay window, stairs
 		// rising east to it along the south wall.
 		Floors: []content.Floor{
@@ -242,8 +253,8 @@ var coreBuildings = []content.Blueprint{
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},
-			// Built-in storage along the walls: by the sale corner, and
-			// either side of the bedroom's door.
+			// Built-in storage along the walls, either side of the
+			// bedroom's door.
 			// Its zones, by their floors and walls: the entry by the
 			// airlock's door tiled in the ceramic fired on site, a wall of
 			// it beside; the lab on a technical floor, sage felt over the
@@ -254,7 +265,6 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "floor.tech", At: vec3{-9.28, 0, 5.28}},
 			{Kit: "felt.wall", At: vec3{-8.2, 1.0, 7.78}, Yaw: -90, Seed: 2},
 			{Kit: "felt.wall", At: vec3{6, 0.15, 7.78}, Yaw: -90},
-			{Kit: "storage", At: vec3{-6.5, 0, -7.53}, Yaw: 90, Seed: 1},
 			{Kit: "storage", At: vec3{-3, 0, 7.53}, Yaw: -90, Seed: 2},
 			{Kit: "storage", At: vec3{3, 0, 7.53}, Yaw: -90, Seed: 3},
 			// The research lab, in the north-west corner: the console
@@ -292,8 +302,8 @@ var coreBuildings = []content.Blueprint{
 			// along the stairs, and on the way to the bedroom.
 			{Kit: "curtain", At: vec3{11.72, 2.62, -6.55}, Yaw: 180},
 			{Kit: "curtain", At: vec3{11.72, 2.62, 6.55}, Yaw: 180},
-			{Kit: "curtain", At: vec3{11.72, 5.55, -6.55}, Yaw: 180},
-			{Kit: "curtain", At: vec3{11.72, 5.55, 6.55}, Yaw: 180},
+			{Kit: "curtain.tall", At: vec3{11.72, 8.15, -6.55}, Yaw: 180},
+			{Kit: "curtain.tall", At: vec3{11.72, 8.15, 6.55}, Yaw: 180},
 			{Kit: "plant.hanging", At: vec3{8.3, 2.3, -4.6}, Seed: 1},
 			{Kit: "plant.hanging", At: vec3{8.3, 2.3, -0.4}, Seed: 2},
 			{Kit: "plant.hanging", At: vec3{8.3, 2.3, 4.2}, Seed: 3},
@@ -307,6 +317,15 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "telescope", At: vec3{10.5, 3, -3.5}}, // between two mullions
 			{Kit: "bench", At: vec3{9.4, 3, 2.4}},
 			{Kit: "lowtable", At: vec3{10.5, 3, 2.4}},
+			// On the roof's low half, solar panels facing the setting sun,
+			// and two extractors.
+			{Kit: "solar.rack", At: vec3{-8, 6.32, -3.6}},
+			{Kit: "solar.rack", At: vec3{-8, 6.32, 2.2}},
+			{Kit: "roof.vent", At: vec3{-3, 7.0, 5.6}},
+			{Kit: "roof.vent", At: vec3{-3, 7.0, -6.0}, Seed: 1},
+			// Outside, the life support's annex, between the greenhouse
+			// and the hangar.
+			{Kit: "annex.tech", At: vec3{-16.5, 0, -12}},
 		},
 	},
 	// The bedroom wing, at the end of a corridor north of the hall: one
@@ -314,12 +333,13 @@ var coreBuildings = []content.Blueprint{
 	// against the north wall under a porthole, the desk and the shelf
 	// east, the lockers, the guitar and the armchair west.
 	content.Blueprint{
-		ID:       "core:sleep",
-		Link:     "core:hall",
-		Sign:     "CHAMBRE",
-		Accent:   "neon.amber",
-		At:       vec3{0, 0, 19.5}, // 9 m of corridor from the hall
-		Hall:     &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1},
+		ID:     "core:sleep",
+		Link:   "core:hall",
+		Sign:   "CHAMBRE",
+		Accent: "neon.amber",
+		At:     vec3{0, 0, 19.5}, // 9 m of corridor from the hall
+		// A roof of its own, a small slope rising east like the hall's.
+		Hall:     &content.Hall{Size: [2]float64{7, 5}, WallH: 2.6, Rise: 1.4, Roof: "shed"},
 		Style:    "habitat.white",
 		Light:    "warm",
 		Interior: "home",
@@ -346,19 +366,34 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "garland", At: vec3{0, 2.45, 1.62}, Seed: 44},
 		},
 	},
+	// The greenhouse, on the south side where one arrives, west of the
+	// entry: a geodesic dome of glass full of plants, green seen from
+	// afar, a short corridor from the great hall.
+	content.Blueprint{
+		ID:     "core:greenhouse",
+		Link:   "core:hall",
+		Sign:   "SERRE",
+		Accent: "led.green",
+		At:     vec3{-8, 0, -14.5},
+		Shape:  content.Dome{Radius: 4.5, WallH: 2.8},
+		Style:  "habitat.white",
+		Glazed: true,
+		Props:  []content.Prop{{Kit: "greenhouse.plants", Seed: 2}},
+	},
 	// The vehicles' hangar, west of the base, turned so its door (east in
 	// its own frame) faces away; a corridor leads there from the great
-	// hall.
+	// hall. Clad in steel grey, just long and high enough for the fleet in
+	// one row: the great hall stands in front of it.
 	content.Blueprint{
 		ID:     "core:hangar",
 		Link:   "core:hall",
 		Sign:   "HANGAR 01",
 		Accent: "neon.orange",
-		At:     vec3{-35, 0, 0}, // 10 m of corridor from the hall
+		At:     vec3{-33, 0, 0}, // 10 m of corridor from the hall
 		Yaw:    180,
-		Hall:   &content.Hall{Size: [2]float64{26, 64}, WallH: 11, Rise: 5, Door: [2]float64{52, 10}},
+		Hall:   &content.Hall{Size: [2]float64{22, 58}, WallH: 7.5, Rise: 3, Door: [2]float64{50, 7}},
 		Garage: true,
-		Style:  "habitat.white",
+		Style:  "clad.sand",
 		// By the corridor's door, the terminal to buy and sell vehicles.
 		Props: []content.Prop{{Kit: "garage.terminal", At: vec3{-12.4, 0, -2.25}}},
 	},
@@ -376,27 +411,33 @@ var coreKits = map[string]content.Kit{
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.OpenGarage() }, Prompt: "[E] Acheter ou revendre un véhicule"},
 	"bed": {Build: base.KitBuild(base.BuildBed), Obstacles: []content.Obstacle{{vec3{-0.55, 0, 0}, 0.8}, {vec3{0.55, 0, 0}, 0.8}},
 		Reach: 2.6, Use: func(g content.Game, _ vec3) { g.Sleep() }, Prompt: "[E] Dormir"},
-	"nightstand":    {Build: base.KitBuild(base.BuildNightstand), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"bedlamp":       {Build: base.KitBuild(base.BuildBedLamp), Lamps: []content.KitLamp{{base.BedLampLight, 0.45, 4}}},
-	"writing.desk":  {Build: base.KitBuild(base.BuildWritingDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.42}, {vec3{0, 0, 0.35}, 0.42}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
-	"shelf":         {Build: base.KitBuild(base.BuildShelf), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.3}, {vec3{0, 0, 0.3}, 0.3}}},
-	"armchair":      {Build: base.KitBuild(base.BuildArmchair), Obstacles: []content.Obstacle{{vec3{}, 0.5}}},
-	"lockers":       {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
-	"lamp.arc":      {Build: base.KitBuild(base.BuildArcLamp), Obstacles: []content.Obstacle{{vec3{}, 0.25}}, Lamps: []content.KitLamp{{base.ArcLight, 1.1, 6}}},
-	"lamp.floor":    {Build: base.KitBuild(base.BuildFloorLamp), Obstacles: []content.Obstacle{{vec3{}, 0.22}}, Lamps: []content.KitLamp{{base.FloorLight, 0.7, 5}}},
-	"canopy":        {Build: base.KitBuild(base.BuildCanopy)},
-	"divider":       {Build: base.KitBuild(base.BuildDivider), Obstacles: obstacles(base.DividerObstacles, 0.3)},
-	"entry":         {Build: base.KitBuild(base.BuildEntry), Obstacles: obstacles(base.EntryObstacles, 0.32)},
-	"pouf":          {Build: base.KitBuild(base.BuildPouf), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"frame":         {Build: base.KitBuild(base.BuildFrame)},
-	"curtain":       {Build: base.KitBuild(base.BuildCurtain)},
-	"plant.hanging": {Build: base.KitBuild(base.BuildHangingPlant)},
-	"plant.big":     {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},
-	"felt.low":      {Build: base.KitBuild(base.BuildFeltLow)},
-	"ceramic.wall":  {Build: base.KitBuild(base.BuildCeramicWall)},
-	"floor.ceramic": {Build: base.KitBuild(base.BuildCeramicFloor)},
-	"floor.tech":    {Build: base.KitBuild(base.BuildTechFloor)},
+	"nightstand":   {Build: base.KitBuild(base.BuildNightstand), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"bedlamp":      {Build: base.KitBuild(base.BuildBedLamp), Lamps: []content.KitLamp{{base.BedLampLight, 0.45, 4}}},
+	"writing.desk": {Build: base.KitBuild(base.BuildWritingDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.42}, {vec3{0, 0, 0.35}, 0.42}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
+	"shelf":        {Build: base.KitBuild(base.BuildShelf), Obstacles: []content.Obstacle{{vec3{0, 0, -0.3}, 0.3}, {vec3{0, 0, 0.3}, 0.3}}},
+	"armchair":     {Build: base.KitBuild(base.BuildArmchair), Obstacles: []content.Obstacle{{vec3{}, 0.5}}},
+	"lockers":      {Build: base.KitBuild(base.BuildLockers), Obstacles: []content.Obstacle{{vec3{0, 0, -0.23}, 0.33}, {vec3{0, 0, 0.23}, 0.33}}},
+	"lamp.arc":     {Build: base.KitBuild(base.BuildArcLamp), Obstacles: []content.Obstacle{{vec3{}, 0.25}}, Lamps: []content.KitLamp{{base.ArcLight, 1.1, 6}}},
+	"lamp.floor":   {Build: base.KitBuild(base.BuildFloorLamp), Obstacles: []content.Obstacle{{vec3{}, 0.22}}, Lamps: []content.KitLamp{{base.FloorLight, 0.7, 5}}},
+	"canopy":       {Build: base.KitBuild(base.BuildCanopy)},
+	"divider":      {Build: base.KitBuild(base.BuildDivider), Obstacles: obstacles(base.DividerObstacles, 0.3)},
+	"entry":        {Build: base.KitBuild(base.BuildEntry), Obstacles: obstacles(base.EntryObstacles, 0.32)},
+	"pouf":         {Build: base.KitBuild(base.BuildPouf), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"frame":        {Build: base.KitBuild(base.BuildFrame)},
+	"curtain":      {Build: base.KitBuild(base.BuildCurtain)},
+	"curtain.tall": {Build: base.KitBuild(base.BuildTallCurtain)},
+	// Outside: on the roofs and around the buildings.
+	"solar.rack":        {Build: base.KitBuild(base.BuildSolarRack)},
+	"roof.vent":         {Build: base.KitBuild(base.BuildRoofVent)},
+	"greenhouse.plants": {Build: base.KitBuild(base.BuildGreenhousePlants), Obstacles: plantsObstacles()},
+	"annex.tech":        {Build: base.KitBuild(base.BuildAnnex), Obstacles: obstacles(base.AnnexObstacles, 1.9)},
+	"plant.hanging":     {Build: base.KitBuild(base.BuildHangingPlant)},
+	"plant.big":         {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"felt.wall":         {Build: base.KitBuild(base.BuildFeltWall)},
+	"felt.low":          {Build: base.KitBuild(base.BuildFeltLow)},
+	"ceramic.wall":      {Build: base.KitBuild(base.BuildCeramicWall)},
+	"floor.ceramic":     {Build: base.KitBuild(base.BuildCeramicFloor)},
+	"floor.tech":        {Build: base.KitBuild(base.BuildTechFloor)},
 	"bed.niche": {Build: base.KitBuild(base.BuildBedNiche), Obstacles: obstacles(base.NicheObstacles, 0.33),
 		Lamps: []content.KitLamp{{base.NicheLights[0], 0.3, 3}, {base.NicheLights[1], 0.3, 3}}},
 	"desk.wall":   {Build: base.KitBuild(base.BuildWallDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.38}, {vec3{0, 0, 0.35}, 0.38}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
@@ -427,6 +468,16 @@ var coreKits = map[string]content.Kit{
 }
 
 // obstacles are round obstacles of radius r at the points at.
+// plantsObstacles: the greenhouse's beds.
+func plantsObstacles() []content.Obstacle {
+	at, radius := base.PlantsObstacles()
+	var out []content.Obstacle
+	for i, p := range at {
+		out = append(out, content.Obstacle{At: p, Radius: radius[i]})
+	}
+	return out
+}
+
 func obstacles(at []vec3, r float64) []content.Obstacle {
 	var out []content.Obstacle
 	for _, p := range at {

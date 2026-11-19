@@ -129,15 +129,16 @@ func (b *building) hallLining(r Room) {
 	th := hallWall / 2
 	for k, w := range r.straightWalls() {
 		nrm := []vec3{X, Z, Z.Scale(-1), X.Scale(-1), X.Scale(-1)}[k]
+		top := r.wallTop(w[0], w[1])
 		for _, s := range r.spans(w[0], w[1]) {
 			for _, sd := range r.solid(s[0], s[1]) {
-				b.liningPanel(sd[0], sd[1], nrm, th, 0, r.WallH)
+				b.liningPanel(sd[0], sd[1], nrm, th, 0, top)
 			}
 			for _, pn := range r.panes(s[0], s[1]) {
 				if pn.y0 > 0.01 {
 					b.liningPanel(pn.a, pn.b, nrm, th, 0, pn.y0)
 				}
-				b.liningPanel(pn.a, pn.b, nrm, th, pn.y1, r.WallH)
+				b.liningPanel(pn.a, pn.b, nrm, th, pn.y1, top)
 			}
 			if r.panes(s[0], s[1]) == nil || r.panes(s[0], s[1])[0].y0 > 0.2 {
 				b.footLight(s[0], s[1], nrm, th, r.led())
@@ -147,7 +148,7 @@ func (b *building) hallLining(r Room) {
 	for _, w := range r.doorways() {
 		out := r.wallOut(w)
 		along := vec3{-out.Z, 0, out.X}
-		b.liningPanel(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), out.Scale(-1), th, DoorHeight+0.1, r.WallH)
+		b.liningPanel(w.Sub(along.Scale(hallGap)), w.Add(along.Scale(hallGap)), out.Scale(-1), th, DoorHeight+0.1, r.wallTop(w.Sub(along), w.Add(along)))
 	}
 
 	// The gables, under the vault's lining, and the vault's lining, in
@@ -155,12 +156,9 @@ func (b *building) hallLining(r Room) {
 	const steps = 24
 	in := th + liningGap + lining
 	for _, s := range []float64{-1, 1} {
-		var pts []vec3
-		for i := 0; i <= steps; i++ {
-			u := -hx + 2*hx*float64(i)/steps
-			pts = append(pts, p(u, r.vault(u)-liningGap-lining, s*(hz-in+lining/2)))
+		if pts := r.gable(s*(hz-in+lining/2), liningGap+lining); pts != nil {
+			b.in("home.panel").Slab(pts, Z, lining)
 		}
-		b.in("home.panel").Slab(pts, Z, lining)
 	}
 	// A panel spans a few of the vault's plates, about homePanelW across:
 	// a joint only where it ends.
@@ -194,9 +192,9 @@ func (b *building) hallLining(r Room) {
 		deep, tall = 0.3, 0.24
 	}
 	for _, s := range []float64{-1, 1} {
-		x := s * (hx - in - deep/2)
-		b.in("home.panel2").Box(p(x, r.WallH-tall/2, 0), vec3{deep, tall, 2 * (hz - in)}, X, 0.03)
-		b.casingLight(p(x-s*(deep/2-0.06), r.WallH-tall, 0), Z, 2*(hz-in), r.led())
+		x, top := s*(hx-in-deep/2), r.vault(s*hx)
+		b.in("home.panel2").Box(p(x, top-tall/2, 0), vec3{deep, tall, 2 * (hz - in)}, X, 0.03)
+		b.casingLight(p(x-s*(deep/2-0.06), top-tall, 0), Z, 2*(hz-in), r.led())
 	}
 }
 

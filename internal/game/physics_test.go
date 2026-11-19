@@ -28,6 +28,16 @@ func walk(g *Game, to vec3, seconds float64) {
 	}
 }
 
+// blocked tells a local point within one of the base's obstacles.
+func blocked(p vec3) bool {
+	for _, o := range base.Obstacles() {
+		if math.Hypot(p.X-o.At.X, p.Z-o.At.Z) < o.Radius+0.35 {
+			return true
+		}
+	}
+	return false
+}
+
 func TestWalkIntoWalls(t *testing.T) {
 	g := baseGame(t)
 	crossed, tried := 0, 0
@@ -41,6 +51,9 @@ func TestWalkIntoWalls(t *testing.T) {
 		tried++
 		for _, side := range []float64{-1, 1} {
 			start := mid.Add(n.Scale(side * 1.5))
+			if blocked(start) {
+				continue // something stands against the wall there: a greenhouse
+			}
 			g.Player.Pos = g.World.Relief.Surface(base.ToWorld(start.Add(vec3{0, 1, 0})))
 			g.Player.vel = vec3{}
 			walk(g, n.Scale(-side), 1.5)

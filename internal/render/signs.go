@@ -83,7 +83,7 @@ func (gfx *Graphics) baseSigns() []sign {
 	}
 	return append(signs,
 		inHub(base.South, "SAS 01 - SORTIE", palette.Gold),
-		sign{at: base.AirlockEnd.Add(vec3{0, 3.05, -0.2}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: palette.Gold},
+		sign{at: base.AirlockEnd.Add(vec3{0, 3.55, -0.36}), facing: vec3{0, 0, -1}, width: 2.6, text: "BASE MARTIENNE - SAS 01", accent: palette.Gold},
 	)
 }
 

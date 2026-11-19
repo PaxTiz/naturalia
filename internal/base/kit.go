@@ -14,14 +14,15 @@ import (
 
 // roomOf is the room a blueprint lays out.
 func roomOf(bp *content.Blueprint) Room {
-	var openings []float64
+	var openings, alongs []float64
 	for _, d := range bp.Doors {
 		openings = append(openings, d.Facing+bp.Yaw*math.Pi/180)
+		alongs = append(alongs, d.Along)
 	}
 	if bp.Hall != nil {
-		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, plan: bp}
+		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, alongs: alongs, plan: bp}
 	}
-	return Room{bp.At, bp.Yaw, bp.Shape.Radius, bp.Shape.WallH, nil, openings, bp}
+	return Room{Center: bp.At, Yaw: bp.Yaw, Radius: bp.Shape.Radius, WallH: bp.Shape.WallH, openings: openings, alongs: alongs, plan: bp}
 }
 
 // KitBuild lets a kit piece use the base's building helpers.
@@ -46,7 +47,9 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		} else {
 			b.room(id, *r)
-			b.greebleRoom(id, *r, i*97+3)
+			if !r.glazed() {
+				b.greebleRoom(id, *r, i*97+3)
+			}
 			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		}
 		b.floors(id)
@@ -60,12 +63,14 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 		i++
 	}
 	b.yard()
+	b.ground()
 	for _, p := range junctionPlates() {
 		room := ToWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
 		across := vec3{-p.normal.Z, 0, p.normal.X}
 		b.Part("habitat.white2", mesh.LitTowards, room).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, WallThick * 1.5}, across, 0.04)
 	}
 	b.airlock()
+	b.entry()
 	b.outside()
 	b.Unfight()
 	return b.Parts
@@ -94,8 +99,14 @@ func DoorPanel() *mesh.Builder {
 func (b *building) room(id ecs.ID, r Room) {
 	bp := r.plan
 	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
+	if r.glazed() {
+		b.glassShell(r)
+	}
 	// Walls: bevelled panels, a dark plinth, a steel collar under the dome.
 	for i, p := range r.panels() {
+		if r.glazed() {
+			break
+		}
 		tok := bp.Style
 		if i%2 == 1 {
 			tok += "2"
@@ -109,7 +120,9 @@ func (b *building) room(id ecs.ID, r Room) {
 		}
 	}
 	// The dome stays a smooth shell: dust settles on its top.
-	b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
+	if !r.glazed() {
+		b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
+	}
 	// Door frames: steel jambs and a hazard header (a home's: homeDoorFrame). They stand a little
 	// into the opening: flush with the corridor's walls and ceiling, they
 	// would fight them for the depth and flicker.
@@ -130,7 +143,11 @@ func (b *building) room(id ecs.ID, r Room) {
 	if r.home() {
 		b.domeLining(r)
 	}
-	b.interior(bp, r)
+	if r.glazed() {
+		b.glassFloor(r)
+	} else {
+		b.interior(bp, r)
+	}
 	b.props(id)
 }
 
@@ -269,13 +286,19 @@ func (b *building) corridor(c Corridor) {
 		}
 	}
 	b.Part("habitat.white2", mesh.LitTowards, in).Box(mid.Add(vec3{0, c.Height + 0.06, 0}), vec3{length, 0.12, c.Width + 2*WallThick}, dir, 0.04)
+	// Steel posts at the joints, and every third one a heavier rib round
+	// the outside: the corridor reads as a passage.
 	for i := 1; i < n; i++ {
 		at := c.From.Add(dir.Scale(float64(i) * seg))
-		for _, s := range []float64{-1, 1} {
-			post := at.Add(side.Scale(s * (c.Width/2 + WallThick/2 + 0.04))).Add(vec3{0, (c.Height + 0.12) / 2, 0})
-			b.Part("steel", mesh.LitTowards, in).Box(post, vec3{0.14, c.Height + 0.12, WallThick + 0.08}, dir, 0.03)
+		w, out := 0.14, 0.04
+		if i%3 == 0 {
+			w, out = 0.32, 0.12
 		}
-		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.Height + 0.14, 0}), vec3{0.14, 0.1, c.Width + 2*WallThick + 0.16}, dir, 0.03)
+		for _, s := range []float64{-1, 1} {
+			post := at.Add(side.Scale(s * (c.Width/2 + WallThick/2 + out))).Add(vec3{0, (c.Height + 0.12) / 2, 0})
+			b.Part("steel", mesh.LitTowards, in).Box(post, vec3{w, c.Height + 0.12 + 2*(out-0.04), WallThick + 2*out}, dir, 0.03)
+		}
+		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.Height + 0.14 + out - 0.04, 0}), vec3{w, 0.1 + 2*(out-0.04), c.Width + 2*WallThick + 4*out}, dir, 0.03)
 	}
 	// Inside: two-tone walls like the rooms, a flat floor edged with steel,
 	// a lamp strip under the roof; or a home's lining and paths.
@@ -335,7 +358,7 @@ func BeaconTop() vec3 {
 	return mast().Add(vec3{0, hub.roof(mast()) + 3.05, 0})
 }
 
-// outside: an antenna and a dish on the hub, solar panels nearby.
+// outside: an antenna and a dish on the hub.
 func (b *building) outside() {
 	_, hub := Hub()
 	up := vec3{0, 1, 0}
@@ -349,20 +372,6 @@ func (b *building) outside() {
 	d.Y = hub.roof(d)
 	steel.Prism(d.Add(vec3{0, 0.1, 0}), up, 0.08, 0.08, 0.35, 8, 0)
 	b.Part("habitat.white", mesh.LitSun, vec3{}).Prism(d.Add(vec3{0, 0.4, 0}), tilt, 0.15, 0.75, 0.28, 16, 0.03)
-	slope := -30 * math.Pi / 180
-	ax := [3]vec3{{1, 0, 0}, {0, math.Cos(slope), math.Sin(slope)}, {}}
-	ax[2] = ax[0].Cross(ax[1])
-	for _, z := range solarPanels {
-		at := vec3{solarX, 0, z}
-		steel.Prism(at, up, 0.06, 0.06, 1.2, 8, 0)
-		panel := at.Add(vec3{0, 1.28, 0})
-		steel.BoxBasis(panel, ax, vec3{2.7, 0.05, 1.6}, 0.02)
-		cells := panel.Add(ax[1].Scale(0.03))
-		b.Part("solar.blue", mesh.LitSun, vec3{}).BoxBasis(cells, ax, vec3{2.56, 0.03, 1.46}, 0.01)
-		for _, x := range []float64{-0.43, 0.43} {
-			steel.BoxBasis(cells.Add(ax[0].Scale(x)).Add(ax[1].Scale(0.012)), ax, vec3{0.03, 0.02, 1.46}, 0)
-		}
-	}
 }
 
 // BuildCrates stacks two or three bevelled crates, chosen by the seed.

@@ -382,12 +382,6 @@ func (b *building) yard() {
 		sun("steel.dark").Box(head, vec3{0.7, 0.28, 0.3}, vec3{-in.Z, 0, in.X}, 0.03)
 		sun("lamp.warm").Box(head.Add(vec3{0, -0.15, 0}).Add(in.Scale(0.03)), vec3{0.6, 0.02, 0.22}, vec3{-in.Z, 0, in.X}, 0)
 	}
-
-	// Cables on the ground, from the solar panels to the great hall.
-	for _, seg := range [][2]vec3{{{solarX, 0.03, -11}, {solarX, 0.03, -6.6}}, {{solarX, 0.03, -6.6}, {-12.2, 0.03, -6.6}}} {
-		d := seg[1].Sub(seg[0])
-		sun("rubber").Box(seg[0].Lerp(seg[1], 0.5), vec3{0.07, 0.06, d.Length()}, vec3{d.Z, 0, -d.X}.Norm(), 0.02)
-	}
 }
 
 func (b *building) landingPad(pad vec3) {
@@ -407,8 +401,9 @@ func (b *building) landingPad(pad vec3) {
 
 func (b *building) waterTanks() {
 	sun := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitSun, vec3{}) }
-	for j, z := range []float64{-14.2, -12.4} {
-		start := vec3{-6.8, 0.95, z}
+	c := yardTanks
+	for _, dz := range yardTankRows {
+		start := vec3{c.X - 1.8, 0.95, c.Z + dz}
 		x := vec3{1, 0, 0}
 		sun("habitat.white").Prism(start, x, 0.78, 0.78, 3.6, 18, 0.06)
 		for _, t := range []float64{0.3, 1.8, 3.3} {
@@ -418,19 +413,19 @@ func (b *building) waterTanks() {
 			}
 		}
 		sun("hazard").Prism(start.Add(x.Scale(3.6)), x, 0.5, 0.45, 0.04, 18, 0)
-		sun("pipe.blue").Prism(vec3{-3.2, 0.5, z}, x, 0.06, 0.06, 1.6-float64(j)*0.2, 8, 0)
-		sun("pipe.blue").Prism(vec3{-1.6 - float64(j)*0.2, 0, z}, yUp, 0.06, 0.06, 0.56, 8, 0)
 	}
-	sun("rubber").Box(vec3{-1.7, 0.03, -11.5}, vec3{0.08, 0.06, 4}, vec3{1, 0, 0}, 0.02)
+	// A hose from them to the greenhouse.
+	sun("pipe.blue").Prism(vec3{c.X + 1.9, 0.5, c.Z - 0.9}, vec3{0, 0, 1}, 0.06, 0.06, 1.8, 8, 0)
+	a, e := vec3{c.X + 1.9, 0.03, c.Z + 0.9}, vec3{c.X + 4.0, 0.03, c.Z + 2.9}
+	sun("rubber").Box(a.Lerp(e, 0.5), vec3{0.08, 0.06, e.Sub(a).Length()}, vec3{e.Z - a.Z, 0, a.X - e.X}.Norm(), 0.02)
 }
 
 var (
-	yardMasts     = []vec3{{-17.5, 0, 6}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
+	yardMasts     = []vec3{{-14.3, 0, 9.5}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
 	yardBarrels   = []vec3{{5.4, 0, -10.6}, {-9.4, 0, 10.2}}
-	yardTanks     = vec3{-5, 0, -13.3}
+	yardTanks     = vec3{-16.5, 0, -18.5} // south of the annex, by the greenhouse they water
+	yardTankRows  = []float64{-0.9, 0.9}
 	yardContainer = vec3{10, 0, 13.5}
-	solarX        = -17.0 // the solar panels, west of the great hall
-	solarPanels   = []float64{-9.5, -12.5}
 )
 
 // yardFree tells whether a yard object of radius r at p stays clear of the
@@ -444,7 +439,11 @@ func yardFree(p vec3, r float64) bool {
 			// The hall, and the door's rails in front of it.
 			hx, hz := rm.half()
 			d := rm.Unturn(flat).Sub(rm.Center)
-			if math.Abs(d.X) < hx+r+margin+3 && math.Abs(d.Z) < hz+r+margin {
+			rails := 0.0
+			if rm.bigDoor() && d.X > 0 {
+				rails = 3
+			}
+			if math.Abs(d.X) < hx+r+margin+rails && math.Abs(d.Z) < hz+r+margin {
 				return false
 			}
 			continue
@@ -472,9 +471,9 @@ func YardObstacles() []content.Obstacle {
 		}
 	}
 	if yardFree(yardTanks, 2.6) {
-		for _, z := range []float64{-14.2, -12.4} {
-			for _, x := range []float64{-6.3, -5.0, -3.7} {
-				out = append(out, content.Obstacle{vec3{x, 0, z}, 0.8})
+		for _, dz := range yardTankRows {
+			for _, dx := range []float64{-1.3, 0, 1.3} {
+				out = append(out, content.Obstacle{yardTanks.Add(vec3{dx, 0, dz}), 0.8})
 			}
 		}
 	}
@@ -575,7 +574,10 @@ func BuildPlanter(b *building, at vec3, seed int) {
 
 // tufts plants two rows of n tufts of leaves along sd, 26 cm apart,
 // across f, around c on the soil.
-func (b *building) tufts(c, sd, f vec3, seed, n int) {
+func (b *building) tufts(c, sd, f vec3, seed, n int) { b.tuftsLit(c, sd, f, seed, n, mesh.LitIndoor) }
+
+// tuftsLit plants them lit as lit says: by the sun, in a greenhouse.
+func (b *building) tuftsLit(c, sd, f vec3, seed, n int, lit float32) {
 	for k := range n {
 		for j, z := range []float64{-0.12, 0.12} {
 			r := grnd(seed, k*2+j)
@@ -586,7 +588,7 @@ func (b *building) tufts(c, sd, f vec3, seed, n int) {
 				tok = "planter.lime"
 			}
 			// A tuft of leaves arching out from the stem.
-			leaf := b.Part(tok, mesh.LitIndoor, vec3{})
+			leaf := b.Part(tok, lit, vec3{})
 			leaf.Prism(p, yUp, 0.025, 0.015, h*0.6, 8, 0)
 			for l := range 6 {
 				t := float64(l)*2.4 + r*6

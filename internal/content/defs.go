@@ -41,6 +41,9 @@ type Blueprint struct {
 	// like a well-made habitat (composite panels, warm grey floor, ducts
 	// boxed in); left out, it stays industrial. The outside doesn't change.
 	Interior string `json:"interior"`
+	// Glazed makes a dome of glass on a white frame, its round wall glazed
+	// above a low plinth, the sun lighting what grows inside: a greenhouse.
+	Glazed bool `json:"glazed"`
 }
 
 // Window is a pane of glass in a wall of a hall, in its frame (before its
@@ -86,9 +89,14 @@ func (bp *Blueprint) AllLinks() []string {
 // pockets past the ends.
 type Hall struct {
 	Size  [2]float64 `json:"size"`        // along X and Z, in m
-	WallH float64    `json:"wall_height"` // up to where the vault starts
-	Rise  float64    `json:"rise"`        // the vault's height over the walls
+	WallH float64    `json:"wall_height"` // up to where the roof starts
+	Rise  float64    `json:"rise"`        // how much higher the roof gets
 	Door  [2]float64 `json:"door"`        // the big door's width and height
+	// Roof is its shape: a barrel vault along Z (left out, or "vault"),
+	// rising Rise in the middle; a single slope rising Rise from the west
+	// wall to the east one ("shed"); or flat, behind a parapet Rise high
+	// ("flat").
+	Roof string `json:"roof"`
 }
 
 type Dome struct {
@@ -98,6 +106,9 @@ type Dome struct {
 
 type Door struct {
 	Facing float64 `json:"facing"` // angle, atan2(z, x), in the building's frame (before its Yaw)
+	// Along is how far a hall's door stands from the middle of its wall,
+	// in m, to the left as one walks out of it.
+	Along float64 `json:"along"`
 }
 
 // Prop is a kit piece placed in a building, relative to its center; Seed

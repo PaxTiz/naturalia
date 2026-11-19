@@ -324,7 +324,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	// The base's shapes, for its ambient occlusion (baseAO).
 	var rms, crs, csz []float32
 	for _, id := range gfx.nearRooms {
-		if r := base.Ents.Building.Get(id); r.Hall == nil { // halls aren't round: no occlusion from them
+		if r := base.Ents.Building.Get(id); r.Hall == nil && !r.Plan().Glazed { // halls aren't round, glass doesn't occlude
 			rms = append(rms, float32(r.Center.X), float32(r.Center.Z), float32(r.Radius), float32(r.WallH))
 		}
 	}
@@ -389,6 +389,9 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	var casters []float32
 	for _, id := range base.NearBuildings(base.ToLocal(gfx.camEye), maxCasters) {
 		r := base.Ents.Building.Get(id)
+		if r.Plan().Glazed {
+			continue // the sun goes through
+		}
 		c := base.ToWorld(r.Center.Add(vec3{0, r.WallH * 0.7, 0}))
 		radius := r.Radius * 1.05
 		if r.Hall != nil {
