@@ -142,6 +142,7 @@ func Setup(c *content.Content) {
 	Ents.Corridor.Set(Ents.New(), Corridor{hub.At.Add(south.Scale(edge(hub, south))), AirlockEnd, DoorWidth + 0.2, 2.6, [2]ecs.ID{ids[hub], 0}})
 	// The yard's clutter keeps clear of the buildings and corridors.
 	Ents.Obstacles.Set(Ents.New(), YardObstacles())
+	Ents.Obstacles.Set(Ents.New(), groundObstacles())
 	for _, bp := range plans {
 		for _, p := range bp.Props {
 			addFurniture(&c.Kits, ids[bp], bp, p)

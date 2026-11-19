@@ -60,6 +60,7 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 		i++
 	}
 	b.yard()
+	b.ground()
 	b.berms()
 	for _, p := range junctionPlates() {
 		room := ToWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
@@ -271,13 +272,19 @@ func (b *building) corridor(c Corridor) {
 		}
 	}
 	b.Part("habitat.white2", mesh.LitTowards, in).Box(mid.Add(vec3{0, c.Height + 0.06, 0}), vec3{length, 0.12, c.Width + 2*WallThick}, dir, 0.04)
+	// Steel posts at the joints, and every third one a heavier rib round
+	// the outside: the corridor reads as a passage.
 	for i := 1; i < n; i++ {
 		at := c.From.Add(dir.Scale(float64(i) * seg))
-		for _, s := range []float64{-1, 1} {
-			post := at.Add(side.Scale(s * (c.Width/2 + WallThick/2 + 0.04))).Add(vec3{0, (c.Height + 0.12) / 2, 0})
-			b.Part("steel", mesh.LitTowards, in).Box(post, vec3{0.14, c.Height + 0.12, WallThick + 0.08}, dir, 0.03)
+		w, out := 0.14, 0.04
+		if i%3 == 0 {
+			w, out = 0.32, 0.12
 		}
-		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.Height + 0.14, 0}), vec3{0.14, 0.1, c.Width + 2*WallThick + 0.16}, dir, 0.03)
+		for _, s := range []float64{-1, 1} {
+			post := at.Add(side.Scale(s * (c.Width/2 + WallThick/2 + out))).Add(vec3{0, (c.Height + 0.12) / 2, 0})
+			b.Part("steel", mesh.LitTowards, in).Box(post, vec3{w, c.Height + 0.12 + 2*(out-0.04), WallThick + 2*out}, dir, 0.03)
+		}
+		b.Part("steel", mesh.LitTowards, in).Box(at.Add(vec3{0, c.Height + 0.14 + out - 0.04, 0}), vec3{w, 0.1 + 2*(out-0.04), c.Width + 2*WallThick + 4*out}, dir, 0.03)
 	}
 	// Inside: two-tone walls like the rooms, a flat floor edged with steel,
 	// a lamp strip under the roof; or a home's lining and paths.
