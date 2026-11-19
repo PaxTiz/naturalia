@@ -37,7 +37,7 @@ func groundFree(p vec3, r float64) bool {
 	flat := vec3{p.X, 0, p.Z}
 	for _, rm := range Buildings() {
 		if rm.Hall != nil {
-			if rm.inHall(flat, r+rm.bermRun()) {
+			if rm.inHall(flat, r) {
 				return false
 			}
 			continue

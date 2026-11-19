@@ -435,11 +435,10 @@ func yardFree(p vec3, r float64) bool {
 	flat := vec3{p.X, 0, p.Z}
 	for _, rm := range Buildings() {
 		if rm.Hall != nil {
-			// The hall, the door's rails in front of it, its banks.
+			// The hall, and the door's rails in front of it.
 			hx, hz := rm.half()
-			berm := rm.bermRun()
 			d := rm.Unturn(flat).Sub(rm.Center)
-			if math.Abs(d.X) < hx+r+margin+math.Max(3, berm) && math.Abs(d.Z) < hz+r+margin+berm {
+			if math.Abs(d.X) < hx+r+margin+3 && math.Abs(d.Z) < hz+r+margin {
 				return false
 			}
 			continue
@@ -451,11 +450,7 @@ func yardFree(p vec3, r float64) bool {
 	for _, c := range Corridors() {
 		d := c.To.Sub(c.From)
 		t := mathx.Clamp01(flat.Sub(c.From).Dot(d) / d.Dot(d))
-		banks := 0.0
-		if k := c.banks(); len(k) > 0 {
-			banks = WallThick + k[0].run()
-		}
-		if flat.Sub(c.From.Add(d.Scale(t))).Length() < c.Width/2+r+margin+banks {
+		if flat.Sub(c.From.Add(d.Scale(t))).Length() < c.Width/2+r+margin {
 			return false
 		}
 	}

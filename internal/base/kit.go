@@ -61,7 +61,6 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	}
 	b.yard()
 	b.ground()
-	b.berms()
 	for _, p := range junctionPlates() {
 		room := ToWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
 		across := vec3{-p.normal.Z, 0, p.normal.X}

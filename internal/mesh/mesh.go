@@ -249,17 +249,6 @@ func (m *Builder) Slab(pts []vec3, n vec3, depth float64) {
 	}
 }
 
-// Hull adds flat faces, each a convex polygon given in order, facing away
-// from center: a convex shape no other piece makes, like a bank of earth.
-func (m *Builder) Hull(center vec3, faces ...[]vec3) {
-	m.begin()
-	for _, f := range faces {
-		for i := 1; i+1 < len(f); i++ {
-			m.tri(f[0], f[i], f[i+1], center)
-		}
-	}
-}
-
 // Wedge adds a ramp standing on the local point c: size.X long along the
 // horizontal direction across, size.Z wide, rising from nothing to size.Y.
 func (m *Builder) Wedge(c, size, across vec3) {
