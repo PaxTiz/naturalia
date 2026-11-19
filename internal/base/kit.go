@@ -47,7 +47,9 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		} else {
 			b.room(id, *r)
-			b.greebleRoom(id, *r, i*97+3)
+			if !r.glazed() {
+				b.greebleRoom(id, *r, i*97+3)
+			}
 			b.turned(*r, func(b *building) { b.clutter(r.plan) })
 		}
 		b.floors(id)
@@ -97,8 +99,14 @@ func DoorPanel() *mesh.Builder {
 func (b *building) room(id ecs.ID, r Room) {
 	bp := r.plan
 	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
+	if r.glazed() {
+		b.glassShell(r)
+	}
 	// Walls: bevelled panels, a dark plinth, a steel collar under the dome.
 	for i, p := range r.panels() {
+		if r.glazed() {
+			break
+		}
 		tok := bp.Style
 		if i%2 == 1 {
 			tok += "2"
@@ -112,7 +120,9 @@ func (b *building) room(id ecs.ID, r Room) {
 		}
 	}
 	// The dome stays a smooth shell: dust settles on its top.
-	b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
+	if !r.glazed() {
+		b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
+	}
 	// Door frames: steel jambs and a hazard header (a home's: homeDoorFrame). They stand a little
 	// into the opening: flush with the corridor's walls and ceiling, they
 	// would fight them for the depth and flicker.
@@ -133,7 +143,11 @@ func (b *building) room(id ecs.ID, r Room) {
 	if r.home() {
 		b.domeLining(r)
 	}
-	b.interior(bp, r)
+	if r.glazed() {
+		b.glassFloor(r)
+	} else {
+		b.interior(bp, r)
+	}
 	b.props(id)
 }
 

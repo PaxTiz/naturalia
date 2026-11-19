@@ -41,6 +41,9 @@ type Blueprint struct {
 	// like a well-made habitat (composite panels, warm grey floor, ducts
 	// boxed in); left out, it stays industrial. The outside doesn't change.
 	Interior string `json:"interior"`
+	// Glazed makes a dome of glass on a white frame, its round wall glazed
+	// above a low plinth, the sun lighting what grows inside: a greenhouse.
+	Glazed bool `json:"glazed"`
 }
 
 // Window is a pane of glass in a wall of a hall, in its frame (before its

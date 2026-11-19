@@ -416,13 +416,14 @@ func (b *building) waterTanks() {
 	}
 	// A hose from them to the greenhouse.
 	sun("pipe.blue").Prism(vec3{c.X + 1.9, 0.5, c.Z - 0.9}, vec3{0, 0, 1}, 0.06, 0.06, 1.8, 8, 0)
-	sun("rubber").Box(vec3{c.X + 1.9, 0.03, c.Z + 2.4}, vec3{0.08, 0.06, 3.4}, vec3{1, 0, 0}, 0.02)
+	a, e := vec3{c.X + 1.9, 0.03, c.Z + 0.9}, vec3{c.X + 4.0, 0.03, c.Z + 2.9}
+	sun("rubber").Box(a.Lerp(e, 0.5), vec3{0.08, 0.06, e.Sub(a).Length()}, vec3{e.Z - a.Z, 0, a.X - e.X}.Norm(), 0.02)
 }
 
 var (
 	yardMasts     = []vec3{{-14.3, 0, 9.5}, {17.5, 0, 6}, {15.5, 0, -15}, {-8, 0, 17.5}}
 	yardBarrels   = []vec3{{5.4, 0, -10.6}, {-9.4, 0, 10.2}}
-	yardTanks     = vec3{-8.6, 0, -17} // south of the greenhouse they water
+	yardTanks     = vec3{-16.5, 0, -18.5} // south of the annex, by the greenhouse they water
 	yardTankRows  = []float64{-0.9, 0.9}
 	yardContainer = vec3{10, 0, 13.5}
 )

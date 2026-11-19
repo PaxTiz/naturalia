@@ -179,6 +179,11 @@ var coreTokens = map[string]content.Token{
 	"earth.blue":   {color.RGBA{50, 110, 205, 255}, content.MtPlain, 1, 0.5, 0.15},
 	"earth.green":  {color.RGBA{96, 150, 80, 255}, content.MtPlain, 1, 0.5, 0.1},
 	"clay":         {color.RGBA{176, 98, 64, 255}, content.MtPlain, 1, 0.15, 0},
+	// The greenhouse: more greens, and flowers.
+	"leaf.dark":    {color.RGBA{46, 110, 62, 255}, content.MtPlain, 1, 0.2, 0},
+	"leaf.olive":   {color.RGBA{118, 136, 62, 255}, content.MtPlain, 1, 0.2, 0},
+	"bloom.coral":  {color.RGBA{232, 108, 86, 255}, content.MtPlain, 1, 0.2, 0},
+	"bloom.yellow": {color.RGBA{238, 198, 78, 255}, content.MtPlain, 1, 0.2, 0},
 	// The living spaces' finishes (interior: "home"): off-white composite
 	// panels, smooth white ribs, a warm grey matte floor and its lighter
 	// paths.
@@ -248,8 +253,8 @@ var coreBuildings = []content.Blueprint{
 		Props: []content.Prop{
 			{Kit: "maptable"},
 			{Kit: "incinerator", At: vec3{-10, 0, -5}},
-			// Built-in storage along the walls: by the sale corner, and
-			// either side of the bedroom's door.
+			// Built-in storage along the walls, either side of the
+			// bedroom's door.
 			// Its zones, by their floors and walls: the entry by the
 			// airlock's door tiled in the ceramic fired on site, a wall of
 			// it beside; the lab on a technical floor, sage felt over the
@@ -260,7 +265,6 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "floor.tech", At: vec3{-9.28, 0, 5.28}},
 			{Kit: "felt.wall", At: vec3{-8.2, 1.0, 7.78}, Yaw: -90, Seed: 2},
 			{Kit: "felt.wall", At: vec3{6, 0.15, 7.78}, Yaw: -90},
-			{Kit: "storage", At: vec3{-6.5, 0, -7.53}, Yaw: 90, Seed: 1},
 			{Kit: "storage", At: vec3{-3, 0, 7.53}, Yaw: -90, Seed: 2},
 			{Kit: "storage", At: vec3{3, 0, 7.53}, Yaw: -90, Seed: 3},
 			// The research lab, in the north-west corner: the console
@@ -319,12 +323,9 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "solar.rack", At: vec3{-8, 6.32, 2.2}},
 			{Kit: "roof.vent", At: vec3{-3, 7.0, 5.6}},
 			{Kit: "roof.vent", At: vec3{-3, 7.0, -6.0}, Seed: 1},
-			// Outside, on the south side where one arrives: a greenhouse
-			// leaning on the wall west of the entry, green seen from
-			// afar; the life support's annex at the corner, by the
-			// hangar's bank.
-			{Kit: "greenhouse", At: vec3{-7.2, 0, -8.15}, Seed: 3},
-			{Kit: "annex.tech", At: vec3{-13.2, 0, -12.6}},
+			// Outside, the life support's annex, between the greenhouse
+			// and the hangar.
+			{Kit: "annex.tech", At: vec3{-16.5, 0, -12}},
 		},
 	},
 	// The bedroom wing, at the end of a corridor north of the hall: one
@@ -364,6 +365,20 @@ var coreBuildings = []content.Blueprint{
 			{Kit: "books", At: vec3{-1.8, 0, -2.0}, Seed: 4},
 			{Kit: "garland", At: vec3{0, 2.45, 1.62}, Seed: 44},
 		},
+	},
+	// The greenhouse, on the south side where one arrives, west of the
+	// entry: a geodesic dome of glass full of plants, green seen from
+	// afar, a short corridor from the great hall.
+	content.Blueprint{
+		ID:     "core:greenhouse",
+		Link:   "core:hall",
+		Sign:   "SERRE",
+		Accent: "led.green",
+		At:     vec3{-8, 0, -14.5},
+		Shape:  content.Dome{Radius: 4.5, WallH: 2.8},
+		Style:  "habitat.white",
+		Glazed: true,
+		Props:  []content.Prop{{Kit: "greenhouse.plants", Seed: 2}},
 	},
 	// The vehicles' hangar, west of the base, turned so its door (east in
 	// its own frame) faces away; a corridor leads there from the great
@@ -412,17 +427,17 @@ var coreKits = map[string]content.Kit{
 	"curtain":      {Build: base.KitBuild(base.BuildCurtain)},
 	"curtain.tall": {Build: base.KitBuild(base.BuildTallCurtain)},
 	// Outside: on the roofs and around the buildings.
-	"solar.rack":    {Build: base.KitBuild(base.BuildSolarRack)},
-	"roof.vent":     {Build: base.KitBuild(base.BuildRoofVent)},
-	"greenhouse":    {Build: base.KitBuild(base.BuildGreenhouse), Obstacles: obstacles(base.GreenhouseObstacles, 2.25)},
-	"annex.tech":    {Build: base.KitBuild(base.BuildAnnex), Obstacles: obstacles(base.AnnexObstacles, 1.9)},
-	"plant.hanging": {Build: base.KitBuild(base.BuildHangingPlant)},
-	"plant.big":     {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
-	"felt.wall":     {Build: base.KitBuild(base.BuildFeltWall)},
-	"felt.low":      {Build: base.KitBuild(base.BuildFeltLow)},
-	"ceramic.wall":  {Build: base.KitBuild(base.BuildCeramicWall)},
-	"floor.ceramic": {Build: base.KitBuild(base.BuildCeramicFloor)},
-	"floor.tech":    {Build: base.KitBuild(base.BuildTechFloor)},
+	"solar.rack":        {Build: base.KitBuild(base.BuildSolarRack)},
+	"roof.vent":         {Build: base.KitBuild(base.BuildRoofVent)},
+	"greenhouse.plants": {Build: base.KitBuild(base.BuildGreenhousePlants), Obstacles: plantsObstacles()},
+	"annex.tech":        {Build: base.KitBuild(base.BuildAnnex), Obstacles: obstacles(base.AnnexObstacles, 1.9)},
+	"plant.hanging":     {Build: base.KitBuild(base.BuildHangingPlant)},
+	"plant.big":         {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
+	"felt.wall":         {Build: base.KitBuild(base.BuildFeltWall)},
+	"felt.low":          {Build: base.KitBuild(base.BuildFeltLow)},
+	"ceramic.wall":      {Build: base.KitBuild(base.BuildCeramicWall)},
+	"floor.ceramic":     {Build: base.KitBuild(base.BuildCeramicFloor)},
+	"floor.tech":        {Build: base.KitBuild(base.BuildTechFloor)},
 	"bed.niche": {Build: base.KitBuild(base.BuildBedNiche), Obstacles: obstacles(base.NicheObstacles, 0.33),
 		Lamps: []content.KitLamp{{base.NicheLights[0], 0.3, 3}, {base.NicheLights[1], 0.3, 3}}},
 	"desk.wall":   {Build: base.KitBuild(base.BuildWallDesk), Obstacles: []content.Obstacle{{vec3{0, 0, -0.35}, 0.38}, {vec3{0, 0, 0.35}, 0.38}}, Lamps: []content.KitLamp{{base.DeskLight, 0.35, 3.5}}},
@@ -453,6 +468,16 @@ var coreKits = map[string]content.Kit{
 }
 
 // obstacles are round obstacles of radius r at the points at.
+// plantsObstacles: the greenhouse's beds.
+func plantsObstacles() []content.Obstacle {
+	at, radius := base.PlantsObstacles()
+	var out []content.Obstacle
+	for i, p := range at {
+		out = append(out, content.Obstacle{At: p, Radius: radius[i]})
+	}
+	return out
+}
+
 func obstacles(at []vec3, r float64) []content.Obstacle {
 	var out []content.Obstacle
 	for _, p := range at {
