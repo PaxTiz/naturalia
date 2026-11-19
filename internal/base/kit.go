@@ -67,6 +67,7 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 		b.Part("habitat.white2", mesh.LitTowards, room).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, WallThick * 1.5}, across, 0.04)
 	}
 	b.airlock()
+	b.entry()
 	b.outside()
 	b.Unfight()
 	return b.Parts
