@@ -155,9 +155,11 @@ const hallGap = DoorWidth/2 + WallThick + 0.05
 // level (in its own frame).
 func (r Room) doorways() []vec3 {
 	var out []vec3
-	for _, a := range r.openings {
+	for i, a := range r.openings {
 		d := vec3{math.Cos(a), 0, math.Sin(a)}
-		out = append(out, r.Center.Add(content.Turn(d, -r.Yaw).Scale(edge(r.plan, d))))
+		dl := content.Turn(d, -r.Yaw)
+		along := vec3{-dl.Z, 0, dl.X}.Scale(r.alongs[i])
+		out = append(out, r.Center.Add(dl.Scale(edge(r.plan, d))).Add(along))
 	}
 	return out
 }

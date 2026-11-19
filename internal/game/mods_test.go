@@ -81,7 +81,7 @@ func TestExampleMod(t *testing.T) {
 	if tk, _ := c.Tokens.Get("serre:leaf"); tk.Col.G != 0xa0 || tk.Scale != 1 {
 		t.Errorf("leaf token: %+v", tk)
 	}
-	if n := len(base.YardObstacles()); n != 14 {
+	if n := len(base.YardObstacles()); n != 13 {
 		t.Errorf("the greenhouse should push the barrels away: %d yard obstacles", n)
 	}
 	if tr := c.Terrain; tr.Gems != 0.15 || len(tr.Features) != 2 || tr.Hills != 1 {

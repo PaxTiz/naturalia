@@ -438,7 +438,11 @@ func yardFree(p vec3, r float64) bool {
 			// The hall, and the door's rails in front of it.
 			hx, hz := rm.half()
 			d := rm.Unturn(flat).Sub(rm.Center)
-			if math.Abs(d.X) < hx+r+margin+3 && math.Abs(d.Z) < hz+r+margin {
+			rails := 0.0
+			if rm.bigDoor() && d.X > 0 {
+				rails = 3
+			}
+			if math.Abs(d.X) < hx+r+margin+rails && math.Abs(d.Z) < hz+r+margin {
 				return false
 			}
 			continue

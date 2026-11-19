@@ -28,6 +28,7 @@ type Room struct {
 	WallH    float64
 	Hall     *content.Hall
 	openings []float64          // angles (radians, atan2(z, x)) of the doorways
+	alongs   []float64          // and how far along its wall each stands from its middle (a hall's)
 	plan     *content.Blueprint // drawn from the kit when set
 }
 
@@ -98,7 +99,7 @@ func Setup(c *content.Content) {
 	plans := c.Buildings.All()
 	hub := plans[0]
 	south := vec3{0, 0, -1}
-	addDoor(hub, South) // to the airlock
+	addDoor(hub, South, hub.At.Add(south.Scale(edge(hub, south)))) // to the airlock
 	// The links open the doors first: a room is laid out with them.
 	type link struct {
 		from, to *content.Blueprint
@@ -118,13 +119,16 @@ func Setup(c *content.Content) {
 			if to == bp || linked(bp, to) {
 				continue
 			}
-			d := to.At.Sub(bp.At)
-			d = vec3{d.X, 0, d.Z}.Norm()
-			addDoor(bp, math.Atan2(d.Z, d.X))
-			addDoor(to, math.Atan2(-d.Z, -d.X))
-			links = append(links, link{bp, to, Corridor{
-				From: to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), To: bp.At.Add(d.Scale(edge(bp, d))), Width: DoorWidth, Height: 2.4,
-			}})
+			from, end, ok := straightLink(to, bp)
+			if !ok { // from middle to middle
+				d := to.At.Sub(bp.At)
+				d = vec3{d.X, 0, d.Z}.Norm()
+				from, end = to.At.Sub(d.Scale(edge(to, d.Scale(-1)))), bp.At.Add(d.Scale(edge(bp, d)))
+			}
+			d := from.Sub(end).Norm()
+			addDoor(bp, math.Atan2(d.Z, d.X), end)
+			addDoor(to, math.Atan2(-d.Z, -d.X), from)
+			links = append(links, link{bp, to, Corridor{From: from, To: end, Width: DoorWidth, Height: 2.4}})
 		}
 	}
 	Ents = newEntities()
@@ -218,16 +222,91 @@ func edge(bp *content.Blueprint, d vec3) float64 {
 	return t
 }
 
-// addDoor opens a door of bp facing angle a (in the base), unless there is
-// one already.
-func addDoor(bp *content.Blueprint, a float64) {
+// addDoor opens a door of bp facing angle a (in the base), at local point
+// at on its wall, unless there is one already.
+func addDoor(bp *content.Blueprint, a float64, at vec3) {
 	a -= bp.Yaw * math.Pi / 180
+	along := 0.0
+	if bp.Hall != nil {
+		p := content.Turn(at.Sub(bp.At), -bp.Yaw)
+		along = p.Dot(vec3{-math.Sin(a), 0, math.Cos(a)})
+	}
 	for _, d := range bp.Doors {
-		if angleDist(d.Facing, a) < 0.05 {
+		if angleDist(d.Facing, a) < 0.05 && math.Abs(d.Along-along) < 0.1 {
 			return
 		}
 	}
-	bp.Doors = append(bp.Doors, content.Door{a})
+	bp.Doors = append(bp.Doors, content.Door{Facing: a, Along: along})
+}
+
+// straightLink lays a corridor from a's wall straight to b's, at right
+// angles to both, where they face each other: two halls side by side, or
+// a dome before a hall's wall, the corridor going to the dome's middle.
+// Halls turned other than by quarter turns don't.
+func straightLink(a, b *content.Blueprint) (from, to vec3, ok bool) {
+	lo := func(bp *content.Blueprint) (vec3, vec3, bool) {
+		if bp.Hall == nil {
+			r := vec3{bp.Shape.Radius, 0, bp.Shape.Radius}
+			return bp.At.Sub(r), bp.At.Add(r), true
+		}
+		q := math.Mod(math.Abs(bp.Yaw), 180)
+		hx, hz := bp.Hall.Size[0]/2, bp.Hall.Size[1]/2
+		switch {
+		case q < 0.01:
+		case math.Abs(q-90) < 0.01:
+			hx, hz = hz, hx
+		default:
+			return vec3{}, vec3{}, false
+		}
+		return bp.At.Sub(vec3{hx, 0, hz}), bp.At.Add(vec3{hx, 0, hz}), true
+	}
+	a0, a1, okA := lo(a)
+	b0, b1, okB := lo(b)
+	if !okA || !okB {
+		return
+	}
+	// Along each axis in turn: where they overlap across it, apart along
+	// it.
+	for _, ax := range []int{0, 1} {
+		get := func(v vec3) float64 { return [2]float64{v.X, v.Z}[ax] }
+		set := func(across, along float64) vec3 {
+			if ax == 0 {
+				return vec3{across, 0, along}
+			}
+			return vec3{along, 0, across}
+		}
+		// across: the other axis
+		across0, across1 := get(a0), get(a1)
+		bAcross0, bAcross1 := get(b0), get(b1)
+		lo, hi := math.Max(across0, bAcross0), math.Min(across1, bAcross1)
+		if hi-lo < 2*hallGap+0.6 {
+			continue
+		}
+		x := (lo + hi) / 2
+		for _, bp := range []*content.Blueprint{a, b} {
+			if bp.Hall == nil {
+				x = get(bp.At) // through a dome's middle
+			}
+		}
+		other := func(v vec3) float64 { return [2]float64{v.Z, v.X}[ax] }
+		var ea, eb float64 // the walls facing each other
+		switch {
+		case other(a1) <= other(b0):
+			ea, eb = other(a1), other(b0)
+		case other(b1) <= other(a0):
+			ea, eb = other(a0), other(b1)
+		default:
+			continue
+		}
+		if a.Hall == nil {
+			ea = other(a.At) + math.Copysign(a.Shape.Radius-0.2, eb-other(a.At))
+		}
+		if b.Hall == nil {
+			eb = other(b.At) + math.Copysign(b.Shape.Radius-0.2, ea-other(b.At))
+		}
+		return set(x, ea), set(x, eb), true
+	}
+	return
 }
 
 // Origin is where the base stands on the ground, set once the relief is known

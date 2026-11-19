@@ -14,14 +14,15 @@ import (
 
 // roomOf is the room a blueprint lays out.
 func roomOf(bp *content.Blueprint) Room {
-	var openings []float64
+	var openings, alongs []float64
 	for _, d := range bp.Doors {
 		openings = append(openings, d.Facing+bp.Yaw*math.Pi/180)
+		alongs = append(alongs, d.Along)
 	}
 	if bp.Hall != nil {
-		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, plan: bp}
+		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, alongs: alongs, plan: bp}
 	}
-	return Room{bp.At, bp.Yaw, bp.Shape.Radius, bp.Shape.WallH, nil, openings, bp}
+	return Room{Center: bp.At, Yaw: bp.Yaw, Radius: bp.Shape.Radius, WallH: bp.Shape.WallH, openings: openings, alongs: alongs, plan: bp}
 }
 
 // KitBuild lets a kit piece use the base's building helpers.
