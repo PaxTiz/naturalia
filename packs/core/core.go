@@ -121,12 +121,9 @@ var coreTokens = map[string]content.Token{
 	"habitat.white":  {color.RGBA{232, 230, 224, 255}, content.MtPanel, 1, 0.55, 0},
 	"habitat.white2": {color.RGBA{218, 217, 212, 255}, content.MtPanel, 1, 0.55, 0},
 	// The working buildings' cladding, a warm steel grey that sinks into
-	// the plain where the living spaces stay white; the regolith banked
-	// against them, a shield from the radiation.
+	// the plain where the living spaces stay white.
 	"clad.sand":     {color.RGBA{148, 140, 126, 255}, content.MtPanel, 1, 0.45, 0},
 	"clad.sand2":    {color.RGBA{138, 131, 118, 255}, content.MtPanel, 1, 0.45, 0},
-	"regolith":      {color.RGBA{172, 92, 54, 255}, content.MtPaint, 1 / content.PaintTile, 0.05, 0},
-	"regolith.dark": {color.RGBA{138, 74, 46, 255}, content.MtPaint, 1 / content.PaintTile, 0.05, 0},
 	"steel":         {color.RGBA{140, 146, 158, 255}, content.MtMetal, 1.2, 0.6, 0},
 	"steel.dark":    {color.RGBA{50, 54, 66, 255}, content.MtPlain, 1, 0.4, 0},
 	"door.plate":    {color.RGBA{168, 172, 178, 255}, content.MtMetal, 1.2, 0.45, 0}, // the hangar's door leaves
