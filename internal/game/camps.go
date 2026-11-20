@@ -139,7 +139,7 @@ func (g *Game) standCamps() {
 		pos, ax, up, az := g.Frame(t)
 		b.site = base.Site{Origin: pos, X: ax, Y: up, Z: az}
 	}
-	g.phys = nil // their walls, laid again
+	g.relay = true // their walls, laid again
 }
 
 // newCamp makes entity id a bootcamp, with the next ID and a name.

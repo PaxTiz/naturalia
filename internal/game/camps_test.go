@@ -2,8 +2,8 @@ package game
 
 import (
 	"math"
-	"naturalia/internal/content"
 	"naturalia/internal/base"
+	"naturalia/internal/content"
 	"naturalia/internal/planet"
 	"strings"
 	"testing"
@@ -236,5 +236,24 @@ func TestRenameAndTeleport(t *testing.T) {
 	}
 	if len(heard) != 1 || heard[0] != "Base > "+name {
 		t.Errorf("heard %v", heard)
+	}
+}
+
+// Setting a bootcamp down while something slides nearby lays the
+// collisions again, carrying its speed over.
+func TestCampSetWhileMoving(t *testing.T) {
+	g, c := campGame(t)
+	g.Mode = ModePlay
+	g.stepPhysics(1.0 / 60)
+	crate := g.add(Placed{Kind: "core:crate", Dir: planet.Toward2(g.Player.Pos.Norm(), planet.TangentAt(g.Player.Pos.Norm(), g.Player.Heading), 3)})
+	g.stepPhysics(1.0 / 60)
+	if !g.Impulse(uint32(crate), g.Player.Heading.Scale(4)) {
+		t.Fatalf("the crate won't move")
+	}
+	g.stepPhysics(1.0 / 60)
+	g.Ents.Transform.Get(c.Ent).Yaw += 0.3 // moved
+	g.standCamps()
+	for range 10 {
+		g.stepPhysics(1.0 / 60)
 	}
 }

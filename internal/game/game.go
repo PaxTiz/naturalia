@@ -115,6 +115,7 @@ type Game struct {
 
 	walls    []base.Segment // the base's walls, for collisions
 	phys     *phys          // the collisions' plane (physics.go)
+	relay    bool           // lay it again at the next step: a bootcamp set down, a trip
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
 	doorWant float64        // where they are going
 	HallOpen []float64      // the halls' big doors, in the order of base.Halls

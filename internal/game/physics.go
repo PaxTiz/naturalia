@@ -133,7 +133,8 @@ func (p *phys) slice(pos vec3, h float64) (bottom, top float64) {
 // the ground, out of walls, rocks and entities.
 func (g *Game) stepPhysics(dt float64) {
 	pl := &g.Player
-	if g.phys == nil || planet.ArcDist(pl.LocalUp(), g.phys.up) > reanchor || g.phys.held != g.heldCamp() {
+	if g.phys == nil || g.relay || planet.ArcDist(pl.LocalUp(), g.phys.up) > reanchor || g.phys.held != g.heldCamp() {
+		g.relay = false
 		g.layPlane()
 	}
 	p := g.phys
@@ -465,7 +466,7 @@ func (g *Game) layPlane() {
 	p.side = t1.Cross(up).Dot(t2)
 	p.w.Mix, p.w.Allow = mix, g.allow
 	for id, bp := range g.Ents.Body.All() {
-		if b := *bp; b.Kind == physics.Dynamic && !b.Asleep() {
+		if b := *bp; b.Kind == physics.Dynamic && !b.Asleep() && g.phys != nil {
 			at := g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir)
 			p.carried[id] = moving{g.phys.vecWorld(at, b.Vel), b.Spin * g.phys.side}
 		}

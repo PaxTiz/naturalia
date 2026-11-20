@@ -177,7 +177,7 @@ func (g *Game) jump(d Destination) {
 	g.Player.Pos = site.ToWorld(vec3{at.X, table.Y + base.FloorTop, at.Z})
 	g.Player.Heading = site.Dir(out.Scale(-1))
 	g.Player.Pitch, g.Player.vr, g.Player.vel, g.Player.want = -0.1, 0, vec3{}, vec3{}
-	g.phys = nil // the collisions, laid again where they arrive
+	g.relay = true // the collisions, laid again where they arrive
 	g.Steps = Footprints{}
 	g.NearRocks = g.World.RocksNear(g.Player.Pos, RockDrawDist)
 	g.sfx.Beep(0.06, 0.4, 0.12, 1047, 784, 1175, 1568)
