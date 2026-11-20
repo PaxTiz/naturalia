@@ -12,21 +12,21 @@ import (
 	"slices"
 )
 
-func (g *Game) Credits() float64       { return g.State.Credits }
-func (g *Game) Tank() float64          { return g.State.Tank }
-func (g *Game) ToolID() string         { return g.Tool().ID }
-func (g *Game) Level(id string) int    { return g.State.Levels[id] }
-func (g *Game) SunHeight() float64     { return planet.SunDir.Dot(g.Player.LocalUp()) }
-func (g *Game) Inside() string         { return g.inside }
-func (g *Game) Clock() float64         { return g.Elapsed }
-func (g *Game) PlayerPos() vec3        { return g.Player.Pos }
-func (g *Game) DustDevils() int        { return len(g.Devils) }
-func (g *Game) Random() float64        { return g.Rng.Float64() }
-func (g *Game) Beep(freq float64)      { g.sfx.Beep(0.05, 0.25, 0.14, freq) }
-func (g *Game) SpawnDustDevil()        { spawnDevil(g) }
-func (g *Game) OpenMap()               { g.MapTab, g.MapHover = 0, -1; g.setMode(ModeMap) }
-func (g *Game) OpenShop()              { g.Garage = false; g.setMode(ModeShop) }
-func (g *Game) OpenGarage()            { g.Garage = true; g.setMode(ModeShop) }
+func (g *Game) Credits() float64    { return g.State.Credits }
+func (g *Game) Tank() float64       { return g.State.Tank }
+func (g *Game) ToolID() string      { return g.Tool().ID }
+func (g *Game) Level(id string) int { return g.State.Levels[id] }
+func (g *Game) SunHeight() float64  { return planet.SunDir.Dot(g.Player.LocalUp()) }
+func (g *Game) Inside() string      { return g.inside }
+func (g *Game) Clock() float64      { return g.Elapsed }
+func (g *Game) PlayerPos() vec3     { return g.Player.Pos }
+func (g *Game) DustDevils() int     { return len(g.Devils) }
+func (g *Game) Random() float64     { return g.Rng.Float64() }
+func (g *Game) Beep(freq float64)   { g.sfx.Beep(0.05, 0.25, 0.14, freq) }
+func (g *Game) SpawnDustDevil()     { spawnDevil(g) }
+func (g *Game) OpenMap()            { g.MapTab, g.MapHover = 0, -1; g.setMode(ModeMap) }
+func (g *Game) OpenShop()           { g.Garage = false; g.setMode(ModeShop) }
+func (g *Game) OpenGarage()         { g.Garage = true; g.setMode(ModeShop) }
 func (g *Game) Sleep() {
 	g.Mode, g.SleepT = ModeSleep, 0
 	g.State.Wake = 0 // the bed slept in: the base's, or a bootcamp's

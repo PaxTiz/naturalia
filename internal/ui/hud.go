@@ -966,6 +966,8 @@ type HUD struct {
 	shopScroll                  int    // first row shown in the shop
 	shopTab                     string // the shop's tab open
 	mapScroll                   int    // first destination shown at the map table
+	renaming                    bool   // the bootcamp's name being typed in, at its map table
+	name                        []rune // what is typed
 	dbg                         debugInfo
 	photo                       photoUI
 	menu                        menuUI

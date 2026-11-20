@@ -26,6 +26,7 @@ type Camp struct {
 	Furniture []Furniture
 	Table     vec3        // where the hologram's table stands
 	Wake      vec3        // where the player wakes up, by the bed
+	Sign      vec3        // the middle of its name's sign, standing on the door's header, facing out
 	Beacon    vec3        // the light blinking on its roof
 	Reach     float64     // how far from its middle it stands: the ground is flat under it
 	Parts     *mesh.Parts // its static pieces
@@ -68,6 +69,7 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint) *Camp 
 			c.Wake = f.At.Add(f.At.Scale(-1).Norm().Scale(1.5)) // toward the middle
 		}
 	}
+	c.Sign = AirlockEnd.Add(vec3{0, 3.0, 0})
 	if c.Wake == (vec3{}) {
 		c.Wake = AirlockEnd.Scale(0.4)
 	}

@@ -4,9 +4,11 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/game"
 	"naturalia/internal/mesh"
 	"naturalia/internal/palette"
+	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -63,6 +65,7 @@ func (gfx *Graphics) drawCamps(g *game.Game) {
 			mat.GetMap(rl.MapAlbedo).Color = rl.White
 		}
 		gfx.drawCampDoor(g, c)
+		gfx.drawCampSign(c)
 		if math.Mod(g.Elapsed+float64(c.ID)*0.37, 1.2) < 0.3 {
 			gfx.setLighting(mesh.LitSun, vec3{})
 			gfx.setMat(content.MtPlain, 1, false)
@@ -98,4 +101,36 @@ func (gfx *Graphics) drawCampDoor(g *game.Game, c game.CampAt) {
 	out := vec3{0, 1, 0}.Cross(across) // out of the door
 	at := end.Add(vec3{0, 2.6, 0}).Add(out.Scale(0.2))
 	gfx.putBasis(gfx.cube, s.ToWorld(at), ax.Scale(1.2), s.Y.Scale(0.08), az.Scale(0.04), lamp, 0, 1)
+}
+
+// campSign is the texture painted with a bootcamp's name, kept until it
+// is renamed.
+type campSign struct {
+	name string
+	tex  rl.Texture2D
+}
+
+const campSignW, campSignH = 2.4, 0.45
+
+// drawCampSign draws a bootcamp's name on the sign standing on its door's
+// header, facing out.
+func (gfx *Graphics) drawCampSign(c game.CampAt) {
+	if gfx.campSigns == nil {
+		gfx.campSigns = map[ecs.ID]campSign{}
+	}
+	sg, ok := gfx.campSigns[c.Ent]
+	if !ok || sg.name != c.Name {
+		if ok {
+			rl.UnloadTexture(sg.tex)
+		}
+		sg = campSign{c.Name, paintSign(sign{width: campSignW, height: campSignH, text: strings.ToUpper(c.Name), accent: palette.AccentCyan}, gfx.smallcaps)}
+		gfx.campSigns[c.Ent] = sg
+	}
+	s := c.Site
+	gfx.setMat(content.MtDecal, 1, false)
+	gfx.setLighting(mesh.LitSun, vec3{})
+	rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, sg.tex)
+	// The box's front (+z) shows the texture: turned to face out (+x).
+	gfx.putBasis(gfx.signBox, c.ToWorld(c.Layout.Sign), s.Dir(vec3{0, 0, -campSignW}), s.Y.Scale(campSignH), s.X.Scale(0.06), rl.White, 0.2, 0.25)
+	gfx.setMat(content.MtPlain, 1, false)
 }

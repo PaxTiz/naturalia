@@ -113,6 +113,12 @@ type jsEntity struct {
 	Dist float64 `json:"dist"`
 }
 
+type jsCamp struct {
+	Name string  `json:"name"`
+	At   jsVec   `json:"at"`
+	Dist float64 `json:"dist"`
+}
+
 type jsVehicle struct {
 	ID       string  `json:"id"`
 	Speed    float64 `json:"speed"`
@@ -213,7 +219,18 @@ func (s *script) api(c *content.Content) map[string]any {
 			}
 			return nil
 		},
-		"driving": func() string { return s.game().Driving() },
+		// camps are the bootcamps standing: [{name, at, dist}].
+		"camps": func() []jsCamp {
+			var out []jsCamp
+			for _, c := range s.game().Bootcamps() {
+				out = append(out, jsCamp{c.Name, jsVec(c.At), c.Dist})
+			}
+			return out
+		},
+		// teleport sends the player to the bootcamp of that name, or to
+		// the base ("Base"), for free: false if there is none.
+		"teleport": func(name string) bool { return s.game().Teleport(name) },
+		"driving":  func() string { return s.game().Driving() },
 		// vehicle is the driven vehicle, or null: {id, speed (m/s), air,
 		// alt (m), airtime (s), fuel (0 to 1), boosting}.
 		"vehicle": func() any {

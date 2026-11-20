@@ -2,8 +2,10 @@ package game
 
 import (
 	"math"
+	"naturalia/internal/content"
 	"naturalia/internal/base"
 	"naturalia/internal/planet"
+	"strings"
 	"testing"
 )
 
@@ -199,5 +201,40 @@ func TestTravel(t *testing.T) {
 	}
 	if g.Travel(g.Destinations()[1]); g.Mode == ModeTravel {
 		t.Errorf("traveled without the credits")
+	}
+}
+
+// A bootcamp is renamed, not to nothing nor to a name taken; a mod sends
+// the player there by that name, for free, and hears of it.
+func TestRenameAndTeleport(t *testing.T) {
+	g, c := campGame(t)
+	if g.RenameCamp(c.Ent, "  ") || g.RenameCamp(c.Ent, "base") {
+		t.Errorf("renamed to nothing, or to the base")
+	}
+	if !g.RenameCamp(c.Ent, "  Olympus, au pied du volcan géant  ") {
+		t.Fatalf("not renamed")
+	}
+	name := g.Bootcamps()[0].Name
+	if name != "Olympus, au pied du volc" {
+		t.Errorf("named %q", name)
+	}
+	var heard []string
+	g.Content.On(content.EvTeleport, func(_ content.Game, e *content.Event) { heard = append(heard, e.By+" > "+e.ID) })
+	credits := g.State.Credits
+	if g.Teleport(name) {
+		t.Errorf("teleported from the pause screen")
+	}
+	g.Mode = ModePlay
+	if g.Teleport("nowhere") || !g.Teleport(strings.ToUpper(name)) {
+		t.Fatalf("teleport by name")
+	}
+	for g.Mode == ModeTravel {
+		g.updateTravel(1.0 / 60)
+	}
+	if at, ok := g.CampAround(g.Player.Eye()); !ok || at.Ent != c.Ent || g.State.Credits != credits {
+		t.Errorf("not there for free")
+	}
+	if len(heard) != 1 || heard[0] != "Base > "+name {
+		t.Errorf("heard %v", heard)
 	}
 }

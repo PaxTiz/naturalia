@@ -6,6 +6,7 @@ import (
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
 	"naturalia/internal/planet"
+	"strings"
 )
 
 // Travel (docs/TELEPORTEURS.md): the hologram of the base or of any
@@ -86,9 +87,62 @@ func (g *Game) Travel(d Destination) {
 		return
 	}
 	g.State.Credits -= TravelCost
+	g.startTravel(d)
+}
+
+func (g *Game) startTravel(d Destination) {
 	g.travelTo, g.TravelT = d, 0
 	g.Mode = ModeTravel
 	g.sfx.Beep(0.07, 0.35, 0.14, 330, 440, 587, 784, 1047)
+}
+
+// Teleport sends the player to the base ("Base") or the bootcamp of that
+// name, for free: a mod's doing. False if there is none, or the player
+// can't go now (driving, or not playing).
+func (g *Game) Teleport(name string) bool {
+	if g.Riding != 0 || g.Mode != ModePlay && g.Mode != ModeMap {
+		return false
+	}
+	for _, d := range g.Destinations() {
+		if strings.EqualFold(d.Name, name) {
+			g.startTravel(d)
+			return true
+		}
+	}
+	return false
+}
+
+// Bootcamps are the bootcamps standing, for packs: their name, where they
+// stand and how far from the player.
+func (g *Game) Bootcamps() []content.CampState {
+	var out []content.CampState
+	for _, d := range g.Destinations()[1:] {
+		out = append(out, content.CampState{Name: d.Name, At: g.World.Relief.Surface(d.Dir), Dist: d.Dist})
+	}
+	return out
+}
+
+// maxCampName is how long a bootcamp's name may be, in letters.
+const maxCampName = 24
+
+// RenameCamp names bootcamp id: trimmed, cut to maxCampName letters; an
+// empty name or one another place has already is refused.
+func (g *Game) RenameCamp(id ecs.ID, name string) bool {
+	name = strings.TrimSpace(name)
+	if r := []rune(name); len(r) > maxCampName {
+		name = strings.TrimSpace(string(r[:maxCampName]))
+	}
+	b := g.Ents.Camp.Get(id)
+	if b == nil || name == "" {
+		return false
+	}
+	for _, d := range g.Destinations() {
+		if d.Camp != id && strings.EqualFold(d.Name, name) {
+			return false
+		}
+	}
+	b.Name = name
+	return true
 }
 
 // TravelingTo is the name of where the player is traveling to.

@@ -482,6 +482,13 @@ type EntityState struct {
 	Dist float64 // from the player, m
 }
 
+// CampState is a bootcamp, as packs see it.
+type CampState struct {
+	Name string
+	At   vec3    // its middle on the ground, from Mars' center
+	Dist float64 // from the player, m
+}
+
 // Game is what packs see of the running game: their handlers, random
 // events, furniture and debug lines act through it, never on the game's
 // internals. Scripts get the same, in JavaScript (internal/script).
@@ -527,6 +534,12 @@ type Game interface {
 	// pushed around (a crate, a robot) or driven: along the ground it
 	// slides, up it flies off. False if it can't be.
 	Impulse(id uint32, v vec3) bool
+
+	// Bootcamps are the bootcamps standing; Teleport sends the player to
+	// one by its name, or to the base ("Base"), with the trip's fade, for
+	// free. False if there is none or the player can't go now.
+	Bootcamps() []CampState
+	Teleport(name string) bool
 
 	// ModData is what a pack keeps in the save, by key.
 	ModData(pack string) map[string]any

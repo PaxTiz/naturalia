@@ -123,6 +123,7 @@ type Game struct {
 	Garage    bool    // the shop open is the garage's: vehicles to drive
 	MapTab    int     // the map table's tab: 0 the state of Mars, 1 travel
 	MapHover  int     // the destination under the mouse at the map table, -1 for none
+	Typing    bool    // a name is being typed in (the interface's): keys don't close the terminal
 	TravelT   float64 // time into the trip (ModeTravel)
 	travelTo  Destination
 	Burn      float64 // incinerator glow after a deposit
@@ -221,7 +222,7 @@ func (g *Game) Update(dt float64) {
 			g.sfx.ToggleMute()
 		}
 	}
-	closeKeys := rl.IsKeyPressed(rl.KeyEscape) || KeyPressed(ActUse) || rl.IsKeyPressed(rl.KeyTab)
+	closeKeys := !g.Typing && (rl.IsKeyPressed(rl.KeyEscape) || KeyPressed(ActUse) || rl.IsKeyPressed(rl.KeyTab))
 	switch g.Mode {
 	case ModePaused:
 		if g.resume {

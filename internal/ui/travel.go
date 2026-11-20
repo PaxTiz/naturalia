@@ -46,6 +46,11 @@ func travelRowRect(i int) rl.Rectangle {
 // scrolls the destinations, follows the mouse over them and travels to
 // the one clicked.
 func (hud *HUD) updateMap(g *game.Game) {
+	g.Typing = hud.renaming
+	if hud.renaming {
+		hud.typeName(g)
+		return
+	}
 	mouse := rl.GetMousePosition()
 	click := rl.IsMouseButtonPressed(rl.MouseButtonLeft)
 	switch {
@@ -78,7 +83,38 @@ func (hud *HUD) updateMap(g *game.Game) {
 		}
 	}
 	if click && g.MapHover >= 0 {
-		g.Travel(dests[g.MapHover])
+		switch d := dests[g.MapHover]; {
+		case d.Here && d.Camp != 0: // where the player is: rename it
+			hud.renaming, hud.name = true, []rune(d.Name)
+			for rl.GetCharPressed() != 0 { // what was typed before isn't the name
+			}
+		default:
+			g.Travel(d)
+		}
+	}
+}
+
+// typeName edits the name of the bootcamp the player is in: Enter keeps
+// it, Escape leaves it as it was.
+func (hud *HUD) typeName(g *game.Game) {
+	for r := rl.GetCharPressed(); r != 0; r = rl.GetCharPressed() {
+		if r >= ' ' && len(hud.name) < 24 {
+			hud.name = append(hud.name, r)
+		}
+	}
+	if rl.IsKeyPressed(rl.KeyBackspace) || rl.IsKeyPressedRepeat(rl.KeyBackspace) {
+		hud.name = hud.name[:max(0, len(hud.name)-1)]
+	}
+	switch {
+	case rl.IsKeyPressed(rl.KeyEnter), rl.IsKeyPressed(rl.KeyKpEnter):
+		for _, d := range g.Destinations() {
+			if d.Here && d.Camp != 0 && !g.RenameCamp(d.Camp, string(hud.name)) {
+				g.Say("Ce nom est vide ou déjà pris")
+			}
+		}
+		hud.renaming = false
+	case rl.IsKeyPressed(rl.KeyEscape):
+		hud.renaming = false
 	}
 }
 
@@ -133,13 +169,29 @@ func (hud *HUD) drawTravel(g *game.Game, p rl.Rectangle) {
 			rl.DrawRectangleRec(rl.NewRectangle(r.X, r.Y+7*u, 3*u, r.Height-7*u), mark)
 		}
 		right := r.X + r.Width - 14*u
-		hud.text(hud.fit(d.Name, 18*u, r.Width*0.5), r.X+34*u, r.Y+5*u, 18*u, uiWhite)
+		name := d.Name
+		editing := hud.renaming && d.Here && d.Camp != 0
+		if editing {
+			name = string(hud.name)
+			if math.Mod(g.Elapsed, 1) < 0.55 {
+				name += "_"
+			}
+			fillCut(rl.NewRectangle(r.X+28*u, r.Y+3*u, r.Width*0.62, 24*u), 4*u, uiInk)
+		}
+		hud.text(hud.fit(name, 18*u, r.Width*0.6), r.X+34*u, r.Y+5*u, 18*u, uiWhite)
 		where := fmt.Sprintf("%s m · %s", game.FmtNum(d.Dist), d.Bearing)
 		if d.Here {
 			where = "ici"
 		}
 		hud.caps(where, r.X+34*u, r.Y+27*u, 12*u, visorDim)
 		switch {
+		case editing:
+			hud.capsRight("ENTRÉE · ÉCHAP", right, r.Y+15*u, 13*u, visorDim)
+		case d.Here && d.Camp != 0:
+			label := "RENOMMER"
+			cw := hud.capsWidth(label, 13*u)
+			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+11*u, cw+14*u, 22*u), 5*u, visorCyan)
+			hud.caps(label, right-cw-7*u, r.Y+14*u, 13*u, uiInk)
 		case d.Here:
 			hud.capsRight("TU Y ES", right, r.Y+15*u, 14*u, visorDim)
 		case g.CanTravel(d):

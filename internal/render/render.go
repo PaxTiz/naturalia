@@ -58,6 +58,7 @@ type Graphics struct {
 	shadow                                            *shadowMap
 	lampShadow                                        *lampShadow
 	shade                                             shading // the buildings in the shaders (selectBase)
+	campSigns                                         map[ecs.ID]campSign
 	dust                                              dustGPU // the dust tiles near the player, on the GPU
 	base                                              *baseModels
 	growth                                            map[grown]*baseModels  // what grows in the base, by stage
