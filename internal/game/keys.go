@@ -185,10 +185,11 @@ func (g *Game) PollKeys() {
 	for k := rl.GetKeyPressed(); k != 0; k = rl.GetKeyPressed() {
 		g.KeysPressed = append(g.KeysPressed, k)
 	}
-	var chars []rune
+	g.CharsTyped = g.CharsTyped[:0]
 	for c := rl.GetCharPressed(); c != 0; c = rl.GetCharPressed() {
-		chars = append(chars, c)
+		g.CharsTyped = append(g.CharsTyped, c)
 	}
+	chars := g.CharsTyped
 	mods := rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift) || rl.IsKeyDown(rl.KeyLeftAlt) ||
 		rl.IsKeyDown(rl.KeyRightAlt) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)
 	if len(g.KeysPressed) != 1 || len(chars) != 1 || mods {

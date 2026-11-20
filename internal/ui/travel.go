@@ -86,8 +86,6 @@ func (hud *HUD) updateMap(g *game.Game) {
 		switch d := dests[g.MapHover]; {
 		case d.Here && d.Camp != 0: // where the player is: rename it
 			hud.renaming, hud.name = true, []rune(d.Name)
-			for rl.GetCharPressed() != 0 { // what was typed before isn't the name
-			}
 		default:
 			g.Travel(d)
 		}
@@ -97,7 +95,7 @@ func (hud *HUD) updateMap(g *game.Game) {
 // typeName edits the name of the bootcamp the player is in: Enter keeps
 // it, Escape leaves it as it was.
 func (hud *HUD) typeName(g *game.Game) {
-	for r := rl.GetCharPressed(); r != 0; r = rl.GetCharPressed() {
+	for _, r := range g.CharsTyped {
 		if r >= ' ' && len(hud.name) < 24 {
 			hud.name = append(hud.name, r)
 		}

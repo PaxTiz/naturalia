@@ -136,6 +136,7 @@ type Game struct {
 	// KeysPressed are this frame's keys, in order (PollKeys); KeyCapture
 	// is set while the menu waits for a key to bind, so none acts.
 	KeysPressed []int32
+	CharsTyped  []rune // this frame's letters typed (PollKeys), for a name being typed in
 	KeyCapture  bool
 	resume      bool // the pause menu said to play (Resume)
 	Quit        bool // the pause menu said to leave the game
