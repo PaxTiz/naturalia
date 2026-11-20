@@ -10,6 +10,7 @@ uniform vec3 origin;
 // millimeter of float grain off the screen, where it made close surfaces
 // fight for each pixel as the camera moved.
 uniform vec4 viewProj[4];
+uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (setViewProj)
 uniform vec4 lightVP[4]; // the shadow map's camera about origin, by columns
 out vec3 fragPos;
 out vec3 fragRel;
@@ -26,8 +27,8 @@ void main() {
     fragTexCoord = vertexTexCoord;
     fragPos = vertexPosition; // terrain meshes are drawn with no transform
     fragRel = vertexPosition - origin;
-    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragRel, 1.0);
+    vec4 lp = mat4(lightVP[0], lightVP[1], lightVP[2], lightVP[3]) * vec4(fragRel - viewAt, 1.0);
     shadowCoord = lp.xyz / lp.w * 0.5 + 0.5; // orthographic: linear, so exact per vertex
     fragNormal = normalize(vertexNormal);
-    gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel, 1.0);
+    gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel - viewAt, 1.0);
 }

@@ -16,6 +16,7 @@ uniform vec3 origin;
 // millimeter of float grain off the screen, where it made close surfaces
 // fight for each pixel as the camera moved.
 uniform vec4 viewProj[4];
+uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (setViewProj)
 void main() {
     fragTexCoord = vertexTexCoord;
     localPos = vertexPosition;
@@ -23,5 +24,5 @@ void main() {
     fragPos = vec3(matModel * vec4(vertexPosition, 1.0));
     fragRel = fragPos - origin;
     fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 0.0)));
-    gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel, 1.0);
+    gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel - viewAt, 1.0);
 }

@@ -142,7 +142,9 @@ vec3 paint(vec3 base, vec3 n, out float h) {
     if (matInfo.x < 4.5) return base; // the tread plate is gone: its slot holds the sun's shadows
     if (matInfo.x < 5.5) { // fabric
         vec4 t = triO(texture4, p, shift, w, s);
-        h = t.a * 0.001;
+        // The weave's relief fades once a pixel spans a few millimeters:
+        // finer than a pixel, it would fold into moiré stripes.
+        h = t.a * 0.001 * (1.0 - smoothstep(0.0015, 0.005, length(fwidth(fragRel))));
         return base * (0.85 + 0.2 * t.r);
     }
     if (matInfo.x < 6.5) { // rock: the regolith texture, tinted

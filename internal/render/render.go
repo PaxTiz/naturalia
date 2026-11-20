@@ -32,7 +32,7 @@ type shaderLocs struct {
 	ground                      int32
 	steps, stepDirs, stepCount  int32
 	lightVP, shadowPass         int32
-	viewProj                    int32
+	viewProj, viewAt            int32
 	lighting, room              int32
 	mat, wear, wearUp           int32
 	globeCenter, globeRot       int32
@@ -98,7 +98,7 @@ func loadShaderVS(vs, fs string) (rl.Shader, shaderLocs) {
 		brush: loc("brush"), casters: loc("casters"), casterCount: loc("casterCount"),
 		surface: loc("surface"), up: loc("up"), instanced: loc("instanced"), ground: loc("ground"),
 		steps: loc("steps"), stepDirs: loc("stepDirs"), stepCount: loc("stepCount"),
-		lightVP: loc("lightVP"), shadowPass: loc("shadowPass"), viewProj: loc("viewProj"),
+		lightVP: loc("lightVP"), shadowPass: loc("shadowPass"), viewProj: loc("viewProj"), viewAt: loc("viewAt"),
 		lighting: loc("lighting"), room: loc("room"),
 		mat: loc("matInfo"), wear: loc("wear"), wearUp: loc("wearUp"),
 		globeCenter: loc("globeCenter"), globeRot: loc("globeRot"), playerDir: loc("playerDir"),
@@ -482,20 +482,25 @@ func (gfx *Graphics) setOrigin() {
 	}
 }
 
-// setViewProj gives every shader the camera of the next draws, about
-// origin (relVP).
-func (gfx *Graphics) setViewProj(cols []float32) {
+// setViewProj gives every shader the camera of the next draws, about its
+// eye at (relVP): the shaders project fragRel less viewAt. About origin,
+// up to 50 m off, the sums giving depth would cancel down to a few meters
+// and keep the rounding of the big terms, more than a depth layer
+// (mesh.Unfight): flush surfaces fought a few meters away.
+func (gfx *Graphics) setViewProj(cols []float32, at vec3) {
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValueV(s.sh, s.loc.viewProj, cols, rl.ShaderUniformVec4, 4)
+		rl.SetShaderValue(s.sh, s.loc.viewAt, v3f(at.Sub(gfx.origin)), rl.ShaderUniformVec3)
 	}
 }
 
-// viewCols is the view's camera about origin, as BeginMode3D sets it for
-// the scene's target, between the clip planes near and far.
+// viewCols is the view's camera about its eye (setViewProj), as
+// BeginMode3D sets it for the scene's target, between the clip planes near
+// and far.
 func (gfx *Graphics) viewCols(cam rl.Camera3D, near, far float64) []float32 {
 	t := gfx.post.scene.Texture
 	proj := rl.MatrixPerspective(cam.Fovy*math.Pi/180, float32(t.Width)/float32(t.Height), float32(near), float32(far))
-	return relVP(gfx.camEye, gfx.camLook, gfx.camUp, gfx.origin, proj)
+	return relVP(gfx.camEye, gfx.camLook, gfx.camUp, gfx.camEye, proj)
 }
 
 // toolCols is the view's camera for the held tool: its own near plane, a
@@ -550,7 +555,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	rl.ClearBackground(rl.Black)
 	rl.BeginMode3D(cam)
 	view := gfx.viewCols(cam, gfx.near, gfx.far)
-	gfx.setViewProj(view)
+	gfx.setViewProj(view, gfx.camEye)
 
 	// Sky: a big sphere around the camera, seen from inside, behind everything.
 	rl.DisableBackfaceCulling()
@@ -581,9 +586,9 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
-	gfx.setViewProj(gfx.toolCols(cam))
+	gfx.setViewProj(gfx.toolCols(cam), gfx.camEye)
 	gfx.drawTool(g)
-	gfx.setViewProj(view)
+	gfx.setViewProj(view, gfx.camEye)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.drawGlows(g, cam)
 	gfx.drawGlobe(g, cam)
