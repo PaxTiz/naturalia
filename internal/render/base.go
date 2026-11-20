@@ -206,20 +206,33 @@ func beaconTop() vec3 {
 	return base.ToWorld(base.BeaconTop())
 }
 
-// drawGlobe draws the hologram of Mars above the map table.
+// globeDrawDist is how far the holograms of Mars are drawn.
+const globeDrawDist = 60.0
+
+// drawGlobe draws the holograms of Mars above the map tables near the
+// camera: the base's, and the bootcamps'.
 func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
-	center := base.ToWorld(base.TableSpot().Add(vec3{0, globeHeight, 0}))
+	if base.ToLocal(gfx.camEye).Length() < base.Extent+globeDrawDist {
+		gfx.drawGlobeAt(g, cam, base.BaseSite(), base.TableSpot())
+	}
+	for _, c := range g.CampsNear(gfx.camEye, globeDrawDist) {
+		gfx.drawGlobeAt(g, cam, c.Site, c.Layout.Table)
+	}
+}
+
+// drawGlobeAt draws a hologram of Mars over the table standing at a point
+// of a site.
+func (gfx *Graphics) drawGlobeAt(g *game.Game, cam rl.Camera3D, site base.Site, table vec3) {
+	up := site.Y
+	center := site.ToWorld(table.Add(vec3{0, globeHeight, 0}))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
 	// Turn the player's spot on Mars toward the viewer, a bit raised,
 	// with a slow sway so the hologram feels alive.
 	toViewer := g.Player.Eye().Sub(center)
-	toViewer = vec3{toViewer.X, 0, toViewer.Z}.Norm()
+	toViewer = toViewer.Sub(up.Scale(toViewer.Dot(up))).Norm()
 	sway := math.Sin(g.Elapsed*0.35) * 0.45
-	toViewer = vec3{
-		toViewer.X*math.Cos(sway) + toViewer.Z*math.Sin(sway), 0,
-		-toViewer.X*math.Sin(sway) + toViewer.Z*math.Cos(sway),
-	}
-	facing := toViewer.Add(vec3{0, 0.2, 0}).Norm()
+	toViewer = toViewer.Scale(math.Cos(sway)).Add(up.Cross(toViewer).Scale(math.Sin(sway)))
+	facing := toViewer.Add(up.Scale(0.2)).Norm()
 	rl.SetShaderValueMatrix(gfx.holoSh, gfx.hLoc.globeRot, rotationBetween(facing, g.Player.LocalUp()))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.playerDir, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
 	rl.SetMaterialTexture(&gfx.holo.GetMaterials()[0], rl.MapDiffuse, gfx.dust.Coverage())
@@ -231,7 +244,7 @@ func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
 	// Soft light rising from the table to the globe.
 	for i := range 6 {
 		f := float64(i) / 5
-		p := base.ToWorld(base.TableSpot().Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
+		p := site.ToWorld(table.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
 		rl.DrawBillboard(cam, gfx.glow, ToRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
 	}
 	rl.EndBlendMode()
