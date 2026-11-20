@@ -35,6 +35,7 @@ func (g *Game) Sleep() {
 	}
 }
 func (g *Game) Nights() int            { return g.State.Nights }
+func (g *Game) Hour() float64          { return g.LocalHour(g.Player.Pos) }
 func (g *Game) Spawn(kind string) bool { return g.spawn(kind, g.placeAt()) != 0 }
 
 func (g *Game) Driving() string {

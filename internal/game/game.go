@@ -29,6 +29,7 @@ type State struct {
 	TotalDust   float64                   `json:"total_dust"`
 	TotalEarned float64                   `json:"total_earned"`
 	Nights      int                       `json:"nights,omitempty"` // slept: what grows in the base grows with them
+	Sol         float64                   `json:"sol,omitempty"`    // sols since the first morning (clock.go)
 }
 
 type Mode int
@@ -215,6 +216,7 @@ func (g *Game) Update(dt float64) {
 		return         // the world stands still for the photo
 	}
 	g.Elapsed += dt
+	g.tick(dt)
 
 	if !g.KeyCapture { // the menu waits for a key to bind: it is only that
 		if KeyPressed(ActFullscreen) {
@@ -457,6 +459,7 @@ func (g *Game) updateSleep(dt float64) {
 	g.SleepT += dt
 	if before < SleepSave && g.SleepT >= SleepSave {
 		g.State.Nights++
+		g.wakeAtDawn()
 		g.Save()
 	}
 	if g.SleepT >= SleepEnd {

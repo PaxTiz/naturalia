@@ -166,6 +166,7 @@ func (s *script) api(c *content.Content) map[string]any {
 		"inside": func() string { return s.game().Inside() },
 		"clock":  func() float64 { return s.game().Clock() },
 		"nights": func() int { return s.game().Nights() },
+		"hour":   func() float64 { return s.game().Hour() },
 		// distanceToBase: in meters along the ground.
 		"distanceToBase": func() float64 { return planet.ArcDist(s.game().PlayerPos().Norm(), planet.BaseUp) },
 		"player":         func() jsVec { return jsVec(s.game().PlayerPos()) },

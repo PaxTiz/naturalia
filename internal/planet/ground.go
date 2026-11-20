@@ -5,10 +5,6 @@ import "math"
 // Queries on the ground: where it is, how high above it a point stands,
 // where a ray meets it.
 
-// SunDir points toward the sun: low on the horizon for long soft shadows.
-// It stays put: the sun never moves across the sky.
-var SunDir = vec3{-0.5, 0.62, -0.6}.Norm()
-
 func (t Relief) SurfaceRadius(d vec3) float64 { return Radius + t.Height(d) }
 
 // Surface returns the ground point in direction d (any length).

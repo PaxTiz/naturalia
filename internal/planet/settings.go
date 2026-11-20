@@ -21,6 +21,7 @@ type Settings struct {
 	IceCap    float64 `json:"ice_cap"`   // the polar cap; 0 also removes its ice
 	Gems      float64 `json:"gems"`      // chance that a tile hides a crystal
 	Rocks     float64 `json:"rocks"`     // how many rocks lie around
+	Sol       float64 `json:"sol"`       // a day and a night, in seconds of play
 
 	Features []Feature `json:"features"` // shapes added by mods
 
@@ -43,7 +44,7 @@ type Feature struct {
 func DefaultSettings() Settings {
 	return Settings{
 		Plains: 1, Hills: 1, Dunes: 1, Mountains: 1, Craters: 1,
-		Volcano: 1, Canyon: 1, IceCap: 1, Gems: 0.12, Rocks: 1,
+		Volcano: 1, Canyon: 1, IceCap: 1, Gems: 0.12, Rocks: 1, Sol: 1200,
 	}
 }
 

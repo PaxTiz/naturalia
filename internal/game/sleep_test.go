@@ -1,6 +1,7 @@
 package game
 
 import (
+	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/ecs"
 	"testing"
@@ -42,5 +43,41 @@ func TestPlantGrows(t *testing.T) {
 		if len(base.BuildGrowth(&g.Content.Kits, plant, s).Keys) == 0 {
 			t.Errorf("stage %d: nothing built", s)
 		}
+	}
+}
+
+// The clock runs while playing, stops on the pause screen, and sleeping
+// wakes up at dawn where the bed is, the next morning; the hour is saved.
+func TestSleepToDawn(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	g := baseGame(t)
+	if h := g.BaseHour(); h != Dawn {
+		t.Fatalf("a new game starts at %.2f h", h)
+	}
+	g.Mode = ModePlay
+	g.tick(g.Content.Terrain.Sol / 2) // half a sol: evening
+	if h := g.BaseHour(); math.Abs(h-(Dawn+12)) > 0.01 {
+		t.Fatalf("half a sol later it is %.2f h", h)
+	}
+	g.Mode = ModePaused
+	g.tick(100)
+	if h := g.BaseHour(); math.Abs(h-(Dawn+12)) > 0.01 {
+		t.Fatalf("the pause screen ran the clock to %.2f h", h)
+	}
+	sol := g.State.Sol
+	g.Sleep()
+	for g.SleepT < SleepWake {
+		g.updateSleep(1.0 / 30)
+	}
+	if h := g.LocalHour(g.Player.Pos); math.Abs(h-Dawn) > 1e-6 {
+		t.Errorf("woke up at %.2f h", h)
+	}
+	if d := g.State.Sol - sol; d <= 0 || d > 1 {
+		t.Errorf("slept %.2f sol", d)
+	}
+	sol = g.State.Sol
+	g.load()
+	if g.State.Sol != sol {
+		t.Errorf("sol %g after loading, want %g", g.State.Sol, sol)
 	}
 }

@@ -543,5 +543,6 @@ type Game interface {
 
 	// ModData is what a pack keeps in the save, by key.
 	ModData(pack string) map[string]any
-	Nights() int // slept since the game began
+	Nights() int   // slept since the game began
+	Hour() float64 // where the player stands, 0 to 24
 }
