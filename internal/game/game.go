@@ -23,6 +23,7 @@ type State struct {
 	Levels      map[string]int            `json:"levels"`              // by upgrade ID; a removed mod's stay
 	Mods        map[string]map[string]any `json:"mods,omitempty"`      // what each mod's scripts keep
 	Items       map[string]int            `json:"items,omitempty"`     // carried, by item ID
+	Wake        int                       `json:"wake,omitempty"`      // the bootcamp whose bed was slept in last (Bootcamp.ID), 0 for the base's
 	Entities    []Placed                  `json:"entities,omitempty"`  // standing in the world: only at load and save, Game.Ents meanwhile
 	OldTier     int                       `json:"tool_tier,omitempty"` // before IDs: index of the tool
 	TotalDust   float64                   `json:"total_dust"`
@@ -172,8 +173,10 @@ func New(c *content.Content) *Game {
 	}
 	base.Origin = planet.BaseUp.Scale(planet.Radius + g.World.Relief.BaseHeight())
 	g.standCamps()
-	if fresh {
-		g.Player = Player{Pos: base.ToWorld(base.SpawnSpot), Heading: vec3{0, 0, -1}}
+	// A new game, or nowhere to stand (NaN too): wake up by the last bed.
+	if fresh || !(g.Player.Pos.Length() > planet.Radius/2) {
+		g.Player = Player{}
+		g.Player.Pos, g.Player.Heading = g.WakeSpot()
 		g.wakeUp = true
 	}
 	g.Player.Pos = g.World.Relief.Surface(g.Player.Pos)

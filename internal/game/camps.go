@@ -292,3 +292,15 @@ func (g *Game) ShotCamp(kind string, dist, bearing float64) (CampAt, bool) {
 	}
 	return CampAt{}, false
 }
+
+// WakeSpot is where the player wakes up, and the way they face: by the
+// bed slept in last, the base's if that bootcamp is gone.
+func (g *Game) WakeSpot() (at, heading vec3) {
+	for _, c := range g.Camps() {
+		if c.ID == g.State.Wake && g.State.Wake != 0 {
+			w := c.Layout.Wake
+			return c.ToWorld(vec3{w.X, base.FloorTop, w.Z}), c.Site.Dir(vec3{-w.X, 0, -w.Z}.Norm())
+		}
+	}
+	return base.ToWorld(base.SpawnSpot), vec3{0, 0, -1}
+}

@@ -27,7 +27,13 @@ func (g *Game) SpawnDustDevil()        { spawnDevil(g) }
 func (g *Game) OpenMap()               { g.MapTab, g.MapHover = 0, -1; g.setMode(ModeMap) }
 func (g *Game) OpenShop()              { g.Garage = false; g.setMode(ModeShop) }
 func (g *Game) OpenGarage()            { g.Garage = true; g.setMode(ModeShop) }
-func (g *Game) Sleep()                 { g.Mode, g.SleepT = ModeSleep, 0 }
+func (g *Game) Sleep() {
+	g.Mode, g.SleepT = ModeSleep, 0
+	g.State.Wake = 0 // the bed slept in: the base's, or a bootcamp's
+	if c, ok := g.CampAround(g.Player.Eye()); ok {
+		g.State.Wake = c.ID
+	}
+}
 func (g *Game) Nights() int            { return g.State.Nights }
 func (g *Game) Spawn(kind string) bool { return g.spawn(kind, g.placeAt()) != 0 }
 
