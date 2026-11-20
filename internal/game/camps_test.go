@@ -53,6 +53,12 @@ func TestCampLayout(t *testing.T) {
 			t.Errorf("at %v: indoors %v, want %v", p.at, got, p.inside)
 		}
 	}
+	// The ground lies flat under it, up to the airlock's door.
+	for _, p := range []vec3{{0, 0, 0}, {-3.9, 0, 0}, {0, 0, 3.9}, door} {
+		if y := c.Site.ToLocal(g.World.Relief.Surface(c.ToWorld(p))).Y; math.Abs(y) > 0.005 {
+			t.Errorf("at %v, the ground is %.3f m off its floor", p, y)
+		}
+	}
 	if b := g.buildingAt(c.ToWorld(vec3{0, 1, 0})); b != "core:bootcamp" {
 		t.Errorf("in the dome: building %q", b)
 	}

@@ -30,7 +30,8 @@ type lodNode struct {
 	arc, angulRad float64 // side in meters, angular radius bounding it
 	children      []*lodNode
 	mesh          rl.Mesh
-	state         int // nodeEmpty, nodePending or nodeReady
+	state         int  // nodeEmpty, nodePending or nodeReady
+	redo          bool // ready, built again meanwhile: the ground changed under it (Refresh)
 	lastUsed      uint64
 }
 
@@ -60,6 +61,7 @@ type Terrain struct {
 	// (raylib-go's UnloadMesh is broken without cgo, and recycling is faster.)
 	pool  []rl.Mesh
 	frame uint64
+	pads  []planet.Pad // the flattened discs the meshes were built with
 }
 
 func NewTerrain(relief planet.Relief) *Terrain {
@@ -232,11 +234,50 @@ func (t *Terrain) upload(limit int) {
 			rl.UpdateMeshBuffer(mesh, 0, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Vertices)), n*12), 0)
 			rl.UpdateMeshBuffer(mesh, 1, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Texcoords)), n*8), 0)
 			rl.UpdateMeshBuffer(mesh, 2, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Normals)), n*12), 0)
-			r.n.mesh, r.n.state = mesh, nodeReady
-			t.loaded = append(t.loaded, r.n)
+			if r.n.redo && r.n.state == nodeReady { // built again: the old mesh goes
+				t.pool = append(t.pool, r.n.mesh)
+			} else {
+				t.loaded = append(t.loaded, r.n)
+			}
+			r.n.mesh, r.n.state, r.n.redo = mesh, nodeReady, false
 		default:
 			return
 		}
+	}
+}
+
+// refreshPads builds again the meshes over the ground flattened or given
+// back since the last frame, where a bootcamp was set down or moved off.
+// They are drawn as they were until then.
+func (t *Terrain) refreshPads() {
+	pads := t.Pads()
+	if slices.Equal(pads, t.pads) {
+		return
+	}
+	for _, list := range [2][]planet.Pad{pads, t.pads} {
+		for _, p := range list {
+			if !slices.Contains(pads, p) || !slices.Contains(t.pads, p) {
+				for _, r := range t.roots {
+					t.refresh(r, p.Dir, (p.Radius+planet.PadBlend)/planet.Radius)
+				}
+			}
+		}
+	}
+	t.pads = slices.Clone(pads)
+}
+
+// refresh builds again the ready meshes of n and under within angle a of d.
+func (t *Terrain) refresh(n *lodNode, d vec3, a float64) {
+	if math.Acos(math.Max(-1, math.Min(1, n.center.Dot(d)))) > n.angulRad+a {
+		return
+	}
+	if n.state == nodeReady && !n.redo {
+		n.redo = true
+		t.pending++
+		t.jobs <- n
+	}
+	for _, c := range n.children {
+		t.refresh(c, d, a)
 	}
 }
 
@@ -244,6 +285,7 @@ func (t *Terrain) upload(limit int) {
 // queues the meshes it is missing.
 func (t *Terrain) Visible(eye vec3) []*lodNode {
 	t.frame++
+	t.refreshPads()
 	t.upload(uploadsPerTick)
 	// Beyond this angle around Mars, even mountain tops are below the horizon.
 	horizon := math.Acos(math.Min(1, planet.Radius/eye.Length())) + math.Acos(planet.Radius/(planet.Radius+planet.MaxMountain))

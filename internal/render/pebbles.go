@@ -9,6 +9,7 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 	"naturalia/internal/planet"
+	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -30,7 +31,7 @@ type pebble struct {
 }
 
 // pebblesIn places the pebbles of a dust tile, mostly a few centimeters
-// wide. None on the base's pad nor on the polar ice.
+// wide. None on the base's pad, under a bootcamp nor on the polar ice.
 func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 	f, tx, ty := k.Split()
 	var out []pebble
@@ -39,7 +40,7 @@ func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 		a := (float64(tx*planet.TileCells) + mathx.Hash3(f, tx, ty, s)*planet.TileCells) / planet.FaceCells * 2
 		b := (float64(ty*planet.TileCells) + mathx.Hash3(f, tx, ty, s+1)*planet.TileCells) / planet.FaceCells * 2
 		d := mathx.FaceDir(f, a-1, b-1)
-		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || base.Covered(base.ToLocal(d.Scale(planet.Radius))) || gfx.Terrain.Ice(d) > 0.3 {
+		if planet.ArcDist(d, planet.BaseUp) < base.Reach+2 || base.Covered(base.ToLocal(d.Scale(planet.Radius))) || gfx.Terrain.Ice(d) > 0.3 || gfx.Terrain.OnPad(d, 0.5) {
 			continue
 		}
 		t1, t2 := mathx.TangentBasis(d)
@@ -60,8 +61,9 @@ func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 // drawPebbles draws the pebbles near the player, one instanced call per
 // shape. They sink into thick dust and come out where it is swept.
 func (gfx *Graphics) drawPebbles(g *game.Game) {
-	if gfx.nearPebbles == nil {
-		gfx.nearPebbles = map[planet.TileKey][]pebble{}
+	if pads := g.World.Relief.Pads(); gfx.nearPebbles == nil || !slices.Equal(pads, gfx.pebblePads) {
+		gfx.nearPebbles = map[planet.TileKey][]pebble{} // none under a bootcamp set down
+		gfx.pebblePads = slices.Clone(pads)
 	}
 	near := map[planet.TileKey]bool{}
 	var mats [pebbleShapes][]rl.Matrix

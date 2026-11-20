@@ -121,17 +121,23 @@ func (g *Game) buildingAt(at vec3) string {
 	return ""
 }
 
-// standCamp sets where bootcamp id stands, from its entity: upright on
-// the ground where it was placed.
-func (g *Game) standCamp(id ecs.ID) {
-	b := g.Ents.Camp.Get(id)
-	t := g.Ents.Transform.Get(id)
-	if b == nil || t == nil {
-		return
+// standCamps flattens the ground under every bootcamp, the one moved
+// too, and stands each upright on it.
+func (g *Game) standCamps() {
+	var pads []planet.Pad
+	for id := range g.Ents.Camp.All() {
+		if l := g.campLayout(g.kind(id)); l != nil {
+			pads = append(pads, planet.Pad{Dir: g.Ents.Transform.Get(id).Dir, Radius: l.Reach + 0.5})
+		}
 	}
-	t.Alt, t.Pitch, t.Roll = 0, 0, 0
-	pos, ax, up, az := g.Frame(t)
-	b.site = base.Site{Origin: pos, X: ax, Y: up, Z: az}
+	g.World.Relief.SetPads(pads)
+	for id, b := range g.Ents.Camp.All() {
+		t := g.Ents.Transform.Get(id)
+		t.Alt, t.Pitch, t.Roll = 0, 0, 0
+		pos, ax, up, az := g.Frame(t)
+		b.site = base.Site{Origin: pos, X: ax, Y: up, Z: az}
+	}
+	g.phys = nil // their walls, laid again
 }
 
 // newCamp makes entity id a bootcamp, with the next ID and a name.

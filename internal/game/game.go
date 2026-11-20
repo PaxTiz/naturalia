@@ -165,6 +165,7 @@ func New(c *content.Content) *Game {
 		g.World = planet.NewWorld(g.Rng.Uint64(), &g.Content.Terrain)
 	}
 	base.Origin = planet.BaseUp.Scale(planet.Radius + g.World.Relief.BaseHeight())
+	g.standCamps()
 	if fresh {
 		g.Player = Player{Pos: base.ToWorld(base.SpawnSpot), Heading: vec3{0, 0, -1}}
 		g.wakeUp = true
@@ -284,8 +285,8 @@ func (g *Game) updateAim() {
 	p := &g.Player
 	eye, fwd := p.Eye(), p.Forward()
 	g.Aim, g.AimOK = g.World.Relief.Raycast(eye, fwd, g.Tool().Reach)
-	if g.AimOK && (planet.ArcDist(g.Aim.Norm(), planet.BaseUp) < base.Reach || base.Covered(base.ToLocal(g.Aim))) {
-		g.AimOK = false // the ground under the base isn't swept
+	if g.AimOK && (planet.ArcDist(g.Aim.Norm(), planet.BaseUp) < base.Reach || base.Covered(base.ToLocal(g.Aim)) || g.Indoors(g.Aim.Add(g.Aim.Norm().Scale(0.5)))) {
+		g.AimOK = false // the ground under the base and the bootcamps isn't swept
 	}
 
 	// The held tool: lower right of the view, pointing at the aimed spot.

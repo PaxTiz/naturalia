@@ -84,7 +84,9 @@ func (g *Game) add(p Placed) ecs.ID {
 		} else {
 			g.newCamp(id)
 		}
-		g.standCamp(id)
+		if g.World != nil { // loading: once the world is there (New)
+			g.standCamps()
+		}
 	}
 	return id
 }

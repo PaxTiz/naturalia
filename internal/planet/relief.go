@@ -64,10 +64,11 @@ type Relief struct {
 	seed  uint64
 	baseH float64   // ground altitude at the base, before flattening the pad
 	set   *Settings // how mods shape it
+	pads  *pads     // flattened under the bootcamps (pads.go)
 }
 
 func newRelief(seed uint64, set *Settings) Relief {
-	r := Relief{seed: seed, set: set}
+	r := Relief{seed: seed, set: set, pads: &pads{}}
 	r.baseH = r.raw(BaseUp)
 	return r
 }
@@ -83,10 +84,10 @@ func (r Relief) Height(d vec3) float64 {
 	// sink half a meter).
 	k := mathx.Smoothstep(padRadius, padRadius+35, ArcDist(d, BaseUp))
 	if k >= 1 {
-		return h
+		return r.flatten(d, h)
 	}
 	flat := (Radius+r.baseH)/d.Dot(BaseUp) - Radius
-	return flat + (h-flat)*k
+	return r.flatten(d, flat+(h-flat)*k)
 }
 
 func (r Relief) raw(d vec3) float64 {
