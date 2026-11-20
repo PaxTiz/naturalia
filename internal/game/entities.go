@@ -26,6 +26,7 @@ type Ents struct {
 	Roam      *ecs.Store[Roam]          // automatic vehicles
 	Body      *ecs.Store[*physics.Body] // near the player, what takes room (physics.go)
 	Air       *ecs.Store[Air]           // tossed up
+	Camp      *ecs.Store[Bootcamp]      // bootcamps (camps.go)
 }
 
 // Air is a thing tossed up by a knock: its speed up, and how fast it
@@ -35,7 +36,7 @@ type Air struct{ vz, tumble float64 }
 func newEnts() *Ents {
 	w := ecs.NewWorld()
 	return &Ents{World: w, Kind: ecs.NewStore[string](w), Transform: ecs.NewStore[Transform](w), Roam: ecs.NewStore[Roam](w),
-		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w)}
+		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w), Camp: ecs.NewStore[Bootcamp](w)}
 }
 
 // Transform is where an entity stands.
@@ -59,13 +60,14 @@ type Roam struct {
 
 // Placed is an entity as the save keeps it.
 type Placed struct {
-	Kind  string  `json:"kind"`
-	Dir   vec3    `json:"dir"`
-	Yaw   float64 `json:"yaw"`
-	Alt   float64 `json:"alt,omitempty"`
-	Home  vec3    `json:"home,omitempty"`
-	Pitch float64 `json:"pitch,omitempty"`
-	Roll  float64 `json:"roll,omitempty"`
+	Kind  string    `json:"kind"`
+	Dir   vec3      `json:"dir"`
+	Yaw   float64   `json:"yaw"`
+	Alt   float64   `json:"alt,omitempty"`
+	Home  vec3      `json:"home,omitempty"`
+	Pitch float64   `json:"pitch,omitempty"`
+	Roll  float64   `json:"roll,omitempty"`
+	Camp  *Bootcamp `json:"camp,omitempty"` // a bootcamp's ID and name
 }
 
 // add brings a saved entity into the world.
@@ -75,6 +77,14 @@ func (g *Game) add(p Placed) ecs.ID {
 	g.Ents.Transform.Set(id, Transform{p.Dir, p.Yaw, p.Alt, p.Pitch, p.Roll})
 	if v, ok := g.Content.Vehicles.Get(p.Kind); (ok && v.Auto()) || p.Home != (vec3{}) {
 		g.Ents.Roam.Set(id, Roam{Home: p.Home})
+	}
+	if def, _ := g.Content.Entities.Get(p.Kind); isCamp(def) {
+		if p.Camp != nil {
+			g.Ents.Camp.Set(id, *p.Camp)
+		} else {
+			g.newCamp(id)
+		}
+		g.standCamp(id)
 	}
 	return id
 }
@@ -87,6 +97,10 @@ func (g *Game) placed() []Placed {
 		p := Placed{Kind: g.kind(id), Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll}
 		if r := g.Ents.Roam.Get(id); r != nil {
 			p.Home = r.Home
+		}
+		if b := g.Ents.Camp.Get(id); b != nil {
+			c := *b
+			p.Camp = &c
 		}
 		out = append(out, p)
 	}
@@ -222,21 +236,28 @@ func (g *Game) NearbyUse() (base.Interactable, bool) {
 	if id, _ := g.nearbyEntity(); id != 0 {
 		return g.entityUse(id), true
 	}
-	local := base.ToLocal(g.Player.Pos)
-	flat := vec3{local.X, 0, local.Z}
 	best, found := base.Interactable{}, false
 	bestDist := math.Inf(1)
-	for _, it := range base.Ents.Use.All() {
-		to := vec3{it.At.X, 0, it.At.Z}.Sub(flat)
-		d := to.Length()
-		if d > it.Reach || d >= bestDist || math.Abs(it.At.Y-local.Y) > 1.5 { // up on a mezzanine, or under it
-			continue
+	// What stands in a site, seen from it.
+	near := func(site base.Site, uses []base.Interactable) {
+		local := site.ToLocal(g.Player.Pos)
+		flat := vec3{local.X, 0, local.Z}
+		heading := site.DirLocal(g.Player.Heading)
+		for _, it := range uses {
+			to := vec3{it.At.X, 0, it.At.Z}.Sub(flat)
+			d := to.Length()
+			if d > it.Reach || d >= bestDist || math.Abs(it.At.Y-local.Y) > 1.5 { // up on a mezzanine, or under it
+				continue
+			}
+			if d > 0.8 && heading.Dot(to.Norm()) < 0.3 {
+				continue // standing next to it but looking away
+			}
+			best, found, bestDist = it, true, d
 		}
-		heading := base.ToLocal(g.Player.Pos.Add(g.Player.Heading)).Sub(local)
-		if d > 0.8 && heading.Dot(to.Norm()) < 0.3 {
-			continue // standing next to it but looking away
-		}
-		best, found, bestDist = *it, true, d
+	}
+	near(base.BaseSite(), base.Interactables())
+	for _, c := range g.CampsNear(g.Player.Pos, 0) {
+		near(c.Site, c.Layout.Uses)
 	}
 	return best, found
 }

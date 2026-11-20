@@ -18,6 +18,12 @@ func TestBaseZFighting(t *testing.T) {
 			checkFights(t, base.Ents.Furniture.Get(id).Kit, base.BuildGrowth(&c.Kits, id, s))
 		}
 	}
+	// The bootcamps, laid out apart.
+	for _, def := range c.Entities.All() {
+		if def.Camp != nil {
+			checkFights(t, def.ID, base.LayCamp(&c.Kits, *def.Camp).Parts)
+		}
+	}
 }
 
 // checkFights checks the surfaces of parts lying on top of each other.

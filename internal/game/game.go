@@ -96,18 +96,19 @@ type Game struct {
 	NoSave      bool    // screenshots: the player was moved, nothing is kept
 	SellPop     float64 // timer of the "+X cr" pop next to the credits
 	SellPopText string
-	Message     string             // said by a mod (say), shown on the visor...
-	MessageT    float64            // ...for this long still
-	itemSel     int                // which carried item F places (R cycles)
-	Ghost       *Ghost             // the item being placed, drawn see-through (build.go)
-	solids      map[string][]solid // each kind's parts, for rays (blocks.go)
-	Ents        *Ents              // standing in the world
-	Riding      ecs.ID             // the vehicle driven, 0 on foot
-	drive       drive              // the driven vehicle's motion
-	chase       bool               // the camera follows the driven vehicle from behind (V)
-	fleetHeld   bool               // automatic vehicles stand still (LineUp)
-	Photo       Photo              // the photo mode's camera and settings
-	Scope       Scope              // the view through the telescope
+	Message     string                // said by a mod (say), shown on the visor...
+	MessageT    float64               // ...for this long still
+	itemSel     int                   // which carried item F places (R cycles)
+	Ghost       *Ghost                // the item being placed, drawn see-through (build.go)
+	solids      map[string][]solid    // each kind's parts, for rays (blocks.go)
+	layouts     map[string]*base.Camp // each kind of bootcamp's (camps.go)
+	Ents        *Ents                 // standing in the world
+	Riding      ecs.ID                // the vehicle driven, 0 on foot
+	drive       drive                 // the driven vehicle's motion
+	chase       bool                  // the camera follows the driven vehicle from behind (V)
+	fleetHeld   bool                  // automatic vehicles stand still (LineUp)
+	Photo       Photo                 // the photo mode's camera and settings
+	Scope       Scope                 // the view through the telescope
 
 	walls    []base.Segment // the base's walls, for collisions
 	phys     *phys          // the collisions' plane (physics.go)
@@ -250,7 +251,7 @@ func (g *Game) Update(dt float64) {
 	g.stepPhysics(dt)
 	g.liftVehicle(dt)
 	g.Player.fall(dt, g.World.Relief)
-	outside := !base.Indoors(base.ToLocal(g.Player.Eye()))
+	outside := !g.Indoors(g.Player.Eye())
 	if g.Riding == 0 && g.Steps.update(&g.Player) { // seated, the player stays on the ground
 		g.sfx.Step(!outside || g.Player.floor > 0.01) // the base's floor, a block
 	}

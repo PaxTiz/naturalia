@@ -476,19 +476,24 @@ func (g *Game) layPlane() {
 
 	if planet.ArcDist(up, planet.BaseUp) < physReach+base.Extent {
 		for _, s := range g.walls {
-			g.addWall(s)
+			g.addWall(s, base.BaseSite())
 		}
 		for _, o := range base.Obstacles() {
-			at := base.ToWorld(o.At)
-			bottom, top := p.slice(at, thingH)
-			p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(o.Radius), Pos: p.plane(at),
-				Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
+			g.addObstacle(base.ToWorld(o.At), o.Radius)
 		}
 		for _, f := range base.Ents.Floor.All() {
 			g.addFloor(*f)
 		}
 		for _, r := range base.Rails() {
 			g.addRail(r)
+		}
+	}
+	for _, c := range g.CampsNear(up.Scale(p.r0), physReach) {
+		for _, s := range c.Layout.Walls {
+			g.addWall(s, c.Site)
+		}
+		for _, o := range c.Layout.Obstacles {
+			g.addObstacle(c.ToWorld(o.At), o.Radius)
 		}
 	}
 	p.doorSegs, p.doors = nil, nil
@@ -540,15 +545,24 @@ func (g *Game) addFloor(f base.Floor) {
 	p.floors[b] = f
 }
 
-// addWall adds one of the base's walls.
-func (g *Game) addWall(s base.Segment) *physics.Body {
+// addWall adds a wall of the base, or of a bootcamp: of a site.
+func (g *Game) addWall(s base.Segment, site base.Site) *physics.Body {
 	p := g.phys
 	a, b, top := s.Ends()
-	pa, pb := p.plane(base.ToWorld(a)), p.plane(base.ToWorld(b))
+	pa, pb := p.plane(site.ToWorld(a)), p.plane(site.ToWorld(b))
 	mid := pa.Lerp(pb, 0.5)
 	return p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Capsule(pa.Sub(mid), pb.Sub(mid), base.WallThick/2), Pos: mid,
-		Bottom: p.height(base.ToWorld(a)) - bodyFeet, Top: p.height(base.ToWorld(a.Add(vec3{0, top, 0}))), Layer: layerStatic, Mask: ^uint32(0),
+		Bottom: p.height(site.ToWorld(a)) - bodyFeet, Top: p.height(site.ToWorld(a.Add(vec3{0, top, 0}))), Layer: layerStatic, Mask: ^uint32(0),
 		Friction: frictionWall, Restitution: bounceWall})
+}
+
+// addObstacle adds a round obstacle standing at a point of the world:
+// furniture, the yard's clutter.
+func (g *Game) addObstacle(at vec3, radius float64) {
+	p := g.phys
+	bottom, top := p.slice(at, thingH)
+	p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(radius), Pos: p.plane(at),
+		Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
 }
 
 // addRail adds a guard rail: a wall at the height of its slab, which those
@@ -578,7 +592,7 @@ func (g *Game) syncDoors() {
 	}
 	p.doorSegs, p.doors = slices.Clone(segs), p.doors[:0]
 	for _, s := range segs {
-		p.doors = append(p.doors, g.addWall(s))
+		p.doors = append(p.doors, g.addWall(s, base.BaseSite()))
 	}
 }
 

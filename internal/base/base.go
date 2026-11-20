@@ -433,7 +433,11 @@ func (s Segment) Half() float64 { return s.b.Sub(s.a).Length() / 2 }
 func (s Segment) Ends() (a, b vec3, top float64) { return s.a, s.b, s.top }
 
 // Walls lists every wall the player bumps into.
-func Walls() []Segment {
+func Walls() []Segment { return shellWalls(true) }
+
+// shellWalls are the walls of the buildings, of the corridors and where
+// they meet; with entry, the base's entrance's too.
+func shellWalls(entry bool) []Segment {
 	var walls []Segment
 	for _, r := range Buildings() {
 		for _, p := range r.panels() {
@@ -450,7 +454,9 @@ func Walls() []Segment {
 		top := c.Height + 0.2
 		walls = append(walls, Segment{c.From.Add(side), c.To.Add(side), top}, Segment{c.From.Sub(side), c.To.Sub(side), top})
 	}
-	walls = append(walls, entryWalls()...)
+	if entry {
+		walls = append(walls, entryWalls()...)
+	}
 	for _, p := range junctionPlates() {
 		if p.y0 > 0 {
 			continue // above the corridor

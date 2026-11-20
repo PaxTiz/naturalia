@@ -2,7 +2,6 @@ package game
 
 import (
 	"math"
-	"naturalia/internal/base"
 	"naturalia/internal/content"
 )
 
@@ -29,7 +28,7 @@ func (g *Game) updateEvents(dt float64) {
 			ev.Run(g)
 		}
 	}
-	in := buildingAt(base.ToLocal(g.Player.Pos))
+	in := g.buildingAt(g.Player.Pos)
 	if in != g.inside {
 		if g.inside != "" {
 			g.emit(content.Event{Name: content.EvLeave, ID: g.inside})
@@ -39,12 +38,4 @@ func (g *Game) updateEvents(dt float64) {
 		}
 		g.inside = in
 	}
-}
-
-// buildingAt is the ID of the building whose room holds a local point.
-func buildingAt(local vec3) string {
-	if id := base.RoomAt(local); id != 0 {
-		return base.Ents.Building.Get(id).Plan().ID
-	}
-	return ""
 }

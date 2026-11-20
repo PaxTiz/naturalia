@@ -64,16 +64,21 @@ func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
 	}
 	b.yard()
 	b.ground()
-	for _, p := range junctionPlates() {
-		room := ToWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
-		across := vec3{-p.normal.Z, 0, p.normal.X}
-		b.Part("habitat.white2", mesh.LitTowards, room).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, WallThick * 1.5}, across, 0.04)
-	}
+	b.plates()
 	b.airlock()
 	b.entry()
 	b.outside()
 	b.Unfight()
 	return b.Parts
+}
+
+// plates builds the flat walls where corridors open into round rooms.
+func (b *building) plates() {
+	for _, p := range junctionPlates() {
+		room := ToWorld(p.mid.Sub(p.normal.Scale(2)).Add(vec3{0, 1.2, 0}))
+		across := vec3{-p.normal.Z, 0, p.normal.X}
+		b.Part("habitat.white2", mesh.LitTowards, room).Box(p.mid.Add(vec3{0, (p.y0 + p.y1) / 2, 0}), vec3{p.width, p.y1 - p.y0, WallThick * 1.5}, across, 0.04)
+	}
 }
 
 // turned builds what build makes in building r's own frame, facing east,

@@ -247,6 +247,12 @@ type EntityDef struct {
 	// goes out says trigger_enter and trigger_leave. It spans radius, or
 	// its parts without one, up to 1.5 m over them.
 	Trigger bool `json:"trigger"`
+	// Camp makes it a bootcamp (docs/TELEPORTEURS.md): a small closed dome
+	// laid out from this blueprint (its Shape, Style, Accent, Interior and
+	// Props), its door toward +X, where the player sleeps, opens the lab
+	// and travels from by the hologram. It stands upright, the ground
+	// flattened under it; it is moved, never picked up.
+	Camp *Blueprint `json:"camp"`
 	// Data is the pack's own components, anything JSON holds, for its
 	// scripts (game.data).
 	Data map[string]any `json:"data"`
@@ -267,6 +273,7 @@ type Item struct {
 	Cost     float64 `json:"cost"`     // in the shop; 0 keeps it out of it
 	Category string  `json:"category"` // the shop's tab: "build" for a block, "items" otherwise, if left out
 	Places   string  `json:"places"`   // ID of the entity it becomes
+	Max      int     `json:"max"`      // how many there can be at most, placed and carried; 0 for no limit
 }
 
 // ShopTabs are the shop's tabs, in their order. An upgrade, an item or an

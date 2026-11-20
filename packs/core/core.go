@@ -83,6 +83,7 @@ func registerCore(c *content.Content) {
 	registerVehicles(c)
 	registerStunts(c)
 	registerBuild(c)
+	registerCamps(c)
 
 	// Dust devils rise in daytime, a few at once.
 	const maxDevils = 3
