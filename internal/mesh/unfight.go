@@ -142,7 +142,7 @@ func (s *Parts) surfaces() ([]piece, []Surface) {
 			pieces = append(pieces, piece{b, st, end, seqs[i]})
 			layer := b.layerAt(st) - 1
 			for v := st; v+2 < end; v += 3 {
-				p := [3]vec3{b.at(v, s.origin), b.at(v+1, s.origin), b.at(v+2, s.origin)}
+				p := [3]vec3{b.at(v), b.at(v + 1), b.at(v + 2)}
 				nrm := p[1].Sub(p[0]).Cross(p[2].Sub(p[0]))
 				if nrm.Length() < 1e-9 {
 					continue
@@ -154,9 +154,9 @@ func (s *Parts) surfaces() ([]piece, []Surface) {
 	return pieces, tris
 }
 
-// at is vertex v, less origin.
-func (m *Builder) at(v int, origin vec3) vec3 {
-	return vec3{float64(m.V[3*v]), float64(m.V[3*v+1]), float64(m.V[3*v+2])}.Sub(origin)
+// at is vertex v, about the origin.
+func (m *Builder) at(v int) vec3 {
+	return vec3{float64(m.V[3*v]), float64(m.V[3*v+1]), float64(m.V[3*v+2])}
 }
 
 // fights returns the pieces that have surfaces fighting: facing the same

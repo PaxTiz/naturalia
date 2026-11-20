@@ -19,6 +19,9 @@ uniform vec3 origin;
 // millimeter of float grain off the screen, where it made close surfaces
 // fight for each pixel as the camera moved.
 uniform vec4 viewProj[4];
+// matModel places a mesh about origin, not about Mars' center: rounded
+// 3 km out, the points of flush surfaces would part by a quarter
+// millimeter and fight. Instances (rocks, pebbles) keep world transforms.
 out vec3 fragRel;
 out vec3 fragPos;
 out vec3 fragNormal;
@@ -39,8 +42,8 @@ void main() {
         gl_Position.z -= layer * layerStep * gl_Position.w;
         return;
     }
-    fragPos = vec3(matModel * vec4(vertexPosition, 1.0));
-    fragRel = fragPos - origin;
+    fragRel = vec3(matModel * vec4(vertexPosition, 1.0));
+    fragPos = fragRel + origin;
     fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 0.0)));
     gl_Position = mat4(viewProj[0], viewProj[1], viewProj[2], viewProj[3]) * vec4(fragRel, 1.0);
     gl_Position.z -= layer * layerStep * gl_Position.w;

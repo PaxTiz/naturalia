@@ -219,7 +219,7 @@ func v3f(v vec3) []float32 { return []float32{float32(v.X), float32(v.Y), float3
 // put draws a unit model scaled, then rotated (angle in degrees around axis).
 func (gfx *Graphics) put(m rl.Model, pos, scale, axis vec3, angle float64, c color.RGBA, spec, emissive float32) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{spec, emissive}, rl.ShaderUniformVec2)
-	rl.DrawModelEx(m, ToRL(pos), ToRL(axis), float32(angle), ToRL(scale), c)
+	rl.DrawModelEx(m, ToRL(pos.Sub(gfx.origin)), ToRL(axis), float32(angle), ToRL(scale), c)
 }
 
 // segment stretches a unit cylinder or cone (base at y=0, top at y=1) from a to b.
@@ -801,7 +801,7 @@ func (gfx *Graphics) putBasis(m rl.Model, pos, ax, ay, az vec3, c color.RGBA, sp
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{spec, emissive}, rl.ShaderUniformVec2)
 	mat := m.GetMaterials()[0]
 	mat.GetMap(rl.MapAlbedo).Color = c
-	rl.DrawMesh(m.GetMeshes()[0], mat, basisMatrix(pos, ax, ay, az))
+	rl.DrawMesh(m.GetMeshes()[0], mat, basisMatrix(pos.Sub(gfx.origin), ax, ay, az))
 	mat.GetMap(rl.MapAlbedo).Color = rl.White
 }
 

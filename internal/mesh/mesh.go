@@ -22,7 +22,7 @@ const (
 type Parts struct {
 	byKey  map[Key]*Builder
 	Keys   []Key
-	origin vec3 // of every mesh
+	origin vec3 // where every mesh is drawn: their points are kept about it
 	built  int  // pieces built so far, in all meshes
 }
 
@@ -34,16 +34,21 @@ type Key struct {
 	At  vec3
 }
 
-// NewParts starts an empty set whose meshes are moved by origin.
+// NewParts starts an empty set of meshes drawn at origin. Their points
+// are kept about it: float32 3 km from Mars' center would round them to a
+// quarter millimeter, and flush surfaces would fight.
 func NewParts(origin vec3) *Parts {
 	return &Parts{byKey: map[Key]*Builder{}, origin: origin}
 }
+
+// Origin is where the meshes are drawn: their points are about it.
+func (s *Parts) Origin() vec3 { return s.origin }
 
 // Part is the mesh of a piece, created on first use.
 func (s *Parts) Part(tok string, lit float32, at vec3) *Builder {
 	k := Key{tok, lit, at}
 	if s.byKey[k] == nil {
-		s.byKey[k] = &Builder{origin: s.origin, parts: s}
+		s.byKey[k] = &Builder{parts: s}
 		s.Keys = append(s.Keys, k)
 	}
 	return s.byKey[k]
@@ -66,7 +71,7 @@ func (s *Parts) MergeTurned(o *Parts, turn func(p vec3) vec3) {
 		}
 		dir := func(x, y, z float32) vec3 { return turn(vec3{float64(x), float64(y), float64(z)}).Sub(turn(vec3{})) }
 		for i := 0; i+2 < len(src.V); i += 3 {
-			p := s.origin.Add(turn(vec3{float64(src.V[i]), float64(src.V[i+1]), float64(src.V[i+2])}))
+			p := turn(vec3{float64(src.V[i]), float64(src.V[i+1]), float64(src.V[i+2])})
 			n := dir(src.N[i], src.N[i+1], src.N[i+2])
 			dst.V = append(dst.V, float32(p.X), float32(p.Y), float32(p.Z))
 			dst.N = append(dst.N, float32(n.X), float32(n.Y), float32(n.Z))
@@ -79,10 +84,9 @@ func (s *Parts) MergeTurned(o *Parts, turn func(p vec3) vec3) {
 // Mesh is the mesh of a piece already built.
 func (s *Parts) Mesh(k Key) *Builder { return s.byKey[k] }
 
-// Builder collects triangles, moved by origin.
+// Builder collects triangles, about their Parts' origin.
 type Builder struct {
 	V, N, UV []float32
-	origin   vec3  // added to every point: the frame the triangles are built in
 	pieces   []int // the first vertex of each piece (a box, a slab...), for Unfight
 	seqs     []int // and when it was built, among all the pieces of parts
 	parts    *Parts
@@ -107,7 +111,6 @@ func (m *Builder) emit(p, nrm vec3) {
 	if m.uvf != nil {
 		t = m.uvf(p)
 	}
-	p = m.origin.Add(p)
 	m.V = append(m.V, float32(p.X), float32(p.Y), float32(p.Z))
 	m.N = append(m.N, float32(nrm.X), float32(nrm.Y), float32(nrm.Z))
 	m.UV = append(m.UV, float32(t[0]), float32(t[1]))

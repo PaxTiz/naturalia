@@ -340,6 +340,9 @@ func (gfx *Graphics) uploadBase(parts *mesh.Parts, sh rl.Shader) *baseModels {
 	return b
 }
 
+// at is where the meshes are drawn, about the shaders' origin.
+func (b *baseModels) at(gfx *Graphics) rl.Vector3 { return ToRL(b.Origin().Sub(gfx.origin)) }
+
 func (b *baseModels) draw(gfx *Graphics) {
 	for i, k := range b.Keys {
 		if k.Lit == mesh.LitGlass {
@@ -349,7 +352,7 @@ func (b *baseModels) draw(gfx *Graphics) {
 		gfx.setMat(t.Mat, t.Scale, false)
 		gfx.setLighting(k.Lit, k.At)
 		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
-		rl.DrawModel(b.models[i], rl.Vector3{}, 1, t.Col)
+		rl.DrawModel(b.models[i], b.at(gfx), 1, t.Col)
 	}
 }
 
@@ -365,7 +368,7 @@ func (gfx *Graphics) baseDepth() {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
 	for i, k := range gfx.base.Keys {
 		if k.Lit != mesh.LitGlass {
-			rl.DrawModel(gfx.base.models[i], rl.Vector3{}, 1, rl.White)
+			rl.DrawModel(gfx.base.models[i], gfx.base.at(gfx), 1, rl.White)
 		}
 	}
 	rl.DrawRenderBatchActive()
@@ -389,7 +392,7 @@ func (gfx *Graphics) drawGlass() {
 			continue
 		}
 		gfx.setLighting(k.Lit, k.At)
-		rl.DrawModel(gfx.base.models[i], rl.Vector3{}, 1, gfx.base.toks[i].Col)
+		rl.DrawModel(gfx.base.models[i], gfx.base.at(gfx), 1, gfx.base.toks[i].Col)
 	}
 	rl.DrawRenderBatchActive()
 	rl.EnableDepthMask()

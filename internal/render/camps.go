@@ -46,7 +46,7 @@ func (gfx *Graphics) drawCamps(g *game.Game) {
 		s := c.Site
 		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(s.Origin.Dot(s.Y))}, rl.ShaderUniformVec2)
 		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, v3f(s.Y), rl.ShaderUniformVec3)
-		frame := basisMatrix(s.Origin, s.X, s.Y, s.Z)
+		frame := basisMatrix(s.Origin.Add(s.Dir(m.Origin())).Sub(gfx.origin), s.X, s.Y, s.Z) // about the origin (object.vert)
 		for i, k := range m.Keys {
 			if k.Lit == mesh.LitGlass {
 				continue
