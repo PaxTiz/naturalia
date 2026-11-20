@@ -65,7 +65,7 @@ func (hud *HUD) drawDebug(g *game.Game, rs render.Stats) {
 		fmt.Sprintf("cailloux %d   rochers %d", rs.Pebbles, len(g.NearRocks)),
 		fmt.Sprintf("lat %.2f°  lon %.2f°", math.Asin(up.Y)*180/math.Pi, math.Atan2(up.Z, up.X)*180/math.Pi),
 		fmt.Sprintf("alt sol %.1f m   relief %.1f m", t.Altitude(g.Player.Pos), t.Height(up)),
-		fmt.Sprintf("soleil %.1f°   ombre %.2f   occlusion %.2f", math.Asin(up.Dot(planet.SunDir))*180/math.Pi, rs.Sun, rs.AO),
+		fmt.Sprintf("%s   soleil %.1f°   ombre %.2f   occlusion %.2f", hourText(g.Hour()), math.Asin(up.Dot(planet.SunDir))*180/math.Pi, rs.Sun, rs.AO),
 		fmt.Sprintf("poussière %.2f   tuiles %d", g.World.DustAt(up), len(g.World.Touched())),
 		fmt.Sprintf("tas %.0f Mo   goroutines %d", d.heapMB, d.goroutines),
 		fmt.Sprintf("packs %s   entités %d", content.PackList(), g.Ents.Len()),
@@ -85,4 +85,10 @@ func (hud *HUD) drawDebug(g *game.Game, rs render.Stats) {
 	for i, s := range lines {
 		rl.DrawTextEx(hud.mono, s, rl.NewVector2(x+12*u, y+10*u+float32(i)*step), size, 0, visorCyan)
 	}
+}
+
+// hourText writes an hour (0..24) as 7 h 05.
+func hourText(h float64) string {
+	m := int(h*60) % (24 * 60)
+	return fmt.Sprintf("%d h %02d", m/60, m%60)
 }

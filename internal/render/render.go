@@ -144,9 +144,7 @@ func New(g *game.Game) *Graphics {
 
 	gfx.smallcaps = LoadFont(gosmallcaps.TTF, 96) // for the signs
 
-	for _, s := range gfx.shaders() {
-		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(planet.SunDir), rl.ShaderUniformVec3)
-	}
+	rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, "sunAxis"), v3f(planet.SunAxis()), rl.ShaderUniformVec3)
 	for name, v := range map[string]float32{
 		"faceCells": planet.FaceCells, "tileCells": planet.TileCells, "tilesPerFace": planet.TilesPerFace,
 		"atlasTiles": atlasTiles, "marsRadius": planet.Radius,
@@ -358,6 +356,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	for _, s := range gfx.shaders() {
 		rl.SetShaderValue(s.sh, s.loc.viewPos, eye, rl.ShaderUniformVec3)
 		rl.SetShaderValue(s.sh, s.loc.time, t, rl.ShaderUniformFloat)
+		rl.SetShaderValue(s.sh, s.loc.sunDir, v3f(planet.SunDir), rl.ShaderUniformVec3)
 	}
 	e, o := gfx.camEye, gfx.origin
 	for _, s := range gfx.shaders() {

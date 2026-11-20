@@ -37,6 +37,15 @@ type shotRun struct {
 func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	s := &shotRun{file: os.Getenv("NA_SHOT"), mode: game.ModePlay, hud: hud, tab: -1}
 	g.NoSave = s.file != ""
+	// The clock stands still for a shot, at NA_SHOT_HOUR (the base's hour)
+	// or at the hour of the art direction's reference sun.
+	if s.file != "" {
+		hour := planet.RefHour
+		fmt.Sscanf(os.Getenv("NA_SHOT_HOUR"), "%f", &hour)
+		g.Content.Terrain.Sol = 0
+		g.State.Sol = 0
+		g.SetLocalHour(planet.BaseUp, hour)
+	}
 	// NA_SHOT_MODE opens a screen for the shot: shop, garage, map, pause,
 	// or settings (NA_SHOT_TAB=n picks the tab).
 	switch os.Getenv("NA_SHOT_MODE") {

@@ -129,24 +129,37 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			kinds[j*(nodeQuads+1)+i] = [2]float32{float32(t.Ice(d)), float32(t.Basalt(d))}
 		}
 	}
-	// The light is costly: computed every other vertex, then interpolated.
-	const half = nodeQuads/2 + 1
-	var suns, aos [half * half]float64
-	for j := range half {
-		for i := range half {
-			suns[j*half+i], aos[j*half+i] = t.light(at(i*2, j*2))
+	// The light is costly: the occlusion is computed every other vertex,
+	// the sun's course every fourth, then interpolated.
+	sample := func(step int, f func(p vec3) float64) func(i, j int) float64 {
+		n := nodeQuads/step + 1
+		v := make([]float64, n*n)
+		for j := range n {
+			for i := range n {
+				v[j*n+i] = f(at(i*step, j*step))
+			}
+		}
+		return func(i, j int) float64 {
+			i0, j0 := min(i/step, n-2), min(j/step, n-2)
+			fx, fy := float64(i-i0*step)/float64(step), float64(j-j0*step)/float64(step)
+			k := j0*n + i0
+			return (v[k]*(1-fx)+v[k+1]*fx)*(1-fy) + (v[k+n]*(1-fx)+v[k+n+1]*fx)*fy
 		}
 	}
-	lights := make([]float64, (nodeQuads+1)*(nodeQuads+1))
+	var sets []float64
+	rise := sample(4, func(p vec3) float64 {
+		r, s := t.course(p)
+		sets = append(sets, s)
+		return r
+	})
+	k := 0
+	set := sample(4, func(vec3) float64 { k++; return sets[k-1] })
+	ao := sample(2, t.occlusion)
+	type light struct{ rise, set, ao float64 }
+	lights := make([]light, (nodeQuads+1)*(nodeQuads+1))
 	for j := range nodeQuads + 1 {
 		for i := range nodeQuads + 1 {
-			i0, j0 := min(i/2, half-2), min(j/2, half-2)
-			fx, fy := float64(i-i0*2)/2, float64(j-j0*2)/2
-			lerp := func(v *[half * half]float64) float64 {
-				k := j0*half + i0
-				return (v[k]*(1-fx)+v[k+1]*fx)*(1-fy) + (v[k+half]*(1-fx)+v[k+half+1]*fx)*fy
-			}
-			lights[j*(nodeQuads+1)+i] = 1 + math.Round(lerp(&aos)*31) + 0.9*lerp(&suns)
+			lights[j*(nodeQuads+1)+i] = light{rise(i, j), set(i, j), ao(i, j)}
 		}
 	}
 	skirt := n.arc/nodeQuads*1.5 + 0.5
@@ -159,7 +172,8 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			if nrm.Dot(p) < 0 {
 				nrm = nrm.Scale(-1)
 			}
-			nrm = nrm.Scale(lights[j*(nodeQuads+1)+i])
+			l := lights[j*(nodeQuads+1)+i]
+			nrm = nrm.Scale(1 + l.ao)
 			if vx != i+1 || vz != j+1 {
 				p = p.Sub(p.Norm().Scale(skirt))
 			}
@@ -167,38 +181,88 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			verts[k], verts[k+1], verts[k+2] = float32(p.X), float32(p.Y), float32(p.Z)
 			norms[k], norms[k+1], norms[k+2] = float32(nrm.X), float32(nrm.Y), float32(nrm.Z)
 			kind := kinds[j*(nodeQuads+1)+i]
-			uvs[(vz*side+vx)*2], uvs[(vz*side+vx)*2+1] = kind[0], kind[1]
+			uvs[(vz*side+vx)*2] = courseCode(-l.rise) + kind[0]*0.99
+			uvs[(vz*side+vx)*2+1] = courseCode(l.set) + kind[1]*0.99
 		}
 	}
 	return nodeData{n, verts, norms, uvs}
 }
 
-// light returns, for a ground point, how much of the sun the relief lets
-// through (soft-edged) and how open the sky is around it (ambient
-// occlusion). The sun is fixed in space, so both are computed once per
-// vertex. Sampling distances are fixed in meters, so the result does not
-// change with the level of detail. The shader receives them in the length
-// of the normal: whole part the occlusion in 1/31 steps, then 0.9 × sun.
-func (t *Terrain) light(p vec3) (sun, ao float64) {
+// The relief's shadow is baked in the vertices: the sun follows the same
+// course every sol (planet/sun.go), so each ground point has the hour
+// angles, from its local noon, where the sun comes out from behind the
+// relief in the morning and goes behind it in the evening. The shader
+// compares them to the sun's hour angle (terrain.vert). A point the relief
+// hides at noon never sees the sun; one it hides only in the morning and
+// the evening is taken as lit in between. They travel in the integer part
+// of the texture coordinates, in thousandths of half a turn (courseCode):
+// 1000 is never hidden.
+
+// courseCode turns a hour angle from noon (0..π) into a texture coordinate's
+// integer part.
+func courseCode(a float64) float32 {
+	if a >= math.Pi {
+		return 1000
+	}
+	return float32(min(999, math.Round(a/math.Pi*1000)))
+}
+
+// sunThrough is how much of the sun along dir the relief lets through at
+// the ground point p (soft-edged). Sampling distances are fixed in meters,
+// so the result does not change with the level of detail.
+func (t *Terrain) sunThrough(p, dir vec3) float64 {
 	up := p.Norm()
-	sun = 1
-	if up.Dot(planet.SunDir) > -0.15 { // night side: the sun is gone anyway
-		start := p.Add(up.Scale(0.3))
-		for s := 1.5; s < 4000; s *= 1.45 {
-			q := start.Add(planet.SunDir.Scale(s))
-			if q.Length()-planet.Radius > planet.MaxMountain {
-				break // above every peak
-			}
-			h := q.Length() - t.SurfaceRadius(q.Norm())
-			sun = min(sun, 14*h/s) // penumbra of about 4°
-			if sun <= 0 {
-				sun = 0
-				break
-			}
+	start := p.Add(up.Scale(0.3))
+	sun := 1.0
+	for s := 1.5; s < 4000; s *= 1.45 {
+		q := start.Add(dir.Scale(s))
+		if q.Length()-planet.Radius > planet.MaxMountain {
+			break // above every peak
+		}
+		h := q.Length() - t.SurfaceRadius(q.Norm())
+		sun = min(sun, 14*h/s) // penumbra of about 4°
+		if sun <= 0 {
+			return 0
 		}
 	}
+	return sun
+}
 
-	// Occlusion: steepest horizon in 6 directions, at a few distances.
+// course returns the hour angles where the sun clears the relief at p in
+// the morning (-π..0) and goes behind it in the evening (0..π): ±π when the
+// relief never hides it before it stands 3° high, 0 and 0 when it hides
+// it at noon. Pure: the workers call it.
+func (t *Terrain) course(p vec3) (rise, set float64) {
+	up := p.Norm()
+	seen := func(h float64) bool { return t.sunThrough(p, planet.SunAtHourAngle(up, h)) >= 0.5 }
+	if !seen(0) {
+		return 0, 0
+	}
+	low := math.Pi // the hour angle where the sun stands 3° high
+	if c, s3 := math.Cos(planet.Latitude(up)), math.Sin(3*math.Pi/180); c > s3 {
+		low = math.Acos(s3 / c)
+	}
+	edge := func(side float64) float64 {
+		if seen(side * low) {
+			return side * math.Pi
+		}
+		hidden, lit := low, 0.0
+		for range 5 {
+			if mid := (hidden + lit) / 2; seen(side * mid) {
+				lit = mid
+			} else {
+				hidden = mid
+			}
+		}
+		return side * (hidden + lit) / 2
+	}
+	return edge(-1), edge(1)
+}
+
+// occlusion is how open the sky is around a ground point (ambient
+// occlusion): the steepest horizon in 6 directions, at a few distances.
+func (t *Terrain) occlusion(p vec3) float64 {
+	up := p.Norm()
 	u, v := mathx.TangentBasis(up)
 	h0 := t.SurfaceRadius(up)
 	open := 0.0
@@ -212,7 +276,14 @@ func (t *Terrain) light(p vec3) (sun, ao float64) {
 		}
 		open += 1 - slope/math.Sqrt(1+slope*slope) // 1 - sin of the horizon angle
 	}
-	return sun, open / 6
+	return open / 6
+}
+
+// light is how much of the sun, where it stands now, the relief lets
+// through at p, and how open the sky is there: for the objects near the
+// player.
+func (t *Terrain) light(p vec3) (sun, ao float64) {
+	return t.sunThrough(p, planet.SunDir), t.occlusion(p)
 }
 
 // upload turns finished node data into GPU meshes, a few per frame.
