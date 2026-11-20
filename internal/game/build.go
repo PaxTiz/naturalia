@@ -25,6 +25,7 @@ type Ghost struct {
 	Kind   string
 	Pose   Transform // where it would stand
 	OK     bool      // nothing in the way: F sets it down
+	Why    string    // or why not, when it says (a bootcamp)
 	Free   bool      // floating where the player holds it, not on a surface
 	Moving ecs.ID    // a placed entity being moved, out of the world meanwhile (0: a new one)
 	item   string
@@ -38,7 +39,7 @@ type Ghost struct {
 // around their up.
 func (g *Game) turnable(def *content.EntityDef) bool {
 	_, vehicle := g.Content.Vehicles.Get(def.ID)
-	return def.Ramp == nil && def.Kick <= 0 && !vehicle
+	return def.Ramp == nil && def.Kick <= 0 && !vehicle && !isCamp(def)
 }
 
 func (g *Game) updateItems() {
@@ -140,7 +141,7 @@ func (g *Game) Held(id ecs.ID) bool { return id != 0 && id == g.held() }
 
 // movable: what right click picks up to move, a block or anything put
 // back in the inventory.
-func movable(def *content.EntityDef) bool { return def.Build || def.Pickup }
+func movable(def *content.EntityDef) bool { return def.Build || def.Pickup || isCamp(def) }
 
 // AimedMovable is the entity right click would move: the nearest the
 // player looks at, within reach, before the ground; 0 for none.
@@ -157,6 +158,11 @@ func (g *Game) AimedMovable() ecs.ID {
 		}
 		if t, _, ok := g.rayEntity(id, eye, fwd, reach); ok {
 			reach, best = t, id
+		}
+	}
+	for _, c := range g.CampsNear(eye, buildReach) {
+		if t, ok := rayCamp(c, eye, fwd, reach); ok {
+			reach, best = t, c.Ent
 		}
 	}
 	return best
@@ -202,6 +208,10 @@ func (g *Game) poseGhost() {
 	gh := g.Ghost
 	def, ok := g.Content.Entities.Get(gh.Kind)
 	if !ok {
+		return
+	}
+	if l := g.campLayout(def.ID); l != nil {
+		g.poseCamp(gh, l)
 		return
 	}
 	p := &g.Player
@@ -342,6 +352,9 @@ func (g *Game) placeGhost() {
 	}
 	if def, ok := g.Content.Entities.Get(gh.Kind); ok && def.Mass > 0 && e.Alt > 0.05 {
 		g.Ents.Air.Set(id, Air{})
+	}
+	if g.campLayout(gh.Kind) != nil {
+		g.standCamps() // the ground flattened under it, its walls where it stands
 	}
 	g.sfx.Beep(0.02, 0.15, 0.12, 392, 523)
 	if gh.Moving == 0 {

@@ -134,7 +134,8 @@ vec3 shade(vec3 albedo, vec3 n, vec3 v, vec3 up, float shadow, float ao, float s
 // part of the sky or of the bounce from a surface, the more so the closer
 // it is and the more the surface faces it: corners darken, the foot of
 // the walls and of the objects standing on the ground too.
-uniform vec3 baseRel;          // the base's origin, from origin
+uniform vec3 baseRel;          // the base's origin, from origin: or a bootcamp's (base.Site)
+uniform vec3 baseX, baseY, baseZ; // and its axes, y up: the base's are the world's
 uniform vec4 baseRooms[8];     // local center x and z, radius, wall height
 uniform vec4 baseCorrs[8];     // local ends: from x, z, to x, z
 uniform vec4 baseCorrSize[8];  // width, height
@@ -166,13 +167,17 @@ float slabShade(vec3 p, vec3 lamp) {
     return s;
 }
 
+// toBase turns a direction of the world to the base's frame.
+vec3 toBase(vec3 d) { return vec3(dot(d, baseX), dot(d, baseY), dot(d, baseZ)); }
+
 float occ(float d, float r, vec3 n, vec3 pn) {
     d = max(d, 0.0);
     return (1.0 - d / sqrt(d * d + r * r)) * (0.5 - 0.5 * dot(n, pn));
 }
 
 float baseAO(vec3 n) {
-    vec3 p = fragRel - baseRel;
+    vec3 p = toBase(fragRel - baseRel);
+    n = toBase(n);
     if (dot(p.xz, p.xz) > 1600.0) return 1.0;
     float ao = 1.0 - 0.7 * occ(p.y - 0.02, 0.8, n, vec3(0, 1, 0));
     bool inCorr = false;

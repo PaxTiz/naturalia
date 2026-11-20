@@ -122,6 +122,26 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
 		gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 	}
+	// NA_SHOT_CAMP=dist,bearing sets a bootcamp that far from the base
+	// (bearing in degrees from +X toward +Z) and looks at it from 14 m
+	// before its door; NA_SHOT_CAMP_AT=x,z,yaw stands in its own frame
+	// instead (yaw in radians from +X toward +Z), NA_SHOT_Y that high.
+	if v := os.Getenv("NA_SHOT_CAMP"); s.file != "" && v != "" {
+		var dist, bearing float64
+		fmt.Sscanf(v, "%f,%f", &dist, &bearing)
+		if c, ok := g.ShotCamp("core:bootcamp", dist, bearing); ok {
+			x, z, yaw := 14.0, 6.0, math.Pi*1.1
+			fmt.Sscanf(os.Getenv("NA_SHOT_CAMP_AT"), "%f,%f,%f", &x, &z, &yaw)
+			var y float64
+			fmt.Sscanf(os.Getenv("NA_SHOT_Y"), "%f", &y)
+			g.Player.Pos = c.Site.ToWorld(vec3{x, base.FloorTop + y, z})
+			g.Player.Heading = c.Site.Dir(vec3{math.Cos(yaw), 0, math.Sin(yaw)})
+			g.Player.Pitch = 0.05
+			fmt.Sscanf(os.Getenv("NA_SHOT_PITCH"), "%f", &g.Player.Pitch)
+			s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
+			gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
+		}
+	}
 	// NA_SHOT_NIGHTS=n counts n nights slept: what grows has grown.
 	if s.file != "" {
 		fmt.Sscanf(os.Getenv("NA_SHOT_NIGHTS"), "%d", &g.State.Nights)

@@ -3,7 +3,6 @@ package render
 import (
 	"image/color"
 	"math"
-	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/game"
 	"naturalia/internal/mathx"
@@ -30,7 +29,7 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 		models := gfx.entityModels(def)
 		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
 		lit := float32(mesh.LitSun)
-		if base.Indoors(base.ToLocal(pos)) {
+		if g.Indoors(pos) {
 			lit = mesh.LitIndoor
 		}
 		gfx.setLighting(lit, vec3{})
@@ -85,6 +84,13 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	gfx.setMat(content.MtPlain, 1, false)
 	for _, m := range gfx.entityModels(def) {
 		gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.5)
+	}
+	if l := g.CampLayout(def.ID); l != nil { // a bootcamp: its meshes, all alike
+		rl.DisableBackfaceCulling()
+		for _, md := range gfx.campModels(def.ID, l).models {
+			gfx.putBasis(md, pos, ax, up, az, col, 0, 0.5)
+		}
+		rl.EnableBackfaceCulling()
 	}
 	rl.DrawRenderBatchActive()
 	rl.EnableDepthMask()

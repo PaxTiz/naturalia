@@ -102,6 +102,7 @@ type Game struct {
 	Ghost       *Ghost                // the item being placed, drawn see-through (build.go)
 	solids      map[string][]solid    // each kind's parts, for rays (blocks.go)
 	layouts     map[string]*base.Camp // each kind of bootcamp's (camps.go)
+	campDoors   map[ecs.ID]campDoor   // the bootcamps' doors near the player
 	Ents        *Ents                 // standing in the world
 	Riding      ecs.ID                // the vehicle driven, 0 on foot
 	drive       drive                 // the driven vehicle's motion
@@ -394,6 +395,7 @@ func (g *Game) updateBase(dt float64) {
 	g.DoorOpen += (open - g.DoorOpen) * math.Min(1, dt*4)
 	g.updateHallDoors(dt)
 	g.updateInnerDoors(dt)
+	g.updateCampDoors(dt)
 	g.Burn = math.Max(0, g.Burn-dt*0.5)
 }
 

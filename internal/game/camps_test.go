@@ -91,3 +91,67 @@ func TestWalkIntoCamp(t *testing.T) {
 		t.Errorf("by the bed, E uses %q", it.Kit)
 	}
 }
+
+// A bootcamp is bought at the lab, set down by its ghost away from the
+// base and the others, and no more than 32 of them.
+func TestCampShop(t *testing.T) {
+	g := baseGame(t)
+	g.State.Credits = 1e12
+	buy := func() (ShopItem, bool) {
+		for _, it := range g.ShopItems() {
+			if it.id == "core:bootcamp" {
+				return it, true
+			}
+		}
+		return ShopItem{}, false
+	}
+	it, ok := buy()
+	if !ok || it.Tab != "build" || it.Cost != 100_000_000 {
+		t.Fatalf("in the shop: %+v", it)
+	}
+	g.Buy(it)
+	ghost := func() *Ghost {
+		g.Ghost = &Ghost{Kind: "core:bootcamp", item: "core:bootcamp", rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}}
+		g.poseGhost()
+		return g.Ghost
+	}
+	// By the base: no.
+	g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{0, 0, -1}, 40))
+	g.Player.Heading = planet.TangentAt(g.Player.Pos.Norm(), vec3{0, 0, -1})
+	g.phys = nil
+	g.stepPhysics(1.0 / 60)
+	if gh := ghost(); gh.OK || gh.Why != "trop près de la base" {
+		t.Errorf("by the base: fits %v (%s)", gh.OK, gh.Why)
+	}
+	// Out on a flat plain: yes, its door toward the player.
+	for _, d := range []float64{500, 700, 900, 1100, 1300} {
+		g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{0.2, 0, 1}, d))
+		g.Player.Heading = planet.TangentAt(g.Player.Pos.Norm(), vec3{0, 0, 1})
+		if gh := ghost(); gh.OK {
+			break
+		}
+	}
+	if !g.Ghost.OK {
+		t.Fatalf("nowhere to set it down: %s", g.Ghost.Why)
+	}
+	g.placeGhost()
+	camps := g.Camps()
+	if len(camps) != 1 || g.State.Items["core:bootcamp"] != 0 {
+		t.Fatalf("%d standing, %d carried", len(camps), g.State.Items["core:bootcamp"])
+	}
+	c := camps[0]
+	if to := c.Site.DirLocal(g.Player.Pos.Sub(c.Site.Origin)); to.X < 0 || math.Abs(to.Z) > to.X {
+		t.Errorf("its door doesn't face the player: they are toward %v", to)
+	}
+	if gh := ghost(); gh.OK {
+		t.Errorf("a second one right next to it fits")
+	}
+	g.Ghost = nil
+	// 31 more: the shop has none left.
+	for i := range 31 {
+		g.add(Placed{Kind: "core:bootcamp", Dir: planet.Toward(vec3{math.Cos(float64(i)), 0, math.Sin(float64(i))}, 2000)})
+	}
+	if it, _ := buy(); !it.Maxed || it.Info != "32 bootcamps posés" {
+		t.Errorf("with 32 standing: %+v", it)
+	}
+}

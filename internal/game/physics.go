@@ -74,6 +74,7 @@ type phys struct {
 	doors      []*physics.Body
 	floors     map[*physics.Body]base.Floor // the base's floors, which the player walks up (allow)
 	carried    map[ecs.ID]moving            // from the plane before, until put back
+	held       ecs.ID                       // the bootcamp being moved: its walls are out
 	bounds     map[string][2]vec3           // the box around each kind's parts
 }
 
@@ -132,7 +133,7 @@ func (p *phys) slice(pos vec3, h float64) (bottom, top float64) {
 // the ground, out of walls, rocks and entities.
 func (g *Game) stepPhysics(dt float64) {
 	pl := &g.Player
-	if g.phys == nil || planet.ArcDist(pl.LocalUp(), g.phys.up) > reanchor {
+	if g.phys == nil || planet.ArcDist(pl.LocalUp(), g.phys.up) > reanchor || g.phys.held != g.heldCamp() {
 		g.layPlane()
 	}
 	p := g.phys
@@ -460,7 +461,7 @@ func (g *Game) layPlane() {
 	up := g.Player.LocalUp()
 	t1, t2 := mathx.TangentBasis(up)
 	p := &phys{w: physics.NewWorld(), up: up, t1: t1, t2: t2, r0: g.World.Relief.Surface(up).Length(),
-		carried: map[ecs.ID]moving{}, bounds: map[string][2]vec3{}}
+		carried: map[ecs.ID]moving{}, bounds: map[string][2]vec3{}, held: g.heldCamp()}
 	p.side = t1.Cross(up).Dot(t2)
 	p.w.Mix, p.w.Allow = mix, g.allow
 	for id, bp := range g.Ents.Body.All() {

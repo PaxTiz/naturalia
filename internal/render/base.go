@@ -63,6 +63,7 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 
 	// Red dust settles on the faces turned up and at the foot of the walls.
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(base.Origin.Y)}, rl.ShaderUniformVec2)
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, []float32{0, 1, 0}, rl.ShaderUniformVec3)
 	gfx.base.draw(gfx)
 	gfx.drawGrowth(g)
 	for _, f := range base.AllFurniture() {

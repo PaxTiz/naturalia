@@ -6,6 +6,7 @@ import (
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"slices"
+	"strings"
 )
 
 // stat is a stat with every upgrade applied.
@@ -135,20 +136,32 @@ func (g *Game) ShopItems() []ShopItem {
 			continue
 		}
 		tab, kind := o.Category, "Objet"
-		if def, ok := g.Content.Entities.Get(o.Places); ok && def.Build {
+		def, ok := g.Content.Entities.Get(o.Places)
+		switch {
+		case ok && def.Build:
 			tab, kind = content.OrDefault(tab, "build"), "Bloc"
+		case isCamp(def):
+			tab, kind = content.OrDefault(tab, "build"), "Bootcamp"
 		}
-		items = append(items, ShopItem{
+		placed, carried := g.Entities(content.Qualify(o.Places)), g.State.Items[o.ID]
+		it := ShopItem{
 			id: o.ID, Name: o.Name, Desc: o.Desc, Icon: content.OrDefault(o.Icon, "flag"),
 			Tab:  content.OrDefault(tab, "items"),
-			Info: fmt.Sprintf("%s · %d sur toi", kind, g.State.Items[o.ID]), Cost: o.Cost,
+			Info: fmt.Sprintf("%s · %d sur toi", kind, carried), Cost: o.Cost,
 			buy: func() {
 				if g.State.Items == nil {
 					g.State.Items = map[string]int{}
 				}
 				g.State.Items[o.ID]++
 			},
-		})
+		}
+		if isCamp(def) {
+			it.Info = fmt.Sprintf("%d posés · %d sur toi", placed, carried)
+		}
+		if o.Max > 0 && placed+carried >= o.Max {
+			it.Maxed, it.Info = true, fmt.Sprintf("%d %ss posés", placed, strings.ToLower(kind))
+		}
+		items = append(items, it)
 	}
 	return items
 }

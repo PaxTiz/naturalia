@@ -114,10 +114,18 @@ func (s *shadowMap) render(gfx *Graphics, center vec3, draw func()) {
 // kept keeps its shadows, so nothing pops in when the player walks in.
 type lampShadow struct {
 	target rl.RenderTexture2D
-	lamps  []vec3 // where the cameras stand, looking down
-	grid   int    // cells per side
+	lamps  []lampView // where the cameras stand, looking down
+	grid   int        // cells per side
 	done   bool
 }
+
+// lampView is a lamp's camera: where it stands, the up it looks down
+// from (a bootcamp's isn't the world's), and the way the top of its view
+// points.
+type lampView struct{ at, up, side vec3 }
+
+// look is the camera's eye, its target and its up, for relVP.
+func (l lampView) look() (eye, target, up vec3) { return l.at, l.at.Sub(l.up), l.side }
 
 const (
 	lampShadowCell = 1024 // each lamp's view; the rooms' lamps are the first lights of base.Lamps
@@ -148,7 +156,8 @@ func (s *lampShadow) cols(o vec3) []float32 {
 	proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
 	var c []float32
 	for _, l := range s.lamps {
-		c = append(c, relVP(l, l.Sub(vec3{0, 1, 0}), vec3{1, 0, 0}, o, proj)...)
+		eye, target, up := l.look()
+		c = append(c, relVP(eye, target, up, o, proj)...)
 	}
 	return c
 }
@@ -157,7 +166,7 @@ func (s *lampShadow) cols(o vec3) []float32 {
 func (s *lampShadow) reset() { s.done, s.lamps = false, nil }
 
 // render draws every lamp's view into its cell, once.
-func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
+func (s *lampShadow) render(gfx *Graphics, lamps []lampView, draw func()) {
 	if s.done {
 		return
 	}
@@ -170,14 +179,15 @@ func (s *lampShadow) render(gfx *Graphics, lamps []vec3, draw func()) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
 	proj := rl.MatrixPerspective(lampFov*math.Pi/180, 1, 0.1, 30)
 	for i, lamp := range lamps[:min(len(lamps), s.grid*s.grid)] {
+		eye, target, up := lamp.look()
 		cam := rl.Camera3D{
-			Position: ToRL(lamp), Target: ToRL(lamp.Sub(vec3{0, 1, 0})), Up: rl.Vector3{X: 1},
+			Position: ToRL(eye), Target: ToRL(target), Up: ToRL(up),
 			Fovy: lampFov, Projection: rl.CameraPerspective,
 		}
 		rl.BeginMode3D(cam)
 		rl.Viewport(int32(i)%grid*cell, int32(i)/grid*cell, cell, cell)
 		s.lamps = append(s.lamps, lamp)
-		gfx.setViewProj(relVP(lamp, lamp.Sub(vec3{0, 1, 0}), vec3{1, 0, 0}, gfx.origin, proj))
+		gfx.setViewProj(relVP(eye, target, up, gfx.origin, proj))
 		rl.SetBlendFactors(glOne, glOne, glMin)
 		rl.BeginBlendMode(rl.BlendCustom)
 		rl.DisableBackfaceCulling()

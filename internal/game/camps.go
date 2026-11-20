@@ -3,9 +3,11 @@ package game
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
+	"naturalia/internal/physics"
 	"naturalia/internal/planet"
 	"slices"
 )
@@ -152,5 +154,141 @@ func (g *Game) newCamp(id ecs.ID) *Bootcamp {
 // campName is a new bootcamp's name.
 func campName(n int) string { return fmt.Sprintf("Bootcamp %d", n) }
 
+// heldCamp is the bootcamp being moved, 0 for none.
+func (g *Game) heldCamp() ecs.ID {
+	if id := g.held(); g.Ents.Camp.Has(id) {
+		return id
+	}
+	return 0
+}
+
+// Kind is entity id's kind, "" for none.
+func (g *Game) Kind(id ecs.ID) string { return g.kind(id) }
+
 // isCamp tells whether an entity's kind is a bootcamp.
 func isCamp(def *content.EntityDef) bool { return def != nil && def.Camp != nil }
+
+// CampDoor is how open a bootcamp's door is, 0 closed to 1 open.
+func (g *Game) CampDoor(id ecs.ID) float64 { return g.campDoors[id].open }
+
+// campDoor is a bootcamp's door: how open, and where it is going.
+type campDoor struct{ open, want float64 }
+
+// updateCampDoors slides the doors of the bootcamps near open when the
+// player comes close, as the base's airlock.
+func (g *Game) updateCampDoors(dt float64) {
+	if g.campDoors == nil {
+		g.campDoors = map[ecs.ID]campDoor{}
+	}
+	for _, c := range g.CampsNear(g.Player.Pos, 30) {
+		door, _ := c.Layout.Door()
+		d := g.campDoors[c.Ent]
+		want := 0.0
+		if c.Site.ToLocal(g.Player.Pos).Sub(door).Length() < 4 {
+			want = 1
+		}
+		if want != d.want {
+			d.want = want
+			g.sfx.Airlock()
+		}
+		d.open += (want - d.open) * math.Min(1, dt*4)
+		g.campDoors[c.Ent] = d
+	}
+}
+
+// CampLayout is how a kind of bootcamp is laid out, nil for what isn't
+// one.
+func (g *Game) CampLayout(kind string) *base.Camp { return g.campLayout(kind) }
+
+const (
+	campFromBase = 40.0 // m kept between a bootcamp and the base's buildings
+	maxCampSlope = 2.0  // m the flattened ground may make up, at most
+)
+
+// campFits tells whether a bootcamp laid out as l would stand at dir:
+// away from the base and from the other bootcamps (but moving, the one
+// moved), on ground flat enough, with nothing in its way; if not, why.
+func (g *Game) campFits(l *base.Camp, dir vec3, moving ecs.ID) (bool, string) {
+	if planet.ArcDist(dir, planet.BaseUp) < base.Extent+campFromBase+l.Reach {
+		return false, "trop près de la base"
+	}
+	for id, b := range g.Ents.Camp.All() {
+		if o := g.campLayout(g.kind(id)); id != moving && o != nil &&
+			planet.ArcDist(dir, b.site.Origin.Norm()) < l.Reach+o.Reach+planet.PadBlend {
+			return false, "trop près d'un bootcamp"
+		}
+	}
+	if g.World.Relief.PadSlope(dir, l.Reach+0.5) > maxCampSlope {
+		return false, "sol trop pentu"
+	}
+	if p := g.phys; p != nil {
+		at := g.World.Relief.Surface(dir)
+		bottom, top := p.slice(at, 4)
+		if p.w.Overlap(physics.Circle(l.Reach), p.plane(at), 0, bottom, top, layerEntity|layerVehicle|layerRobot|layerProp|layerPlayer, nil) {
+			return false, "quelque chose gêne"
+		}
+	}
+	return true, ""
+}
+
+// poseCamp sets a bootcamp's ghost where the player looks: its near edge
+// on the aimed ground, its door toward them, upright, turned only around
+// its up.
+func (g *Game) poseCamp(gh *Ghost, l *base.Camp) {
+	p := &g.Player
+	eye, fwd := p.Eye(), p.Forward()
+	hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach)
+	if !ok {
+		hit = g.World.Relief.Surface(eye.Add(planet.TangentAt(p.LocalUp(), fwd).Scale(buildReach)))
+	}
+	n := hit.Norm()
+	dir := planet.Toward2(n, planet.TangentAt(n, p.Heading), l.Reach)
+	face := planet.TangentAt(dir, p.Heading).Scale(-1)
+	side := face.Cross(dir)
+	r := gh.rel[0]
+	ax := face.Scale(r.X).Add(side.Scale(r.Z)).Norm()
+	gh.Pose = Transform{Dir: dir}
+	gh.Pose.SetAxes(ax, dir)
+	gh.OK, gh.Why = g.campFits(l, dir, gh.Moving)
+}
+
+// rayCamp is how far along a ray from o along d (length 1), within max,
+// it meets bootcamp c's walls or dome, seen as a round tower; never from
+// inside it.
+func rayCamp(c CampAt, o, d vec3, max float64) (float64, bool) {
+	lo, ld := c.Site.ToLocal(o), c.Site.DirLocal(d)
+	r := c.Layout.Room
+	top := r.WallH + r.Radius*0.55
+	if c.Layout.Indoors(lo) {
+		return 0, false
+	}
+	// x² + z² = R² along the ray, seen from above.
+	a := ld.X*ld.X + ld.Z*ld.Z
+	b := 2 * (lo.X*ld.X + lo.Z*ld.Z)
+	k := lo.X*lo.X + lo.Z*lo.Z - r.Radius*r.Radius
+	if a < 1e-12 || b*b-4*a*k < 0 {
+		return 0, false
+	}
+	t := (-b - math.Sqrt(b*b-4*a*k)) / (2 * a)
+	if y := lo.Y + t*ld.Y; t < 0 || t > max || y < 0 || y > top {
+		return 0, false
+	}
+	return t, true
+}
+
+// ShotCamp sets a bootcamp of kind dist m from the base along a bearing
+// (degrees from +X toward +Z), its door toward the base, for screenshots.
+func (g *Game) ShotCamp(kind string, dist, bearing float64) (CampAt, bool) {
+	a := bearing * math.Pi / 180
+	dir := planet.Toward(vec3{math.Cos(a), 0, math.Sin(a)}, dist)
+	id := g.add(Placed{Kind: kind, Dir: dir})
+	t := g.Ents.Transform.Get(id)
+	t.SetAxes(planet.TangentAt(dir, planet.BaseUp.Sub(dir)), dir)
+	g.standCamps()
+	for _, c := range g.Camps() {
+		if c.Ent == id {
+			return c, true
+		}
+	}
+	return CampAt{}, false
+}

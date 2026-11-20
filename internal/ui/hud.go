@@ -282,6 +282,12 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 			rl.DrawLineEx(v(x, -0.6), v(x+0.4, -0.05), 2.4*u, c)
 			rl.DrawLineEx(v(x+0.4, -0.05), v(x, 0.25), 2.4*u, c)
 		}
+	case "camp": // a little dome on the ground, its door, a beacon on top
+		rl.DrawCircleSector(v(0, 0.55), 0.95*s, 180, 360, 24, c)
+		rect(-1, 0.55, 1, 0.75, c)
+		rect(-0.2, 0.05, 0.2, 0.55, uiInk)
+		rect(-0.04, -0.75, 0.04, -0.35, c)
+		rl.DrawCircleV(v(0, -0.85), 0.14*s, c)
 	case "flag": // a pole and a pennant
 		rect(-0.55, -1, -0.4, 1, c)
 		tri(v(-0.4, -1), v(-0.4, 0.05), v(0.85, -0.47), c)
@@ -462,12 +468,15 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 		}
 		keys = [][2]string{{place, "poser"}, {next, "changer"}, {game.KeyLabel(game.ActTurnY) + " " + game.KeyLabel(game.ActTurnZ) + " " + game.KeyLabel(game.ActTurnX), "tourner"},
 			{game.KeyLabel(game.ActStick), stick}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
+		if g.CampLayout(gh.Kind) != nil { // upright, on the ground: only turned
+			keys = [][2]string{keys[0], keys[1], {game.KeyLabel(game.ActTurnY), "tourner"}, keys[5]}
+		}
 		if moving {
 			keys = append(keys[:1], keys[2:]...)
 			keys[len(keys)-1][1] = "annuler"
 		}
 		if !gh.OK {
-			keys[0][1] = "bloqué"
+			keys[0][1] = content.OrDefault(gh.Why, "bloqué")
 		}
 	}
 	u := uiScale()

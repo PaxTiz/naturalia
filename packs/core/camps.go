@@ -13,6 +13,8 @@ import (
 func registerCamps(c *content.Content) {
 	c.Kits.Add("core:camp.bench", content.Kit{Build: base.KitBuild(base.BuildWorkbench), Obstacles: []content.Obstacle{{vec3{}, 0.8}},
 		Reach: 2.4, Use: func(g content.Game, _ vec3) { g.OpenShop() }, Prompt: "[E] Ouvrir le laboratoire de recherche"})
+	c.Items.Add("core:bootcamp", content.Item{Name: "Bootcamp", Icon: "camp", Cost: 100_000_000, Max: 32, Places: "core:bootcamp",
+		Desc: "Un petit dôme à poser loin (F) : y dormir, ouvrir le labo, voyager par l'hologramme"})
 	c.Entities.Add("core:bootcamp", content.EntityDef{Name: "Bootcamp", Camp: &content.Blueprint{
 		ID:       "core:bootcamp",
 		Shape:    content.Dome{Radius: 4, WallH: 2.6},

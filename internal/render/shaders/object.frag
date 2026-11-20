@@ -19,7 +19,8 @@ uniform float lampGrid;          // cells per side of the map
 uniform vec2 ground;      // relief shadow and occlusion where the player stands (Terrain.light)
 uniform float shadowPass; // 1 while drawing the shadow map: write depth only
 uniform vec3 matInfo;     // painted material (mat* constants), texture tiles per meter, 1 if it follows the object
-uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: height of their floor
+uniform vec2 wear;        // x: dust on the outside of buildings (0..1), y: height of their floor along wearUp
+uniform vec3 wearUp;      // their up
 uniform sampler2D texture0, texture1, texture2, texture3, texture4, texture5, texture6; // texture3: the sun's shadow map
 uniform vec4 lightVP[4]; // the sun's shadow camera about origin, by columns
 out vec4 finalColor;
@@ -76,7 +77,7 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
                 lit = mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);
             }
         }
-        lit *= slabShade(fragRel - baseRel + n * 0.05, lights[i].xyz - origin - baseRel);
+        lit *= slabShade(toBase(fragRel - baseRel + n * 0.05), toBase(lights[i].xyz - origin - baseRel));
         light += lc * att * lightRamp(dot(n, l)) * lit;
         glints += lc * glint(n, v, l, max(spec, metal)) * att * lit;
     }
@@ -84,10 +85,11 @@ vec3 indoor(vec3 albedo, vec3 n, vec3 v, float spec, float metal, float ao) {
     vec3 shade = mix(roomShade, warmShade, bounce > 0.0 ? warmth / bounce : 0.0);
     vec3 above = mix(shade, hue, 0.2) * bounce * 1.2;
     vec3 below = shade * 0.5 * bounce;
-    vec3 amb = mix(below, above, smoothstep(-0.6, 0.6, n.y)) * ao;
+    vec3 up = normalize(fragPos);
+    vec3 amb = mix(below, above, smoothstep(-0.6, 0.6, dot(n, up))) * ao;
     vec3 col = albedo * (1.0 - 0.45 * metal) * (light + amb);
     col += glints * mix(vec3(0.45), albedo * 1.4, metal);
-    vec3 env = mix(below, above, smoothstep(-0.3, 0.3, reflect(-v, n).y));
+    vec3 env = mix(below, above, smoothstep(-0.3, 0.3, dot(reflect(-v, n), up)));
     return col + env * albedo * metal * 0.5 * ao;
 }
 
@@ -188,8 +190,8 @@ void main() {
     vec3 albedo = paint(colDiffuse.rgb, n, h);
     if (wear.x > 0.0 && !inside) { // big flat shapes of dust, no grain
         float patch = 0.75 + 0.25 * sin(fragPos.x * 0.7 + 1.3) * sin(fragPos.z * 0.9);
-        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, n.y) * 0.18 * patch * wear.x);
-        float foot = 1.0 - smoothstep(0.05, 0.55, fragPos.y - wear.y);
+        albedo = mix(albedo, vec3(0.58, 0.31, 0.19), smoothstep(0.55, 0.85, dot(n, wearUp)) * 0.18 * patch * wear.x);
+        float foot = 1.0 - smoothstep(0.05, 0.55, dot(fragPos, wearUp) - wear.y);
         albedo = mix(albedo, albedo * vec3(0.72, 0.52, 0.42), foot * wear.x * 0.4);
     }
     float dist = length(viewRel - fragRel);
