@@ -22,15 +22,16 @@ import (
 // center, facing the sun; NA_SHOT_TURN (radians, to the right) and
 // NA_SHOT_PITCH then adjust the view.
 type shotRun struct {
-	file    string
-	frames  int
-	placed  bool
-	heading vec3 // the view, held against stray mouse motion
-	pitch   float64
-	mode    game.Mode
-	perf    float64 // summed frame times (NA_SHOT_PERF)
-	hud     *ui.HUD
-	tab     int // the settings' tab shown, or -1 (NA_SHOT_MODE=settings)
+	file     string
+	frames   int
+	placed   bool
+	heading  vec3 // the view, held against stray mouse motion
+	pitch    float64
+	mode     game.Mode
+	perf     float64 // summed frame times (NA_SHOT_PERF)
+	hud      *ui.HUD
+	traveled bool // NA_SHOT_TRAVEL: the trip started
+	tab      int  // the settings' tab shown, or -1 (NA_SHOT_MODE=settings)
 }
 
 func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
@@ -184,6 +185,23 @@ func (s *shotRun) tick(g *game.Game) {
 		return
 	}
 	g.Mode = s.mode
+	// NA_SHOT_MAP=tab,hover opens the map table's tab (1: travel) with
+	// destination hover under the mouse; NA_SHOT_TRAVEL=t shows the trip
+	// to the first bootcamp t seconds in.
+	if v := os.Getenv("NA_SHOT_MAP"); v != "" && s.mode == game.ModeMap {
+		fmt.Sscanf(v, "%d,%d", &g.MapTab, &g.MapHover)
+	}
+	if v := os.Getenv("NA_SHOT_TRAVEL"); v != "" && s.frames > 30 {
+		if d := g.Destinations(); g.Mode != game.ModeTravel && len(d) > 1 && !s.traveled {
+			g.State.Credits += game.TravelCost
+			g.Travel(d[1])
+			s.traveled = true
+		}
+		if s.traveled {
+			fmt.Sscanf(v, "%f", &g.TravelT)
+			g.Mode, s.mode = game.ModeTravel, game.ModeTravel
+		}
+	}
 	if s.tab >= 0 {
 		s.hud.OpenSettings(s.tab)
 	}

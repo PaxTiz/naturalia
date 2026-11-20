@@ -424,6 +424,8 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.drawMapPanel(g)
 	case game.ModeSleep:
 		hud.drawSleep(g)
+	case game.ModeTravel:
+		hud.drawTravelFade(g)
 	}
 }
 
@@ -861,44 +863,6 @@ func (hud *HUD) hasUse(g *game.Game) bool {
 	return ok
 }
 
-// drawMapPanel shows the state of Mars next to the hologram.
-func (hud *HUD) drawMapPanel(g *game.Game) {
-	u := uiScale()
-	_, h := screenSize()
-	s := g.World.Stats(g.State.TotalDust)
-	p := rl.NewRectangle(40*u, h/2-190*u, 440*u, 380*u)
-	hud.terminal(g, p, "ÉTAT DE MARS", visorCyan)
-
-	rows := []struct{ label, value string }{
-		{"MARS NETTOYÉE", fmt.Sprintf("%.4f %%", s.Cleaned*100)},
-		{"POUSSIÈRE COLLECTÉE", game.FmtNum(g.State.TotalDust) + " g"},
-		{"ZONES VISITÉES", fmt.Sprintf("%d / %d", s.TilesVisited, s.TilesTotal)},
-		{"CRISTAUX TROUVÉS", fmt.Sprintf("%d / %d", s.Gems, s.GemTotal)},
-		{"CRÉDITS GAGNÉS", game.FmtNum(g.State.TotalEarned) + " cr"},
-		{"DISTANCE DE LA BASE", game.FmtNum(planet.ArcDist(g.Player.LocalUp(), planet.BaseUp)) + " m"},
-	}
-	for i, r := range rows {
-		y := p.Y + 74*u + float32(i)*42*u
-		if i%2 == 0 {
-			rl.DrawRectangleRec(rl.NewRectangle(p.X+14*u, y-8*u, p.Width-28*u, 38*u), color.RGBA{255, 255, 255, 8})
-		}
-		hud.caps(r.label, p.X+26*u, y+4*u, 14*u, visorDim)
-		hud.monoRight(r.value, p.X+p.Width-26*u, y+1*u, 19*u, uiWhite)
-	}
-	y := p.Y + p.Height - 38*u
-	legend := []struct {
-		c     color.RGBA
-		label string
-	}{{palette.Gold, "BASE"}, {color.RGBA{255, 90, 70, 255}, "TOI"}, {color.RGBA{190, 255, 255, 255}, "NETTOYÉ"}}
-	x := p.X + 28*u
-	for _, l := range legend {
-		rl.DrawPoly(rl.NewVector2(x, y+8*u), 4, 6*u, 0, l.c)
-		hud.caps(l.label, x+12*u, y+1*u, 14*u, uiMuted)
-		x += hud.capsWidth(l.label, 14*u) + 40*u
-	}
-	hud.closeHint(g, p.X, p.Y+p.Height+16*u, false)
-}
-
 // drawSleep fades to black, shows the night passing, then fades back in.
 func (hud *HUD) drawSleep(g *game.Game) {
 	u := uiScale()
@@ -932,6 +896,9 @@ func (hud *HUD) Update(g *game.Game, dt float64) {
 	hud.updateMenu(g, dt)
 	if g.Mode == game.ModeShop {
 		hud.updateShop(g)
+	}
+	if g.Mode == game.ModeMap {
+		hud.updateMap(g)
 	}
 }
 
@@ -998,6 +965,7 @@ type HUD struct {
 	confirm                     int    // vehicle row clicked once to sell it back, or -1
 	shopScroll                  int    // first row shown in the shop
 	shopTab                     string // the shop's tab open
+	mapScroll                   int    // first destination shown at the map table
 	dbg                         debugInfo
 	photo                       photoUI
 	menu                        menuUI

@@ -6,22 +6,23 @@ package content
 
 // Events the game emits, and what they carry.
 const (
-	EvTick   = "tick"           // every frame of play: Dt
-	EvDust   = "dust_collected" // Amount grams, At where it was swept
-	EvGem    = "gem_collected"  // Amount credits, At
-	EvSell   = "sell"           // Amount credits
-	EvBuy    = "buy"            // ID of the tool, upgrade or vehicle, Amount its price
-	EvResell = "resell"         // ID of the vehicle sold back at the garage, Amount the credits
-	EvUse    = "use"            // ID of the kit used, At (local)
-	EvEnter  = "enter_building" // ID of the building
-	EvLeave  = "leave_building" // ID of the building
-	EvWake   = "wake"           // the player gets up after sleeping
-	EvPlace  = "place"          // ID of the entity placed with an item, At
-	EvDrive  = "drive"          // ID of the vehicle the player gets in; empty when getting out
-	EvJump   = "jump"           // ID of the vehicle driven, Amount its upward speed
-	EvLand   = "land"           // ID of the vehicle driven, Amount seconds in the air, At where
-	EvBoost  = "boost"          // ID of the vehicle driven, when its boost starts
-	EvImpact = "impact"         // the vehicle driven hit something: ID its kind (empty: a wall, a rock), Entity it, Amount the speed, At where
+	EvTick     = "tick"           // every frame of play: Dt
+	EvDust     = "dust_collected" // Amount grams, At where it was swept
+	EvGem      = "gem_collected"  // Amount credits, At
+	EvSell     = "sell"           // Amount credits
+	EvBuy      = "buy"            // ID of the tool, upgrade or vehicle, Amount its price
+	EvResell   = "resell"         // ID of the vehicle sold back at the garage, Amount the credits
+	EvUse      = "use"            // ID of the kit used, At (local)
+	EvEnter    = "enter_building" // ID of the building
+	EvLeave    = "leave_building" // ID of the building
+	EvWake     = "wake"           // the player gets up after sleeping
+	EvPlace    = "place"          // ID of the entity placed with an item, At
+	EvDrive    = "drive"          // ID of the vehicle the player gets in; empty when getting out
+	EvJump     = "jump"           // ID of the vehicle driven, Amount its upward speed
+	EvLand     = "land"           // ID of the vehicle driven, Amount seconds in the air, At where
+	EvBoost    = "boost"          // ID of the vehicle driven, when its boost starts
+	EvImpact   = "impact"         // the vehicle driven hit something: ID its kind (empty: a wall, a rock), Entity it, Amount the speed, At where
+	EvTeleport = "teleport"       // the player traveled: ID the name of where to (Base, or a bootcamp's), By where from, At where they stand
 	// Into a zone (ramps and pads too): ID its kind, Entity it, By who
 	// ("player", or the kind of the vehicle driven), At where it stands.
 	EvTriggerIn  = "trigger_enter"

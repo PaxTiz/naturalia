@@ -235,6 +235,7 @@ func (gfx *Graphics) drawGlobeAt(g *game.Game, cam rl.Camera3D, site base.Site, 
 	facing := toViewer.Add(up.Scale(0.2)).Norm()
 	rl.SetShaderValueMatrix(gfx.holoSh, gfx.hLoc.globeRot, rotationBetween(facing, g.Player.LocalUp()))
 	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.playerDir, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
+	gfx.globeMarks(g)
 	rl.SetMaterialTexture(&gfx.holo.GetMaterials()[0], rl.MapDiffuse, gfx.dust.Coverage())
 
 	rl.DrawRenderBatchActive()
@@ -249,6 +250,30 @@ func (gfx *Graphics) drawGlobeAt(g *game.Game, cam rl.Camera3D, site base.Site, 
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()
+}
+
+// globeMarks puts the places to travel to on the hologram: every
+// bootcamp, the one under the mouse at the map table brighter (the base
+// has its own gold mark).
+func (gfx *Graphics) globeMarks(g *game.Game) {
+	var marks []float32
+	for i, d := range g.Destinations() {
+		if d.Camp == 0 && (g.Mode != game.ModeMap || g.MapHover != i) {
+			continue
+		}
+		lit := float32(1)
+		if g.Mode == game.ModeMap && g.MapTab == 1 && g.MapHover == i {
+			lit = 2
+		}
+		marks = append(marks, float32(d.Dir.X), float32(d.Dir.Y), float32(d.Dir.Z), lit)
+		if len(marks) == 33*4 {
+			break
+		}
+	}
+	if len(marks) > 0 {
+		rl.SetShaderValueV(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "marks"), marks, rl.ShaderUniformVec4, int32(len(marks)/4))
+	}
+	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "markCount"), []float32{float32(len(marks) / 4)}, rl.ShaderUniformFloat)
 }
 
 const (

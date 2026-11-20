@@ -35,11 +35,12 @@ type Mode int
 const (
 	ModePaused Mode = iota
 	ModePlay
-	ModeShop  // research lab: upgrades; or the garage's terminal (Garage)
-	ModeMap   // map table: state of Mars
-	ModeSleep // fading out, sleeping, waking up
-	ModePhoto // free camera, no interface (photo.go)
-	ModeScope // through the telescope (scope.go)
+	ModeShop   // research lab: upgrades; or the garage's terminal (Garage)
+	ModeMap    // map table: state of Mars
+	ModeSleep  // fading out, sleeping, waking up
+	ModePhoto  // free camera, no interface (photo.go)
+	ModeScope  // through the telescope (scope.go)
+	ModeTravel // teleported to the base or a bootcamp (travel.go)
 )
 
 // Sleep timeline, in seconds: fade out, sleep (the game saves), fade in.
@@ -119,6 +120,10 @@ type Game struct {
 	// The halls' corridor doors (base.InnerDoors), like the airlock's.
 	InnerOpen []float64
 	Garage    bool    // the shop open is the garage's: vehicles to drive
+	MapTab    int     // the map table's tab: 0 the state of Mars, 1 travel
+	MapHover  int     // the destination under the mouse at the map table, -1 for none
+	TravelT   float64 // time into the trip (ModeTravel)
+	travelTo  Destination
 	Burn      float64 // incinerator glow after a deposit
 	SleepT    float64 // time into the sleep sequence
 	wakeUp    bool    // a new game starts by waking up in bed
@@ -180,6 +185,9 @@ func New(c *content.Content) *Game {
 
 func (g *Game) setMode(m Mode) {
 	g.Mode = m
+	if !rl.IsWindowReady() { // tests have no window
+		return
+	}
 	if m == ModePlay || m == ModePhoto || m == ModeScope {
 		rl.DisableCursor()
 	} else {
@@ -245,6 +253,8 @@ func (g *Game) Update(dt float64) {
 		g.updateScope()
 	case ModeSleep:
 		g.updateSleep(dt)
+	case ModeTravel:
+		g.updateTravel(dt)
 	}
 
 	g.NearRocks = g.World.RocksNear(g.Player.Pos, RockDrawDist)

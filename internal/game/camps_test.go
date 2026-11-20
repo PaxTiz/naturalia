@@ -2,6 +2,7 @@ package game
 
 import (
 	"math"
+	"naturalia/internal/base"
 	"naturalia/internal/planet"
 	"testing"
 )
@@ -153,5 +154,50 @@ func TestCampShop(t *testing.T) {
 	}
 	if it, _ := buy(); !it.Maxed || it.Info != "32 bootcamps posés" {
 		t.Errorf("with 32 standing: %+v", it)
+	}
+}
+
+// From the base's hologram the player travels to a bootcamp, for a price,
+// and comes out before its hologram, facing it, inside; and back.
+func TestTravel(t *testing.T) {
+	g, c := campGame(t)
+	g.State.Credits = 2 * TravelCost
+	dests := g.Destinations()
+	if len(dests) != 2 || dests[0].Name != "Base" || dests[1].Camp != c.Ent {
+		t.Fatalf("destinations: %+v", dests)
+	}
+	g.Travel(dests[1])
+	for g.Mode == ModeTravel {
+		g.updateTravel(1.0 / 60)
+	}
+	if g.State.Credits != TravelCost {
+		t.Errorf("%v credits left", g.State.Credits)
+	}
+	at, ok := g.CampAround(g.Player.Eye())
+	if !ok || at.Ent != c.Ent {
+		t.Fatalf("not in the bootcamp: %v", c.Site.ToLocal(g.Player.Pos))
+	}
+	table := c.ToWorld(c.Layout.Table).Sub(g.Player.Pos)
+	if table.Norm().Dot(g.Player.Heading) < 0.95 {
+		t.Errorf("not facing the hologram")
+	}
+	for range 30 { // standing still: nothing pushes them out
+		g.stepPhysics(1.0 / 60)
+	}
+	if !g.Indoors(g.Player.Eye()) {
+		t.Errorf("pushed out: %v", c.Site.ToLocal(g.Player.Pos))
+	}
+	if d := g.Destinations(); !d[1].Here || g.CanTravel(d[1]) {
+		t.Errorf("can travel where they are")
+	}
+	g.Travel(g.Destinations()[0])
+	for g.Mode == ModeTravel {
+		g.updateTravel(1.0 / 60)
+	}
+	if l := base.ToLocal(g.Player.Pos); !base.Indoors(l) {
+		t.Errorf("not back in the base: %v", l)
+	}
+	if g.Travel(g.Destinations()[1]); g.Mode == ModeTravel {
+		t.Errorf("traveled without the credits")
 	}
 }

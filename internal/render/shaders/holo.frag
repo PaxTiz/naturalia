@@ -12,6 +12,8 @@ uniform vec3 globeCenter;
 uniform mat4 globeRot; // world → Mars frame: turns the player's spot toward the viewer
 uniform vec3 playerDir;
 uniform float tilesPerFace;
+uniform vec4 marks[33]; // the places to travel to: their direction, and 1, or 2 under the mouse
+uniform float markCount;
 uniform float time;
 out vec4 finalColor;
 
@@ -51,6 +53,11 @@ void main() {
 
     col = mix(col, vec3(0.75, 1.0, 1.0) * 1.3, clamp(coverage(d) * 3.0, 0.0, 1.0));
     col += vec3(1.0, 0.8, 0.3) * smoothstep(0.996, 0.999, d.y) * 2.0;
+    for (int i = 0; i < int(markCount); i++) {
+        float lit = marks[i].w - 1.0; // 1 under the mouse
+        float dot_ = smoothstep(mix(0.9985, 0.996, lit), mix(0.9995, 0.9985, lit), dot(d, marks[i].xyz));
+        col += mix(vec3(0.3, 1.0, 1.0), vec3(1.0, 1.0, 1.0), lit) * dot_ * mix(1.4, 3.0 + sin(time * 8.0), lit);
+    }
     float pulse = 0.6 + 0.4 * sin(time * 6.0);
     col += vec3(1.0, 0.35, 0.25) * smoothstep(0.997, 0.9993, dot(d, playerDir)) * 2.0 * pulse;
     col *= 0.85 + 0.15 * sin(fragPos.y * 90.0 + time * 3.0);
