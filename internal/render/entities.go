@@ -2,6 +2,7 @@ package render
 
 import (
 	"cmp"
+	"fmt"
 	"image/color"
 	"math"
 	"naturalia/internal/content"
@@ -68,6 +69,9 @@ func (gfx *Graphics) drawEntities(g *game.Game, seen sees) {
 		if !ok || g.Held(id) {
 			continue // its mod was removed (it stays in the save), or it is being moved
 		}
+		if _, car := g.Content.Vehicles.Get(kind); car && gfx.still {
+			continue
+		}
 		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
 		if !seen(pos, gfx.entityReach(def)+0.5) {
 			continue
@@ -78,12 +82,22 @@ func (gfx *Graphics) drawEntities(g *game.Game, seen sees) {
 			lit = mesh.LitIndoor
 		}
 		gfx.setLighting(lit, vec3{})
-		for _, m := range models {
-			if m.glass {
-				continue
+		put := func(models []entityModel, pos vec3) {
+			for _, m := range models {
+				if m.glass {
+					continue
+				}
+				gfx.setMat(m.tok.Mat, m.tok.Scale, false)
+				glow := m.tok.Emissive
+				if def.Light != nil && def.Light.Night {
+					glow *= 0.15 + 0.85*float32(nightAt(pos))
+				}
+				gfx.putBasis(m.model, pos, ax, up, az, m.tok.Col, m.tok.Spec, glow)
 			}
-			gfx.setMat(m.tok.Mat, m.tok.Scale, false)
-			gfx.putBasis(m.model, pos, ax, up, az, m.tok.Col, m.tok.Spec, m.tok.Emissive)
+		}
+		put(models, pos)
+		for i := range def.Leaves {
+			put(gfx.leafModels(def, i, g.Paint(id)), pos.Add(g.LeafShift(id, i)))
 		}
 		if v, ok := g.Content.Vehicles.Get(kind); ok && v.Light != (vec3{}) && math.Sin(g.Elapsed*6+float64(id.Index())) > 0 {
 			light := palette.Green
@@ -114,10 +128,20 @@ func (gfx *Graphics) drawPanes(g *game.Game, seen sees) {
 		if !ok || g.Held(id) {
 			continue
 		}
-		for _, m := range gfx.entityModels(def, g.Paint(id)) {
-			if pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id)); m.glass && seen(pos, gfx.entityReach(def)+0.5) {
-				panes = append(panes, pane{m, pos, ax, up, az, pos.Sub(gfx.camEye).Length()})
+		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+		if !seen(pos, gfx.entityReach(def)+0.5) {
+			continue
+		}
+		add := func(models []entityModel, pos vec3) {
+			for _, m := range models {
+				if m.glass {
+					panes = append(panes, pane{m, pos, ax, up, az, pos.Sub(gfx.camEye).Length()})
+				}
 			}
+		}
+		add(gfx.entityModels(def, g.Paint(id)), pos)
+		for i := range def.Leaves {
+			add(gfx.leafModels(def, i, g.Paint(id)), pos.Add(g.LeafShift(id, i)))
 		}
 	}
 	if len(panes) == 0 {
@@ -139,13 +163,24 @@ func (gfx *Graphics) drawPanes(g *game.Game, seen sees) {
 // entityModels are an entity's models, painted with a finish ("" for its
 // own), built on first use.
 func (gfx *Graphics) entityModels(def *content.EntityDef, finish string) []entityModel {
-	key := def.ID
+	return gfx.partModels(def, finish, "", def.Parts)
+}
+
+// leafModels are the models of the leaf i of an entity's door.
+func (gfx *Graphics) leafModels(def *content.EntityDef, i int, finish string) []entityModel {
+	return gfx.partModels(def, finish, fmt.Sprintf(" leaf %d", i), def.Leaves[i].Parts)
+}
+
+// partModels are the models of some of an entity's parts, kept under its
+// ID and what they are of it.
+func (gfx *Graphics) partModels(def *content.EntityDef, finish, what string, parts []content.PartJSON) []entityModel {
+	key := def.ID + what
 	if def.Paint != "" {
 		key += " " + finish
 	}
 	models, ok := gfx.entities[key]
 	if !ok {
-		models = buildEntity(def, finish, gfx)
+		models = buildEntity(def, finish, parts, gfx)
 		gfx.entities[key] = models
 	}
 	return models
@@ -190,7 +225,11 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	}
 	pos, ax, up, az := g.Frame(&gh.Pose)
 	draw := func() {
-		for _, m := range gfx.entityModels(def, gh.Paint) {
+		all := gfx.entityModels(def, gh.Paint)
+		for i := range def.Leaves {
+			all = append(all[:len(all):len(all)], gfx.leafModels(def, i, gh.Paint)...)
+		}
+		for _, m := range all {
 			gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.22)
 		}
 		if l := g.CampLayout(def.ID); l != nil { // a bootcamp: its meshes, all alike
@@ -224,10 +263,10 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	rl.DrawRenderBatchActive()
 }
 
-// buildEntity merges an entity's parts into one model per material, in
-// its own frame.
-func buildEntity(def *content.EntityDef, finish string, gfx *Graphics) []entityModel {
-	b := gfx.content.Painted(def, finish)
+// buildEntity merges some of an entity's parts into one model per
+// material, in its own frame.
+func buildEntity(def *content.EntityDef, finish string, parts []content.PartJSON, gfx *Graphics) []entityModel {
+	b := gfx.content.Painted(def, finish, parts)
 	b.Unfight()
 	var out []entityModel
 	for _, k := range b.Keys {

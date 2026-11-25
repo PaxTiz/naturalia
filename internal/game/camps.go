@@ -169,30 +169,14 @@ func (g *Game) Kind(id ecs.ID) string { return g.kind(id) }
 func isCamp(def *content.EntityDef) bool { return def != nil && def.Camp != nil }
 
 // CampDoor is how open a bootcamp's door is, 0 closed to 1 open.
-func (g *Game) CampDoor(id ecs.ID) float64 { return g.campDoors[id].open }
-
-// campDoor is a bootcamp's door: how open, and where it is going.
-type campDoor struct{ open, want float64 }
+func (g *Game) CampDoor(id ecs.ID) float64 { return g.doors[id].open }
 
 // updateCampDoors slides the doors of the bootcamps near open when the
 // player comes close, as the base's airlock.
 func (g *Game) updateCampDoors(dt float64) {
-	if g.campDoors == nil {
-		g.campDoors = map[ecs.ID]campDoor{}
-	}
 	for _, c := range g.CampsNear(g.Player.Pos, 30) {
 		door, _ := c.Layout.Door()
-		d := g.campDoors[c.Ent]
-		want := 0.0
-		if c.Site.ToLocal(g.Player.Pos).Sub(door).Length() < 4 {
-			want = 1
-		}
-		if want != d.want {
-			d.want = want
-			g.sfx.Airlock()
-		}
-		d.open += (want - d.open) * math.Min(1, dt*4)
-		g.campDoors[c.Ent] = d
+		g.slideDoor(c.Ent, c.Site.ToLocal(g.Player.Pos).Sub(door).Length() < 4, dt)
 	}
 }
 

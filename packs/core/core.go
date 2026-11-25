@@ -175,6 +175,7 @@ var coreTokens = map[string]content.Token{
 	"fabric.wool":  {color.RGBA{226, 212, 186, 255}, content.MtFabric, 1 / content.FabricTile, 0.05, 0},
 	"lamp.shade":   {color.RGBA{255, 214, 160, 255}, content.MtPlain, 1, 0, 0.55},
 	"lamp.amber":   {color.RGBA{255, 180, 100, 255}, content.MtPlain, 1, 0, 1},
+	"lamp.cold":    {color.RGBA{214, 232, 255, 255}, content.MtPlain, 1, 0, 0.9},
 	"neon.amber":   {color.RGBA{255, 170, 80, 255}, content.MtPlain, 1, 0, 0.9},
 	"rock.red":     {color.RGBA{150, 72, 48, 255}, content.MtPlain, 1, 0.1, 0},
 	"earth.blue":   {color.RGBA{50, 110, 205, 255}, content.MtPlain, 1, 0.5, 0.15},

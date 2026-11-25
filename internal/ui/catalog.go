@@ -267,7 +267,7 @@ func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 	if def.Paint != "" {
 		paint = g.State.Paint
 	}
-	parts := g.Content.Painted(def, paint)
+	parts := g.Content.Painted(def, paint, def.Closed())
 	lo, hi := content.Bounds(def.Parts)
 	mid := lo.Add(hi).Scale(0.5)
 	size := math.Max(0.6, hi.Sub(lo).Length())

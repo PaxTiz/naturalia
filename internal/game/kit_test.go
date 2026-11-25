@@ -196,6 +196,87 @@ func TestDriveGate(t *testing.T) {
 	}
 }
 
+// A door opens as the player comes, lets them through, and closes; a
+// shutter opens for a vehicle.
+func TestSlidingDoors(t *testing.T) {
+	for _, kind := range []string{"core:door", "core:door-glass", "core:gate-door"} {
+		g := gridGame(t)
+		id := put(g, kind, ahead(g, 8), 8)
+		if id == 0 {
+			t.Fatalf("no %s: %q", kind, g.Ghost.Why)
+		}
+		g.Ghost = nil
+		wait := func(sec float64) {
+			for range int(sec * 60) {
+				g.updateDoors(1.0 / 60)
+			}
+		}
+		wait(1)
+		if o := g.LeafOpen(id); o != 0 {
+			t.Errorf("%s: %.2f open with no one by", kind, o)
+		}
+		at := stride(g, id, vec3{2, 0, 0}, vec3{-2, 0, 0}, 0.01)
+		wait(2)
+		if o := g.LeafOpen(id); o != 1 {
+			t.Errorf("%s: %.2f open for the player at %v", kind, o, at)
+		}
+		if at = stride(g, id, vec3{2, 0, 0}, vec3{-2, 0, 0}, 1); at.X > -1.5 {
+			t.Errorf("%s: walked to %v", kind, at)
+		}
+		stride(g, id, vec3{-20, 0, 0}, vec3{-21, 0, 0}, 0.01)
+		wait(2)
+		if o := g.LeafOpen(id); o != 0 {
+			t.Errorf("%s: left %.2f open", kind, o)
+		}
+		// What slides stays in the walls: within the block's sides.
+		def, _ := g.Content.Entities.Get(kind)
+		for i, l := range def.Leaves {
+			lo, hi := content.Bounds(l.Parts)
+			lo, hi = lo.Add(l.Slide), hi.Add(l.Slide)
+			if hi.Z > 3 || lo.Z < -3 || hi.Y > 4 || lo.Y < 0 {
+				t.Errorf("%s: leaf %d goes to %v %v", kind, i, lo, hi)
+			}
+		}
+	}
+}
+
+// Aimed at the underside of a slab, a ceiling lamp hangs from it; at a
+// wall's face, a wall lamp stands against it, its light out of the wall.
+func TestLampsHang(t *testing.T) {
+	g := gridGame(t)
+	slab := put(g, "core:slab", ahead(g, 6), 6)
+	grid, _ := g.gridOf(slab)
+	wall := onGrid(t, g, slab, "core:wall", vec3{0.1, 0.2, 2}, 0)
+	roof := onGrid(t, g, slab, "core:slab", vec3{2, 2.7, 2}, 0)
+	rp, _, ru, _ := g.Frame(g.Ents.Transform.Get(roof))
+	lamp := put(g, "core:lamp-ceiling", rp.Add(ru.Scale(0.01)), 4)
+	if lamp == 0 {
+		t.Fatalf("no lamp under the slab: %q", g.Ghost.Why)
+	}
+	lo, hi, _ := g.boxOf(grid, lamp)
+	if math.Abs(hi.Y-2.7) > 1e-6 || math.Abs(lo.Y-2.6) > 1e-6 {
+		t.Errorf("the ceiling lamp fills %v %v under 2.7", lo, hi)
+	}
+	wp, wx, wu, _ := g.Frame(g.Ents.Transform.Get(wall))
+	face := wp.Add(wx.Scale(0.1)).Add(wu.Scale(1.6))
+	if g.Player.Eye().Sub(wp).Dot(wx) < 0 {
+		face = wp.Add(wx.Scale(-0.1)).Add(wu.Scale(1.6))
+	}
+	app := put(g, "core:lamp-wall", face, 4)
+	if app == 0 {
+		t.Fatalf("no lamp on the wall: %q", g.Ghost.Why)
+	}
+	alo, ahi, _ := g.boxOf(grid, app)
+	wlo, whi, _ := g.boxOf(grid, wall)
+	if math.Abs(alo.X-whi.X) > 1e-6 && math.Abs(ahi.X-wlo.X) > 1e-6 {
+		t.Errorf("the wall lamp fills %v %v on %v %v", alo, ahi, wlo, whi)
+	}
+	ap, ax, _, _ := g.Frame(g.Ents.Transform.Get(app))
+	if ap.Sub(wp).Dot(ax) < 0 {
+		t.Error("the wall lamp lights its wall")
+	}
+}
+
 // Every block of the catalog can be set down, and walked into.
 func TestCatalogStands(t *testing.T) {
 	for _, s := range gridGame(t).Catalog() {

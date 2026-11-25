@@ -1224,7 +1224,7 @@ func (g *Game) ShotGrid(dist, step float64, what int) {
 		turned(3, "core:stairs", -2, 0.2, 5, false)
 		for i, z := range []float64{-4, 0, 4} { // the front and the back
 			for j, y := range []float64{0.2, 2.9} {
-				kinds := [][]string{{"core:wall-window", "core:wall-door", "core:wall-glass"}, {"core:wall-glass", "core:wall-window", "core:wall-window"}}
+				kinds := [][]string{{"core:wall-window", "core:door", "core:wall-glass"}, {"core:wall-glass", "core:wall-window", "core:wall-window"}}
 				paint = []string{"core:coral", "core:white"}[j]
 				stand(kinds[j][i], 3.9, y, z, false)
 				stand("core:wall", -3.9, y, z, false)
@@ -1247,7 +1247,18 @@ func (g *Game) ShotGrid(dist, step float64, what int) {
 		turned(1, "core:gable", 2, 5.4, 5.9, false)
 		paint = ""
 		stand("core:rail", 7.9, 0.2, 0, false)
-		stand("core:gate", 4, 0, 14, true)
+		stand("core:gate-door", 4, 0, 14, true)
+		stand("core:lamp-street", 9, 0, 9, true)
+		stand("core:lamp-street", 9, 0, -9, true)
+		for _, z := range []float64{-4, 0, 4} {
+			stand("core:lamp-ceiling", 0, 2.6, z, false)
+			if z < 4 {
+				stand("core:lamp-ceiling", 0, 5.3, z, false)
+			}
+		}
+		turned(0, "core:lamp-wall", 4.075, 2, 2.5, false)
+		stand("core:lamp-post", 8, 0.2, 4.5, false)
+		turned(2, "core:lamp-flood", 7, 0, 18, true)
 		stand("core:arch", 4, 0, -14, true)
 		g.regrade = true
 		g.syncGround()

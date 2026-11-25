@@ -57,6 +57,8 @@ type Graphics struct {
 	post                                              *postFX
 	shadow                                            *shadowMap
 	lampShadow                                        *lampShadow
+	spots                                             *spots  // the player's lamps (spots.go)
+	still                                             bool    // drawing only what stays put
 	shade                                             shading // the buildings in the shaders (selectBase)
 	campSigns                                         map[ecs.ID]campSign
 	dust                                              dustGPU // the dust tiles near the player, on the GPU
@@ -167,6 +169,7 @@ func New(g *game.Game) *Graphics {
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 	gfx.shadow = newShadowMap()
 	gfx.lampShadow = newLampShadow(min(base.Ents.Building.Len(), maxRooms))
+	gfx.spots = newSpots()
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(gfx.terrainSh, "shadowMap"))
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
 
@@ -548,6 +551,8 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
 	}
 
+	gfx.drawSpots(g)
+
 	sunUp := gfx.camEye.Norm().Dot(planet.SunDir)
 	indoors := g.Indoors(gfx.camEye)
 	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors)
@@ -829,6 +834,7 @@ func LoadFont(ttf []byte, size int32) rl.Font {
 type Stats struct {
 	Patches, Pebbles int     // drawn this frame
 	Loaded, Pending  int     // terrain meshes on the GPU, being built
+	Lamps            int     // the player's, lighting the scene
 	Sun, AO          float64 // relief light under the player
 }
 

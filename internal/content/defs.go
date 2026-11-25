@@ -259,6 +259,11 @@ type EntityDef struct {
 	// ramp nor mostly a wedge: stairs. What is aimed at its top goes on
 	// from there.
 	Rise vec3 `json:"rise"`
+	// Light is what it lights around, with shadows; none if left out.
+	Light *Light `json:"light"`
+	// Leaves are a door's: they slide open as someone comes close, and are
+	// walked through.
+	Leaves []Leaf `json:"leaves"`
 	// Trigger makes it a zone, walked and driven through: who comes in and
 	// goes out says trigger_enter and trigger_leave. It spans radius, or
 	// its parts without one, up to 1.5 m over them.
@@ -272,6 +277,34 @@ type EntityDef struct {
 	// Data is the pack's own components, anything JSON holds, for its
 	// scripts (game.data).
 	Data map[string]any `json:"data"`
+}
+
+// Light is a lamp: a wide cone of light from At along Dir, in the frame of
+// what carries it.
+type Light struct {
+	At    vec3    `json:"at"`    // a little out of the lamp's parts: they cast shadows too
+	Dir   vec3    `json:"dir"`   // down if left out
+	Cone  float64 `json:"cone"`  // degrees from the middle to the edge, 70 if left out (the most)
+	Power float64 `json:"power"` // 1 if left out, a room's lamp
+	Range float64 `json:"range"` // in m, 10 if left out
+	Tint  string  `json:"tint"`  // the token whose color it has; a warm white if left out
+	Night bool    `json:"night"` // only lit when the sun is down
+}
+
+// Leaf is a part of a door that moves: closed where its parts are, open
+// Slide farther.
+type Leaf struct {
+	Parts []PartJSON `json:"parts"`
+	Slide vec3       `json:"slide"`
+}
+
+// Closed are all an entity's parts, its doors closed.
+func (e *EntityDef) Closed() []PartJSON {
+	out := slices.Clone(e.Parts)
+	for _, l := range e.Leaves {
+		out = append(out, l.Parts...)
+	}
+	return out
 }
 
 type Ramp struct {
@@ -313,13 +346,14 @@ var Shelves = []struct{ ID, Name string }{
 	{"roofs", "Toits"},
 	{"climbs", "Rampes"},
 	{"frames", "Structure"},
+	{"lights", "Lumières"},
 	{"other", "Autres"},
 }
 
-// Painted are an entity's parts as meshes, painted with a finish ("" for
-// their own).
-func (c *Content) Painted(def *EntityDef, finish string) *mesh.Parts {
-	parts := slices.Clone(def.Parts)
+// Painted are some of an entity's parts as meshes, painted with a finish
+// ("" for their own).
+func (c *Content) Painted(def *EntityDef, finish string, parts []PartJSON) *mesh.Parts {
+	parts = slices.Clone(parts)
 	if f, ok := c.Finishes.Get(finish); ok && finish != "" && def.Paint != "" {
 		for i := range parts {
 			if Qualify(parts[i].Token) == Qualify(def.Paint) {

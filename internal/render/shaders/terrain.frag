@@ -22,6 +22,7 @@ out vec4 finalColor;
 #include "common.glsl"
 #include "texture.glsl"
 #include "grid.glsl"
+#include "spots.glsl"
 const float regolithTile = ${regolithTile};
 const float dustTile = ${dustTile};
 // Same cube projection as the game code (cubeFaces in mathx.go).
@@ -158,6 +159,7 @@ void main() {
     shadow *= fragSun;
     float ao = mix(0.35, 1.0, fragAO) * baseAO(normalize(fragNormal));
     vec3 col = shade(albedo, n, v, up, shadow, ao, mix(0.04 * cover, 0.5, ice));
+    col += spotLight(albedo, n, normalize(fragNormal), false);
 
     if (brush.w > 0.0) {
         float d = length(up - normalize(brush.xyz)) * marsRadius;

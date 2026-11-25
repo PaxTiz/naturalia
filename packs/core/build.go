@@ -16,6 +16,7 @@ import (
 // what climbs rises away from them (toward -X).
 func registerBuild(c *content.Content) {
 	registerFinishes(c)
+	defer registerLamps(c)
 	// What a block is made of, how much of the grid it fills, and the token
 	// its finish replaces. What isn't a plain box has a shape.
 	block := func(shelf, id, name, desc, icon string, cost float64, cell vec3, paint string, parts []content.PartJSON, more ...func(e *content.EntityDef)) {
@@ -161,6 +162,32 @@ func registerBuild(c *content.Content) {
 	block("walls", "core:wall-door", "Mur à porte", "4 m de long : un passage de 1,6 m au milieu", "door", 320, vec3{0.2, 2.5, 4}, "habitat.white",
 		join(door, foot(0.8), lining(0.8, 0, 2.2), []content.PartJSON{box("neon.cyan", vec3{0.105, 2.29, 0}, vec3{0.01, 0.04, 1.4}, 0), box("neon.cyan", vec3{-0.105, 2.29, 0}, vec3{0.01, 0.04, 1.4}, 0)}),
 		shape(door...))
+	// Doors: their leaves slide into the wall on both sides.
+	sliding := func(id, name, desc string, cost float64, leaf func(side float64) []content.PartJSON) {
+		parts := join(door, foot(0.8), lining(0.8, 0, 2.2), []content.PartJSON{
+			box("neon.cyan", vec3{0.105, 2.29, 0}, vec3{0.01, 0.04, 1.4}, 0), box("neon.cyan", vec3{-0.105, 2.29, 0}, vec3{0.01, 0.04, 1.4}, 0)})
+		block("walls", id, name, desc, "door", cost, vec3{0.2, 2.5, 4}, "habitat.white", parts, shape(door...), func(e *content.EntityDef) {
+			for _, s := range []float64{-1, 1} {
+				e.Leaves = append(e.Leaves, content.Leaf{Parts: leaf(s), Slide: vec3{0, 0, s * 0.72}})
+			}
+		})
+	}
+	sliding("core:door", "Porte coulissante", "4 m de long : s'ouvre toute seule quand on approche", 520, func(s float64) []content.PartJSON {
+		return []content.PartJSON{
+			box("steel", vec3{0, 1.07, s * 0.37}, vec3{0.08, 2.14, 0.73}, 0),
+			box("steel.dark", vec3{0, 1.07, s * 0.04}, vec3{0.1, 2.12, 0.06}, 0),
+			box("neon.cyan", vec3{0, 1.25, s * 0.4}, vec3{0.1, 0.04, 0.4}, 0),
+		}
+	})
+	sliding("core:door-glass", "Porte vitrée", "4 m de long : s'ouvre toute seule, laisse passer la lumière", 560, func(s float64) []content.PartJSON {
+		return []content.PartJSON{
+			box("steel.dark", vec3{0, 0.06, s * 0.37}, vec3{0.08, 0.12, 0.73}, 0),
+			box("steel.dark", vec3{0, 2.1, s * 0.37}, vec3{0.08, 0.08, 0.73}, 0),
+			box("steel.dark", vec3{0, 1.09, s * 0.035}, vec3{0.08, 1.94, 0.06}, 0),
+			box("steel.dark", vec3{0, 1.09, s * 0.705}, vec3{0.08, 1.94, 0.06}, 0),
+			glass(vec3{0, 1.09, s * 0.37}, vec3{0.04, 1.94, 0.61}),
+		}
+	})
 	window := opened(2.5, 1.4, 0.9, 2.1)
 	block("walls", "core:wall-window", "Mur à fenêtre", "4 m de long : une vitre de 2,8 m", "window", 380, vec3{0.2, 2.5, 4}, "habitat.white",
 		join(window, trims(4, 2.5), lining(1.4, 0.9, 2.1), []content.PartJSON{glass(vec3{0, 1.5, 0}, vec3{0.04, 1.08, 2.68})}),
@@ -184,6 +211,22 @@ func registerBuild(c *content.Content) {
 			box("hazard", vec3{0, 0.5, -2.49}, vec3{0.42, 1, 0.04}, 0), box("hazard", vec3{0, 0.5, 2.49}, vec3{0.42, 1, 0.04}, 0),
 			box("neon.cyan", vec3{0.205, 3.7, 0}, vec3{0.01, 0.06, 4.6}, 0), box("neon.cyan", vec3{-0.205, 3.7, 0}, vec3{0.01, 0.06, 4.6}, 0)}),
 		shape(gate...))
+	// Its shutter: slats that all roll up behind the header.
+	block("walls", "core:gate-door", "Portail à rideau", "6 m de large, 4 m de haut : le rideau monte quand on approche, à pied ou en véhicule", "door", 1_100, vec3{0.4, 4, 6}, "habitat.white",
+		join(gate, []content.PartJSON{
+			box("hazard", vec3{0, 0.5, -2.49}, vec3{0.42, 1, 0.04}, 0), box("hazard", vec3{0, 0.5, 2.49}, vec3{0.42, 1, 0.04}, 0),
+			box("neon.orange", vec3{0.205, 3.7, 0}, vec3{0.01, 0.06, 4.6}, 0), box("neon.orange", vec3{-0.205, 3.7, 0}, vec3{0.01, 0.06, 4.6}, 0)}),
+		shape(gate...), func(e *content.EntityDef) {
+			const n, h = 6, 3.4 / 6
+			for i := range n {
+				y := h * (float64(i) + 0.5)
+				slat := []content.PartJSON{box("steel", vec3{0, y, 0}, vec3{0.08, h - 0.02, 4.94}, 0), box("steel.dark", vec3{0, y, 0}, vec3{0.05, h, 4.9}, 0)}
+				if i == 0 {
+					slat = append(slat, box("hazard", vec3{0, 0.08, 0}, vec3{0.1, 0.14, 4.92}, 0))
+				}
+				e.Leaves = append(e.Leaves, content.Leaf{Parts: slat, Slide: vec3{0, 3.7 - y, 0}})
+			}
+		})
 
 	// Roofs: 20 cm thick, their underside rising 2 m over 4.
 	const thick = 0.2
@@ -306,6 +349,58 @@ func registerBuild(c *content.Content) {
 	block("frames", "core:arch", "Arche", "6 m de large, 4 m de haut : les véhicules passent dessous", "door", 650, vec3{0.6, 4, 6}, "habitat.white",
 		append(arch, box("steel.dark", vec3{0, 0.06, -2.7}, vec3{0.64, 0.12, 0.64}, 0), box("steel.dark", vec3{0, 0.06, 2.7}, vec3{0.64, 0.12, 0.64}, 0)),
 		shape(arch...))
+}
+
+// registerLamps adds the lamps to build with. Those for outside light up
+// at dusk.
+func registerLamps(c *content.Content) {
+	lamp := func(id, name, desc string, cost float64, cell vec3, l content.Light, paint string, parts []content.PartJSON, shape ...content.PartJSON) {
+		c.Entities.Add(id, content.EntityDef{Name: name, Pickup: true, Prompt: "Ramasser : " + name, Build: true, Cell: cell, Paint: "core:" + paint, Parts: parts, Shape: shape, Light: &l})
+		c.Items.Add(id, content.Item{Name: name, Desc: desc, Icon: "lamp", Cost: cost, Places: id, Shelf: "lights"})
+	}
+	lamp("core:lamp-ceiling", "Plafonnier", "60 cm, sous une dalle : éclaire une pièce", 120, vec3{0.6, 0.1, 0.6},
+		content.Light{At: vec3{0, -0.06, 0}, Cone: 74, Power: 0.75, Range: 9}, "steel.dark", []content.PartJSON{
+			box("steel.dark", vec3{0, 0.065, 0}, vec3{0.6, 0.07, 0.6}, 0.02),
+			box("lamp.warm", vec3{0, 0.02, 0}, vec3{0.5, 0.04, 0.5}, 0),
+		})
+	lamp("core:lamp-strip", "Réglette", "2 m de lumière blanche, sous une dalle", 110, vec3{0.2, 0.1, 2},
+		content.Light{At: vec3{0, -0.06, 0}, Cone: 74, Power: 0.85, Range: 10, Tint: "core:lamp.cold"}, "steel.dark", []content.PartJSON{
+			box("steel.dark", vec3{0, 0.07, 0}, vec3{0.2, 0.06, 2}, 0.01),
+			box("lamp.cold", vec3{0, 0.025, 0}, vec3{0.12, 0.05, 1.9}, 0),
+		})
+	lamp("core:lamp-wall", "Applique", "Contre un mur, dedans ou dehors : une lumière douce", 90, vec3{0.15, 0.4, 0.25},
+		content.Light{At: vec3{0.14, 0.2, 0}, Dir: vec3{0.6, -1, 0}, Cone: 72, Power: 0.5, Range: 7, Tint: "core:lamp.amber"}, "steel.dark", []content.PartJSON{
+			box("steel.dark", vec3{-0.05, 0.2, 0}, vec3{0.05, 0.4, 0.25}, 0.01),
+			box("lamp.amber", vec3{0.01, 0.2, 0}, vec3{0.08, 0.3, 0.15}, 0.02),
+		})
+	lamp("core:lamp-post", "Lampe sur pied", "1,6 m, pour l'intérieur : une lumière chaude", 150, vec3{0.5, 1.6, 0.5},
+		content.Light{At: vec3{0, 1.22, 0}, Cone: 74, Power: 0.5, Range: 7, Tint: "core:lamp.amber"}, "steel.dark", []content.PartJSON{
+			prism("steel.dark", vec3{}, vec3{}, 0.16, 0.16, 0.04, 12),
+			prism("steel.dark", vec3{0, 0.04, 0}, vec3{}, 0.02, 0.02, 1.21, 6),
+			prism("lamp.amber", vec3{0, 1.25, 0}, vec3{}, 0.24, 0.15, 0.35, 10),
+		}, box("", vec3{0, 0.8, 0}, vec3{0.1, 1.6, 0.1}, 0))
+	lamp("core:lamp-bollard", "Borne lumineuse", "1 m de haut, s'allume la nuit : bords de piste, allées", 130, vec3{0.25, 1, 0.25},
+		content.Light{At: vec3{0, 0.84, 0}, Cone: 74, Power: 0.6, Range: 6, Night: true}, "steel.dark", []content.PartJSON{
+			box("steel.dark", vec3{0, 0.4, 0}, vec3{0.1, 0.8, 0.1}, 0),
+			box("lamp.warm", vec3{0, 0.89, 0}, vec3{0.2, 0.07, 0.2}, 0),
+			box("steel.dark", vec3{0, 0.96, 0}, vec3{0.25, 0.08, 0.25}, 0.01),
+		}, box("", vec3{0, 0.5, 0}, vec3{0.2, 1, 0.2}, 0))
+	pole := box("habitat.white", vec3{-0.8, 2, 0}, vec3{0.16, 4, 0.16}, 0.02)
+	lamp("core:lamp-street", "Lampadaire", "4 m de haut, s'allume la nuit : places et pistes", 320, vec3{2, 4, 0.5},
+		content.Light{At: vec3{0.6, 3.72, 0}, Cone: 74, Power: 2.6, Range: 16, Night: true}, "habitat.white", []content.PartJSON{
+			pole,
+			box("steel.dark", vec3{-0.8, 0.1, 0}, vec3{0.4, 0.2, 0.4}, 0.02),
+			box("habitat.white", vec3{0.1, 3.92, 0}, vec3{1.7, 0.1, 0.12}, 0.01),
+			box("steel.dark", vec3{0.6, 3.86, 0}, vec3{0.7, 0.1, 0.4}, 0.01),
+			box("lamp.warm", vec3{0.6, 3.8, 0}, vec3{0.6, 0.04, 0.3}, 0),
+		}, pole)
+	lamp("core:lamp-flood", "Projecteur", "Sur pied, s'allume la nuit : un large faisceau, loin devant lui", 380, vec3{1, 2, 1},
+		content.Light{At: vec3{-0.3, 1.65, 0}, Dir: vec3{-1, -0.28, 0}, Cone: 42, Power: 5, Range: 30, Night: true, Tint: "core:lamp.cold"}, "steel.dark", []content.PartJSON{
+			box("steel.dark", vec3{0, 0.03, 0}, vec3{0.8, 0.06, 0.8}, 0.01),
+			box("steel.dark", vec3{0, 0.75, 0}, vec3{0.1, 1.4, 0.1}, 0),
+			box("steel.dark", vec3{0, 1.65, 0}, vec3{0.3, 0.45, 0.8}, 0.03),
+			box("lamp.cold", vec3{-0.16, 1.65, 0}, vec3{0.03, 0.37, 0.7}, 0),
+		}, box("", vec3{0, 0.95, 0}, vec3{0.4, 1.9, 0.8}, 0))
 }
 
 // hull is the convex hull of points.

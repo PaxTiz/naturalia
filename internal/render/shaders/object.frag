@@ -27,6 +27,7 @@ out vec4 finalColor;
 #include "common.glsl"
 #include "texture.glsl"
 #include "grid.glsl"
+#include "spots.glsl"
 // Indoor lighting, painted like outside: each ceiling lamp lays a warm
 // pool that fades softly with distance (faded out by its range: 10 m in
 // the domes, more in the halls), with the same soft-edged ramp as the sun.
@@ -207,6 +208,7 @@ void main() {
     float ao = baseAO(n);
     vec3 lit = inside ? indoor(albedo, n, v, surface.x, metal, ao)
                       : shadeM(albedo, n, v, normalize(fragPos), ground.x * sunShadow(normalize(fragNormal)), mix(0.35, 1.0, ground.y) * ao, surface.x, metal);
+    lit += spotLight(albedo * (1.0 - 0.45 * metal), n, normalize(fragNormal), inside);
     vec3 col = mix(lit, albedo * 2.6, surface.y); // emissive goes past white: it blooms
     col = buildGrid(col, normalize(fragNormal));
     finalColor = vec4(finish(col, dist), colDiffuse.a);

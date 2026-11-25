@@ -309,6 +309,12 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 		rect(-0.25, -0.8, 0.25, 0.8, c)
 		rect(-0.5, -1, 0.5, -0.75, c)
 		rect(-0.5, 0.75, 0.5, 1, c)
+	case "lamp": // a lamp and its rays
+		tri(v(-0.5, -0.1), v(0.5, -0.1), v(0, -0.9), c)
+		rect(-0.5, -0.1, 0.5, 0.1, c)
+		for _, x := range []float32{-0.8, 0, 0.8} {
+			rl.DrawLineEx(v(x*0.5, 0.35), v(x, 0.95), 2*u, c)
+		}
 	case "rail":
 		rect(-1, -0.5, 1, -0.3, c)
 		rect(-1, 0, 1, 0.1, c)

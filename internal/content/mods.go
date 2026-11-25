@@ -189,6 +189,12 @@ func (m *modFile) register(c *Content) {
 	for name, e := range m.Entities {
 		refParts(e.Parts)
 		refParts(e.Shape)
+		for _, l := range e.Leaves {
+			refParts(l.Parts)
+		}
+		if e.Light != nil && e.Light.Tint != "" {
+			e.Light.Tint = m.ref(e.Light.Tint, isTok)
+		}
 		e.Paint = m.ref(e.Paint, isTok)
 		e.Item = ""
 		c.Entities.Add(m.own(name), e)
