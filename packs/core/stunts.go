@@ -14,7 +14,7 @@ func registerStunts(c *content.Content) {
 	ramp := func(id, name, desc string, cost, height float64) {
 		const lip = 0.2 // m: the hazard strip at its end, flush
 		low := height * (6 - lip) / 6
-		c.Entities.Add(id, content.EntityDef{Name: name, Pickup: true, Prompt: "Ramasser : " + name, Build: true,
+		c.Entities.Add(id, content.EntityDef{Name: name, Pickup: true, Prompt: "Ramasser : " + name, Build: true, Paint: "core:steel",
 			Cell: vec3{6, height, 4}, Ramp: &content.Ramp{Length: 6, Width: 4, Height: height},
 			Parts: []content.PartJSON{
 				{Shape: "wedge", Token: "steel", At: vec3{-lip / 2, 0, 0}, Size: vec3{6 - lip, low, 4}, Lit: "outdoor"},
@@ -24,12 +24,12 @@ func registerStunts(c *content.Content) {
 				box("steel.dark", vec3{0.3, 0.06, -2}, vec3{5.2, 0.12, 0.02}, 0),
 				box("steel.dark", vec3{0.3, 0.06, 2}, vec3{5.2, 0.12, 0.02}, 0),
 			}})
-		c.Items.Add(id, content.Item{Name: name, Desc: desc, Icon: "ramp", Cost: cost, Places: id})
+		c.Items.Add(id, content.Item{Name: name, Desc: desc, Icon: "ramp", Cost: cost, Places: id, Shelf: "climbs"})
 	}
 	ramp("core:ramp", "Tremplin", "6 × 4 m, monte de 2 m : vises-en le haut pour en ajouter un qui le prolonge", 2_000, 2)
 	ramp("core:ramp-steep", "Tremplin raide", "6 × 4 m, monte de 4 m : à mettre au bout d'un autre, pour les très grands sauts", 3_500, 4)
 	c.Entities.Add("core:ramp-base", content.EntityDef{Name: "Socle", Pickup: true, Prompt: "Ramasser : Socle", Build: true,
-		Cell: vec3{6, 2, 4}, Parts: []content.PartJSON{
+		Cell: vec3{6, 2, 4}, Paint: "core:steel", Parts: []content.PartJSON{
 			box("steel", vec3{0, 1, 0}, vec3{6, 2, 4}, 0),
 			box("steel.dark", vec3{0, 0.06, -2}, vec3{6, 0.12, 0.02}, 0),
 			box("steel.dark", vec3{0, 0.06, 2}, vec3{6, 0.12, 0.02}, 0),
@@ -37,7 +37,7 @@ func registerStunts(c *content.Content) {
 			box("hazard", vec3{0, 1.8, 2}, vec3{6, 0.2, 0.02}, 0),
 		}})
 	c.Items.Add("core:ramp-base", content.Item{Name: "Socle", Desc: "6 × 4 m, 2 m de haut : porte un tremplin, ou continue sa hauteur",
-		Icon: "crate", Cost: 500, Places: "core:ramp-base"})
+		Icon: "crate", Cost: 500, Places: "core:ramp-base", Shelf: "climbs"})
 
 	pad := []content.PartJSON{
 		box("steel.dark", vec3{0, 0.04, 0}, vec3{3.2, 0.08, 2.6}, 0.02),
@@ -55,7 +55,7 @@ func registerStunts(c *content.Content) {
 	c.Entities.Add("core:pad", content.EntityDef{Name: "Accélérateur", Pickup: true, Prompt: "Ramasser : Accélérateur",
 		Kick: 15, Parts: pad})
 	c.Items.Add("core:pad", content.Item{Name: "Accélérateur", Desc: "Plaque à poser (F) : lance le véhicule qui passe dessus et remplit son boost",
-		Icon: "pad", Cost: 5_000, Places: "core:pad"})
+		Icon: "pad", Cost: 5_000, Places: "core:pad", Shelf: "climbs"})
 
 	// A jump of over a second pays, more for dearer vehicles; what flies
 	// doesn't count.

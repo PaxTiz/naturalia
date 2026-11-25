@@ -56,6 +56,10 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		s.mode = game.ModeShop
 	case "garage":
 		s.mode, g.Garage = game.ModeShop, true
+	case "build": // NA_SHOT_SHELF=id opens that section
+		hud.OpenShelf(os.Getenv("NA_SHOT_SHELF"))
+		g.State.Paint = os.Getenv("NA_SHOT_PAINT")
+		s.mode = game.ModeBuild
 	case "map":
 		s.mode = game.ModeMap
 	case "pause":
@@ -153,12 +157,12 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		}
 	}
 	// NA_SHOT_GRID=dist,step builds a small house on the grid that far
-	// ahead, dist,step,1 ramps on two levels (NA_SHOT_GHOST then holds something to add to it).
+	// ahead, dist,step,1 ramps on two levels, 2 a house, 3 every block (NA_SHOT_GHOST then holds something to add to it).
 	if v := os.Getenv("NA_SHOT_GRID"); s.file != "" && v != "" {
 		dist, step := 10.0, 1.0
 		ramps := 0
 		fmt.Sscanf(v, "%f,%f,%d", &dist, &step, &ramps)
-		g.ShotGrid(dist, step, ramps != 0)
+		g.ShotGrid(dist, step, ramps)
 	}
 	// NA_SHOT_NIGHTS=n counts n nights slept: what grows has grown.
 	if s.file != "" {

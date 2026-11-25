@@ -1177,12 +1177,14 @@ func (g *Game) boxesMeet(def *content.EntityDef, origin, ax, up vec3, id ecs.ID,
 
 // ShotGrid builds a small house on a grid dist m ahead, for screenshots:
 // two rows of slabs, walls along the far edge, a crate at their end; or
-// ramps on two levels.
-func (g *Game) ShotGrid(dist, step float64, ramps bool) {
+// (1) ramps on two levels, (2) a two-storey house, (3) every block of the
+// catalog in rows.
+func (g *Game) ShotGrid(dist, step float64, what int) {
 	g.Settings.Grid, g.Settings.GridStep = true, step
 	n := planet.Toward2(g.Player.LocalUp(), g.Player.Heading, dist)
 	at := g.World.Relief.Surface(n)
 	grid := planet.Grid{At: at, X: planet.TangentAt(n, g.Player.Heading).Scale(-1), Up: n}
+	quarters, paint := 0, ""
 	stand := func(kind string, x, y, z float64, ground bool) {
 		def, ok := g.Content.Entities.Get(kind)
 		if !ok {
@@ -1191,13 +1193,88 @@ func (g *Game) ShotGrid(dist, step float64, ramps bool) {
 		origin := grid.World(vec3{x, y, z})
 		t := Transform{Dir: origin.Norm()}
 		t.Alt = origin.Length() - g.World.Relief.Surface(t.Dir).Length()
-		t.SetAxes(grid.X, grid.Up)
-		lo, hi := boxIn(grid, def, grid.X, grid.Up)
+		ax := grid.X
+		for range quarters {
+			ax = ax.Cross(grid.Up)
+		}
+		t.SetAxes(ax, grid.Up)
+		lo, hi := boxIn(grid, def, ax, grid.Up)
 		o := vec3{x, y, z}
-		g.add(Placed{Kind: kind, Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll,
+		g.add(Placed{Kind: def.ID, Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll, Paint: paint,
 			Grid: &OnGrid{Grid: grid, Lo: o.Add(lo), Hi: o.Add(hi), Ground: ground}})
 	}
-	if ramps {
+	if what == 2 {
+		turned := func(q int, kind string, x, y, z float64, ground bool) {
+			quarters = q
+			stand(kind, x, y, z, ground)
+			quarters = 0
+		}
+		for _, x := range []float64{-2, 2} {
+			for _, z := range []float64{-4, 0, 4} {
+				stand("core:slab", x, 0, z, true)
+				if x > 0 || z < 4 {
+					stand("core:slab", x, 2.7, z, false)
+				}
+			}
+		}
+		turned(0, "core:slab-half", -3, 2.7, 4, false)
+		stand("core:slab-round", 6, 0, 4, true)
+		turned(1, "core:slab-round", 6, 0, -4, true)
+		stand("core:slab", 6, 0, 0, true)
+		turned(3, "core:stairs", -2, 0.2, 5, false)
+		for i, z := range []float64{-4, 0, 4} { // the front and the back
+			for j, y := range []float64{0.2, 2.9} {
+				kinds := [][]string{{"core:wall-window", "core:wall-door", "core:wall-glass"}, {"core:wall-glass", "core:wall-window", "core:wall-window"}}
+				paint = []string{"core:coral", "core:white"}[j]
+				stand(kinds[j][i], 3.9, y, z, false)
+				stand("core:wall", -3.9, y, z, false)
+			}
+			paint = "core:plum"
+			turned(0, "core:roof", 2, 5.4, z, false)
+			turned(2, "core:roof", -2, 5.4, z, false)
+		}
+		for j, y := range []float64{0.2, 2.9} { // the ends
+			paint = []string{"core:coral", "core:white"}[j]
+			for _, x := range []float64{-2, 2} {
+				turned(1, []string{"core:wall", "core:wall-window"}[j], x, y, -5.9, false)
+				turned(1, "core:wall", x, y, 5.9, false)
+			}
+		}
+		paint = "core:white"
+		turned(3, "core:gable", -2, 5.4, -5.9, false)
+		turned(1, "core:gable", 2, 5.4, -5.9, false)
+		turned(3, "core:gable", -2, 5.4, 5.9, false)
+		turned(1, "core:gable", 2, 5.4, 5.9, false)
+		paint = ""
+		stand("core:rail", 7.9, 0.2, 0, false)
+		stand("core:gate", 4, 0, 14, true)
+		stand("core:arch", 4, 0, -14, true)
+		g.regrade = true
+		g.syncGround()
+		return
+	}
+	if what == 3 {
+		paint = g.State.Paint
+		row := 0.0
+		for _, s := range g.Catalog() {
+			z := -18.0
+			for _, it := range s.Items {
+				def, ok := g.Content.Entities.Get(it.Places)
+				if !ok || s.ID == carriedShelf {
+					continue
+				}
+				lo, hi := nominal(def)
+				z += (hi.Z - lo.Z) / 2
+				stand(def.ID, -row, 0, z, true)
+				z += (hi.Z-lo.Z)/2 + 1
+			}
+			row += 9
+		}
+		g.regrade = true
+		g.syncGround()
+		return
+	}
+	if what == 1 {
 		grid.X = grid.X.Scale(-1)
 		stand("core:ramp", 0, 0, 0, true)
 		stand("core:ramp-base", 6, 0, 0, true)
