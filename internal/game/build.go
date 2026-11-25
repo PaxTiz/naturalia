@@ -37,6 +37,10 @@ type Ghost struct {
 	home       *planet.Grid // the one it is kept on, far from any (alignGhost)
 	from       *planet.Grid // the one it was taken from
 	fresh      bool         // the grid is its own: it founds it
+	askew      bool         // the player turned it off the grid's axes
+	level      *Level       // the height they chose on it (Raise)
+	wheel      float64      // how far the wheel turned, since its last stop
+	wheelT     float64      // when
 	Sheet      *Sheet       // the grid's lines shown
 	dist, lift float64      // free: how far ahead; on a surface: how high over it
 }
@@ -94,7 +98,7 @@ func (g *Game) updateItems() {
 	if g.campLayout(def.ID) == nil {
 		if KeyPressed(ActGrid) {
 			g.ToggleGrid()
-			gh.home = nil
+			gh.home, gh.level, gh.askew = nil, nil, false
 		}
 		if KeyPressed(ActAlign) {
 			g.alignGhost()
@@ -131,20 +135,35 @@ func (g *Game) updateItems() {
 		gh.rel[0] = vec3{gh.rel[0].X, 0, gh.rel[0].Z}.Norm()
 	}
 	if KeyPressed(ActStick) {
-		gh.Free = !gh.Free
+		gh.Free, gh.level = !gh.Free, nil
 		pos, _, _, _ := g.Frame(&gh.Pose)
 		gh.dist = math.Max(1.5, pos.Sub(g.Player.Eye()).Length()) // it stays where it was
 	}
 	if w := float64(rl.GetMouseWheelMove()); w != 0 {
 		if gh.Free {
 			gh.dist = math.Max(1.5, math.Min(15, gh.dist+w*0.3))
-		} else if gh.grid != nil { // a level a notch, down into the ground too
-			gh.lift = math.Max(-5, math.Min(5, gh.lift+w*planet.GridRise))
+		} else if gh.grid != nil {
+			// A stop a notch: a wheel may send fractions of one, a trackpad
+			// many in a row.
+			if gh.wheel*w < 0 {
+				gh.wheel = 0
+			}
+			gh.wheel += w
+			if now := rl.GetTime(); now-gh.wheelT > 0.12 || math.Abs(gh.wheel) >= 1 {
+				g.Raise(int(math.Copysign(1, gh.wheel)), KeyDown(ActTurnQuarter))
+				gh.wheel, gh.wheelT = 0, now
+			}
 		} else {
 			gh.lift = math.Max(0, math.Min(5, gh.lift+w*0.1))
 		}
 	}
 	g.poseGhost()
+	if KeyPressed(ActRaise) {
+		g.Raise(1, KeyDown(ActTurnQuarter))
+	}
+	if KeyPressed(ActLower) {
+		g.Raise(-1, KeyDown(ActTurnQuarter))
+	}
 	if KeyPressed(ActPlace) && gh.OK {
 		g.placeGhost()
 	}
@@ -211,6 +230,9 @@ func (g *Game) grab(id ecs.ID) {
 	ax, up, _ := e.Axes()
 	pos, _, _, _ := g.Frame(e)
 	g.Ghost = &Ghost{Kind: def.ID, Moving: id, from: from, frame: [3]vec3{face, n, face.Cross(n)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
+	if g.Settings.Grid { // it stays on its own, even far from all
+		g.Ghost.home = from
+	}
 	g.Ghost.setRel(ax, up)
 	g.Ents.Air.Remove(id)
 	if bp := g.Ents.Body.Get(id); bp != nil && g.phys != nil {
@@ -225,6 +247,7 @@ func (g *Game) grab(id ecs.ID) {
 func (gh *Ghost) turn(axis vec3, angle float64) {
 	gh.rel[0] = rotate(gh.rel[0], axis, angle).Norm()
 	gh.rel[1] = rotate(gh.rel[1], axis, angle).Norm()
+	gh.askew = !gh.straight()
 }
 
 // inFrame is a direction of the frame the ghost stands in, in the world.
@@ -247,7 +270,7 @@ func (g *Game) aimSurface(def *content.EntityDef, eye, fwd vec3) (at, n vec3, on
 	if !ok {
 		hit, reach = g.World.Relief.Surface(eye.Add(planet.TangentAt(g.Player.LocalUp(), fwd).Scale(buildReach))), buildReach
 	}
-	if !g.turnable(def) {
+	if _, vehicle := g.Content.Vehicles.Get(def.ID); vehicle || isCamp(def) {
 		return hit, hit.Norm(), 0
 	}
 	if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach, def.Mass > 0); ok {

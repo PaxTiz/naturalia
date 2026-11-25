@@ -213,13 +213,16 @@ func (g *Game) groundOn(p vec3) (r float64, block bool) {
 			continue
 		}
 		e := g.Ents.Transform.Get(id)
-		foot := g.World.Relief.Surface(e.Dir)
-		ax, _, az := entityAxes(e.Dir, e.Yaw)
+		foot, ax, up, az := g.Frame(e)
 		off := p.Sub(foot)
 		x, z := off.Dot(ax), off.Dot(az)
 		rp := def.Ramp
 		if math.Abs(x) < rp.Length/2 && math.Abs(z) < rp.Width/2 {
-			r = math.Max(r, foot.Length()+rp.Height*(x/rp.Length+0.5))
+			top := foot.Add(ax.Scale(x)).Add(az.Scale(z)).Add(up.Scale(rp.Height * (x/rp.Length + 0.5))).Length()
+			if e.Alt > 0.3 && g.drive.r > 0 && top > g.drive.r+carStep {
+				continue // it passes under
+			}
+			r = math.Max(r, top)
 		}
 	}
 	if g.drive.r > 0 { // and the blocks it rolls onto

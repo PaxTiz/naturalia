@@ -252,9 +252,6 @@ func TestGridAlign(t *testing.T) {
 	g.Ents.Transform.Get(a).SetAxes(ax, up)
 	g.Ghost = nil
 	g.grab(a)
-	if g.Ghost.Aligned() {
-		t.Fatal("askew, it says it is straight")
-	}
 	aligned := func(when string) {
 		t.Helper()
 		ax, up, _ := g.Ghost.Pose.Axes()
@@ -263,17 +260,21 @@ func TestGridAlign(t *testing.T) {
 			t.Errorf("%s: %+v, rel %v", when, gh.grid, gh.rel)
 		}
 	}
+	aligned("taken in hand")
+	g.Ghost.turn(vec3{0, 1, 0}, 0.3)
+	g.poseGhost()
+	if g.Ghost.Aligned() {
+		t.Fatal("turned by the player, it says it is straight")
+	}
 	g.alignGhost()
 	aligned("beside the grid")
 	// 40 m away, beyond any thing's grid, the key keeps it on its own.
 	g.Player.Pos = g.World.Relief.Surface(planet.Toward2(g.Player.LocalUp(), g.Player.Heading, -40))
-	g.Ghost.home = nil
 	g.poseGhost()
-	if g.Ghost.Aligned() {
-		t.Error("far away, it stayed on the grid by itself")
-	}
-	g.alignGhost()
 	aligned("far away")
+	g.Ghost.home = nil
+	g.alignGhost()
+	aligned("far away, by the key")
 	// With the grid off, the key brings it back.
 	g.Settings.Grid = false
 	g.alignGhost()
@@ -447,5 +448,172 @@ func TestGridOverHead(t *testing.T) {
 	l, _, _ := g.boxOf(grid, id)
 	if want := (vec3{lo.X, hi.Y, lo.Z}); l.Sub(want).Length() > 1e-6 {
 		t.Errorf("at %v, want %v", l, want)
+	}
+}
+
+// Wherever its top is aimed at, whatever the step, the same block goes
+// exactly on the one under it: a clean column.
+func TestGridColumn(t *testing.T) {
+	for _, kind := range []string{"core:crate", "core:crate-2", "core:slab", "core:slope", "core:beam"} {
+		for _, step := range GridSteps {
+			for _, off := range []vec3{{0.3, 0, 0.2}, {-0.35, 0, 0.4}, {0, 0, -0.3}} {
+				g := gridGame(t)
+				g.Settings.GridStep = step
+				id := put(g, kind, ahead(g, 5), 5)
+				def, _ := g.Content.Entities.Get(kind)
+				lo, hi := nominal(def)
+				first, fax, up, az := g.Frame(g.Ents.Transform.Get(id))
+				last := first
+				tall, back := 2, 3.0
+				switch kind { // seen from above, and out of the player's way
+				case "core:crate-2":
+					tall = 1
+				case "core:slab":
+					back = 5
+				}
+				for i := 1; i <= tall; i++ {
+					at := last.Add(up.Scale(hi.Y - 0.01)).Add(fax.Scale(off.X * (hi.X - lo.X))).Add(az.Scale(off.Z * (hi.Z - lo.Z)))
+					if kind == "core:slope" { // its top is slanted: from above
+						at = last.Add(up.Scale(0.5))
+					}
+					next := put(g, kind, at, back)
+					if next == 0 {
+						t.Errorf("%s step %g off %v: %d doesn't fit (%q)", kind, step, off, i, g.Ghost.Why)
+						break
+					}
+					for range 120 {
+						g.stepPhysics(1.0 / 60)
+					}
+					pos, ax, _, _ := g.Frame(g.Ents.Transform.Get(next))
+					d := pos.Sub(first)
+					if side := d.Sub(up.Scale(d.Dot(up))); side.Length() > 2e-3 || math.Abs(math.Abs(ax.Dot(fax))-1) > 1e-5 || d.Dot(up) < 0.15*float64(i) {
+						t.Errorf("%s step %g off %v: %d is %.4f m aside, %.2f m up, turned %.4f", kind, step, off, i, side.Length(), d.Dot(up), ax.Dot(fax))
+					}
+					last = pos
+				}
+			}
+		}
+	}
+}
+
+// What is set down on a floor goes by steps all over it, across its slabs.
+func TestGridFloor(t *testing.T) {
+	g := gridGame(t)
+	a := put(g, "core:slab", ahead(g, 6), 6)
+	pos, ax, up, az := g.Frame(g.Ents.Transform.Get(a))
+	b := put(g, "core:slab", pos.Add(az.Scale(4)), 6)
+	if b == 0 {
+		t.Fatal("no floor")
+	}
+	grid, _ := g.gridOf(a)
+	top := up.Scale(0.2)
+	id := put(g, "core:crate-2", pos.Add(top).Add(az.Scale(1.9)), 5) // across the joint
+	lo, _, _ := g.boxOf(grid, id)
+	alo, ahi, _ := g.boxOf(grid, a)
+	p, _, _, _ := g.Frame(g.Ents.Transform.Get(id))
+	if d := p.Sub(pos).Dot(az); id == 0 || math.Abs(d-2) > 1e-6 && math.Abs(d-1) > 1e-6 {
+		t.Errorf("across the joint: %.3f m off the slab's middle", d)
+	}
+	g.Ents.Kill(id)
+	id = put(g, "core:crate-2", pos.Add(top).Add(ax.Scale(1.9)), 5) // at the edge
+	lo, _, _ = g.boxOf(grid, id)
+	_, hi, _ := g.boxOf(grid, id)
+	if id == 0 || lo.X < alo.X-1e-6 || hi.X > ahi.X+1e-6 {
+		t.Errorf("hangs over the edge: %v %v on %v %v", lo, hi, alo, ahi)
+	}
+}
+
+// The height chosen holds whatever is aimed at, and slopes and ramps go on
+// blocks, over several of them.
+func TestGridLevel(t *testing.T) {
+	for _, kind := range []string{"core:slope", "core:ramp"} {
+		g := gridGame(t)
+		a := put(g, "core:crate-2", ahead(g, 6), 6)
+		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(a))
+		grid, _ := g.gridOf(a)
+		ids := []ecs.ID{a}
+		for i := 1; i <= 2; i++ {
+			ids = append(ids, put(g, "core:crate-2", pos.Add(az.Scale(2*float64(i))).Add(up.Scale(0.3)), 5))
+		}
+		for _, id := range ids {
+			if id == 0 {
+				t.Fatal("no row of crates")
+			}
+		}
+		_, top, _ := g.boxOf(grid, a)
+		// By itself, aimed high on a crate.
+		id := put(g, kind, pos.Add(up.Scale(1.8)).Add(ax.Scale(1)), 5)
+		if id == 0 {
+			t.Fatalf("%s doesn't fit on crates: %q", kind, g.Ghost.Why)
+		}
+		if lo, _, _ := g.boxOf(grid, id); math.Abs(lo.Y-top.Y) > 1e-6 {
+			t.Errorf("%s at %.3f, the crates' top at %.3f", kind, lo.Y, top.Y)
+		}
+		g.Ents.Kill(id)
+		g.stepPhysics(1.0 / 60)
+
+		// By the wheel, from the ground: straight to their top.
+		g.Ghost.level = nil
+		g.Player.Pitch = -0.3
+		g.poseGhost()
+		for range 8 {
+			if g.Ghost.grid.Lo.Y > top.Y-0.01 {
+				break
+			}
+			g.Raise(1, true)
+		}
+		if y := g.Ghost.grid.Lo.Y; math.Abs(y-top.Y) > 1e-6 {
+			t.Errorf("%s: raised to %.3f, the crates' top at %.3f", kind, y, top.Y)
+		}
+		for _, pitch := range []float64{-1, -0.4, -0.1, 0, 0.1, 0.5} {
+			g.Player.Pitch = pitch
+			for turn := range 8 {
+				g.Player.Heading = rotate(g.Player.Heading, g.Player.LocalUp(), math.Pi/4)
+				g.poseGhost()
+				if g.Ghost.fresh {
+					continue
+				}
+				if y := g.Ghost.grid.Lo.Y; math.Abs(y-top.Y) > 1e-6 {
+					t.Errorf("%s: looking %.1f, %d, at %.3f, not %.3f", kind, pitch, turn, y, top.Y)
+				}
+			}
+		}
+		// Every stop by the wheel goes the way it is turned; down again, at
+		// the same place.
+		g.Player.Pitch = -0.3
+		g.poseGhost()
+		for _, dir := range []int{1, 1, 1, -1, -1, -1, -1} {
+			was := g.Ghost.grid.Lo.Y
+			g.Raise(dir, false)
+			if d := (g.Ghost.grid.Lo.Y - was) * float64(dir); d < 0.01 || d > 0.4 {
+				t.Errorf("%s: a stop of %.3f m", kind, d)
+			}
+		}
+		g.alignGhost()
+		if _, chosen := g.Height(); chosen {
+			t.Errorf("%s: the height still chosen", kind)
+		}
+	}
+}
+
+// A vehicle passes under a ramp set up high, and rolls onto it from its
+// level.
+func TestRampAloft(t *testing.T) {
+	g := fleetGame(t, LoadContent(), map[string]int{})
+	at := ahead(g, 10)
+	id := g.spawn("core:ramp", at)
+	e := g.Ents.Transform.Get(id)
+	e.Alt = 3
+	g.drive.over = []ecs.ID{id}
+	pos, ax, _, _ := g.Frame(e)
+	p := pos.Add(ax.Scale(-2.8))
+	ground := g.World.Relief.Surface(p).Length()
+	g.drive.r = ground
+	if r := g.groundAt(p); r > ground+0.1 {
+		t.Errorf("under it, lifted %.2f m", r-ground)
+	}
+	g.drive.r = ground + 3
+	if r := g.groundAt(p); math.Abs(r-ground-3) > 0.3 {
+		t.Errorf("on its foot, %.2f m up", r-ground)
 	}
 }

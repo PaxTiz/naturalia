@@ -225,14 +225,16 @@ func (s *shotRun) tick(g *game.Game) {
 		g.Player.Heading, g.Player.Pitch = s.heading, s.pitch
 	}
 	s.frames++
-	// NA_SHOT_GHOST=item,degrees holds that item's ghost, tipped over,
-	// once playing; again each frame the pause of an unfocused window put
+	// NA_SHOT_GHOST=item,degrees,stops holds that item's ghost, tipped over,
+	// raised by so many stops of the wheel, once playing; again each frame the pause of an unfocused window put
 	// it away.
 	if v := os.Getenv("NA_SHOT_GHOST"); v != "" && s.frames >= 60 && g.Ghost == nil {
 		item, deg, _ := strings.Cut(v, ",")
 		var d float64
-		fmt.Sscanf(deg, "%f", &d)
+		stops := 0
+		fmt.Sscanf(deg, "%f,%d", &d, &stops)
 		g.HoldGhost(item, d)
+		g.Raise(stops, false)
 	}
 	// NA_SHOT_PERF=1 prints the mean frame time over frames 120 to 239,
 	// without vsync (main.go). NA_SHOT_SIZE=WxH sets the window.

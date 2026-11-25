@@ -33,6 +33,8 @@ const (
 	ActGrid
 	ActGridStep
 	ActAlign
+	ActRaise
+	ActLower
 	ActStow
 	ActTurnQuarter
 	ActTurnDegree
@@ -88,6 +90,8 @@ var ActionDefs = [Actions]ActionDef{
 	{"grid", "Grille", "Construction", rl.KeyG, building},
 	{"grid_step", "Pas de la grille", "Construction", rl.KeyH, building},
 	{"align", "Réaligner sur la grille", "Construction", rl.KeyV, building},
+	{"raise", "Plus haut", "Construction", rl.KeyPageUp, building},
+	{"lower", "Plus bas", "Construction", rl.KeyPageDown, building},
 	{"stow", "Ranger, annuler", "Construction", rl.KeyBackspace, onFoot | building},
 	{"turn_quarter", "Tourner d'un quart, de 15° sur la grille (maintenu)", "Construction", rl.KeyLeftControl, building},
 	{"turn_degree", "Tourner d'un degré (maintenu)", "Construction", rl.KeyLeftAlt, building},

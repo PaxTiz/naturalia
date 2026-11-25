@@ -468,12 +468,27 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 		if gh.Free {
 			stick = "coller"
 		}
+		wheel := "décaler"
+		if high, chosen := g.Height(); gh.Free {
+			wheel = "distance"
+		} else if gh.OnGrid() {
+			wheel = strings.Replace(fmt.Sprintf("hauteur %.2f m", math.Abs(high)), ".", ",", 1)
+			if high < -0.005 {
+				wheel = strings.Replace(wheel, "hauteur ", "hauteur -", 1)
+			}
+			if !chosen {
+				wheel = "hauteur auto"
+			}
+		}
 		keys = [][2]string{{place, "poser"}, {next, "changer"}, {game.KeyLabel(game.ActTurnY) + " " + game.KeyLabel(game.ActTurnZ) + " " + game.KeyLabel(game.ActTurnX), "tourner"},
-			{game.KeyLabel(game.ActStick), stick}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
+			{game.KeyLabel(game.ActStick), stick}, {"MOLETTE", wheel}, {"CLIC DROIT", "ranger"}}
 		if g.CampLayout(gh.Kind) != nil { // upright, on the ground: only turned
 			keys = [][2]string{keys[0], keys[1], {game.KeyLabel(game.ActTurnY), "tourner"}, keys[5]}
 		} else {
 			last := keys[5]
+			if _, chosen := g.Height(); chosen && gh.Aligned() {
+				keys = append(keys[:3], append([][2]string{{game.KeyLabel(game.ActAlign), "hauteur auto"}}, keys[3:]...)...)
+			}
 			if !gh.Aligned() {
 				keys = append(keys[:3], append([][2]string{{game.KeyLabel(game.ActAlign), "aligner"}}, keys[3:]...)...)
 			}

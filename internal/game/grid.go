@@ -204,6 +204,154 @@ func snapRise(lo, hi float64, edges []float64) float64 {
 	return best
 }
 
+// Level is a height chosen on a grid: a thing's bottom at y there.
+type Level struct {
+	planet.Grid
+	y float64
+}
+
+// straight tells whether the ghost's sides are along its frame's axes.
+func (gh *Ghost) straight() bool {
+	for _, v := range gh.rel {
+		if math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))) < 1-1e-6 {
+			return false
+		}
+	}
+	return true
+}
+
+// straighten turns the ghost along its frame's axes, the least.
+func (g *Game) straighten(gh *Ghost, def *content.EntityDef) {
+	axes := [3]vec3{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+	nearest := func(v vec3, but int) (vec3, int) {
+		best := -1
+		for i := range 3 {
+			if i != but && (best < 0 || math.Abs(along(v, i)) > math.Abs(along(v, best))+1e-9) {
+				best = i
+			}
+		}
+		return axes[best].Scale(math.Copysign(1, along(v, best))), best
+	}
+	ax, up := gh.rel[0], gh.rel[1]
+	if !g.turnable(def) {
+		gh.rel[1] = axes[1]
+		gh.rel[0], _ = nearest(ax, 1)
+	} else if math.Max(math.Abs(up.X), math.Max(math.Abs(up.Y), math.Abs(up.Z))) >= math.Max(math.Abs(ax.X), math.Max(math.Abs(ax.Y), math.Abs(ax.Z)))-1e-9 {
+		var i int // the straighter of the two first
+		gh.rel[1], i = nearest(up, -1)
+		gh.rel[0], _ = nearest(ax, i)
+	} else {
+		var i int
+		gh.rel[0], i = nearest(ax, -1)
+		gh.rel[1], _ = nearest(up, i)
+	}
+}
+
+// gridUnder is the grid to line up on over or against entity id: its own,
+// if it was turned askew on the one it was set down on.
+func (g *Game) gridUnder(id ecs.ID) (planet.Grid, bool) {
+	def, ok := g.Content.Entities.Get(g.kind(id))
+	if !ok {
+		return planet.Grid{}, false
+	}
+	pos, ax, up, _ := g.Frame(g.Ents.Transform.Get(id))
+	if grid, ok := g.gridOf(id); ok && square(grid, ax, up) {
+		return grid, true
+	}
+	return gridOn(def, pos, ax, up)
+}
+
+// levelOn is the ghost's chosen level in a grid: the same height at at, on
+// a level of that grid if it was chosen on another.
+func (g *Game) levelOn(gh *Ghost, grid planet.Grid, at vec3) float64 {
+	l := gh.level
+	if l.Same(grid) {
+		return l.y
+	}
+	p := l.Local(at)
+	p.Y = l.y
+	q := grid.Local(l.World(p))
+	return q.Y + snapRise(q.Y, q.Y, g.gridEdges(grid, q, q))
+}
+
+// aimLevel is where the player aims at the ghost's chosen level: where
+// their sight crosses it, unless a block is in the way; otherwise over or
+// under what they aim at.
+func (g *Game) aimLevel(gh *Ghost, def *content.EntityDef, eye, fwd vec3) (at, n vec3, on ecs.ID) {
+	at, n, on = g.aimSurface(def, eye, fwd)
+	l := gh.level
+	e, f := l.Local(eye), l.DirLocal(fwd)
+	if math.Abs(f.Y) < 1e-6 {
+		return at, n, on
+	}
+	t := (l.y - e.Y) / f.Y
+	if t < 0.3 || t*math.Hypot(f.X, f.Z) > buildReach {
+		return at, n, on
+	}
+	if id, _, _, ok := g.aimBlock(eye, fwd, t+0.02, def.Mass > 0); ok {
+		return at, n, id
+	}
+	if hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach); ok && hit.Sub(eye).Length() < t {
+		return at, n, 0
+	}
+	return eye.Add(fwd.Scale(t)), l.Up, 0
+}
+
+// Raise moves the ghost's height on the grid a stop up (by > 0) or down: a
+// level of the grid, or that of the blocks near; with far, straight to the
+// next of theirs. From there on it stays at that height, whatever is aimed
+// at, until alignGhost. What founds its own grid goes over the ground.
+func (g *Game) Raise(by int, far bool) {
+	gh := g.Ghost
+	if gh == nil || gh.grid == nil || gh.Free || by == 0 {
+		return
+	}
+	dir := math.Copysign(1, float64(by))
+	for range max(by, -by) {
+		if gh.fresh {
+			gh.lift = math.Max(-5, math.Min(5, gh.lift+dir*planet.GridRise))
+		} else {
+			y := gh.grid.Lo.Y
+			if gh.level != nil && gh.level.Same(gh.grid.Grid) {
+				y = gh.level.y
+			}
+			gh.level = &Level{gh.grid.Grid, g.nextLevel(gh.grid, y, dir, far)}
+		}
+		g.poseGhost()
+	}
+}
+
+// nextLevel is the next stop over y (dir 1) or under it (-1).
+func (g *Game) nextLevel(o *OnGrid, y, dir float64, far bool) float64 {
+	const near, same = 4.0, 0.12
+	tall := o.Hi.Y - o.Lo.Y
+	var stops []float64 // on the blocks near, or level with their tops
+	g.onGridNear(o.Grid, o.Lo, o.Hi, func(_ ecs.ID, blo, bhi vec3) {
+		if math.Max(math.Max(blo.X-o.Hi.X, o.Lo.X-bhi.X), math.Max(blo.Z-o.Hi.Z, o.Lo.Z-bhi.Z)) < near {
+			stops = append(stops, blo.Y, bhi.Y, bhi.Y-tall)
+		}
+	})
+	step := planet.GridRise
+	if far {
+		step = 1
+	}
+	next := planet.Snap(y, step) + dir*step
+	if prev := planet.Snap(y, step); (prev-y)*dir > same {
+		next = prev
+	}
+	best, found := next, false
+	for _, e := range stops {
+		d := (e - y) * dir
+		if d < 0.01 || !far && d > (next-y)*dir+same {
+			continue
+		}
+		if !found || d < (best-y)*dir {
+			best, found = e, true
+		}
+	}
+	return best
+}
+
 // poseOnGrid sets the ghost on the grid where the player looks; false
 // when it doesn't go on one: a vehicle, or against a block set askew.
 func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
@@ -216,21 +364,23 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 	at := eye.Add(fwd.Scale(gh.dist))
 	n := at.Norm()
 	var on ecs.ID
-	if !gh.Free {
+	switch {
+	case gh.Free:
+	case gh.level != nil:
+		at, n, on = g.aimLevel(gh, def, eye, fwd)
+	default:
 		at, n, on = g.aimSurface(def, eye, fwd)
+	}
+	if !gh.askew && !gh.straight() {
+		g.straighten(gh, def)
 	}
 
 	// The grid: that of the block aimed at, of what is near, or a new one.
 	var grid planet.Grid
 	ok := false
 	if on != 0 {
-		if grid, ok = g.gridOf(on); !ok { // a crate's, only to stack on it
-			t := g.Ents.Transform.Get(on)
-			under, _ := g.Content.Entities.Get(g.kind(on))
-			pos, ax, up, _ := g.Frame(t)
-			if grid, ok = gridOn(under, pos, ax, up); !ok {
-				return false
-			}
+		if grid, ok = g.gridUnder(on); !ok {
+			return false
 		}
 	} else {
 		grid, ok = g.gridAt(at, gridNear)
@@ -247,7 +397,8 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		}
 		grid = planet.Grid{At: at, X: face, Up: at.Norm()}
 	}
-	onGround := on == 0 && !gh.Free
+	chosen := gh.level != nil && !fresh && !gh.Free // its height is
+	onGround := on == 0 && !gh.Free && !chosen
 	up := grid.Up
 	front := grid.Front(face)
 	if onGround && !def.Build { // upright on the ground as it is
@@ -262,7 +413,7 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		}
 	}
 	lo, hi := boxIn(grid, def, ax, top)
-	sides := def.Build && square(grid, ax, top)
+	sides := (def.Build || def.Ramp != nil) && gh.straight()
 
 	// Its origin in the grid's frame: its middle where the player aims...
 	aim := grid.Local(at)
@@ -278,23 +429,36 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 	// of what is taller than them.
 	stacked := false
 	var blo, bhi vec3
+	level := 0.0
+	if chosen {
+		level = g.levelOn(gh, grid, at)
+		if on == 0 { // in the air, over a block or not
+			on = g.blockAt(grid, aim, level)
+		}
+	}
 	if on != 0 {
 		blo, bhi, _ = g.boxOf(grid, on)
-		if tall := bhi.Y - blo.Y; across != 1 && tall >= 0.6 && aim.Y > blo.Y+0.6*tall {
+		tall := bhi.Y - blo.Y
+		over := across != 1 && tall >= 0.6 && aim.Y > blo.Y+0.6*tall
+		if chosen { // over it if it is as high, beside it otherwise
+			over = across != 1 && level > bhi.Y-0.02
+		}
+		if over {
 			stacked, across = true, 1
 			n, normal, aim.Y = grid.Up, vec3{0, 1, 0}, bhi.Y
 		}
 	}
+	onTop := on != 0 && across == 1 && normal.Y > 0 && !gh.Free
 	// ...then its sides on the lines.
 	if !fresh {
 		for _, i := range []int{0, 2} {
-			if gh.Free || i != across {
+			if gh.Free || i != across && !(onTop && sides) {
 				setAlong(&pos, i, along(pos, i)+snapSide(along(pos, i)+along(lo, i), along(pos, i)+along(hi, i), step, sides))
 			}
 		}
 	}
 	lift := planet.Snap(gh.lift, planet.GridRise)
-	ground := false
+	ground, column := false, false // column: on another as wide, edge to edge
 	gh.Why = ""
 	fits := true
 	switch {
@@ -304,9 +468,9 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		}
 	case on != 0:
 		switch {
-		case across == 1 && normal.Y > 0:
-			g.stackOver(grid, &pos, lo, hi, blo, bhi, stacked)
-		case across != 1 && hi.Y-lo.Y >= (bhi.Y-blo.Y)/2: // beside it, level with it
+		case onTop:
+			column = g.stackOver(grid, &pos, lo, hi, blo, bhi, stacked, sides)
+		case across != 1 && hi.Y-lo.Y > 0.5: // beside it, level with it
 			pos.Y = blo.Y - lo.Y
 		case across != 1: // a shelf on its side
 			pos.Y += snapRise(pos.Y+lo.Y, pos.Y+hi.Y, []float64{blo.Y, bhi.Y})
@@ -326,14 +490,20 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		}
 		gap := pos.Sub(aim).Dot(normal) + low
 		setAlong(&pos, across, along(pos, across)-gap/along(normal, across))
-		pos.Y += lift
+		if chosen {
+			pos.Y = level - lo.Y
+		}
 		// Beside a block on the ground: on the ground too.
 		if o := g.Ents.Grid.Get(on); def.Build && across != 1 && o != nil && o.Ground && o.Same(grid) && math.Abs(pos.Y+lo.Y-o.Lo.Y) < 1e-6 {
 			low, high, apart := g.groundUnder(grid, pos.Add(lo), pos.Add(hi))
 			ground = !apart && o.Lo.Y-low <= planet.MaxGrade && high-o.Lo.Y <= planet.MaxGrade
 		}
+	case chosen:
+		pos.Y = level - lo.Y
+		if low, high, apart := g.groundUnder(grid, pos.Add(lo), pos.Add(hi)); def.Build {
+			ground = !apart && graded(level, low, high, true)
+		}
 	case def.Build:
-		var level float64
 		level, ground, fits = g.gridLevel(grid, pos.Add(lo), pos.Add(hi), fresh, lift)
 		if !fits {
 			gh.Why = "sol trop pentu"
@@ -363,7 +533,7 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 	gh.OK = set(pos)
 	// Aimed too near another block, or a wall's end in another's thickness:
 	// slid out of it.
-	if !gh.OK && sides && !fresh && !stacked {
+	if !gh.OK && sides && !fresh && !stacked && !column {
 		for _, d := range g.slides(grid, pos.Add(lo), pos.Add(hi), across) {
 			if set(pos.Add(d)) {
 				pos, gh.OK = pos.Add(d), true
@@ -375,21 +545,22 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		}
 	}
 	// No room there: on top of what takes it, as high as it goes.
-	if !gh.OK && !fresh && !gh.Free {
+	if !gh.OK && !fresh && !gh.Free && !chosen {
 		p := pos
 		for range 12 {
-			top, ok := g.topOver(grid, p.Add(lo), p.Add(hi), def.Mass > 0)
+			blo, bhi, ok := g.topOver(grid, p.Add(lo), p.Add(hi), def.Mass > 0)
 			if !ok {
 				break
 			}
-			p.Y = top - lo.Y
-			graded := ground
+			p.Y = bhi.Y - lo.Y
+			g.stackOver(grid, &p, lo, hi, blo, bhi, true, sides)
+			was := ground
 			ground = false
 			if set(p) {
 				pos, gh.OK, fits, gh.Why = p, true, true, ""
 				break
 			}
-			ground = graded
+			ground = was
 		}
 		if !gh.OK {
 			set(pos)
@@ -428,46 +599,33 @@ func (g *Game) alignGhost() {
 		gh.home = &grid
 	}
 	g.poseGhost() // in the frame of that grid
-	axes := [3]vec3{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
-	nearest := func(v vec3, but int) (vec3, int) {
-		best := -1
-		for i := range 3 {
-			if i != but && (best < 0 || math.Abs(along(v, i)) > math.Abs(along(v, best))+1e-9) {
-				best = i
-			}
-		}
-		return axes[best].Scale(math.Copysign(1, along(v, best))), best
-	}
-	ax, up := gh.rel[0], gh.rel[1]
-	if !g.turnable(def) {
-		gh.rel[1] = axes[1]
-		gh.rel[0], _ = nearest(ax, 1)
-	} else if math.Max(math.Abs(up.X), math.Max(math.Abs(up.Y), math.Abs(up.Z))) >= math.Max(math.Abs(ax.X), math.Max(math.Abs(ax.Y), math.Abs(ax.Z)))-1e-9 {
-		var i int // the straighter of the two first
-		gh.rel[1], i = nearest(up, -1)
-		gh.rel[0], _ = nearest(ax, i)
-	} else {
-		var i int
-		gh.rel[0], i = nearest(ax, -1)
-		gh.rel[1], _ = nearest(up, i)
-	}
-	gh.lift = 0
+	g.straighten(gh, def)
+	gh.askew, gh.lift, gh.level = false, 0, nil
 	g.poseGhost()
 	g.sfx.Beep(0.02, 0.1, 0.1, 523, 659)
 }
 
-// Aligned tells whether the ghost is straight on a grid: alignGhost would
-// change nothing.
+// OnGrid tells whether the ghost is on a grid, where its height is chosen.
+func (gh *Ghost) OnGrid() bool { return gh.grid != nil }
+
+// Height is how high over the ground the ghost's bottom is, at its middle;
+// chosen if the player set it.
+func (g *Game) Height() (h float64, chosen bool) {
+	gh := g.Ghost
+	if gh == nil || gh.grid == nil {
+		return 0, false
+	}
+	mid := gh.grid.Lo.Add(gh.grid.Hi).Scale(0.5)
+	mid.Y = gh.grid.Lo.Y
+	return g.World.Relief.Altitude(gh.grid.World(mid)), !gh.Free && (gh.level != nil && !gh.fresh || gh.lift != 0 && gh.fresh)
+}
+
+// Aligned tells whether the ghost is straight on a grid.
 func (gh *Ghost) Aligned() bool {
 	if gh.grid == nil || gh.fresh && gh.from != nil && gh.home == nil {
 		return false
 	}
-	for _, v := range gh.rel {
-		if math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))) < 1-1e-6 {
-			return false
-		}
-	}
-	return true
+	return gh.straight()
 }
 
 // sheet is the grid's lines around the box, and how far over what is
@@ -492,74 +650,113 @@ func (g *Game) sheet(o *OnGrid, step float64) *Sheet {
 }
 
 // stackOver lines up a thing filling lo..hi around pos over a block that
-// fills blo..bhi: edge to edge with it where they are as long; within it
-// where it is shorter; and where it is longer (a roof on a wall), if the
-// block was aimed at from its side, from one of its edges, over the most
-// of what else would bear it.
-func (g *Game) stackOver(grid planet.Grid, pos *vec3, lo, hi, blo, bhi vec3, side bool) {
+// fills blo..bhi: exactly on it where it is as wide, a clean column (it
+// returns true); otherwise on lines from that block's edges, without
+// hanging over them where it is shorter, unless what is beside bears it;
+// and where it is longer (a roof on a wall), if the block was aimed at
+// from its side, from one of its edges, over the most of what else would
+// bear it. Without sides, what is shorter stays where it is aimed.
+func (g *Game) stackOver(grid planet.Grid, pos *vec3, lo, hi, blo, bhi vec3, side, sides bool) bool {
+	step := g.Settings.GridStep
+	first := blo.Sub(lo)
+	width := hi.Sub(lo).Sub(bhi.Sub(blo))
+	if math.Abs(width.X) < 0.02 && math.Abs(width.Z) < 0.02 {
+		pos.X, pos.Z = first.X, first.Z
+		return true
+	}
+	free := *pos // on the lines, wherever that is
 	for _, i := range []int{0, 2} {
-		long, under := along(hi, i)-along(lo, i), along(bhi, i)-along(blo, i)
-		at := along(*pos, i)
+		long, under, at := along(hi, i)-along(lo, i), along(bhi, i)-along(blo, i), along(*pos, i)
 		first, last := along(blo, i)-along(lo, i), along(bhi, i)-along(hi, i) // edge to edge
-		switch {
-		case math.Abs(long-under) < 0.02:
-			if side || under < g.Settings.GridStep || math.Abs(first-at) < 0.3 {
-				at = first
-			}
-		case long < under:
-			if side {
-				at = math.Max(first, math.Min(last, at))
-			}
-		case side && under < 1: // across a wall
+		if side && under < 1 && long > under+0.02 {                           // across a wall
 			me := along(grid.Local(g.Player.Pos), i)
-			best := -1.0
+			best, score := at, -1.0
 			for _, c := range []float64{first, last} {
 				p := *pos
 				setAlong(&p, i, c)
-				score := g.borne(grid, p.Add(lo), p.Add(hi), bhi.Y)
+				s := g.borne(grid, p.Add(lo), p.Add(hi), math.Inf(-1), bhi.Y)
 				mid := c + (along(lo, i)+along(hi, i))/2
 				if (mid > along(blo, i)) == (me > along(blo, i)) { // toward the player, all else equal
-					score += 1e-3
+					s += 1e-3
 				}
-				if score > best {
-					at, best = c, score
+				if s > score {
+					best, score = c, s
 				}
 			}
+			setAlong(pos, i, best)
+			setAlong(&free, i, best)
+			continue
+		}
+		if sides || long > under+0.02 { // the nearest line, or edge to edge, or in the middle
+			rel := at - first
+			best := at + planet.SnapSpan(rel, rel+long, step)
+			also := []float64{last}
+			if long > under+0.02 {
+				also = append(also, first, (first+last)/2)
+			}
+			for _, c := range also {
+				if math.Abs(c-at) < math.Abs(best-at) {
+					best = c
+				}
+			}
+			at = best
+		}
+		setAlong(&free, i, at)
+		if long <= under+0.02 {
+			at = math.Max(first, math.Min(last, at))
 		}
 		setAlong(pos, i, at)
 	}
+	if !side && free != *pos {
+		l, h := free.Add(lo), free.Add(hi)
+		if g.borne(grid, l, h, bhi.Y-0.02, bhi.Y) > 0.99*(h.X-l.X)*(h.Z-l.Z) {
+			*pos = free
+		}
+	}
+	return false
 }
 
-// borne is how much of the rectangle lo..hi of a grid is over blocks no
-// higher than y.
-func (g *Game) borne(grid planet.Grid, lo, hi vec3, y float64) float64 {
+// borne is how much of the rectangle lo..hi of a grid is over blocks with
+// their tops from low to high.
+func (g *Game) borne(grid planet.Grid, lo, hi vec3, low, high float64) float64 {
 	sum := 0.0
 	g.onGridNear(grid, lo, hi, func(_ ecs.ID, blo, bhi vec3) {
 		x := math.Min(hi.X, bhi.X) - math.Max(lo.X, blo.X)
 		z := math.Min(hi.Z, bhi.Z) - math.Max(lo.Z, blo.Z)
-		if bhi.Y <= y+0.01 && x > 0 && z > 0 {
+		if bhi.Y >= low && bhi.Y <= high+0.01 && x > 0 && z > 0 {
 			sum += x * z
 		}
 	})
 	return sum
 }
 
-// topOver is the highest top of the blocks (with things, the crates too)
-// that meet the box lo..hi of a grid.
-func (g *Game) topOver(grid planet.Grid, lo, hi vec3, things bool) (top float64, ok bool) {
+// blockAt is the block straight under a point of a grid, its top at y; 0
+// for none.
+func (g *Game) blockAt(grid planet.Grid, at vec3, y float64) ecs.ID {
+	var on ecs.ID
+	g.onGridNear(grid, at, at, func(id ecs.ID, blo, bhi vec3) {
+		if math.Abs(bhi.Y-y) < 0.02 && outside(at.X, blo.X, bhi.X) == 0 && outside(at.Z, blo.Z, bhi.Z) == 0 {
+			on = id
+		}
+	})
+	return on
+}
+
+// topOver is the box of the highest of the blocks (with things, the crates
+// too) that meet the box lo..hi of a grid.
+func (g *Game) topOver(grid planet.Grid, lo, hi vec3, things bool) (tlo, thi vec3, ok bool) {
 	const room = 0.03
-	top = math.Inf(-1)
 	for _, id := range g.EntitiesNear(buildReach + gridNear + 15) {
 		def, known := g.Content.Entities.Get(g.kind(id))
 		if !known || g.Held(id) || !(def.Build || things && def.Mass > 0) {
 			continue
 		}
 		blo, bhi, _ := g.boxOf(grid, id)
-		if blo.X < hi.X-room && lo.X < bhi.X-room && blo.Y < hi.Y-room && lo.Y < bhi.Y-room && blo.Z < hi.Z-room && lo.Z < bhi.Z-room {
-			top, ok = math.Max(top, bhi.Y), true
+		if blo.X < hi.X-room && lo.X < bhi.X-room && blo.Y < hi.Y-room && lo.Y < bhi.Y-room && blo.Z < hi.Z-room && lo.Z < bhi.Z-room && (!ok || bhi.Y > thi.Y) {
+			tlo, thi, ok = blo, bhi, true
 		}
 	}
-	return top, ok
+	return tlo, thi, ok
 }
 
 // onGridNear calls fn for the blocks within gridNear of the box lo..hi of
@@ -633,6 +830,14 @@ func (g *Game) groundUnder(grid planet.Grid, lo, hi vec3) (low, high float64, ap
 	return low, high, apart
 }
 
+// graded tells whether the ground, between low and high, is made level for
+// a block at level; chosen by the player, over the ground is in the air,
+// not on a mound.
+func graded(level, low, high float64, chosen bool) bool {
+	return level-low <= planet.MaxGrade && high-level <= planet.MaxGrade &&
+		(!chosen || level-(low+high)/2 < planet.GridRise+0.01)
+}
+
 // gridLevel is the height a block filling lo..hi (seen from above) of a
 // grid stands at on the ground, raised by lift: level with the blocks
 // standing on the ground near, or the level of the grid nearest to the
@@ -662,7 +867,7 @@ func (g *Game) gridLevel(grid planet.Grid, lo, hi vec3, fresh bool, lift float64
 		})
 	}
 	level += lift
-	ground = !apart && level-low <= planet.MaxGrade && high-level <= planet.MaxGrade
+	ground = !apart && graded(level, low, high, lift != 0)
 	return level, ground, ground || high-level < 0.15
 }
 

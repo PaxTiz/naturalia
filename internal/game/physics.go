@@ -727,7 +727,7 @@ func (g *Game) syncEntities() {
 			hi.Y += triggerH
 		}
 		b.Bottom, b.Top = p.slice(at.Add(e.Dir.Scale(e.Alt)), hi.Y)
-		if b.Layer == layerProp && e.Alt > 0.05 { // on top of something: not into it
+		if (b.Layer == layerProp || b.Sensor) && e.Alt > 0.05 { // on top of something: not into it
 			b.Bottom += bodyFeet + 0.03
 		}
 		if b.Layer == layerDrone {

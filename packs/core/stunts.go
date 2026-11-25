@@ -10,7 +10,7 @@ import (
 // set down anywhere, and credits for long jumps, paid like a mod would.
 func registerStunts(c *content.Content) {
 	c.Entities.Add("core:ramp", content.EntityDef{Name: "Tremplin", Pickup: true, Prompt: "Ramasser : Tremplin",
-		Ramp: &content.Ramp{Length: 6, Width: 4, Height: 1.8},
+		Ramp: &content.Ramp{Length: 6, Width: 4, Height: 1.8}, Cell: vec3{6, 1.8, 4},
 		Parts: []content.PartJSON{
 			{Shape: "wedge", Token: "steel", Size: vec3{6, 1.8, 4}, Lit: "outdoor"},
 			box("hazard", vec3{2.9, 1.8, 0}, vec3{0.2, 0.06, 4.02}, 0),
