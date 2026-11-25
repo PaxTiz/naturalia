@@ -26,7 +26,7 @@ type Blueprint struct {
 	Sign   string   `json:"sign"`  // painted over the door that leads here from the hub
 	Shape  Dome     `json:"shape"`
 	Hall   *Hall    `json:"hall"`   // a big rectangular hall instead of a dome
-	Garage bool     `json:"garage"` // its floor has a parking bay for each driven vehicle
+	Garage bool     `json:"garage"` // its floor has a parking bay for each driven vehicle; in a building set down, for any
 	Style  string   `json:"style"`  // token of the walls and roof
 	Accent string   `json:"accent"` // token of the glowing stripes inside
 	Doors  []Door   `json:"doors"`
@@ -45,6 +45,9 @@ type Blueprint struct {
 	// Glazed makes a dome of glass on a white frame, its round wall glazed
 	// above a low plinth, the sun lighting what grows inside: a greenhouse.
 	Glazed bool `json:"glazed"`
+	// Skylight makes only its dome of glass, over solid walls: an
+	// observatory.
+	Skylight bool `json:"skylight"`
 }
 
 // Window is a pane of glass in a wall of a hall, in its frame (before its

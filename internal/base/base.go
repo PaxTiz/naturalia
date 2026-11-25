@@ -30,6 +30,7 @@ type Room struct {
 	openings []float64          // angles (radians, atan2(z, x)) of the doorways
 	alongs   []float64          // and how far along its wall each stands from its middle (a hall's)
 	plan     *content.Blueprint // drawn from the kit when set
+	apron    float64            // how far the concrete reaches out of a hall's big door
 }
 
 // Plan is the blueprint the room is laid out from.

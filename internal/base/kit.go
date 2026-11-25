@@ -20,7 +20,7 @@ func roomOf(bp *content.Blueprint) Room {
 		alongs = append(alongs, d.Along)
 	}
 	if bp.Hall != nil {
-		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, alongs: alongs, plan: bp}
+		return Room{Center: bp.At, Yaw: bp.Yaw, WallH: bp.Hall.WallH, Hall: bp.Hall, openings: openings, alongs: alongs, plan: bp, apron: 10}
 	}
 	return Room{Center: bp.At, Yaw: bp.Yaw, Radius: bp.Shape.Radius, WallH: bp.Shape.WallH, openings: openings, alongs: alongs, plan: bp}
 }
@@ -35,11 +35,12 @@ func KitBuild(f func(b *building, at vec3, seed int)) func(*mesh.Parts, vec3, in
 type building struct {
 	*mesh.Parts
 	kits *content.Registry[content.Kit] // furniture of the blueprints
+	bays []Bay                          // the parking bays of the halls
 }
 
 // Build builds every static piece of the base, furniture from kits.
 func Build(kits *content.Registry[content.Kit]) *mesh.Parts {
-	b := &building{Parts: mesh.NewParts(Origin), kits: kits}
+	b := &building{Parts: mesh.NewParts(Origin), kits: kits, bays: Bays}
 	i := 0
 	for id, r := range Buildings() {
 		if r.Hall != nil {
@@ -88,7 +89,7 @@ func (b *building) turned(r Room, build func(b *building)) {
 		build(b)
 		return
 	}
-	alone := &building{Parts: mesh.NewParts(vec3{}), kits: b.kits}
+	alone := &building{Parts: mesh.NewParts(vec3{}), kits: b.kits, bays: b.bays}
 	build(alone)
 	b.MergeTurned(alone.Parts, r.Turn)
 }
@@ -125,7 +126,10 @@ func (b *building) room(id ecs.ID, r Room) {
 		}
 	}
 	// The dome stays a smooth shell: dust settles on its top.
-	if !r.glazed() {
+	switch {
+	case r.skylight():
+		b.glassDome(r)
+	case !r.glazed():
 		b.Part(bp.Style, mesh.LitBack, in).Dome(r.Center.Add(vec3{0, r.WallH, 0}), r.Radius+0.12, r.Radius*0.55)
 	}
 	// Door frames: steel jambs and a hazard header (a home's: homeDoorFrame). They stand a little
@@ -231,6 +235,9 @@ func (b *building) interior(bp *content.Blueprint, r Room) {
 		b.Part("steel.dark", mesh.LitIndoor, vec3{}).Box(inner.Add(vec3{0, 0.07, 0}).Sub(out.Scale(0.02)), vec3{p.width * 0.99, 0.14, 0.04}, along, 0.01)
 		strip := p.mid.Sub(out.Scale(WallThick/2 + 0.045)).Add(vec3{0, 1.0, 0})
 		b.Part(bp.Accent, mesh.LitIndoor, vec3{}).Box(strip, vec3{p.width * 0.94, 0.07, 0.03}, along, 0.008)
+	}
+	if r.skylight() {
+		return
 	}
 	// Ribs follow the inside of the dome up to the lamp's collar.
 	a, bh := r.Radius+0.02, r.Radius*0.55-0.06

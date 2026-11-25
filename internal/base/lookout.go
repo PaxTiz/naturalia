@@ -53,6 +53,63 @@ func BuildTelescope(b *building, at vec3, _ int) {
 	dark.Prism(back, axis.Scale(-1), 0.03, 0.022, 0.12, 10, 0)                                   // the eyepiece
 }
 
+// The observatory's telescope, on its pier: its tube goes up through the
+// glass.
+const (
+	bigScopeTilt = 55 * math.Pi / 180
+	bigScopeLen  = 4.5
+)
+
+var bigScopeFoot = vec3{-0.5, 1.45, 0} // where its eyepiece is
+
+// BuildBigTelescope: a great refractor on a pier, its tube going up toward
+// +X through a collar in the glass dome of an observatory 4 m in radius
+// (walls 2.6 m high), its eyepiece at eye height at the back.
+func BuildBigTelescope(b *building, at vec3, _ int) {
+	steel, dark, white := b.in("steel"), b.in("steel.dark"), b.in("habitat.white")
+	axis := vec3{math.Cos(bigScopeTilt), math.Sin(bigScopeTilt), 0}
+	foot := at.Add(bigScopeFoot)
+	on := func(t float64) vec3 { return foot.Add(axis.Scale(t)) }
+	// The pier, a fork, the tube's cradle.
+	b.in("ceramic.dark").Prism(at, yUp, 0.62, 0.56, 0.12, 32, 0.02)
+	dark.Prism(at.Add(vec3{0.15, 0.12, 0}), yUp, 0.3, 0.2, 1.35, 20, 0.02)
+	steel.Prism(at.Add(vec3{0.15, 1.47, 0}), yUp, 0.28, 0.28, 0.1, 24, 0.01)
+	pivot := on(1.15)
+	for _, s := range []float64{-1, 1} {
+		dark.Box(at.Add(vec3{0.15, 2.0, s * 0.33}), vec3{0.2, 0.9, 0.08}, xAxis, 0.03)
+		steel.Prism(pivot.Add(vec3{0, 0, s * 0.25}), vec3{0, 0, s}, 0.13, 0.13, 0.16, 20, 0.01)
+	}
+	b.in("pipe.yellow").Prism(on(0.85), axis, 0.275, 0.275, 0.07, 28, 0)
+	b.in("pipe.yellow").Prism(on(1.4), axis, 0.275, 0.275, 0.07, 28, 0)
+	// The tube, its focuser and eyepiece, a finder.
+	white.Prism(on(0.35), axis, 0.2, 0.25, 3.3, 28, 0.01)
+	steel.Prism(on(0.1), axis, 0.1, 0.16, 0.27, 24, 0.01)
+	dark.Prism(foot, axis, 0.04, 0.05, 0.12, 14, 0)
+	up := vec3{-axis.Y, axis.X, 0}
+	dark.Prism(on(0.45).Add(up.Scale(0.3)), axis, 0.04, 0.05, 0.6, 12, 0)
+	b.in("neon.cyan").Prism(on(2.4), axis, 0.242, 0.244, 0.03, 28, 0)
+	// Outside: the collar in the glass, the end of the tube, lit by the sun.
+	out := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitSun, vec3{}) }
+	out("steel.dark").Prism(on(3.55), axis, 0.46, 0.42, 0.22, 28, 0.02)
+	out("habitat.white").Prism(on(3.7), axis, 0.25, 0.26, bigScopeLen-3.95, 28, 0.01)
+	out("steel").Prism(on(bigScopeLen-0.3), axis, 0.31, 0.31, 0.3, 28, 0.01)
+	out("glass.dark").Prism(on(bigScopeLen-0.04), axis, 0.28, 0.28, 0.05, 28, 0)
+	// Steps up to the eyepiece.
+	b.in("home.panel2").Box(at.Add(vec3{-0.95, 0.06, 0}), vec3{0.5, 0.12, 0.8}, xAxis, 0.02)
+}
+
+// Eyepiece is the view through a piece of furniture one looks through: where
+// it starts, the way it looks, level, and whether it turns all around.
+func Eyepiece(f Furniture) (eye, facing vec3, all bool) {
+	if f.Kit == "core:telescope.big" {
+		axis := vec3{math.Cos(bigScopeTilt), math.Sin(bigScopeTilt), 0}
+		front := bigScopeFoot.Add(axis.Scale(bigScopeLen + 0.5))
+		return f.At.Add(content.Turn(front, f.Yaw)), content.Turn(vec3{1, 0, 0}, f.Yaw), true
+	}
+	eye, facing = TelescopeEye(f.At, f.Yaw)
+	return eye, facing, false
+}
+
 // TelescopeEye is where the view through a telescope standing at local
 // point at, turned by yaw (degrees, as a prop's), starts: just past the
 // end of its tube, which would fill it; and the way it looks, level.

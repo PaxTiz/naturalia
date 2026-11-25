@@ -127,6 +127,7 @@ func (g *Game) wallsNow() []base.Segment {
 // docking is a vehicle gliding into its bay: from where (local) and which
 // way it pointed (radians from +X toward +Z), how far along (0 to 1).
 type docking struct {
+	dockSpot
 	from vec3
 	yaw  float64
 	t    float64
@@ -135,24 +136,41 @@ type docking struct {
 // CanDock tells if G parks the driven vehicle: in a hall, slowly, near
 // its bay.
 func (g *Game) CanDock() bool {
+	_, ok := g.dockBay()
+	return ok
+}
+
+// dockSpot is a bay a vehicle glides into: the spot it ends at and the way
+// its nose points, in its site.
+type dockSpot struct {
+	site       base.Site
+	spot, nose vec3
+}
+
+// dockBay is the bay G parks the driven vehicle in, if it does.
+func (g *Game) dockBay() (dockSpot, bool) {
 	v, ok := g.Driven()
 	if !ok || g.drive.dock != nil || g.DriveAlt() > 0.5 || g.DriveSpeed() > 6 {
-		return false
+		return dockSpot{}, false
+	}
+	if c, ok := g.CampAround(g.Player.Eye()); ok {
+		bay, ok := g.freeBay(c, v)
+		return dockSpot{c.Site, bay.SpotOf(v), bay.Nose}, ok
 	}
 	bay, ok := base.BayOf(v.ID)
 	at := base.ToLocal(g.Player.Pos)
-	if !ok || !base.Covered(at) {
-		return false
-	}
-	d := at.Sub(bay.At)
-	return math.Abs(d.Dot(bay.Nose)) < bay.Length/2+dockReach && math.Abs(d.Dot(bay.Side())) < bay.Width/2+dockReach
+	return dockSpot{base.BaseSite(), bay.Spot, bay.Nose}, ok && base.Covered(at) && bay.Holds(at, dockReach)
 }
 
 // startDock sets the driven vehicle gliding into its bay.
 func (g *Game) startDock() {
-	at := base.ToLocal(g.Player.Pos)
-	fwd := base.ToLocal(g.Player.Pos.Add(g.drive.fwd)).Sub(at)
-	g.drive.dock = &docking{from: vec3{at.X, 0, at.Z}, yaw: math.Atan2(fwd.Z, fwd.X)}
+	to, ok := g.dockBay()
+	if !ok {
+		return
+	}
+	at := to.site.ToLocal(g.Player.Pos)
+	fwd := to.site.DirLocal(g.drive.fwd)
+	g.drive.dock = &docking{dockSpot: to, from: vec3{at.X, 0, at.Z}, yaw: math.Atan2(fwd.Z, fwd.X)}
 	g.drive.vel = vec3{}
 	g.sfx.Beep(0.08, 0.15, 0.1, 440, 554, 659)
 }
@@ -161,16 +179,15 @@ func (g *Game) startDock() {
 // end, the player still in it.
 func (g *Game) glideDock(v *content.Vehicle, dt float64) {
 	d := &g.drive
-	bay, _ := base.BayOf(v.ID)
 	d.dock.t = math.Min(1, d.dock.t+dt/dockTime)
 	k := d.dock.t * d.dock.t * (3 - 2*d.dock.t)
-	at := d.dock.from.Lerp(vec3{bay.Spot.X, 0, bay.Spot.Z}, k)
-	nose := math.Atan2(bay.Nose.Z, bay.Nose.X)
+	at := d.dock.from.Lerp(vec3{d.dock.spot.X, 0, d.dock.spot.Z}, k)
+	nose := math.Atan2(d.dock.nose.Z, d.dock.nose.X)
 	turn := math.Remainder(nose-d.dock.yaw, 2*math.Pi)
 	yaw := d.dock.yaw + turn*k // the nose to the door
-	g.Player.Pos = g.World.Relief.Surface(base.ToWorld(at))
+	g.Player.Pos = g.World.Relief.Surface(d.dock.site.ToWorld(at))
 	up := g.Player.LocalUp()
-	d.fwd = planet.TangentAt(up, vec3{math.Cos(yaw), 0, math.Sin(yaw)})
+	d.fwd = planet.TangentAt(up, d.dock.site.Dir(vec3{math.Cos(yaw), 0, math.Sin(yaw)}))
 	g.Player.Heading = d.fwd
 	d.vel, d.spin = vec3{}, 0
 	if d.dock.t >= 1 {

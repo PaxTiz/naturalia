@@ -26,7 +26,13 @@ func (g *Game) Beep(freq float64)   { g.sfx.Beep(0.05, 0.25, 0.14, freq) }
 func (g *Game) SpawnDustDevil()     { spawnDevil(g) }
 func (g *Game) OpenMap()            { g.MapTab, g.MapHover = 0, -1; g.setMode(ModeMap) }
 func (g *Game) OpenShop()           { g.Garage = false; g.setMode(ModeShop) }
-func (g *Game) OpenGarage()         { g.Garage = true; g.setMode(ModeShop) }
+func (g *Game) OpenGarage() {
+	g.Garage, g.garageIn = true, 0 // the base's, or that of the building the player is in
+	if c, ok := g.CampAround(g.Player.Eye()); ok {
+		g.garageIn = c.Ent
+	}
+	g.setMode(ModeShop)
+}
 func (g *Game) Sleep() {
 	g.Mode, g.SleepT = ModeSleep, 0
 	g.State.Wake = 0 // the bed slept in: the base's, or a bootcamp's

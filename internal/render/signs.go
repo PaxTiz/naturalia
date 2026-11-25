@@ -165,7 +165,8 @@ func paintScreen(seed int, accent color.RGBA) rl.Texture2D {
 func (gfx *Graphics) drawScreen(at, facing vec3, w, h float64, tex rl.Texture2D, glow float32) {
 	gfx.setMat(content.MtDecal, 1, false)
 	rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, tex)
-	yaw := math.Atan2(facing.X, facing.Z) * 180 / math.Pi
-	gfx.put(gfx.signBox, base.ToWorld(at), vec3{w, h, 0.03}, vec3{0, 1, 0}, yaw, color.RGBA{255, 255, 255, 255}, 0, glow)
+	s := gfx.frame()
+	z := facing.Norm()
+	gfx.putBasis(gfx.signBox, s.ToWorld(at), s.Dir(vec3{0, 1, 0}.Cross(z)).Scale(w), s.Y.Scale(h), s.Dir(z).Scale(0.03), color.RGBA{255, 255, 255, 255}, 0, glow)
 	gfx.setMat(content.MtPlain, 1, false)
 }

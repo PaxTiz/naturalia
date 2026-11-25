@@ -891,6 +891,10 @@ func (hud *HUD) drawShop(g *game.Game) {
 		info := strings.ToUpper(it.Info)
 		hud.text(hud.fit(it.Desc, 15*u, right-hud.capsWidth(info, 12*u)-16*u-(r.X+66*u)), r.X+66*u, r.Y+32*u, 15*u, uiMuted)
 		switch {
+		case it.Call:
+			cw := hud.capsWidth("FAIRE VENIR", 15*u)
+			fillCut(rl.NewRectangle(right-cw-14*u, r.Y+8*u, cw+14*u, 22*u), 5*u, visorCyan)
+			hud.caps("FAIRE VENIR", right-cw-7*u, r.Y+11*u, 15*u, uiInk)
 		case it.Refund > 0:
 			// Owned: sold back with a second click.
 			label, col := "REVENDRE +"+game.FmtNum(it.Refund)+" CR", palette.Gold
@@ -1026,6 +1030,8 @@ func (hud *HUD) updateShop(g *game.Game) {
 		return
 	}
 	switch it := items[hud.hover]; {
+	case it.Call:
+		g.Call(it)
 	case it.Refund > 0 && hud.confirm == hud.hover:
 		g.Sell(it)
 		hud.confirm = -1

@@ -356,7 +356,11 @@ func (r Room) door() (mid vec3, closed Segment) {
 // from 0 to 1: on each side, from the jamb to the inner edge of its leaves,
 // so the opening lets through as soon as it is wide enough.
 func HallDoorWalls(i ecs.ID, open float64) []Segment {
-	r := Ents.Building.Get(i)
+	return Ents.Building.Get(i).doorWalls(open)
+}
+
+// doorWalls are those of the hall's big door.
+func (r Room) doorWalls(open float64) []Segment {
 	mid, closed := r.door()
 	half := r.Hall.Door[0] / 2
 	gap := half // how far from the middle the leaves start, on each side
@@ -397,7 +401,10 @@ type Leaf struct {
 // from 0 (closed) to 1. Each runs on its own rail, so they stack in the
 // pockets.
 func HallLeaves(i ecs.ID, open float64) []Leaf {
-	r := Ents.Building.Get(i)
+	return Ents.Building.Get(i).turnedLeaves(open)
+}
+
+func (r Room) turnedLeaves(open float64) []Leaf {
 	leaves := r.doorLeaves(open)
 	for k := range leaves {
 		leaves[k].At, leaves[k].Yaw = r.Turn(leaves[k].At), r.Yaw
@@ -576,6 +583,42 @@ func layBays(c *content.Content) []Bay {
 	return out
 }
 
+// campBays are the parking bays of a garage set down anywhere, for any
+// vehicle that fits: side by side, as many as go on each side of the way
+// from the middle of the back wall to the door.
+func campBays(r Room) []Bay {
+	const width, length, aisle = 4.2, 5.4, 1.0
+	hx, hz := r.half()
+	var out []Bay
+	for k := 0; aisle/2+float64(k+1)*width <= hz-0.6; k++ {
+		for _, s := range []float64{-1, 1} {
+			at := r.Center.Add(vec3{-hx + 1.8 + length/2, 0, s * (aisle/2 + (float64(k)+0.5)*width)})
+			out = append(out, Bay{At: at, Length: length, Width: width, Nose: vec3{1, 0, 0}})
+		}
+	}
+	return out
+}
+
+// Fits tells whether vehicle v goes in the bay.
+func (b Bay) Fits(v *content.Vehicle) bool {
+	lo, hi := v.Footprint()
+	return hi.X-lo.X <= b.Length && hi.Z-lo.Z <= b.Width
+}
+
+// SpotOf is where vehicle v stands in the middle of a bay of a garage set
+// down, nose to the door.
+func (b Bay) SpotOf(v *content.Vehicle) vec3 {
+	lo, hi := v.Footprint()
+	mid := lo.Add(hi).Scale(0.5)
+	return b.At.Sub(b.Nose.Scale(mid.X)).Sub(b.Side().Scale(mid.Z))
+}
+
+// Holds tells whether a local point is in the bay, or within m of it.
+func (b Bay) Holds(p vec3, m float64) bool {
+	d := p.Sub(b.At)
+	return math.Abs(d.Dot(b.Nose)) < b.Length/2+m && math.Abs(d.Dot(b.Side())) < b.Width/2+m
+}
+
 // signSpot fits a bay's sign on the back wall between the arches: the
 // widest stretch free of pillars over the bay (z from the hall's middle,
 // its width), at most 4.2 m wide, as close to the bay's middle as it goes.
@@ -651,7 +694,11 @@ func (b *building) hallShell(r Room) {
 		rib, ribIn, ribDeep = "home.rib", 0.32, 0.3
 	}
 	if dw > 0 {
-		sun("pad.concrete").Box(p(hx+5, 0.02, 0), vec3{10, 0.1, dw + 4}, X, 0.02)
+		w := dw + 4
+		if r.apron < 10 {
+			w = dw + 1
+		}
+		sun("pad.concrete").Box(p(hx+r.apron/2, 0.02, 0), vec3{r.apron, 0.1, w}, X, 0.02)
 		sun("hazard").Box(p(hx+0.6, 0.075, 0), vec3{0.5, 0.02, dw}, X, 0)
 	}
 
@@ -939,7 +986,7 @@ func (b *building) hallDoor(r Room) {
 func (b *building) hallBays(r Room) {
 	inside := func(tok string) *mesh.Builder { return b.Part(tok, mesh.LitIndoor, vec3{}) }
 	X := vec3{1, 0, 0}
-	for _, bay := range Bays {
+	for _, bay := range b.bays {
 		if !r.inHall(bay.At, 0) {
 			continue
 		}

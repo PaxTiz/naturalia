@@ -61,6 +61,8 @@ type ShopItem struct {
 	// A vehicle owned, at the garage: what selling it back gives.
 	Refund float64
 	sell   func()
+	Call   bool // at the garage of a building set down: it is brought there
+	call   func()
 }
 
 // resale is the share of its price a vehicle sells back for.
@@ -209,6 +211,9 @@ func (g *Game) garageItems() []ShopItem {
 				it.Info = "Conduit"
 			}
 			it.sell = func() { g.sellVehicle(v, it.Refund) }
+			if c, ok := g.campOf(g.garageIn); ok {
+				g.callItem(&it, c, v)
+			}
 		}
 		items = append(items, it)
 	}
@@ -219,6 +224,13 @@ func (g *Game) garageItems() []ShopItem {
 func (g *Game) Sell(it ShopItem) {
 	if it.sell != nil {
 		it.sell()
+	}
+}
+
+// Call brings a vehicle owned to the garage the player is in.
+func (g *Game) Call(it ShopItem) {
+	if it.call != nil {
+		it.call()
 	}
 }
 

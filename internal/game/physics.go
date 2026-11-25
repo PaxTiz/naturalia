@@ -68,7 +68,7 @@ type phys struct {
 	car        *physics.Body // the driven vehicle's
 	carKind    string
 	side       float64 // +1 if a vehicle's right side (+Z) is the plane's left of its nose
-	doorSegs   []base.Segment
+	doorSegs   []doorSeg
 	doors      []*physics.Body
 	stones     map[*physics.Body]bool       // small rocks, moved out of the way of what is built
 	floors     map[*physics.Body]base.Floor // the base's floors, which the player walks up (allow)
@@ -648,13 +648,28 @@ func (g *Game) addRail(r base.Rail) {
 		Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
 }
 
+// doorSeg is a wall a door's leaf makes, in a site.
+type doorSeg struct {
+	base.Segment
+	site base.Site
+}
+
 // syncDoors sets the doors' walls where the leaves stand.
 func (g *Game) syncDoors() {
 	p := g.phys
-	if planet.ArcDist(p.up, planet.BaseUp) > physReach+base.Extent {
-		return
+	var segs []doorSeg
+	if planet.ArcDist(p.up, planet.BaseUp) < physReach+base.Extent {
+		for _, s := range g.wallsNow()[len(g.walls):] {
+			segs = append(segs, doorSeg{s, base.BaseSite()})
+		}
 	}
-	segs := g.wallsNow()[len(g.walls):]
+	for _, c := range g.CampsNear(p.up.Scale(p.r0), physReach) {
+		if _, _, ok := c.Layout.BigDoor(); ok {
+			for _, s := range c.Layout.BigDoorWalls(g.BigDoor(c.Ent)) {
+				segs = append(segs, doorSeg{s, c.Site})
+			}
+		}
+	}
 	if slices.Equal(segs, p.doorSegs) {
 		return
 	}
@@ -663,7 +678,7 @@ func (g *Game) syncDoors() {
 	}
 	p.doorSegs, p.doors = slices.Clone(segs), p.doors[:0]
 	for _, s := range segs {
-		p.doors = append(p.doors, g.addWall(s, base.BaseSite()))
+		p.doors = append(p.doors, g.addWall(s.Segment, s.site))
 	}
 }
 

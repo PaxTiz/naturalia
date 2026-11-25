@@ -28,7 +28,18 @@ func yawFor(dir vec3) float64 { return math.Atan2(-dir.Z, dir.X) }
 // box draws a cube centered at the local point c, turned so its width (X)
 // runs along the horizontal direction across.
 func (gfx *Graphics) box(c, size, across vec3, col color.RGBA, spec, emissive float32) {
-	gfx.put(gfx.cube, base.ToWorld(c), size, vec3{0, 1, 0}, yawFor(across)*180/math.Pi, col, spec, emissive)
+	s := gfx.frame()
+	x := across.Norm()
+	gfx.putBasis(gfx.cube, s.ToWorld(c), s.Dir(x).Scale(size.X), s.Y.Scale(size.Y), s.Dir(x.Cross(vec3{0, 1, 0})).Scale(size.Z), col, spec, emissive)
+}
+
+// frame is the site whose pieces are drawn: the base, or a building set
+// down meanwhile (gfx.site).
+func (gfx *Graphics) frame() base.Site {
+	if gfx.site == (base.Site{}) {
+		return base.BaseSite()
+	}
+	return gfx.site
 }
 
 // kitSpot is where a kit piece stands (local) and how it is turned
@@ -162,31 +173,37 @@ func (gfx *Graphics) drawAirlock(g *game.Game) {
 // drawHallDoors draws the leaves of the halls' big doors where they stand,
 // lit from inside on their inner face.
 func (gfx *Graphics) drawHallDoors(g *game.Game) {
-	plates := [2]content.Token{gfx.tok("door.plate"), gfx.tok("door.plate2")}
-	dark := gfx.tok("steel.dark")
 	for k, i := range base.Halls() {
 		open := 0.0
 		if k < len(g.HallOpen) {
 			open = g.HallOpen[k]
 		}
 		r := base.Ents.Building.Get(i)
-		gfx.setLighting(mesh.LitTowards, base.ToWorld(r.Center.Add(vec3{0, 1.2, 0})))
-		X := r.TurnDir(vec3{1, 0, 0}) // the leaves' thickness, in the hall's own frame
-		for j, l := range base.HallLeaves(i, open) {
-			tok := plates[j%2]
-			gfx.setMat(tok.Mat, tok.Scale, false)
-			gfx.put(gfx.hallLeaf, base.ToWorld(l.At), l.Size, vec3{0, 1, 0}, -l.Yaw, tok.Col, tok.Spec, 0)
-			// Stiffeners across both faces every 2.5 m, and a dark stile
-			// on one edge: the seams between the leaves show.
-			gfx.setMat(dark.Mat, dark.Scale, false)
-			for y := 2.5; y < l.Size.Y-0.5; y += 2.5 {
-				gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + y, 0}), vec3{l.Size.X + 0.08, 0.14, l.Size.Z - 0.3}, X, dark.Col, dark.Spec, 0)
-			}
-			gfx.box(l.At.Add(r.TurnDir(vec3{0, 0, l.Size.Z/2 - 0.1})), vec3{l.Size.X + 0.05, l.Size.Y, 0.14}, X, dark.Col, dark.Spec, 0)
-			// Hazard stripes along its foot.
-			gfx.setMat(content.MtHazard, 2.5, false)
-			gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + 0.4, 0}), vec3{l.Size.X + 0.02, 0.5, l.Size.Z - 0.1}, X, palette.White, 0.2, 0)
+		gfx.drawLeaves(*r, base.HallLeaves(i, open))
+	}
+}
+
+// drawLeaves draws the leaves of hall r's big door.
+func (gfx *Graphics) drawLeaves(r base.Room, leaves []base.Leaf) {
+	plates := [2]content.Token{gfx.tok("door.plate"), gfx.tok("door.plate2")}
+	dark := gfx.tok("steel.dark")
+	s := gfx.frame()
+	gfx.setLighting(mesh.LitTowards, s.ToWorld(r.Center.Add(vec3{0, 1.2, 0})))
+	X, Z := r.TurnDir(vec3{1, 0, 0}), r.TurnDir(vec3{0, 0, 1}) // X the leaves' thickness, in the hall's own frame
+	for j, l := range leaves {
+		tok := plates[j%2]
+		gfx.setMat(tok.Mat, tok.Scale, false)
+		gfx.putBasis(gfx.hallLeaf, s.ToWorld(l.At), s.Dir(X).Scale(l.Size.X), s.Y.Scale(l.Size.Y), s.Dir(Z).Scale(l.Size.Z), tok.Col, tok.Spec, 0)
+		// Stiffeners across both faces every 2.5 m, and a dark stile
+		// on one edge: the seams between the leaves show.
+		gfx.setMat(dark.Mat, dark.Scale, false)
+		for y := 2.5; y < l.Size.Y-0.5; y += 2.5 {
+			gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + y, 0}), vec3{l.Size.X + 0.08, 0.14, l.Size.Z - 0.3}, X, dark.Col, dark.Spec, 0)
 		}
+		gfx.box(l.At.Add(r.TurnDir(vec3{0, 0, l.Size.Z/2 - 0.1})), vec3{l.Size.X + 0.05, l.Size.Y, 0.14}, X, dark.Col, dark.Spec, 0)
+		// Hazard stripes along its foot.
+		gfx.setMat(content.MtHazard, 2.5, false)
+		gfx.box(l.At.Add(vec3{0, -l.Size.Y/2 + 0.4, 0}), vec3{l.Size.X + 0.02, 0.5, l.Size.Z - 0.1}, X, palette.White, 0.2, 0)
 	}
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})

@@ -129,6 +129,7 @@ type Game struct {
 	// The halls' corridor doors (base.InnerDoors), like the airlock's.
 	InnerOpen []float64
 	Garage    bool    // the shop open is the garage's: vehicles to drive
+	garageIn  ecs.ID  // the building whose garage it is, 0 for the base
 	MapTab    int     // the map table's tab: 0 the state of Mars, 1 travel
 	MapHover  int     // the destination under the mouse at the map table, -1 for none
 	Typing    bool    // a name is being typed in (the interface's): keys don't close the terminal
@@ -428,6 +429,7 @@ func (g *Game) updateBase(dt float64) {
 	}
 	g.DoorOpen += (open - g.DoorOpen) * math.Min(1, dt*4)
 	g.updateHallDoors(dt)
+	g.updateCampHalls(dt)
 	g.updateInnerDoors(dt)
 	g.updateCampDoors(dt)
 	g.updateDoors(dt)

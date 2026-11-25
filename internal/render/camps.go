@@ -119,6 +119,16 @@ func (gfx *Graphics) drawCamps(g *game.Game, seen sees) {
 			rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
 			mat.GetMap(rl.MapAlbedo).Color = rl.White
 		}
+		gfx.site = s
+		for _, f := range c.Layout.Furniture {
+			if draw := kitDraws[f.Kit]; draw != nil {
+				draw(gfx, g, kitSpot{f.At, f.Yaw})
+			}
+		}
+		if _, _, ok := c.Layout.BigDoor(); ok {
+			gfx.drawLeaves(c.Layout.Room, c.Layout.BigDoorLeaves(g.BigDoor(c.Ent)))
+		}
+		gfx.site = base.Site{}
 		for i := range c.Layout.Ports {
 			gfx.drawCampDoor(g, c, i)
 		}

@@ -13,6 +13,9 @@ import (
 // glazed tells a room of glass.
 func (r Room) glazed() bool { return r.plan != nil && r.plan.Glazed }
 
+// skylight tells a room whose dome only is of glass.
+func (r Room) skylight() bool { return r.plan != nil && r.plan.Skylight }
+
 const glassSill = 0.5 // the plinth's height, under the glass
 
 // glassShell builds a glazed dome's walls and dome, and their frame.
@@ -36,8 +39,14 @@ func (b *building) glassShell(r Room) {
 		frame.Box(edge.Add(vec3{0, (0.01 + p.y1 - 0.13) / 2, 0}), vec3{0.07, p.y1 - 0.14, WallThick + 0.06}, tangent, 0.01)
 		frame.Box(p.mid.Add(vec3{0, p.y1 - 0.06, 0}), vec3{p.width * 0.99, 0.12, WallThick + 0.08}, tangent, 0.02)
 	}
-	// The dome: its glass gores, white ribs along their edges and three
-	// rings across, a cap at the top.
+	b.glassDome(r)
+}
+
+// glassDome builds a dome of glass: its gores, white ribs along their
+// edges and three rings across, a cap at the top.
+func (b *building) glassDome(r Room) {
+	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
+	glass, frame := b.Part("glass.pane", mesh.LitGlass, in), b.out(r.plan.Style)
 	top := r.Center.Add(vec3{0, r.WallH, 0})
 	a, bh := r.Radius+0.02, r.Radius*0.55
 	glass.Dome(top, a, bh)

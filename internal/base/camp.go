@@ -33,6 +33,7 @@ type Camp struct {
 	Beacon    vec3            // the light blinking on its roof
 	Reach     float64         // how far from its middle it stands: the ground is flat under it
 	Parts     *mesh.Parts     // its static pieces
+	Bays      []Bay           // a garage's
 	hologram  bool
 }
 
@@ -78,7 +79,9 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 		locks = append(locks, Corridor{From: from, To: end, Width: DoorWidth + 0.2, Height: 2.4})
 	}
 	room := Ents.New()
-	Ents.Building.Set(room, roomOf(&bp))
+	laid := roomOf(&bp)
+	laid.apron = 2.4
+	Ents.Building.Set(room, laid)
 	var corrs []ecs.ID
 	for _, l := range locks {
 		l.Rooms = [2]ecs.ID{room, 0}
@@ -102,6 +105,16 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 		c.Ports = append(c.Ports, Port{l})
 		c.Reach = math.Max(c.Reach, l.To.Length()+0.6)
 	}
+	if c.Room.skylight() { // its lamp hangs by the door, clear of what stands in the middle
+		c.Lamps[0].At = c.Lamps[0].At.Add(c.Ports[0].Out().Scale(c.Room.Radius * 0.55))
+	}
+	if r := c.Room; r.Hall != nil { // its seven lamps hang low, over a small floor
+		for i := range c.Lamps {
+			if i == 0 || i >= len(c.Lamps)-len(r.hallLamps())+1 {
+				c.Lamps[i].Power *= 0.45
+			}
+		}
+	}
 	for _, f := range AllFurniture() {
 		c.Furniture = append(c.Furniture, *f)
 		if f.Kit == "core:bed" && c.Wake == (vec3{}) {
@@ -113,7 +126,12 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 	if c.Wake == (vec3{}) {
 		c.Wake = AirlockEnd.Scale(0.4)
 	}
-	if c.Room.glazed() {
+	if c.Room.Hall != nil && bp.Garage {
+		c.Bays = campBays(c.Room)
+	}
+	if c.Room.skylight() {
+		c.Beacon = c.Room.Center.Add(vec3{0, c.Room.WallH + c.Room.Radius*0.55 + 0.15, 0})
+	} else if c.Room.glazed() {
 		top := c.Room.WallH + c.Room.Radius*0.55
 		c.Beacon = c.Room.Center.Add(vec3{0, top + 0.15, 0})
 		c.Lights = append(c.Lights, content.Light{At: vec3{0, top - 0.5, 0}, Power: 3, Range: c.Room.Radius + top, Night: true})
@@ -121,7 +139,7 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 		c.Beacon = BeaconTop()
 	}
 
-	b := &building{Parts: mesh.NewParts(vec3{}), kits: kits}
+	b := &building{Parts: mesh.NewParts(vec3{}), kits: kits, bays: c.Bays}
 	r := c.Room
 	if r.Hall != nil {
 		b.hall(room, r)
@@ -139,7 +157,7 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 	for _, p := range c.Ports {
 		b.campDoor(p)
 	}
-	if !r.glazed() {
+	if !r.glazed() && !r.skylight() {
 		b.outside()
 	}
 	b.Unfight()
@@ -161,6 +179,21 @@ func (b *building) campDoor(p Port) {
 // Door is the middle of the first port's outer door, on the floor, and
 // the way across it.
 func (c *Camp) Door() (at, across vec3) { return c.Ports[0].At(), c.Ports[0].Across() }
+
+// BigDoor tells whether the camp is a hall with a big door: its middle on
+// the floor, and how wide it is.
+func (c *Camp) BigDoor() (mid vec3, width float64, ok bool) {
+	if !c.Room.bigDoor() {
+		return vec3{}, 0, false
+	}
+	mid, _ = c.Room.door()
+	return mid, c.Room.Hall.Door[0], true
+}
+
+// BigDoorWalls are what its big door, open from 0 to 1, stops; BigDoorLeaves
+// where its leaves stand.
+func (c *Camp) BigDoorWalls(open float64) []Segment { return c.Room.doorWalls(open) }
+func (c *Camp) BigDoorLeaves(open float64) []Leaf   { return c.Room.turnedLeaves(open) }
 
 // Hologram tells whether the camp has a table to travel from.
 func (c *Camp) Hologram() bool { return c.hologram }

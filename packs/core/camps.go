@@ -85,4 +85,35 @@ func registerBuildings(c *content.Content) {
 			Shape: content.Dome{Radius: 5, WallH: 2.8}, Style: "habitat.white", Accent: "led.green", Glazed: true,
 			Props: []content.Prop{{Kit: "serre.plants", Seed: 5}},
 		})
+	// The garage: its big door toward whoever sets it down, two bays, the
+	// terminal by the port at the back.
+	add("core:garage", "Garage", "Un hall à grande porte et deux places : on y gare et on y fait venir ses véhicules", 120_000_000,
+		[]float64{180}, content.Blueprint{
+			Hall:  &content.Hall{Size: [2]float64{10, 12}, WallH: 4.2, Rise: 1.4, Door: [2]float64{8, 3.6}},
+			Style: "clad.sand", Accent: "neon.orange", Garage: true,
+			Props: []content.Prop{
+				{Kit: "garage.terminal", At: vec3{-4.0, 0, 2.3}},
+				{Kit: "workbench", At: vec3{-4.1, 0, -2.6}},
+				{Kit: "crate.stack", At: vec3{-4.1, 0, 5.1}, Seed: 2},
+				{Kit: "crate.stack", At: vec3{-4.1, 0, -5.1}, Seed: 5},
+			},
+		})
+	// The observatory: the great telescope through its dome of glass, a
+	// desk, a reading corner.
+	c.Kits.Add("core:telescope.big", content.Kit{Build: base.KitBuild(base.BuildBigTelescope), Obstacles: []content.Obstacle{{vec3{0.1, 0, 0}, 0.62}},
+		Reach: 2.3, Use: content.Game.LookThrough, Prompt: "[E] Regarder dans la lunette"})
+	add("core:observatoire", "Observatoire", "Un dôme à coupole de verre et sa grande lunette, qui voit tout autour", 90_000_000,
+		[]float64{0}, content.Blueprint{
+			Shape: content.Dome{Radius: 4, WallH: 2.6}, Style: "habitat.white", Accent: "neon.blue", Interior: "home", Skylight: true,
+			Props: []content.Prop{
+				{Kit: "telescope.big", Yaw: 180},
+				{Kit: "desk.wall", At: vec3{0, 0, 3.2}, Yaw: -90},
+				{Kit: "chair", At: vec3{0, 0, 2.45}, Yaw: -90},
+				{Kit: "shelf", At: vec3{-1.9, 0, 2.75}, Yaw: -55, Seed: 4},
+				{Kit: "armchair", At: vec3{-0.4, 0, -2.85}, Yaw: 90},
+				{Kit: "lamp.floor", At: vec3{-1.35, 0, -3.1}},
+				{Kit: "books", At: vec3{0.65, 0, -3.0}, Seed: 1},
+				{Kit: "plant.big", At: vec3{-3.1, 0, -1.1}, Seed: 6},
+			},
+		})
 }

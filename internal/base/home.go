@@ -217,6 +217,9 @@ func (b *building) domeLining(r Room) {
 		b.casingLight(casing.Sub(out.Scale(0.12)).Sub(vec3{0, 0.16, 0}), along, p.width, r.led())
 		b.footLight(p.mid.Sub(t), p.mid.Add(t), out.Scale(-1), th, r.led())
 	}
+	if r.skylight() {
+		return
+	}
 	a, bh := r.domeLining()
 	b.Part("home.panel", mesh.LitBack, vec3{}).Dome(r.Center.Add(vec3{0, r.WallH, 0}), a, bh)
 }

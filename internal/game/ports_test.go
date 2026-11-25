@@ -164,7 +164,7 @@ func openPlain(t *testing.T, g *Game, item string) *Ghost {
 // and taken back for its price by aiming at it.
 func TestBuildingCatalog(t *testing.T) {
 	g := baseGame(t)
-	for _, item := range []string{"core:carrefour", "core:habitat", "core:serre"} {
+	for _, item := range []string{"core:carrefour", "core:habitat", "core:serre", "core:garage", "core:observatoire"} {
 		it, _ := g.Content.Items.Get(item)
 		found := false
 		for _, s := range g.Catalog() {
@@ -206,5 +206,132 @@ func TestBuildingCatalog(t *testing.T) {
 			t.Errorf("%s: the ground stays flat (%v, %v)", item, flat, h)
 		}
 		// From inside, its own things are used, not taken back.
+	}
+}
+
+// A garage's big door opens to whoever comes; a vehicle drives in and is
+// parked in a bay, another is brought to the other by the terminal, a third
+// takes a place, and the one there goes back to the base.
+func TestCampGarage(t *testing.T) {
+	g := baseGame(t)
+	g.Mode = ModePlay
+	c := standing(t, g, "core:garage")
+	if len(c.Layout.Bays) != 2 {
+		t.Fatalf("%d bays, want 2", len(c.Layout.Bays))
+	}
+	mid, _, ok := c.Layout.BigDoor()
+	if !ok {
+		t.Fatal("no big door")
+	}
+	// Closed, it stops whoever walks into it.
+	g.Player.Pos = g.World.Relief.Surface(c.ToWorld(mid.Add(vec3{3, 0, 0})))
+	g.phys = nil
+	walk(g, c.Site.Dir(vec3{-1, 0, 0}), 3)
+	if g.Indoors(g.Player.Eye()) {
+		t.Error("in through the big door, closed")
+	}
+	for range 180 {
+		g.updateCampHalls(1.0 / 60)
+	}
+	if o := g.BigDoor(c.Ent); o != 1 {
+		t.Fatalf("the big door is %v open", o)
+	}
+	walk(g, c.Site.Dir(vec3{-1, 0, 0}), 2)
+	if !g.Indoors(g.Player.Eye()) {
+		t.Error("not in through the big door, open")
+	}
+
+	own := func(id string) (*content.Vehicle, int) {
+		v, _ := g.Content.Vehicles.Get(id)
+		g.State.Levels[id] = 1
+		g.syncFleet()
+		return v, g.Entities(id)
+	}
+	rover, n := own("core:rover")
+	if n != 1 {
+		t.Fatalf("%d rovers", n)
+	}
+	id := g.entityOf(rover.ID)
+	g.getIn(id)
+	g.Player.Pos = g.World.Relief.Surface(c.ToWorld(vec3{1, 0, 0}))
+	g.drive.fwd = c.Site.Dir(vec3{-1, 0, 0})
+	if !g.CanDock() {
+		t.Fatal("no bay to park in")
+	}
+	g.startDock()
+	for range 600 {
+		if g.drive.dock == nil {
+			break
+		}
+		g.glideDock(rover, 1.0/60)
+	}
+	g.getOut()
+	in := 0
+	for _, b := range c.Layout.Bays {
+		if g.inBay(c, b) == id {
+			in++
+		}
+	}
+	if in != 1 || g.Riding != 0 {
+		t.Fatalf("the rover is in %d bays", in)
+	}
+	if !g.Indoors(g.Player.Eye()) {
+		t.Error("stepped out of the garage")
+	}
+
+	item := func(id string) ShopItem {
+		g.Garage, g.garageIn = true, c.Ent
+		for _, it := range g.garageItems() {
+			if it.id == id {
+				return it
+			}
+		}
+		t.Fatalf("no %s at the terminal", id)
+		return ShopItem{}
+	}
+	if it := item("core:rover"); it.Info != "Ici" || it.Call || it.Refund == 0 {
+		t.Errorf("the rover at the terminal: %+v", it)
+	}
+	own("core:buggy")
+	own("core:hover")
+	g.Call(item("core:buggy"))
+	g.Call(item("core:hover"))
+	here := 0
+	for _, v := range []string{"core:rover", "core:buggy", "core:hover"} {
+		if item(v).Info == "Ici" {
+			here++
+		}
+	}
+	if here != 2 || item("core:hover").Info != "Ici" {
+		t.Errorf("%d vehicles in the garage, hover %q", here, item("core:hover").Info)
+	}
+	own("core:harvester")
+	if it := item("core:titan"); it.Call {
+		t.Error("the titan goes in the garage")
+	}
+}
+
+// The observatory's telescope sees from out of the dome, the way its own
+// building faces.
+func TestObservatory(t *testing.T) {
+	g := baseGame(t)
+	g.Mode = ModePlay
+	c := standing(t, g, "core:observatoire")
+	g.Player.Pos = g.World.Relief.Surface(c.ToWorld(vec3{1.4, 0, 0}))
+	g.Player.Heading, g.Player.Pitch = c.Site.Dir(vec3{-1, 0, 0}), 0
+	use, ok := g.NearbyUse()
+	if !ok || use.Kit != "core:telescope.big" {
+		t.Fatalf("by the telescope, E is %+v", use)
+	}
+	use.Use(g, use.At)
+	if g.Mode != ModeScope {
+		t.Fatal("not looking through it")
+	}
+	f := g.Scope.Forward()
+	if up := g.Scope.Eye.Norm(); math.Abs(f.Dot(up)+math.Sin(3*math.Pi/180)) > 0.01 || f.Dot(c.Site.Dir(vec3{-1, 0, 0})) < 0.99 {
+		t.Errorf("it looks %v", f)
+	}
+	if g.Indoors(g.Scope.Eye) {
+		t.Error("it sees from inside")
 	}
 }
