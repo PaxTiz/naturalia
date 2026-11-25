@@ -78,3 +78,60 @@ func TestPorts(t *testing.T) {
 		g.Ents.Kill(c.Ent)
 	}
 }
+
+// Two buildings stand a few meters apart, level with each other, and each
+// keeps its flat ground; closer, they don't fit.
+func TestNeighbours(t *testing.T) {
+	g := baseGame(t)
+	l := g.campLayout("core:bootcamp")
+	var a CampAt
+	dir := func(gap float64) vec3 {
+		d := a.Site.Origin.Norm()
+		return planet.Toward2(d, planet.TangentAt(d, a.Site.Dir(vec3{0, 0, 1})), 2*l.Reach+gap)
+	}
+	for i := 0; ; i++ { // somewhere flat enough
+		if i == 400 {
+			t.Fatal("no flat ground anywhere")
+		}
+		id := g.add(Placed{Kind: "core:bootcamp", Dir: planet.Toward(vec3{math.Cos(float64(i)), 0, math.Sin(float64(i))}, 300+5*float64(i))})
+		a, _ = g.campOf(id)
+		if ok, _ := g.campFits(l, dir(4), g.campLevel(l, dir(4), 0), 0); ok && g.campLevel(l, dir(4), 0) != nil {
+			break
+		}
+		g.Ents.Kill(id)
+	}
+	if ok, why := g.campFits(l, dir(2), g.campLevel(l, dir(2), 0), 0); ok || why != "trop près d'un bâtiment" {
+		t.Errorf("2 m away: fits %v (%s)", ok, why)
+	}
+	level := g.campLevel(l, dir(4), 0)
+	if d := math.Abs(*level - g.World.Relief.Layers(dir(4))); d < 0.001 {
+		t.Errorf("the ground is level already: the test sees nothing")
+	}
+	if ok, why := g.campFits(l, dir(4), level, 0); !ok {
+		t.Fatalf("4 m away: %s", why)
+	}
+	id := g.add(Placed{Kind: "core:bootcamp", Dir: dir(4), Yaw: 2})
+	g.Ents.Camp.Get(id).Level = level
+	g.standCamps()
+	b, _ := g.campOf(id)
+	if d := b.Site.Origin.Length() - a.Site.Origin.Length(); math.Abs(d) > 1e-6 {
+		t.Errorf("%f m over the other", d)
+	}
+	for _, c := range []CampAt{a, b} {
+		for a := 0.0; a < 360; a += 15 {
+			p := content.Turn(vec3{c.Layout.Reach, 0, 0}, a)
+			if y := c.Site.ToLocal(g.World.Relief.Surface(c.ToWorld(p))).Y; math.Abs(y) > 0.005 {
+				t.Errorf("%s, at %v: the ground is %.3f m off its floor", c.Name, p, y)
+			}
+		}
+	}
+	var saved *Placed
+	for _, p := range g.placed() {
+		if p.Camp != nil && p.Camp.ID == b.ID {
+			saved = &p
+		}
+	}
+	if saved == nil || saved.Camp.Level == nil || *saved.Camp.Level != *level {
+		t.Errorf("its level isn't saved")
+	}
+}

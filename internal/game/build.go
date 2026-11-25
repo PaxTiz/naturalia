@@ -43,6 +43,7 @@ type Ghost struct {
 	wheel      float64      // how far the wheel turned, since its last stop
 	wheelT     float64      // when
 	Sheet      *Sheet       // the grid's lines shown
+	floor      *float64     // a building's: the altitude of its floor, nil for the ground's
 	dist, lift float64      // free: how far ahead; on a surface: how high over it
 }
 
@@ -508,6 +509,7 @@ func (g *Game) placeGhost() {
 		g.Ents.Air.Set(id, Air{})
 	}
 	if g.campLayout(gh.Kind) != nil {
+		g.Ents.Camp.Get(id).Level = gh.floor
 		g.standCamps() // the ground flattened under it, its walls where it stands
 	}
 	g.sfx.Beep(0.02, 0.15, 0.12, 392, 523)

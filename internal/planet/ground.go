@@ -11,10 +11,12 @@ import (
 // blocks built on a grid (grid.go). Both blend back to the relief around.
 
 // Pad is a disc of flat ground: a plane tangent to Mars at its middle, at
-// the height the layers give there.
+// the height the layers give there, or at its Level if it is Set.
 type Pad struct {
 	Dir    vec3    // its middle, from Mars' center, unit
 	Radius float64 // flat out to there, in m
+	Level  float64 // its altitude, over the mean radius
+	Set    bool
 	h      float64 // the plane's height, over the mean radius
 	blend  float64 // how far beyond its edge the ground takes back its shape
 	cosOut float64 // cosine of the angle out to where it has
@@ -37,7 +39,10 @@ const (
 // laid is the pad set at the ground's height, with its blend.
 func (p Pad) laid(r Relief, blend float64) Pad {
 	p.Dir = p.Dir.Norm()
-	p.h, p.blend = r.raw(p.Dir), blend
+	p.h, p.blend = p.Level, blend
+	if !p.Set {
+		p.h = r.raw(p.Dir)
+	}
 	p.cosOut = math.Cos((p.Radius + blend) / Radius)
 	return p
 }
@@ -89,6 +94,7 @@ type works struct{ now atomic.Pointer[Flat] }
 // Flat is the ground flattened at some time.
 type Flat struct {
 	Pads  []Pad
+	Ways  PlotSet // what leads from a pad to another: it blends with them
 	Plots PlotSet // graded
 	Bare  PlotSet // under what stands on the ground as it is: only cleared of stones
 }
@@ -151,6 +157,18 @@ func (r Relief) SetPads(list []Pad) {
 	r.works.now.Store(&f)
 }
 
+// SetWays levels the ground under these rectangles that lead from a pad to
+// another, sloping as they do, and no others.
+func (r Relief) SetWays(list []Plot) {
+	f := *r.Flat()
+	f.Ways = newPlotSet(list)
+	r.works.now.Store(&f)
+}
+
+// Layers is the ground's altitude as the layers made it, before any of it
+// was flattened.
+func (r Relief) Layers(d vec3) float64 { return r.raw(d) }
+
 // SetPlots grades the ground under these rectangles, and no others.
 func (r Relief) SetPlots(list []Plot) {
 	f := *r.Flat()
@@ -187,45 +205,86 @@ func (f *Flat) Areas() map[Area]any {
 	for _, p := range f.Plots.List {
 		out[p.area()] = p
 	}
+	for _, p := range f.Ways.List {
+		out[p.area()] = p
+	}
 	return out
 }
 
-func (f *Flat) flatten(d vec3, h float64) float64 {
-	for _, p := range f.Pads {
-		h = p.flatten(d, h)
+// bank mixes the planes of what flattens the ground around a point, the
+// nearer the more, then the relief.
+type bank struct{ sum, weight, natural float64 }
+
+// add mixes in a plane whose edge is e m away (more than 0), and which
+// gives the relief back blend m from it.
+func (b *bank) add(plane, e, blend float64) {
+	if e >= blend {
+		return
 	}
-	return h
+	k := mathx.Smoothstep(0, blend, e)
+	if b.weight == 0 {
+		b.natural = k
+	}
+	b.natural = math.Min(b.natural, k)
+	w := (1 - k) / (e * e)
+	b.sum, b.weight = b.sum+plane*w, b.weight+w
+}
+
+// mix is the height there, h that of the relief.
+func (b *bank) mix(h float64) float64 {
+	if b.weight == 0 {
+		return h
+	}
+	flat := b.sum / b.weight
+	return flat + (h-flat)*b.natural
+}
+
+// flatten blends height h at d to the pads around and the ways between
+// them: on a pad its plane, then on a way its own, then those near.
+func (f *Flat) flatten(d vec3, h float64) float64 {
+	var b bank
+	for _, p := range f.Pads {
+		c := d.Dot(p.Dir)
+		if c < p.cosOut {
+			continue
+		}
+		plane, e := (Radius+p.h)/c-Radius, ArcDist(d, p.Dir)-p.Radius
+		if e <= 0 {
+			return plane
+		}
+		b.add(plane, e, p.blend)
+	}
+	low := f.Ways.bank(d, &b)
+	if !math.IsInf(low, 1) {
+		return low
+	}
+	return b.mix(h)
 }
 
 // grade blends height h at d to the plots around: on one (its margin
 // too), their lowest plane, so that none pokes through another; around,
-// the planes of those near, the nearer the more, then the relief.
+// the planes of those near.
 func (f *Flat) grade(d vec3, h float64) float64 {
-	low, natural := math.Inf(1), 1.0
-	sum, weight := 0.0, 0.0
-	for _, i := range f.Plots.near(d) {
-		dist, plane := f.Plots.List[i].dist(d)
+	var b bank
+	if low := f.Plots.bank(d, &b); !math.IsInf(low, 1) {
+		return low
+	}
+	return b.mix(h)
+}
+
+// bank mixes the plots near d into b; it is the lowest plane of those it
+// is on, their margin too, infinite for none.
+func (s *PlotSet) bank(d vec3, b *bank) float64 {
+	low := math.Inf(1)
+	for _, i := range s.near(d) {
+		dist, plane := s.List[i].dist(d)
 		if dist <= PlotMargin {
 			low = math.Min(low, plane)
 			continue
 		}
-		e := dist - PlotMargin
-		if e >= PlotBlend {
-			continue
-		}
-		k := mathx.Smoothstep(0, PlotBlend, e)
-		natural = math.Min(natural, k)
-		w := (1 - k) / (e * e)
-		sum, weight = sum+plane*w, weight+w
+		b.add(plane, dist-PlotMargin, PlotBlend)
 	}
-	if !math.IsInf(low, 1) {
-		return low
-	}
-	if weight == 0 {
-		return h
-	}
-	flat := sum / weight
-	return flat + (h-flat)*natural
+	return low
 }
 
 // OnPad tells whether d is on a bootcamp's pad, or within margin m of its
@@ -243,11 +302,11 @@ func (r Relief) OnPad(d vec3, margin float64) bool {
 // margin m of its edge.
 func (r Relief) Built(d vec3, margin float64) bool {
 	f := r.Flat()
-	return f.Plots.within(d, margin) || f.Bare.within(d, margin)
+	return f.Plots.within(d, margin) || f.Bare.within(d, margin) || f.Ways.within(d, margin)
 }
 
-// ByPad tells whether d is where the base's pad or a bootcamp's shapes
-// the ground.
+// ByPad tells whether d is where the base's pad, a bootcamp's or a way
+// between two shapes the ground.
 func (r Relief) ByPad(d vec3) bool {
 	if d.Dot(r.base.Dir) > r.base.cosOut {
 		return true
@@ -257,15 +316,14 @@ func (r Relief) ByPad(d vec3) bool {
 			return true
 		}
 	}
-	return false
+	return r.Flat().Ways.within(d, PlotMargin+PlotBlend)
 }
 
 // PadSlope is how far the ground strays from the plane a pad of that
-// radius would lay at d, out to where it takes back its shape: what the
-// blend would have to make up.
-func (r Relief) PadSlope(d vec3, radius float64) float64 {
+// radius would lay at d, at altitude h, out to where it takes back its
+// shape: what the blend would have to make up.
+func (r Relief) PadSlope(d vec3, radius, h float64) float64 {
 	d = d.Norm()
-	h := r.raw(d)
 	t1, t2 := mathx.TangentBasis(d)
 	worst := 0.0
 	for _, dist := range []float64{radius * 0.5, radius, radius + PadBlend*0.5, radius + PadBlend} {

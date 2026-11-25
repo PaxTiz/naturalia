@@ -56,7 +56,7 @@ func TestPads(t *testing.T) {
 	far := Toward2(mid, t2, 7+PadBlend+1)
 	before := w.Relief.Height(far)
 	raw := w.Relief.Height(mid)
-	if w.Relief.PadSlope(mid, 7) <= 0 {
+	if w.Relief.PadSlope(mid, 7, raw) <= 0 {
 		t.Errorf("no slope at all around %v: the test sees nothing", mid)
 	}
 	w.Relief.SetPads([]Pad{{Dir: mid, Radius: 7}})
@@ -78,6 +78,49 @@ func TestPads(t *testing.T) {
 	w.Relief.SetPads(nil)
 	if d := w.Relief.Height(edge) - w.Relief.raw(edge); math.Abs(d) > 1e-9 {
 		t.Errorf("taken off, the ground stays %f m off", d)
+	}
+}
+
+// Two pads close to each other each stay flat, and the ground between them
+// goes from one to the other without a step; a way between them lies on its
+// own plane.
+func TestPadsMeet(t *testing.T) {
+	set := DefaultSettings()
+	w := NewWorld(42, &set)
+	r := w.Relief
+	a := Toward(vec3{1, 0, 0.5}, 900)
+	t1, t2 := mathx.TangentBasis(a)
+	b := Toward2(a, t1, 18)
+	level := r.Layers(a)
+	for _, dh := range []float64{0, 0.6} {
+		r.SetPads([]Pad{{Dir: a, Radius: 7}, {Dir: b, Radius: 7, Level: level + dh, Set: true}})
+		if h := r.Height(b) - level; math.Abs(h-dh) > 1e-9 {
+			t.Errorf("the second pad is %f m over the first, want %f", h, dh)
+		}
+		before := r.Height(a)
+		for x := 0.1; x <= 18; x += 0.1 {
+			h := r.Height(Toward2(a, t1, x))
+			if math.Abs(h-before) > 0.6*0.1 {
+				t.Errorf("dh %v: a step of %f m %.1f m along", dh, h-before, x)
+			}
+			if x < 7 && math.Abs(Toward2(a, t1, x).Scale(Radius+h).Dot(a)-Radius-level) > 1e-6 {
+				t.Errorf("dh %v: the first pad isn't flat %.1f m along", dh, x)
+			}
+			before = h
+		}
+	}
+	mid := a.Add(b).Norm()
+	at := mid.Scale(Radius + level + 0.3)
+	way := Plot{At: at, X: b.Sub(a).Norm(), Up: mid, Half: [2]float64{2, 1.5}}
+	r.SetWays([]Plot{way})
+	for _, x := range []float64{-1.8, 0, 1.8} {
+		p := at.Add(way.X.Scale(x)).Add(t2.Scale(1.2))
+		if h := r.Surface(p).Sub(at).Dot(mid); math.Abs(h) > 1e-6 {
+			t.Errorf("%v m along the way, %f m off its plane", x, h)
+		}
+	}
+	if !r.ByPad(mid) || !r.Built(mid, 0.5) {
+		t.Errorf("stones, or blocks graded, on the way")
 	}
 }
 

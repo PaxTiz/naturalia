@@ -23,9 +23,12 @@ import (
 // Bootcamp is what a building keeps: an ID that stays the same from save
 // to save, and its name.
 type Bootcamp struct {
-	ID   int       `json:"id"`
-	Name string    `json:"name"`
-	site base.Site // where it stands, set when it is placed (placeCamp)
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	// Level is the altitude of its floor, that of the building it was set
+	// down next to; the ground's there if left out.
+	Level *float64  `json:"level,omitempty"`
+	site  base.Site // where it stands, set when it is placed (placeCamp)
 }
 
 // CampAt is a bootcamp standing on Mars: its entity, what it keeps, where
@@ -130,9 +133,13 @@ func (g *Game) buildingAt(at vec3) string {
 // too, and stands each upright on it.
 func (g *Game) standCamps() {
 	var pads []planet.Pad
-	for id := range g.Ents.Camp.All() {
+	for id, b := range g.Ents.Camp.All() {
 		if l := g.campLayout(g.kind(id)); l != nil {
-			pads = append(pads, planet.Pad{Dir: g.Ents.Transform.Get(id).Dir, Radius: l.Reach + 0.5})
+			p := planet.Pad{Dir: g.Ents.Transform.Get(id).Dir, Radius: l.Reach + padMargin}
+			if b.Level != nil {
+				p.Level, p.Set = *b.Level, true
+			}
+			pads = append(pads, p)
 		}
 	}
 	g.reshape(func() { g.World.Relief.SetPads(pads) })
@@ -207,23 +214,67 @@ func (g *Game) CampLayout(kind string) *base.Camp { return g.campLayout(kind) }
 
 const (
 	campFromBase = 40.0 // m kept between a bootcamp and the base's buildings
+	campGap      = 3.0  // m between two buildings, at least
 	maxCampSlope = 2.0  // m the flattened ground may make up, at most
+	maxCampBank  = 0.25 // the slope of the ground between two buildings, at most
+	campTerrace  = 1.2  // m a building is raised or dug to be level with the one next to it
+	padMargin    = 0.5  // m of flat ground around a building
 )
 
-// campFits tells whether a bootcamp laid out as l would stand at dir:
-// away from the base and from the other bootcamps (but moving, the one
-// moved), on ground flat enough, with nothing in its way; if not, why.
-func (g *Game) campFits(l *base.Camp, dir vec3, moving ecs.ID) (bool, string) {
+// neighbours goes through the buildings whose flat ground meets that of one
+// laid out as l at dir, but moving: how far apart they are, and the altitude
+// of their floor.
+func (g *Game) neighbours(l *base.Camp, dir vec3, moving ecs.ID, see func(id ecs.ID, gap, level float64)) {
+	for id, b := range g.Ents.Camp.All() {
+		o := g.campLayout(g.kind(id))
+		if id == moving || o == nil {
+			continue
+		}
+		if gap := planet.ArcDist(dir, b.site.Origin.Norm()) - l.Reach - o.Reach; gap < planet.PadBlend {
+			see(id, gap, b.site.Origin.Length()-planet.Radius)
+		}
+	}
+}
+
+// campLevel is the altitude of the floor of a building laid out as l at
+// dir: that of the nearest around if the ground is about as high, so that
+// they are level; else the ground's, nil.
+func (g *Game) campLevel(l *base.Camp, dir vec3, moving ecs.ID) *float64 {
+	ground, near := g.World.Relief.Layers(dir), math.Inf(1)
+	var out *float64
+	g.neighbours(l, dir, moving, func(_ ecs.ID, gap, level float64) {
+		if math.Abs(level-ground) <= campTerrace && gap < near {
+			near, out = gap, &level
+		}
+	})
+	return out
+}
+
+// campFits tells whether a building laid out as l would stand at dir, its
+// floor at level (the ground's if nil): away from the base and from the
+// others (but moving, the one moved), on ground flat enough, with nothing in
+// its way; if not, why.
+func (g *Game) campFits(l *base.Camp, dir vec3, level *float64, moving ecs.ID) (bool, string) {
 	if planet.ArcDist(dir, planet.BaseUp) < base.Extent+campFromBase+l.Reach {
 		return false, "trop près de la base"
 	}
-	for id, b := range g.Ents.Camp.All() {
-		if o := g.campLayout(g.kind(id)); id != moving && o != nil &&
-			planet.ArcDist(dir, b.site.Origin.Norm()) < l.Reach+o.Reach+planet.PadBlend {
-			return false, "trop près d'un bootcamp"
-		}
+	h := g.World.Relief.Layers(dir)
+	if level != nil {
+		h = *level
 	}
-	if g.World.Relief.PadSlope(dir, l.Reach+0.5) > maxCampSlope {
+	why := ""
+	g.neighbours(l, dir, moving, func(_ ecs.ID, gap, other float64) {
+		switch {
+		case gap < campGap:
+			why = "trop près d'un bâtiment"
+		case why == "" && math.Abs(h-other) > maxCampBank*gap:
+			why = "trop haut ou trop bas pour le bâtiment voisin"
+		}
+	})
+	if why != "" {
+		return false, why
+	}
+	if g.World.Relief.PadSlope(dir, l.Reach+padMargin, h) > maxCampSlope {
 		return false, "sol trop pentu"
 	}
 	if p := g.phys; p != nil {
@@ -254,7 +305,11 @@ func (g *Game) poseCamp(gh *Ghost, l *base.Camp) {
 	ax := face.Scale(r.X).Add(side.Scale(r.Z)).Norm()
 	gh.Pose = Transform{Dir: dir}
 	gh.Pose.SetAxes(ax, dir)
-	gh.OK, gh.Why = g.campFits(l, dir, gh.Moving)
+	gh.floor = g.campLevel(l, dir, gh.Moving)
+	gh.OK, gh.Why = g.campFits(l, dir, gh.floor, gh.Moving)
+	if gh.floor != nil { // shown as high as it will stand
+		gh.Pose.Alt = planet.Radius + *gh.floor - g.World.Relief.Surface(dir).Length()
+	}
 }
 
 // rayCamp is how far along a ray from o along d (length 1), within max,
