@@ -425,7 +425,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 			it, _ := g.NearbyUse()
 			hud.prompt(game.KeyLabel(game.ActUse), strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
 			if moving != "" {
-				hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64+34*uiScale(), visorCyan)
+				hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64+42*uiScale(), visorCyan)
 			}
 		case moving != "":
 			hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64, visorCyan)

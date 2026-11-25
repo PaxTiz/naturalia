@@ -5,6 +5,7 @@ import (
 	"math"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
+	"naturalia/internal/planet"
 	"testing"
 )
 
@@ -153,8 +154,49 @@ func TestHouseByAiming(t *testing.T) {
 	}
 }
 
-// Every block of the catalog can be set down, and walked up to without
-// getting stuck.
+// Vehicles drive between a gate's posts, and not through one.
+func TestDriveGate(t *testing.T) {
+	for _, gate := range []string{"core:gate", "core:arch"} {
+		for _, kind := range []string{"core:rover", "core:buggy", "core:hover"} {
+			for _, aside := range []float64{0, 0.3, 2.8} {
+				g := gridGame(t)
+				id := put(g, gate, ahead(g, 8), 8)
+				if id == 0 {
+					t.Fatalf("no %s: %q", gate, g.Ghost.Why)
+				}
+				pos, ax, _, az := g.Frame(g.Ents.Transform.Get(id))
+				g.Ghost = nil
+				fwd := ax.Scale(-1)
+				g.Player.Pos = g.World.Relief.Surface(pos.Add(ax.Scale(12)).Add(az.Scale(aside)))
+				g.Player.Heading = planet.TangentAt(g.Player.LocalUp(), fwd)
+				car := g.spawn(kind, g.Player.Pos)
+				g.Ents.Transform.Get(car).Yaw = yawOf(g.Player.LocalUp(), g.Player.Heading)
+				g.getIn(car)
+				g.drive.vel = g.Player.Heading.Scale(10)
+				v, _ := g.Driven()
+				hit := false
+				for range 150 {
+					g.move(v, controls{throttle: 1}, 1.0/60)
+					g.stepPhysics(1.0 / 60)
+					g.liftVehicle(1.0 / 60)
+					g.updateVehicle(1.0 / 60)
+					for _, i := range g.phys.w.Impacts {
+						hit = hit || i.A == g.phys.car || i.B == g.phys.car
+					}
+				}
+				d := g.Player.Pos.Sub(pos).Dot(fwd)
+				if aside < 1 && (hit || d < 5) {
+					t.Errorf("%s, %s, %.1f m aside: hit %v, %.1f m past it", gate, kind, aside, hit, d)
+				}
+				if aside > 1 && !hit {
+					t.Errorf("%s, %s: drove through a post", gate, kind)
+				}
+			}
+		}
+	}
+}
+
+// Every block of the catalog can be set down, and walked into.
 func TestCatalogStands(t *testing.T) {
 	for _, s := range gridGame(t).Catalog() {
 		for _, it := range s.Items {
