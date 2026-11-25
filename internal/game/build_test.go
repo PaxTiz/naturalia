@@ -107,6 +107,7 @@ func TestBlocksStand(t *testing.T) {
 
 func TestStackOnSlab(t *testing.T) {
 	g := fleetGame(t, LoadContent(), map[string]int{})
+	g.State.Credits = 1e5
 	block(g, "core:slab", 4)
 	g.Player.Pitch = -0.5
 	g.Ghost = &Ghost{Kind: "core:crate-2", item: "core:crate-2", rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}}
@@ -241,7 +242,7 @@ func TestShopTabs(t *testing.T) {
 		t.Errorf("tabs %v, want %v", got, want)
 	}
 	for _, it := range items {
-		if want := map[string]string{"core:crate-4": "build", "core:slope": "build", "core:crate": "items"}[it.id]; want != "" && it.Tab != want {
+		if want := map[string]string{"core:bootcamp": "build", "core:crate": "items"}[it.id]; want != "" && it.Tab != want {
 			t.Errorf("%s in %q, want %q", it.id, it.Tab, want)
 		}
 	}

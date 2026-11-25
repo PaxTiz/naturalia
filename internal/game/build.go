@@ -29,6 +29,7 @@ type Ghost struct {
 	Free   bool      // floating where the player holds it, not on a surface
 	Moving ecs.ID    // a placed entity being moved, out of the world meanwhile (0: a new one)
 	item   string
+	Paint  string // the finish it is painted with, "" for its own
 	// rel is its front and up in the frame it stands in (front toward
 	// the player, up, side), as the player turned it.
 	rel        [2]vec3
@@ -66,10 +67,14 @@ func (g *Game) updateItems() {
 		return
 	}
 	if gh == nil || gh.Moving == 0 {
-		it, n := g.HeldItem()
+		it, _ := g.HeldItem()
 		if KeyPressed(ActNextItem) {
-			g.itemSel++
-			it, n = g.HeldItem()
+			it = g.nextItem()
+		}
+		if KeyPressed(ActSame) || rl.IsMouseButtonPressed(rl.MouseButtonMiddle) {
+			if g.takeSame() {
+				return
+			}
 		}
 		switch {
 		case gh == nil && rl.IsMouseButtonPressed(rl.MouseButtonRight):
@@ -77,18 +82,19 @@ func (g *Game) updateItems() {
 				g.grab(id)
 			}
 			return
-		case it == nil || n == 0:
+		case it == nil:
 			g.Ghost = nil
 			return
 		case gh == nil:
 			if KeyPressed(ActPlace) {
-				g.Ghost = &Ghost{rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}, dist: 4}
-				g.Ghost.Kind, g.Ghost.item = content.Qualify(it.Places), it.ID
-				g.poseGhost()
+				g.hold(it)
 			}
 			return
 		}
-		gh.Kind, gh.item = content.Qualify(it.Places), it.ID
+		gh.Kind, gh.item, gh.Paint = content.Qualify(it.Places), it.ID, g.State.Paint
+	}
+	if KeyPressed(ActFinish) {
+		g.NextFinish()
 	}
 	def, ok := g.Content.Entities.Get(gh.Kind)
 	if !ok {
@@ -229,7 +235,7 @@ func (g *Game) grab(id ecs.ID) {
 	}
 	ax, up, _ := e.Axes()
 	pos, _, _, _ := g.Frame(e)
-	g.Ghost = &Ghost{Kind: def.ID, Moving: id, from: from, frame: [3]vec3{face, n, face.Cross(n)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
+	g.Ghost = &Ghost{Kind: def.ID, Moving: id, Paint: g.Paint(id), from: from, frame: [3]vec3{face, n, face.Cross(n)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
 	if g.Settings.Grid { // it stays on its own, even far from all
 		g.Ghost.home = from
 	}
@@ -296,10 +302,20 @@ func (g *Game) aimSurface(def *content.EntityDef, eye, fwd vec3) (at, n vec3, on
 	return hit, hit.Norm(), 0
 }
 
-// poseGhost sets the ghost where the player looks: on the grid (grid.go);
+// poseGhost sets the ghost where the player looks; what they can't pay
+// for doesn't go anywhere.
+func (g *Game) poseGhost() {
+	gh := g.Ghost
+	g.pose()
+	if it, ok := g.Content.Items.Get(gh.item); ok && gh.Moving == 0 && gh.OK && !g.canPay(it) {
+		gh.OK, gh.Why = false, "crédits insuffisants"
+	}
+}
+
+// pose sets the ghost where the player looks: on the grid (grid.go);
 // or without it, resting by its lowest point on the ground, or against the
 // face of a block, turned like it; or held in the air when free.
-func (g *Game) poseGhost() {
+func (g *Game) pose() {
 	gh := g.Ghost
 	def, ok := g.Content.Entities.Get(gh.Kind)
 	if !ok {
@@ -469,8 +485,9 @@ func (g *Game) placeGhost() {
 		g.Ghost = nil
 	} else {
 		id = g.add(Placed{Kind: gh.Kind, Dir: e.Dir, Yaw: e.Yaw, Alt: e.Alt, Pitch: e.Pitch, Roll: e.Roll})
-		g.State.Items[gh.item]--
+		g.pay(id, gh.item)
 	}
+	g.setPaint(id, gh.Paint)
 	if def, ok := g.Content.Entities.Get(gh.Kind); ok && gh.grid != nil && def.Mass == 0 {
 		g.Ents.Grid.Set(id, *gh.grid)
 	} else if g.Ents.Grid.Has(id) {
@@ -509,12 +526,8 @@ func (g *Game) HoldGhost(item string, deg float64) {
 	if g.State.Items[it.ID] == 0 {
 		g.GiveItem(it.ID, 1)
 	}
-	for g.itemSel = 0; g.itemSel < g.Content.Items.Len(); g.itemSel++ {
-		if h, _ := g.HeldItem(); h == it {
-			break
-		}
-	}
-	g.Ghost = &Ghost{Kind: content.Qualify(it.Places), item: it.ID, rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}, dist: 4}
+	g.hand = it.ID
+	g.Ghost = &Ghost{Paint: g.State.Paint, Kind: content.Qualify(it.Places), item: it.ID, rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}, dist: 4}
 	g.Ghost.turn(vec3{1, 0, 0}, deg*math.Pi/180)
 	g.poseGhost()
 }

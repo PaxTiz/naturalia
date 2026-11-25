@@ -11,6 +11,7 @@ import (
 // gridGame is a game far from the base, the grid on.
 func gridGame(t *testing.T) *Game {
 	g := fleetGame(t, LoadContent(), map[string]int{})
+	g.State.Credits = 1e6
 	g.Settings.Grid, g.Settings.GridStep = true, 1
 	g.stepPhysics(1.0 / 60)
 	return g

@@ -65,7 +65,8 @@ type Graphics struct {
 	camps                                             map[string]*baseModels // each kind of bootcamp's
 	doorPanel                                         rl.Model
 	hallLeaf                                          rl.Model                 // a door leaf of the halls, scaled to size
-	entities                                          map[string][]entityModel // by entity ID, built on first draw
+	reach                                             map[string]float64       // of entities, by kind (entityReach)
+	entities                                          map[string][]entityModel // by entity ID and finish, built on first draw
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -534,7 +535,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 		gfx.drawRocks(g)
 		gfx.drawBase(g)
 		gfx.drawCamps(g)
-		gfx.drawEntities(g)
+		gfx.drawEntities(g, inShadowMap(g.Player.Pos))
 	})
 	// The rooms' lamps cast shadows too, drawn once.
 	gfx.setUniforms(g, cam)
@@ -570,7 +571,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.baseDepth()
 	gfx.drawBase(g)
 	gfx.drawCamps(g)
-	gfx.drawEntities(g)
+	gfx.drawEntities(g, gfx.inView(cam))
 	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
 	for _, n := range patches {
@@ -583,6 +584,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.drawDevils(g)
 	gfx.drawGhost(g)
 	gfx.drawGlass()
+	gfx.drawPanes(g, gfx.inView(cam))
 	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}

@@ -280,7 +280,7 @@ func (g *Game) ceilingOver(pos vec3) float64 {
 		}
 	}
 	if found {
-		return g.World.Relief.Altitude(from) + low
+		return g.World.Relief.Altitude(from) + low - 0.05 // the head just short of it
 	}
 	if planet.ArcDist(pos.Norm(), planet.BaseUp) >= base.Extent {
 		return 0

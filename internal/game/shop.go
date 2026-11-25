@@ -132,8 +132,8 @@ func (g *Game) ShopItems() []ShopItem {
 		items = append(items, it)
 	}
 	for _, o := range g.Content.Items.All() {
-		if o.Cost <= 0 {
-			continue
+		if o.Cost <= 0 || g.Content.Shelf(o) != "" {
+			continue // in the catalog
 		}
 		tab, kind := o.Category, "Objet"
 		def, ok := g.Content.Entities.Get(o.Places)

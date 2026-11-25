@@ -36,6 +36,7 @@ type modFile struct {
 	Entities  map[string]EntityDef `json:"entities"` // things standing in the world
 	Items     []Item               `json:"items"`    // carried, placed as entities with F
 	Vehicles  []Vehicle            `json:"vehicles"` // driven by the player
+	Finishes  []Finish             `json:"finishes"` // what blocks may be painted with
 	Scripts   []string             `json:"scripts"`  // JavaScript files, run in order (ScriptRunner)
 	// Terrain changes the generation: only the settings given, features
 	// added to those of other packs (planet.Settings).
@@ -188,8 +189,13 @@ func (m *modFile) register(c *Content) {
 	for name, e := range m.Entities {
 		refParts(e.Parts)
 		refParts(e.Shape)
+		e.Paint = m.ref(e.Paint, isTok)
 		e.Item = ""
 		c.Entities.Add(m.own(name), e)
+	}
+	for _, f := range m.Finishes {
+		f.ID, f.Token = m.own(f.ID), m.ref(f.Token, isTok)
+		c.Finishes.Add(f.ID, f)
 	}
 	for _, v := range m.Vehicles {
 		v.ID = m.own(v.ID)

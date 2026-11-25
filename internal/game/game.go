@@ -30,6 +30,8 @@ type State struct {
 	TotalEarned float64                   `json:"total_earned"`
 	Nights      int                       `json:"nights,omitempty"` // slept: what grows in the base grows with them
 	Sol         float64                   `json:"sol,omitempty"`    // sols since the first morning (clock.go)
+	Recent      []string                  `json:"recent,omitempty"` // items last picked in the catalog: R cycles through them too
+	Paint       string                    `json:"paint,omitempty"`  // the finish blocks are painted with, "" for their own
 }
 
 type Mode int
@@ -43,6 +45,7 @@ const (
 	ModePhoto  // free camera, no interface (photo.go)
 	ModeScope  // through the telescope (scope.go)
 	ModeTravel // teleported to the base or a bootcamp (travel.go)
+	ModeBuild  // the building catalog (catalog.go)
 )
 
 // Sleep timeline, in seconds: fade out, sleep (the game saves), fade in.
@@ -101,7 +104,7 @@ type Game struct {
 	SellPopText string
 	Message     string                // said by a mod (say), shown on the visor...
 	MessageT    float64               // ...for this long still
-	itemSel     int                   // which carried item F places (R cycles)
+	hand        string                // ID of the item F places (R cycles, the catalog picks)
 	Ghost       *Ghost                // the item being placed, drawn see-through (build.go)
 	solids      map[string][]solid    // each kind's parts, for rays (blocks.go)
 	layouts     map[string]*base.Camp // each kind of bootcamp's (camps.go)
@@ -254,6 +257,12 @@ func (g *Game) Update(dt float64) {
 			}
 		case KeyPressed(ActPhoto):
 			g.EnterPhoto()
+		case KeyPressed(ActCatalog) && g.Riding == 0:
+			g.OpenCatalog()
+		}
+	case ModeBuild:
+		if closeKeys || KeyPressed(ActCatalog) {
+			g.setMode(ModePlay)
 		}
 	case ModeShop:
 		if closeKeys {

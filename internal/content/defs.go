@@ -4,6 +4,7 @@ import (
 	"image/color"
 	"math"
 	"naturalia/internal/mesh"
+	"slices"
 )
 
 // Token is a material of the base: color, painted material, shine, glow.
@@ -251,6 +252,9 @@ type EntityDef struct {
 	// each on its own, so that a doorway is walked through. Without one, the
 	// player bumps into the box around its parts and walks on them.
 	Shape []PartJSON `json:"shape"`
+	// Paint is the token of its parts that a finish replaces (Finish); none
+	// if left out.
+	Paint string `json:"paint"`
 	// Rise is the way a block climbs, in its own frame, when it is neither a
 	// ramp nor mostly a wedge: stairs. What is aimed at its top goes on
 	// from there.
@@ -286,6 +290,61 @@ type Item struct {
 	Category string  `json:"category"` // the shop's tab: "build" for a block, "items" otherwise, if left out
 	Places   string  `json:"places"`   // ID of the entity it becomes
 	Max      int     `json:"max"`      // how many there can be at most, placed and carried; 0 for no limit
+	// Shelf puts it in the building catalog, where it is paid for as it is
+	// set down, instead of in the shop: its section there (Shelves, or one
+	// named after it). A block's is "other" if left out.
+	Shelf string `json:"shelf"`
+}
+
+// Finish is a material blocks may be painted with, replacing the token
+// their Paint names.
+type Finish struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Token string `json:"token"`
+}
+
+// Shelves are the building catalog's sections, in their order; a section of
+// a mod's own comes after them.
+var Shelves = []struct{ ID, Name string }{
+	{"blocks", "Blocs"},
+	{"floors", "Sols"},
+	{"walls", "Murs"},
+	{"roofs", "Toits"},
+	{"climbs", "Rampes"},
+	{"frames", "Structure"},
+	{"other", "Autres"},
+}
+
+// Painted are an entity's parts as meshes, painted with a finish ("" for
+// their own).
+func (c *Content) Painted(def *EntityDef, finish string) *mesh.Parts {
+	parts := slices.Clone(def.Parts)
+	if f, ok := c.Finishes.Get(finish); ok && finish != "" && def.Paint != "" {
+		for i := range parts {
+			if Qualify(parts[i].Token) == Qualify(def.Paint) {
+				parts[i].Token = f.Token
+			}
+		}
+	}
+	b := mesh.NewParts(vec3{})
+	buildParts(b, vec3{}, parts)
+	return b
+}
+
+// Shelf is the catalog's section an item is in, "" for what is bought in the
+// shop: what may only be had so many times is.
+func (c *Content) Shelf(it *Item) string {
+	if it.Cost <= 0 || it.Max > 0 {
+		return ""
+	}
+	if it.Shelf != "" {
+		return it.Shelf
+	}
+	if def, ok := c.Entities.Get(it.Places); ok && def.Build {
+		return "other"
+	}
+	return ""
 }
 
 // ShopTabs are the shop's tabs, in their order. An upgrade, an item or an

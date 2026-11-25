@@ -24,6 +24,7 @@ const (
 	ActPhoto
 	ActDock
 	ActCamera
+	ActCatalog
 	ActPlace
 	ActNextItem
 	ActTurnY
@@ -33,6 +34,8 @@ const (
 	ActGrid
 	ActGridStep
 	ActAlign
+	ActFinish
+	ActSame
 	ActRaise
 	ActLower
 	ActStow
@@ -81,6 +84,7 @@ var ActionDefs = [Actions]ActionDef{
 	{"photo", "Mode photo", "Actions", rl.KeyP, onFoot | inPhoto},
 	{"dock", "Garer le véhicule", "Actions", rl.KeyG, inVehicle},
 	{"camera", "Caméra du véhicule", "Actions", rl.KeyV, inVehicle},
+	{"catalog", "Catalogue", "Construction", rl.KeyTab, onFoot | building},
 	{"place", "Poser", "Construction", rl.KeyF, onFoot | building},
 	{"next", "Changer d'objet", "Construction", rl.KeyR, onFoot | building},
 	{"turn_y", "Tourner", "Construction", rl.KeyX, onFoot | building},
@@ -90,6 +94,8 @@ var ActionDefs = [Actions]ActionDef{
 	{"grid", "Grille", "Construction", rl.KeyG, building},
 	{"grid_step", "Pas de la grille", "Construction", rl.KeyH, building},
 	{"align", "Réaligner sur la grille", "Construction", rl.KeyV, building},
+	{"finish", "Finition suivante", "Construction", rl.KeyN, building},
+	{"same", "Prendre le même bloc", "Construction", rl.KeyK, onFoot | building},
 	{"raise", "Plus haut", "Construction", rl.KeyPageUp, building},
 	{"lower", "Plus bas", "Construction", rl.KeyPageDown, building},
 	{"stow", "Ranger, annuler", "Construction", rl.KeyBackspace, onFoot | building},

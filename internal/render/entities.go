@@ -1,6 +1,7 @@
 package render
 
 import (
+	"cmp"
 	"image/color"
 	"math"
 	"naturalia/internal/content"
@@ -8,6 +9,8 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 	"naturalia/internal/palette"
+	"naturalia/internal/planet"
+	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -15,25 +18,70 @@ import (
 type entityModel struct {
 	model rl.Model
 	tok   content.Token
+	glass bool // seen through: drawn last (drawPanes)
+}
+
+// sees tells whether a sphere may be in a picture.
+type sees func(at vec3, radius float64) bool
+
+// inView: what the camera sees, a cone around its picture.
+func (gfx *Graphics) inView(cam rl.Camera3D) sees {
+	fwd := gfx.camLook.Sub(gfx.camEye).Norm()
+	aspect := float64(rl.GetScreenWidth()) / math.Max(1, float64(rl.GetScreenHeight()))
+	sin, cos := math.Sincos(math.Atan(math.Tan(float64(cam.Fovy)*math.Pi/360) * math.Hypot(1, aspect)))
+	return func(at vec3, radius float64) bool {
+		d := at.Sub(gfx.camEye)
+		z := d.Dot(fwd)
+		return math.Sqrt(math.Max(0, d.Dot(d)-z*z))*cos-z*sin < radius
+	}
+}
+
+// inShadowMap: what casts its shadow into the sun's map around center.
+func inShadowMap(center vec3) sees {
+	return func(at vec3, radius float64) bool {
+		d := at.Sub(center)
+		return d.Sub(planet.SunDir.Scale(d.Dot(planet.SunDir))).Length() < shadowRadius*math.Sqrt2+radius
+	}
+}
+
+// entityReach is how far from its origin an entity's parts go, figured
+// once by kind.
+func (gfx *Graphics) entityReach(def *content.EntityDef) float64 {
+	r, ok := gfx.reach[def.ID]
+	if !ok {
+		lo, hi := content.Bounds(def.Parts)
+		r = vec3{math.Max(-lo.X, hi.X), math.Max(-lo.Y, hi.Y), math.Max(-lo.Z, hi.Z)}.Length()
+		if gfx.reach == nil {
+			gfx.reach = map[string]float64{}
+		}
+		gfx.reach[def.ID] = r
+	}
+	return r
 }
 
 // drawEntities draws the entities around the player, standing up from the
-// ground.
-func (gfx *Graphics) drawEntities(g *game.Game) {
+// ground: those seen.
+func (gfx *Graphics) drawEntities(g *game.Game, seen sees) {
 	for _, id := range g.EntitiesNear(game.EntityDrawDist) {
 		kind := *g.Ents.Kind.Get(id)
 		def, ok := g.Content.Entities.Get(kind)
 		if !ok || g.Held(id) {
 			continue // its mod was removed (it stays in the save), or it is being moved
 		}
-		models := gfx.entityModels(def)
 		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+		if !seen(pos, gfx.entityReach(def)+0.5) {
+			continue
+		}
+		models := gfx.entityModels(def, g.Paint(id))
 		lit := float32(mesh.LitSun)
 		if g.Indoors(pos) {
 			lit = mesh.LitIndoor
 		}
 		gfx.setLighting(lit, vec3{})
 		for _, m := range models {
+			if m.glass {
+				continue
+			}
 			gfx.setMat(m.tok.Mat, m.tok.Scale, false)
 			gfx.putBasis(m.model, pos, ax, up, az, m.tok.Col, m.tok.Spec, m.tok.Emissive)
 		}
@@ -52,12 +100,53 @@ func (gfx *Graphics) drawEntities(g *game.Game) {
 	gfx.setLighting(mesh.LitSun, vec3{})
 }
 
-// entityModels are an entity's models, built on first use.
-func (gfx *Graphics) entityModels(def *content.EntityDef) []entityModel {
-	models, ok := gfx.entities[def.ID]
+// drawPanes draws the entities' glass over the scene, as drawGlass the
+// base's, the farthest first.
+func (gfx *Graphics) drawPanes(g *game.Game, seen sees) {
+	type pane struct {
+		m               entityModel
+		pos, ax, up, az vec3
+		dist            float64
+	}
+	var panes []pane
+	for _, id := range g.EntitiesNear(game.EntityDrawDist) {
+		def, ok := g.Content.Entities.Get(*g.Ents.Kind.Get(id))
+		if !ok || g.Held(id) {
+			continue
+		}
+		for _, m := range gfx.entityModels(def, g.Paint(id)) {
+			if pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id)); m.glass && seen(pos, gfx.entityReach(def)+0.5) {
+				panes = append(panes, pane{m, pos, ax, up, az, pos.Sub(gfx.camEye).Length()})
+			}
+		}
+	}
+	if len(panes) == 0 {
+		return
+	}
+	slices.SortFunc(panes, func(a, b pane) int { return cmp.Compare(b.dist, a.dist) })
+	rl.DrawRenderBatchActive()
+	rl.DisableDepthMask()
+	gfx.setMat(content.MtPlain, 1, false)
+	gfx.setLighting(mesh.LitGlass, vec3{})
+	for _, p := range panes {
+		gfx.putBasis(p.m.model, p.pos, p.ax, p.up, p.az, p.m.tok.Col, p.m.tok.Spec, 0)
+	}
+	rl.DrawRenderBatchActive()
+	rl.EnableDepthMask()
+	gfx.setLighting(mesh.LitSun, vec3{})
+}
+
+// entityModels are an entity's models, painted with a finish ("" for its
+// own), built on first use.
+func (gfx *Graphics) entityModels(def *content.EntityDef, finish string) []entityModel {
+	key := def.ID
+	if def.Paint != "" {
+		key += " " + finish
+	}
+	models, ok := gfx.entities[key]
 	if !ok {
-		models = buildEntity(def, gfx)
-		gfx.entities[def.ID] = models
+		models = buildEntity(def, finish, gfx)
+		gfx.entities[key] = models
 	}
 	return models
 }
@@ -101,7 +190,7 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	}
 	pos, ax, up, az := g.Frame(&gh.Pose)
 	draw := func() {
-		for _, m := range gfx.entityModels(def) {
+		for _, m := range gfx.entityModels(def, gh.Paint) {
 			gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.22)
 		}
 		if l := g.CampLayout(def.ID); l != nil { // a bootcamp: its meshes, all alike
@@ -137,9 +226,8 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 
 // buildEntity merges an entity's parts into one model per material, in
 // its own frame.
-func buildEntity(def *content.EntityDef, gfx *Graphics) []entityModel {
-	b := mesh.NewParts(vec3{})
-	content.KitJSON{Parts: def.Parts}.Kit().Build(b, vec3{}, 0)
+func buildEntity(def *content.EntityDef, finish string, gfx *Graphics) []entityModel {
+	b := gfx.content.Painted(def, finish)
 	b.Unfight()
 	var out []entityModel
 	for _, k := range b.Keys {
@@ -149,7 +237,7 @@ func buildEntity(def *content.EntityDef, gfx *Graphics) []entityModel {
 		}
 		model := upload(m, gfx.objectSh)
 		gfx.bindMaps(model)
-		out = append(out, entityModel{model, gfx.tok(k.Tok)})
+		out = append(out, entityModel{model, gfx.tok(k.Tok), k.Lit == mesh.LitGlass})
 	}
 	return out
 }

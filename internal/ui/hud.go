@@ -288,6 +288,33 @@ func icon(kind string, cx, cy, s float32, c color.RGBA) {
 		rect(-0.2, 0.05, 0.2, 0.55, uiInk)
 		rect(-0.04, -0.75, 0.04, -0.35, c)
 		rl.DrawCircleV(v(0, -0.85), 0.14*s, c)
+	case "slab": // a floor seen from a corner
+		tri(v(-1, 0), v(0, 0.55), v(1, 0), c)
+		tri(v(-1, 0), v(1, 0), v(0, -0.55), c)
+		rl.DrawLineEx(v(-1, 0.25), v(0, 0.8), 2*u, c)
+		rl.DrawLineEx(v(0, 0.8), v(1, 0.25), 2*u, c)
+	case "wall", "window", "door": // a wall, and what is open in it
+		rect(-0.95, -0.7, 0.95, 0.8, c)
+		if kind == "window" {
+			rect(-0.6, -0.4, 0.6, 0.25, uiInk)
+		} else if kind == "door" {
+			rect(-0.3, -0.25, 0.3, 0.8, uiInk)
+		}
+	case "stairs": // steps, from the side
+		for i := range 4 {
+			x := -1 + 0.5*float32(i)
+			rect(x, 0.5-0.4*float32(i), x+0.5, 0.9, c)
+		}
+	case "pillar":
+		rect(-0.25, -0.8, 0.25, 0.8, c)
+		rect(-0.5, -1, 0.5, -0.75, c)
+		rect(-0.5, 0.75, 0.5, 1, c)
+	case "rail":
+		rect(-1, -0.5, 1, -0.3, c)
+		rect(-1, 0, 1, 0.1, c)
+		for _, x := range []float32{-0.9, -0.05, 0.8} {
+			rect(x, -0.5, x+0.12, 0.7, c)
+		}
 	case "flag": // a pole and a pennant
 		rect(-0.55, -1, -0.4, 1, c)
 		tri(v(-0.4, -1), v(-0.4, 0.05), v(0.85, -0.47), c)
@@ -367,7 +394,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.drawScope(g)
 		return
 	}
-	if g.Mode == game.ModePlay || g.Mode == game.ModeMap || g.Mode == game.ModeShop {
+	if g.Mode == game.ModePlay || g.Mode == game.ModeMap || g.Mode == game.ModeShop || g.Mode == game.ModeBuild {
 		hud.drawVisor(g)
 	}
 
@@ -397,6 +424,9 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		case hud.hasUse(g):
 			it, _ := g.NearbyUse()
 			hud.prompt(game.KeyLabel(game.ActUse), strings.TrimPrefix(it.Prompt, "[E] "), h*0.64, visorCyan)
+			if moving != "" {
+				hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64+34*uiScale(), visorCyan)
+			}
 		case moving != "":
 			hud.prompt("CLIC DROIT", "Déplacer : "+moving, h*0.64, visorCyan)
 		case g.TankFull() && !g.AutoSell() && math.Mod(g.Elapsed, 1) < 0.7:
@@ -409,7 +439,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 			hud.prompt("", g.Message, h*0.2, withAlpha(visorCyan, math.Min(1, g.MessageT)))
 		}
 	}
-	if g.Mode != game.ModePaused {
+	if g.Mode != game.ModePaused && g.Mode != game.ModeBuild {
 		hud.drawStatus(g)
 	}
 
@@ -420,6 +450,8 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		hud.drawPause(g)
 	case game.ModeShop:
 		hud.drawShop(g)
+	case game.ModeBuild:
+		hud.drawCatalog(g)
 	case game.ModeMap:
 		hud.drawMapPanel(g)
 	case game.ModeSleep:
@@ -458,11 +490,18 @@ func (hud *HUD) drawVisor(g *game.Game) {
 func (hud *HUD) drawHeldItem(g *game.Game) {
 	it, n := g.HeldItem()
 	moving := g.Ghost != nil && g.Ghost.Moving != 0
+	u := uiScale()
+	x, y := 40*u, 158*u
 	if it == nil && !moving {
+		key := game.KeyLabel(game.ActCatalog)
+		visorPanel(rl.NewRectangle(x, y, 26*u+rl.MeasureTextEx(hud.mono, key, 11*u, 0).X+hud.capsWidth("construire", 12*u)+18*u, 34*u), visorCyan)
+		kx := x + 12*u
+		kx += hud.keycap(key, kx, y+9*u, 11*u) + 6*u
+		hud.caps("construire", kx, y+11*u, 12*u, visorDim)
 		return
 	}
 	place, next := game.KeyLabel(game.ActPlace), game.KeyLabel(game.ActNextItem)
-	keys := [][2]string{{place, "poser"}, {next, "changer"}}
+	keys := [][2]string{{place, "poser"}, {next, "changer"}, {game.KeyLabel(game.ActCatalog), "catalogue"}}
 	if gh := g.Ghost; gh != nil {
 		stick := "libre"
 		if gh.Free {
@@ -500,6 +539,10 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 				keys = append(keys[:moves], [2]string{game.KeyLabel(game.ActGrid), "grille"}, last)
 			}
 		}
+		if def, ok := g.Content.Entities.Get(gh.Kind); ok && def.Paint != "" {
+			last := len(keys) - 1
+			keys = append(keys[:last:last], [2]string{game.KeyLabel(game.ActFinish), g.FinishName(gh.Paint)}, keys[last])
+		}
 		if moving {
 			keys = append(keys[:1], keys[2:]...)
 			keys[len(keys)-1][1] = "annuler"
@@ -508,14 +551,15 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 			keys[0][1] = content.OrDefault(gh.Why, "bloqué")
 		}
 	}
-	u := uiScale()
-	x, y := 40*u, 158*u
 	var label, ic string
 	if moving {
 		def, _ := g.Content.Entities.Get(g.Ghost.Kind)
 		label, ic = "Déplacer : "+def.Name, "crate"
 	} else {
 		label, ic = fmt.Sprintf("%s ×%d", it.Name, n), it.Icon
+		if n == 0 {
+			label = it.Name + " · " + game.FmtNum(it.Cost) + " cr"
+		}
 	}
 	w := 44*u + hud.width(label, 16*u) + 6*u
 	for _, k := range keys {
@@ -924,6 +968,9 @@ func (hud *HUD) Update(g *game.Game, dt float64) {
 	if g.Mode == game.ModeShop {
 		hud.updateShop(g)
 	}
+	if g.Mode == game.ModeBuild {
+		hud.updateCatalog(g)
+	}
 	if g.Mode == game.ModeMap {
 		hud.updateMap(g)
 	}
@@ -997,6 +1044,7 @@ type HUD struct {
 	name                        []rune // what is typed
 	dbg                         debugInfo
 	photo                       photoUI
+	catalog                     catalogUI
 	menu                        menuUI
 }
 

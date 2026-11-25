@@ -28,6 +28,8 @@ type Ents struct {
 	Air       *ecs.Store[Air]           // tossed up
 	Camp      *ecs.Store[Bootcamp]      // bootcamps (camps.go)
 	Grid      *ecs.Store[OnGrid]        // set down on a grid (grid.go)
+	Paint     *ecs.Store[string]        // the finish a block is painted with (content.Finish)
+	Paid      *ecs.Store[float64]       // what was paid to set it down, given back with it
 }
 
 // Air is a thing tossed up by a knock: its speed up, and how fast it
@@ -37,7 +39,8 @@ type Air struct{ vz, tumble float64 }
 func newEnts() *Ents {
 	w := ecs.NewWorld()
 	return &Ents{World: w, Kind: ecs.NewStore[string](w), Transform: ecs.NewStore[Transform](w), Roam: ecs.NewStore[Roam](w),
-		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w), Camp: ecs.NewStore[Bootcamp](w), Grid: ecs.NewStore[OnGrid](w)}
+		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w), Camp: ecs.NewStore[Bootcamp](w), Grid: ecs.NewStore[OnGrid](w),
+		Paint: ecs.NewStore[string](w), Paid: ecs.NewStore[float64](w)}
 }
 
 // Transform is where an entity stands.
@@ -68,8 +71,10 @@ type Placed struct {
 	Home  vec3      `json:"home,omitempty"`
 	Pitch float64   `json:"pitch,omitempty"`
 	Roll  float64   `json:"roll,omitempty"`
-	Camp  *Bootcamp `json:"camp,omitempty"` // a bootcamp's ID and name
-	Grid  *OnGrid   `json:"grid,omitempty"` // where it stands on a grid
+	Camp  *Bootcamp `json:"camp,omitempty"`  // a bootcamp's ID and name
+	Grid  *OnGrid   `json:"grid,omitempty"`  // where it stands on a grid
+	Paint string    `json:"paint,omitempty"` // its finish
+	Paid  float64   `json:"paid,omitempty"`  // in credits, to set it down
 }
 
 // add brings a saved entity into the world.
@@ -82,6 +87,12 @@ func (g *Game) add(p Placed) ecs.ID {
 	}
 	if p.Grid != nil {
 		g.Ents.Grid.Set(id, *p.Grid)
+	}
+	if p.Paint != "" {
+		g.Ents.Paint.Set(id, p.Paint)
+	}
+	if p.Paid > 0 {
+		g.Ents.Paid.Set(id, p.Paid)
 	}
 	if def, _ := g.Content.Entities.Get(p.Kind); isCamp(def) {
 		if p.Camp != nil {
@@ -112,6 +123,10 @@ func (g *Game) placed() []Placed {
 		if o := g.Ents.Grid.Get(id); o != nil {
 			c := *o
 			p.Grid = &c
+		}
+		p.Paint = g.Paint(id)
+		if paid := g.Ents.Paid.Get(id); paid != nil {
+			p.Paid = *paid
 		}
 		out = append(out, p)
 	}
@@ -161,21 +176,6 @@ func (g *Game) placeAt() vec3 {
 	return g.World.Relief.Surface(g.Player.Pos.Add(g.Player.Heading.Scale(1.5)))
 }
 
-// HeldItem is the item F places, cycled with R, among those carried.
-func (g *Game) HeldItem() (*content.Item, int) {
-	var owned []*content.Item
-	for _, it := range g.Content.Items.All() {
-		if g.State.Items[it.ID] > 0 {
-			owned = append(owned, it)
-		}
-	}
-	if len(owned) == 0 {
-		return nil, 0
-	}
-	it := owned[g.itemSel%len(owned)]
-	return it, g.State.Items[it.ID]
-}
-
 // EntitiesNear lists the entities within dist of the player.
 func (g *Game) EntitiesNear(dist float64) []ecs.ID {
 	var out []ecs.ID
@@ -196,8 +196,8 @@ func (g *Game) nearbyEntity() (ecs.ID, float64) {
 			continue
 		}
 		def, ok := g.Content.Entities.Get(g.kind(id))
-		if !ok || (def.Prompt == "" && !def.Pickup) {
-			continue
+		if !ok || (def.Prompt == "" && !def.Pickup) || def.Build && def.Pickup {
+			continue // a block is picked up by aiming at it (NearbyUse)
 		}
 		pos := g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir)
 		to := pos.Sub(g.Player.Pos)
@@ -228,13 +228,8 @@ func (g *Game) entityUse(id ecs.ID) base.Interactable {
 		Prompt: prompt,
 		Use: func(content.Game, vec3) {
 			if def.Pickup {
+				g.giveBack(id, def)
 				g.Ents.Kill(id)
-				if def.Item != "" {
-					if g.State.Items == nil {
-						g.State.Items = map[string]int{}
-					}
-					g.State.Items[def.Item]++
-				}
 				g.sfx.Beep(0.02, 0.15, 0.12, 523, 392)
 			}
 		},
@@ -269,6 +264,11 @@ func (g *Game) NearbyUse() (base.Interactable, bool) {
 	near(base.BaseSite(), base.Interactables())
 	for _, c := range g.CampsNear(g.Player.Pos, 0) {
 		near(c.Site, c.Layout.Uses)
+	}
+	if !found {
+		if id := g.aimedBlock(); id != 0 {
+			return g.entityUse(id), true
+		}
 	}
 	return best, found
 }
