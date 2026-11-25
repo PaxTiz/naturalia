@@ -37,6 +37,7 @@ type modFile struct {
 	Items     []Item               `json:"items"`    // carried, placed as entities with F
 	Vehicles  []Vehicle            `json:"vehicles"` // driven by the player
 	Finishes  []Finish             `json:"finishes"` // what blocks may be painted with
+	Links     []Link               `json:"links"`    // laid from a building to another
 	Scripts   []string             `json:"scripts"`  // JavaScript files, run in order (ScriptRunner)
 	// Terrain changes the generation: only the settings given, features
 	// added to those of other packs (planet.Settings).
@@ -203,6 +204,15 @@ func (m *modFile) register(c *Content) {
 		f.ID, f.Token = m.own(f.ID), m.ref(f.Token, isTok)
 		c.Finishes.Add(f.ID, f)
 	}
+	for _, l := range m.Links {
+		l.ID = m.own(l.ID)
+		for _, tok := range []*string{&l.Frame, &l.Glass, &l.Floor, &l.Curb, &l.Light} {
+			if *tok != "" {
+				*tok = m.ref(*tok, isTok)
+			}
+		}
+		c.Links.Add(l.ID, l)
+	}
 	for _, v := range m.Vehicles {
 		v.ID = m.own(v.ID)
 		refParts(v.Parts)
@@ -210,7 +220,11 @@ func (m *modFile) register(c *Content) {
 	}
 	for _, it := range m.Items {
 		it.ID = m.own(it.ID)
-		it.Places = m.ref(OrDefault(it.Places, it.ID), isEnt)
+		if it.Link != "" {
+			it.Link = m.ref(it.Link, func(id string) bool { _, ok := c.Links.Get(id); return ok })
+		} else {
+			it.Places = m.ref(OrDefault(it.Places, it.ID), isEnt)
+		}
 		c.Items.Add(it.ID, it)
 	}
 	for _, t := range m.Tools {

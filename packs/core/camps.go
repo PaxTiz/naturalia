@@ -85,6 +85,11 @@ func registerBuildings(c *content.Content) {
 			Shape: content.Dome{Radius: 5, WallH: 2.8}, Style: "habitat.white", Accent: "led.green", Glazed: true,
 			Props: []content.Prop{{Kit: "serre.plants", Seed: 5}},
 		})
+	// The links between them.
+	c.Links.Add("core:sas", content.Link{Name: "SAS"})
+	c.Items.Add("core:sas", content.Item{Name: "SAS transparent", Desc: "Un passage vitré d'un bâtiment à un autre : vise une porte, puis l'autre (3 à 30 m)", Icon: "crate",
+		Cost: 500_000, Link: "sas", Shelf: "links"})
+
 	// The garage: its big door toward whoever sets it down, two bays, the
 	// terminal by the port at the back.
 	add("core:garage", "Garage", "Un hall à grande porte et deux places : on y gare et on y fait venir ses véhicules", 120_000_000,

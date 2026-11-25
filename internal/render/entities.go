@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/game"
 	"naturalia/internal/mathx"
@@ -216,7 +217,7 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 		return
 	}
 	def, ok := g.Content.Entities.Get(gh.Kind)
-	if !ok {
+	if !ok && gh.Link == nil {
 		return
 	}
 	col := color.RGBA{95, 225, 238, 150}
@@ -225,6 +226,21 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	}
 	pos, ax, up, az := g.Frame(&gh.Pose)
 	draw := func() {
+		if gh.Link != nil {
+			if l := gh.Link.Layout; l != nil {
+				rl.DisableBackfaceCulling()
+				m := gfx.linkModels(l)
+				for i, md := range m.models {
+					if m.Keys[i].Lit == mesh.LitGlass {
+						continue // its frames tell enough
+					}
+					gfx.putBasis(md, l.Site.Origin, l.Site.X, l.Site.Y, l.Site.Z, col, 0, 0.22)
+				}
+				rl.EnableBackfaceCulling()
+			}
+			rl.DrawRenderBatchActive()
+			return
+		}
 		all := gfx.entityModels(def, gh.Paint)
 		for i := range def.Leaves {
 			all = append(all[:len(all):len(all)], gfx.leafModels(def, i, gh.Paint)...)
@@ -257,10 +273,34 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
 	rl.ColorMask(true, true, true, true)
 	draw()
+	if gh.Link != nil {
+		gfx.drawPorts(g, gh.Link, col)
+		rl.DrawRenderBatchActive()
+		return
+	}
 	for _, e := range g.GhostEdges() {
 		gfx.segment(gfx.cyl, e[0], e[1], 0.014, color.RGBA{col.R, col.G, col.B, 255}, 0, 0.45)
 	}
 	rl.DrawRenderBatchActive()
+}
+
+// drawPorts outlines the free ports around, those a link being laid goes
+// between brighter and thicker.
+func (gfx *Graphics) drawPorts(g *game.Game, k *game.LinkGhost, col color.RGBA) {
+	g.FreePorts(func(r game.PortRef, p base.PortAt) {
+		thick, glow, c := 0.02, float32(0.25), color.RGBA{95, 225, 238, 255}
+		if k.Aim != nil && *k.Aim == r || k.From != nil && *k.From == r {
+			thick, glow, c = 0.06, 0.8, color.RGBA{col.R, col.G, col.B, 255}
+		}
+		up := p.At.Norm()
+		side := p.Out.Cross(up).Norm()
+		at := p.At.Add(p.Out.Scale(0.3))
+		pt := func(x, y float64) vec3 { return at.Add(side.Scale(x)).Add(up.Scale(y)) }
+		c4 := [4]vec3{pt(-1.6, 0.05), pt(1.6, 0.05), pt(1.6, 2.85), pt(-1.6, 2.85)}
+		for i := range c4 {
+			gfx.segment(gfx.cyl, c4[i], c4[(i+1)%4], thick, c, 0, glow)
+		}
+	})
 }
 
 // buildEntity merges some of an entity's parts into one model per

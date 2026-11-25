@@ -11,6 +11,7 @@ import (
 	"naturalia/internal/render"
 	"naturalia/internal/ui"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,7 +27,8 @@ type shotRun struct {
 	file     string
 	frames   int
 	placed   bool
-	heading  vec3 // the view, held against stray mouse motion
+	link     *game.PortRef // NA_SHOT_LINK: a link held from this port
+	heading  vec3          // the view, held against stray mouse motion
 	pitch    float64
 	mode     game.Mode
 	perf     float64 // summed frame times (NA_SHOT_PERF)
@@ -146,6 +148,21 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		var dist, bearing float64
 		fmt.Sscanf(v, "%f,%f", &dist, &bearing)
 		if c, ok := g.ShotCamp(content.OrDefault(os.Getenv("NA_SHOT_CAMP_KIND"), "core:bootcamp"), dist, bearing); ok {
+			// NA_SHOT_LINK=kind,x,z,yaw sets another building there in its
+			// frame, and links the two; with a fifth value, about to.
+			if v := strings.Split(os.Getenv("NA_SHOT_LINK"), ","); len(v) >= 4 {
+				var at [3]float64
+				for i := range at {
+					at[i], _ = strconv.ParseFloat(v[1+i], 64)
+				}
+				from, ok := g.ShotLink(c, v[0], vec3{at[0], 0, at[1]}, at[2], len(v) == 4)
+				if len(v) > 4 {
+					s.link = &from
+				}
+				if !ok {
+					fmt.Println("frame: no link")
+				}
+			}
 			x, z, yaw := 14.0, 6.0, math.Pi*1.1
 			fmt.Sscanf(os.Getenv("NA_SHOT_CAMP_AT"), "%f,%f,%f", &x, &z, &yaw)
 			var y float64
@@ -235,6 +252,9 @@ func (s *shotRun) tick(g *game.Game) {
 	// NA_SHOT_GHOST=item,degrees,stops holds that item's ghost, tipped over,
 	// raised by so many stops of the wheel, once playing; again each frame the pause of an unfocused window put
 	// it away.
+	if s.link != nil && s.frames >= 60 && g.Ghost == nil {
+		g.HoldLink(*s.link)
+	}
 	if v := os.Getenv("NA_SHOT_GHOST"); v != "" && s.frames >= 60 && g.Ghost == nil {
 		item, deg, _ := strings.Cut(v, ",")
 		var d float64

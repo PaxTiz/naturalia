@@ -104,8 +104,15 @@ func (g *Game) Indoors(at vec3) bool {
 	if base.Indoors(base.ToLocal(at)) {
 		return true
 	}
-	_, ok := g.CampAround(at)
-	return ok
+	if _, ok := g.CampAround(at); ok {
+		return true
+	}
+	for _, l := range g.LinksNear(at, 1) {
+		if l.Layout.Indoors(l.Layout.Site.ToLocal(at)) {
+			return true
+		}
+	}
+	return false
 }
 
 // buildingAt is the ID of the building of the base whose room holds a
@@ -150,6 +157,7 @@ func (g *Game) standCamps() {
 		b.site = base.Site{Origin: pos, X: ax, Y: up, Z: az}
 	}
 	g.relay = true // their walls, laid again
+	g.layLinks()
 }
 
 // newCamp makes entity id a bootcamp, with the next ID and a name.
@@ -194,8 +202,13 @@ func (g *Game) Kind(id ecs.ID) string { return g.kind(id) }
 func isCamp(def *content.EntityDef) bool { return def != nil && def.Camp != nil }
 
 // CampDoor is how open the door of a bootcamp's port i is, 0 closed to 1
-// open.
-func (g *Game) CampDoor(id ecs.ID, i int) float64 { return g.doors[doorKey{id, i}].open }
+// open; for good if it is linked.
+func (g *Game) CampDoor(id ecs.ID, i int) float64 {
+	if b := g.Ents.Camp.Get(id); b != nil && g.Linked(b.ID, i) {
+		return 1
+	}
+	return g.doors[doorKey{id, i}].open
+}
 
 // updateCampDoors slides the doors of the bootcamps near open when the
 // player comes close, as the base's airlock.
@@ -203,6 +216,9 @@ func (g *Game) updateCampDoors(dt float64) {
 	for _, c := range g.CampsNear(g.Player.Pos, 30) {
 		at := c.Site.ToLocal(g.Player.Pos)
 		for i, p := range c.Layout.Ports {
+			if g.Linked(c.ID, i) {
+				continue
+			}
 			g.slideDoor(doorKey{c.Ent, i}, at.Sub(p.At()).Length() < 4, dt)
 		}
 	}
@@ -274,17 +290,35 @@ func (g *Game) campFits(l *base.Camp, dir vec3, level *float64, moving ecs.ID) (
 	if why != "" {
 		return false, why
 	}
+	for _, o := range g.links {
+		o.Layout.Path(func(p vec3) {
+			if why == "" && planet.ArcDist(dir, o.Layout.Site.ToWorld(p).Norm()) < l.Reach+o.Layout.Def.Width/2+0.8 {
+				why = "un " + o.Layout.Def.Name + " gêne"
+			}
+		})
+	}
+	if why != "" {
+		return false, why
+	}
 	if g.World.Relief.PadSlope(dir, l.Reach+padMargin, h) > maxCampSlope {
 		return false, "sol trop pentu"
 	}
 	if p := g.phys; p != nil {
 		at := g.World.Relief.Surface(dir)
 		bottom, top := p.slice(at, 4)
-		if p.w.Overlap(physics.Circle(l.Reach), p.plane(at), 0, bottom, top, layerEntity|layerVehicle|layerRobot|layerProp|layerPlayer, nil) {
+		if p.stands(physics.Circle(l.Reach), p.plane(at), bottom, top, layerRobot|layerPlayer) {
 			return false, "quelque chose gêne"
 		}
 	}
 	return true, ""
+}
+
+// stands tells whether something stands in a shape: a block, a vehicle, a
+// crate, or what is on the layers more; not walls or rocks.
+func (p *phys) stands(s physics.Shape, pos physics.V2, bottom, top float64, more uint32) bool {
+	return p.w.OverlapAny(s, pos, 0, bottom, top, layerStatic|layerEntity|layerVehicle|layerProp|more, func(b *physics.Body) bool {
+		return b.Layer != layerStatic || b.ID != 0
+	})
 }
 
 // poseCamp sets a bootcamp's ghost where the player looks: its near edge

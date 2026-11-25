@@ -105,7 +105,10 @@ func (g *Game) hold(it *content.Item) {
 	if g.Ghost == nil || g.Ghost.Moving != 0 {
 		g.Ghost = &Ghost{rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}, dist: 4}
 	}
-	g.Ghost.Kind, g.Ghost.item, g.Ghost.Paint = content.Qualify(it.Places), it.ID, g.State.Paint
+	g.Ghost.Kind, g.Ghost.item, g.Ghost.Paint, g.Ghost.Link = content.Qualify(it.Places), it.ID, g.State.Paint, nil
+	if l, ok := g.Content.Links.Get(it.Link); ok && it.Link != "" {
+		g.Ghost.Kind, g.Ghost.Link = "", &LinkGhost{Def: l}
+	}
 	g.poseGhost()
 }
 

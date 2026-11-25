@@ -43,6 +43,7 @@ type Ghost struct {
 	wheel      float64      // how far the wheel turned, since its last stop
 	wheelT     float64      // when
 	Sheet      *Sheet       // the grid's lines shown
+	Link       *LinkGhost   // laying a link instead (links.go)
 	floor      *float64     // a building's: the altitude of its floor, nil for the ground's
 	dist, lift float64      // free: how far ahead; on a surface: how high over it
 }
@@ -63,6 +64,10 @@ func (g *Game) updateItems() {
 	if gh != nil && gh.Moving != 0 && !g.Ents.Alive(gh.Moving) {
 		g.Ghost, gh = nil, nil // gone meanwhile (a mod)
 	}
+	if gh != nil && gh.Link != nil && gh.Link.From != nil && rl.IsMouseButtonPressed(rl.MouseButtonRight) {
+		gh.Link.From = nil // the first port chosen again
+		return
+	}
 	if gh != nil && (rl.IsMouseButtonPressed(rl.MouseButtonRight) || KeyPressed(ActStow)) {
 		g.Ghost = nil
 		return
@@ -79,7 +84,7 @@ func (g *Game) updateItems() {
 		}
 		switch {
 		case gh == nil && rl.IsMouseButtonPressed(rl.MouseButtonRight):
-			if id := g.AimedMovable(); id != 0 {
+			if id := g.AimedMovable(); id != 0 && !g.holdsLinks(id) {
 				g.grab(id)
 			}
 			return
@@ -89,6 +94,16 @@ func (g *Game) updateItems() {
 		case gh == nil:
 			if KeyPressed(ActPlace) {
 				g.hold(it)
+			}
+			return
+		}
+		if it.Link != "" || gh.Link != nil {
+			if gh.item != it.ID {
+				g.hold(it)
+			}
+			g.poseGhost()
+			if g.Ghost.Link != nil && KeyPressed(ActPlace) {
+				g.pickPort()
 			}
 			return
 		}
@@ -200,6 +215,9 @@ func (g *Game) AimedMovable() ecs.ID {
 	if hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach); ok {
 		reach = hit.Sub(eye).Length()
 	}
+	if _, t, ok := g.aimedLink(reach); ok { // in front of what is past it
+		reach = t
+	}
 	var best ecs.ID
 	for _, id := range g.EntitiesNear(buildReach + 12) {
 		if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || !movable(def) || id == g.Riding {
@@ -307,6 +325,10 @@ func (g *Game) aimSurface(def *content.EntityDef, eye, fwd vec3) (at, n vec3, on
 // for doesn't go anywhere.
 func (g *Game) poseGhost() {
 	gh := g.Ghost
+	if gh.Link != nil {
+		g.poseLink(gh)
+		return
+	}
 	g.pose()
 	if it, ok := g.Content.Items.Get(gh.item); ok && gh.Moving == 0 && gh.OK && !g.canPay(it) {
 		gh.OK, gh.Why = false, "crédits insuffisants"

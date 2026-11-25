@@ -329,11 +329,41 @@ type Item struct {
 	Cost     float64 `json:"cost"`     // in the shop; 0 keeps it out of it
 	Category string  `json:"category"` // the shop's tab: "build" for a block, "items" otherwise, if left out
 	Places   string  `json:"places"`   // ID of the entity it becomes
+	Link     string  `json:"link"`     // or of the link it lays between two buildings; its cost is then a metre's
 	Max      int     `json:"max"`      // how many there can be at most, placed and carried; 0 for no limit
 	// Shelf puts it in the building catalog, where it is paid for as it is
 	// set down, instead of in the shop: its section there (Shelves, or one
 	// named after it). A block's is "other" if left out.
 	Shelf string `json:"shelf"`
+}
+
+// Link is a kind of passage laid on the ground from a building's port to
+// another's: a glass tube.
+type Link struct {
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	Width  float64 `json:"width"`  // 2.6 m if left out
+	Height float64 `json:"height"` // 2.6 m if left out
+	Step   float64 `json:"step"`   // m between two frames, 2 if left out
+	Min    float64 `json:"min"`    // its length, from door to door: 3 m if left out
+	Max    float64 `json:"max"`    // and 30 m
+	Rise   float64 `json:"rise"`   // how much higher an end may be than the other, 1.5 m if left out
+	Slope  float64 `json:"slope"`  // of its ramp at most, 0.08 (8 %) if left out
+	// What it is made of: tokens, core's SAS' if left out.
+	Frame string `json:"frame"`
+	Glass string `json:"glass"`
+	Floor string `json:"floor"`
+	Curb  string `json:"curb"`
+	Light string `json:"light"`
+}
+
+// Fill gives a link what it leaves out.
+func (l *Link) Fill() {
+	l.Width, l.Height, l.Step = OrZero(l.Width, 2.6), OrZero(l.Height, 2.6), OrZero(l.Step, 2)
+	l.Min, l.Max = OrZero(l.Min, 3), OrZero(l.Max, 30)
+	l.Rise, l.Slope = OrZero(l.Rise, 1.5), OrZero(l.Slope, 0.08)
+	l.Frame, l.Glass = OrDefault(l.Frame, "core:habitat.white"), OrDefault(l.Glass, "core:glass.pane")
+	l.Floor, l.Curb, l.Light = OrDefault(l.Floor, "core:pad.concrete"), OrDefault(l.Curb, "core:steel.dark"), OrDefault(l.Light, "core:home.led")
 }
 
 // Finish is a material blocks may be painted with, replacing the token
@@ -383,6 +413,9 @@ func (c *Content) Shelf(it *Item) string {
 	}
 	if it.Shelf != "" {
 		return it.Shelf
+	}
+	if it.Link != "" {
+		return "links"
 	}
 	if def, ok := c.Entities.Get(it.Places); ok && def.Build {
 		return "other"

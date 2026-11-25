@@ -31,6 +31,7 @@ type State struct {
 	Nights      int                       `json:"nights,omitempty"` // slept: what grows in the base grows with them
 	Sol         float64                   `json:"sol,omitempty"`    // sols since the first morning (clock.go)
 	Recent      []string                  `json:"recent,omitempty"` // items last picked in the catalog: R cycles through them too
+	Links       []Link                    `json:"links,omitempty"`  // from a building to another (links.go)
 	Paint       string                    `json:"paint,omitempty"`  // the finish blocks are painted with, "" for their own
 }
 
@@ -105,6 +106,8 @@ type Game struct {
 	Message     string                // said by a mod (say), shown on the visor...
 	MessageT    float64               // ...for this long still
 	hand        string                // ID of the item F places (R cycles, the catalog picks)
+	links       []LinkAt              // the links standing (links.go)
+	linked      map[PortRef]bool      // the ports they lead to
 	Ghost       *Ghost                // the item being placed, drawn see-through (build.go)
 	solids      map[string][]solid    // each kind's parts, for rays (blocks.go)
 	layouts     map[string]*base.Camp // each kind of bootcamp's (camps.go)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/game"
 	"naturalia/internal/mesh"
@@ -185,7 +186,7 @@ func (hud *HUD) drawCatalog(g *game.Game) {
 		}
 		hud.textCenter(it.Name, r.X+r.Width/2, r.Y+92*u, size, uiWhite)
 		n := g.State.Items[it.ID]
-		col, cost := palette.Gold, game.FmtNum(it.Cost)+" cr"
+		col, cost := palette.Gold, itemPrice(it)
 		switch {
 		case n > 0:
 			col, cost = visorCyan, fmt.Sprintf("%d sur toi", n)
@@ -257,7 +258,12 @@ func thumbColor(g *game.Game, token string) color.RGBA {
 func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 	key := thumbKey(g, it)
 	def, ok := g.Content.Entities.Get(it.Places)
-	if _, done := hud.catalog.thumbs[key]; done || !ok || len(def.Parts) == 0 && def.Camp == nil {
+	link, isLink := g.Content.Links.Get(it.Link)
+	isLink = isLink && it.Link != ""
+	if isLink {
+		def, ok = &content.EntityDef{}, true
+	}
+	if _, done := hud.catalog.thumbs[key]; done || !ok || !isLink && len(def.Parts) == 0 && def.Camp == nil {
 		return false
 	}
 	if hud.catalog.thumbs == nil {
@@ -272,6 +278,11 @@ func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 	if l := g.CampLayout(def.ID); l != nil {
 		parts = l.Parts
 		lo, hi = vec3{-l.Reach, 0, -l.Reach}, vec3{l.Reach, l.Beacon.Y, l.Reach}
+	}
+	if isLink {
+		l := base.SampleLink(link)
+		parts = l.Parts
+		lo, hi = vec3{-l.Length / 2, 0, -link.Width / 2}, vec3{l.Length / 2, link.Height, link.Width / 2}
 	}
 	mid := lo.Add(hi).Scale(0.5)
 	size := math.Max(0.6, hi.Sub(lo).Length())

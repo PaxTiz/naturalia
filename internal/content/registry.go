@@ -28,6 +28,7 @@ type Content struct {
 	Items     Registry[Item]      // carried, placed as entities
 	Vehicles  Registry[Vehicle]
 	Finishes  Registry[Finish] // what blocks may be painted with
+	Links     Registry[Link]   // laid from a building to another
 	// Debug adds lines to the debug overlay (F3).
 	Debug   []func(g Game) string
 	Terrain planet.Settings // one for the whole game, patched by packs
@@ -156,6 +157,7 @@ func Build(extra ...Pack) *Content {
 	c.Items.init("item")
 	c.Vehicles.init("vehicle")
 	c.Finishes.init("finish")
+	c.Links.init("link")
 	c.Terrain = planet.DefaultSettings()
 
 	all := append(slices.Clone(packs), extra...)
@@ -212,6 +214,7 @@ func (c *Content) setPack(id string) {
 	c.Items.pack = id
 	c.Vehicles.pack = id
 	c.Finishes.pack = id
+	c.Links.pack = id
 }
 
 // finish checks the content once every pack is loaded.
@@ -252,10 +255,19 @@ func (c *Content) finish() {
 	for _, id := range c.Finishes.ids {
 		c.Finishes.items[id].ID = id
 	}
+	for _, id := range c.Links.ids {
+		c.Links.items[id].ID = id
+		c.Links.items[id].Fill()
+	}
 	c.vehicleEntities()
 	for _, id := range c.Items.ids {
 		it := c.Items.items[id]
-		it.ID, it.Places = id, Qualify(it.Places)
+		it.ID = id
+		if it.Link != "" {
+			it.Link, it.Places = Qualify(it.Link), ""
+			continue
+		}
+		it.Places = Qualify(it.Places)
 		if e, ok := c.Entities.Get(it.Places); ok && e.Item == "" {
 			e.Item = id // picked up, it comes back as this item
 		}

@@ -553,6 +553,13 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 			keys = append(keys[:1], keys[2:]...)
 			keys[len(keys)-1][1] = "annuler"
 		}
+		if gh.Link != nil { // a port, then another
+			do, off := "choisir cette porte", "ranger"
+			if gh.Link.From != nil {
+				do, off = "poser", "annuler"
+			}
+			keys = [][2]string{{place, do}, {next, "changer"}, {"CLIC DROIT", off}}
+		}
 		if !gh.OK {
 			keys[0][1] = content.OrDefault(gh.Why, "bloqué")
 		}
@@ -564,7 +571,10 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 	} else {
 		label, ic = fmt.Sprintf("%s ×%d", it.Name, n), it.Icon
 		if n == 0 {
-			label = it.Name + " · " + game.FmtNum(it.Cost) + " cr"
+			label = it.Name + " · " + itemPrice(it)
+		}
+		if gh := g.Ghost; gh != nil && gh.Link != nil && gh.Link.Layout != nil {
+			label = gh.Link.LinkLabel()
 		}
 	}
 	w := 44*u + hud.width(label, 16*u) + 6*u
@@ -580,6 +590,15 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 		hud.caps(k[1], kx, y+11*u, 12*u, visorDim)
 		kx += hud.capsWidth(k[1], 12*u) + 10*u
 	}
+}
+
+// itemPrice is what an item costs: a link by the metre.
+func itemPrice(it *content.Item) string {
+	s := game.FmtNum(it.Cost) + " cr"
+	if it.Link != "" {
+		s += "/m"
+	}
+	return s
 }
 
 func (hud *HUD) drawHints(g *game.Game) {

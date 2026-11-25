@@ -561,6 +561,11 @@ func (g *Game) layPlane() {
 			g.addObstacle(c.ToWorld(o.At), o.Radius)
 		}
 	}
+	for _, l := range g.LinksNear(up.Scale(p.r0), physReach) {
+		for _, s := range l.Layout.Walls {
+			g.addWall(s, l.Layout.Site)
+		}
+	}
 	p.doorSegs, p.doors = nil, nil
 	for _, r := range g.World.RocksNear(up.Scale(p.r0), physReach+reanchor) {
 		if r.Size < minRock {

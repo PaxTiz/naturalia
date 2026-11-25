@@ -51,6 +51,58 @@ func (gfx *Graphics) campFrame(s base.Site, m *baseModels) rl.Matrix {
 	return basisMatrix(s.Origin.Add(s.Dir(m.Origin())).Sub(gfx.origin), s.X, s.Y, s.Z) // about the origin (object.vert)
 }
 
+// linkSeen tells whether a link may be in a picture.
+func linkSeen(l *base.Link, seen sees) bool {
+	return seen(l.Site.Origin, l.Length/2+l.Def.Width+l.Rise)
+}
+
+// linkModels are a link's meshes, uploaded on first use and kept for the
+// links of the same shape.
+func (gfx *Graphics) linkModels(l *base.Link) *baseModels {
+	if gfx.links == nil {
+		gfx.links = map[string]*baseModels{}
+	}
+	m := gfx.links[l.Key]
+	if m == nil {
+		m = gfx.uploadBase(l.Parts, gfx.objectSh)
+		for _, md := range m.models {
+			gfx.bindMaps(md)
+		}
+		gfx.links[l.Key] = m
+	}
+	return m
+}
+
+// drawSited draws meshes standing at a site: their glass, or the rest.
+func (gfx *Graphics) drawSited(m *baseModels, s base.Site, glass bool) {
+	frame := gfx.campFrame(s, m)
+	for i, k := range m.Keys {
+		if glass != (k.Lit == mesh.LitGlass) {
+			continue
+		}
+		room := k.At
+		if room != (vec3{}) {
+			room = s.ToWorld(room)
+		}
+		t := m.toks[i]
+		if !glass {
+			gfx.setMat(t.Mat, t.Scale, false)
+		}
+		gfx.setLighting(k.Lit, room)
+		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
+		mat := m.models[i].GetMaterials()[0]
+		mat.GetMap(rl.MapAlbedo).Color = t.Col
+		rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
+		mat.GetMap(rl.MapAlbedo).Color = rl.White
+	}
+}
+
+// wearAt has what is drawn worn by the dust as it stands at a site.
+func (gfx *Graphics) wearAt(s base.Site) {
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(s.Origin.Dot(s.Y))}, rl.ShaderUniformVec2)
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, v3f(s.Y), rl.ShaderUniformVec3)
+}
+
 // drawCampGlass draws the buildings' panes over the scene, as drawGlass
 // the base's, the farthest first.
 func (gfx *Graphics) drawCampGlass(g *game.Game, seen sees) {
@@ -64,23 +116,11 @@ func (gfx *Graphics) drawCampGlass(g *game.Game, seen sees) {
 		if !campSeen(c, seen) {
 			continue
 		}
-		m := gfx.campModels(g.Kind(c.Ent), c.Layout)
-		frame := gfx.campFrame(c.Site, m)
-		for i, k := range m.Keys {
-			if k.Lit != mesh.LitGlass {
-				continue
-			}
-			room := k.At
-			if room != (vec3{}) {
-				room = c.ToWorld(room)
-			}
-			t := m.toks[i]
-			gfx.setLighting(k.Lit, room)
-			rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
-			mat := m.models[i].GetMaterials()[0]
-			mat.GetMap(rl.MapAlbedo).Color = t.Col
-			rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
-			mat.GetMap(rl.MapAlbedo).Color = rl.White
+		gfx.drawSited(gfx.campModels(g.Kind(c.Ent), c.Layout), c.Site, true)
+	}
+	for _, l := range g.LinksNear(gfx.camEye, campDrawDist) {
+		if linkSeen(l.Layout, seen) {
+			gfx.drawSited(gfx.linkModels(l.Layout), l.Layout.Site, true)
 		}
 	}
 	rl.DrawRenderBatchActive()
@@ -97,28 +137,9 @@ func (gfx *Graphics) drawCamps(g *game.Game, seen sees) {
 		if !campSeen(c, seen) {
 			continue
 		}
-		m := gfx.campModels(g.Kind(c.Ent), c.Layout)
 		s := c.Site
-		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(s.Origin.Dot(s.Y))}, rl.ShaderUniformVec2)
-		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, v3f(s.Y), rl.ShaderUniformVec3)
-		frame := gfx.campFrame(s, m)
-		for i, k := range m.Keys {
-			if k.Lit == mesh.LitGlass {
-				continue
-			}
-			t := m.toks[i]
-			room := k.At
-			if room != (vec3{}) {
-				room = s.ToWorld(room)
-			}
-			gfx.setMat(t.Mat, t.Scale, false)
-			gfx.setLighting(k.Lit, room)
-			rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
-			mat := m.models[i].GetMaterials()[0]
-			mat.GetMap(rl.MapAlbedo).Color = t.Col
-			rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
-			mat.GetMap(rl.MapAlbedo).Color = rl.White
-		}
+		gfx.wearAt(s)
+		gfx.drawSited(gfx.campModels(g.Kind(c.Ent), c.Layout), s, false)
 		gfx.site = s
 		for _, f := range c.Layout.Furniture {
 			if draw := kitDraws[f.Kit]; draw != nil {
@@ -130,7 +151,9 @@ func (gfx *Graphics) drawCamps(g *game.Game, seen sees) {
 		}
 		gfx.site = base.Site{}
 		for i := range c.Layout.Ports {
-			gfx.drawCampDoor(g, c, i)
+			if !g.Linked(c.ID, i) {
+				gfx.drawCampDoor(g, c, i)
+			}
 		}
 		if c.Layout.Hologram() {
 			gfx.drawCampSign(c)
@@ -139,6 +162,12 @@ func (gfx *Graphics) drawCamps(g *game.Game, seen sees) {
 			gfx.setLighting(mesh.LitSun, vec3{})
 			gfx.setMat(content.MtPlain, 1, false)
 			gfx.putBasis(gfx.sphere, c.ToWorld(c.Layout.Beacon), s.X.Scale(0.09), s.Y.Scale(0.09), s.Z.Scale(0.09), palette.Red, 0, 1)
+		}
+	}
+	for _, l := range g.LinksNear(gfx.camEye, campDrawDist) {
+		if linkSeen(l.Layout, seen) {
+			gfx.wearAt(l.Layout.Site)
+			gfx.drawSited(gfx.linkModels(l.Layout), l.Layout.Site, false)
 		}
 	}
 	gfx.setMat(content.MtPlain, 1, false)

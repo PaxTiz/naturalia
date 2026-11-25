@@ -58,10 +58,11 @@ type Graphics struct {
 	post                                              *postFX
 	shadow                                            *shadowMap
 	lampShadow                                        *lampShadow
-	spots                                             *spots    // the player's lamps (spots.go)
-	still                                             bool      // drawing only what stays put
-	shade                                             shading   // the buildings in the shaders (selectBase)
-	site                                              base.Site // the building whose pieces are drawn, none: the base (frame)
+	spots                                             *spots                 // the player's lamps (spots.go)
+	still                                             bool                   // drawing only what stays put
+	shade                                             shading                // the buildings in the shaders (selectBase)
+	site                                              base.Site              // the building whose pieces are drawn, none: the base (frame)
+	links                                             map[string]*baseModels // the links', by shape (camps.go)
 	campSigns                                         map[ecs.ID]campSign
 	dust                                              dustGPU // the dust tiles near the player, on the GPU
 	base                                              *baseModels

@@ -227,7 +227,7 @@ func (g *Game) entityUse(id ecs.ID) base.Interactable {
 		At:     at,
 		Prompt: prompt,
 		Use: func(content.Game, vec3) {
-			if def.Pickup {
+			if def.Pickup && !g.holdsLinks(id) {
 				g.giveBack(id, def)
 				g.Ents.Kill(id)
 				if isCamp(def) {
@@ -271,6 +271,9 @@ func (g *Game) NearbyUse() (base.Interactable, bool) {
 	if !found {
 		if id := g.aimedBlock(); id != 0 {
 			return g.entityUse(id), true
+		}
+		if l, _, ok := g.aimedLink(buildReach); ok && g.Ghost == nil {
+			return g.linkUse(l), true
 		}
 	}
 	return best, found

@@ -128,6 +128,12 @@ func (gfx *Graphics) spotsNear(g *game.Game) []spot {
 			add(spotID{c.Ent, 1 + i}, &c.Layout.Lights[i], c.Site.Origin, c.Site.X, c.Site.Y, c.Site.Z, true)
 		}
 	}
+	for _, l := range g.LinksNear(gfx.camEye, spotDist) {
+		s := l.Layout.Site
+		for i := range l.Layout.Lights {
+			add(spotID{0, (l.From.Building*16+l.From.Port)*64 + 1 + i}, &l.Layout.Lights[i], s.Origin, s.X, s.Y, s.Z, true)
+		}
+	}
 	slices.SortFunc(out, func(a, b spot) int { return cmp.Compare(a.dist, b.dist) })
 	if len(out) > maxSpots { // those that make room fade out before they go
 		edge := out[maxSpots].dist

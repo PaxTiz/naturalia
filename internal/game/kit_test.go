@@ -281,6 +281,9 @@ func TestLampsHang(t *testing.T) {
 func TestCatalogStands(t *testing.T) {
 	for _, s := range gridGame(t).Catalog() {
 		for _, it := range s.Items {
+			if it.Link != "" {
+				continue // between two buildings (links_test.go)
+			}
 			g := gridGame(t)
 			id := put(g, it.Places, ahead(g, 9), 9)
 			if id == 0 {
