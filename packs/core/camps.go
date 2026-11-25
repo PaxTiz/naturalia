@@ -30,4 +30,59 @@ func registerCamps(c *content.Content) {
 			{Kit: "lamp.floor", At: vec3{-0.4, 0, -3.35}},
 		},
 	}})
+
+	registerBuildings(c)
+}
+
+// registerBuildings adds the buildings set down anywhere and linked
+// together (docs/BATIMENTS.md): bought in the catalog, taken back there.
+func registerBuildings(c *content.Content) {
+	c.Kits.Add("core:kitchenette", content.Kit{Build: base.KitBuild(base.BuildKitchenette),
+		Obstacles: obstacles([]vec3{{0, 0, -0.75}, {0, 0, 0}, {0, 0, 0.75}}, 0.42), Lamps: []content.KitLamp{{base.KitchenetteLight, 0.4, 3.5}}})
+	c.Kits.Add("core:table.meal", content.Kit{Build: base.KitBuild(base.BuildMealTable),
+		Obstacles: append(obstacles(base.MealObstacles, 0.2), content.Obstacle{Radius: 0.55}), Lamps: []content.KitLamp{{base.MealLight, 0.35, 3}}})
+	c.Kits.Add("core:serre.plants", content.Kit{Build: base.KitBuild(base.BuildSerre), Obstacles: plantsObstacles(base.SerreBeds)})
+
+	add := func(id, name, desc string, cost float64, ports []float64, bp content.Blueprint) {
+		bp.ID = id
+		c.Items.Add(id, content.Item{Name: name, Desc: desc, Icon: "camp", Cost: cost, Shelf: "buildings", Places: id})
+		c.Entities.Add(id, content.EntityDef{Name: name, Item: id, Pickup: true, Prompt: "[E] Reprendre : " + name, Ports: ports, Camp: &bp})
+	}
+	// The crossroads: four ports around the hologram, benches and a plant
+	// between them.
+	add("core:carrefour", "Carrefour", "Un petit dôme à quatre prises, pour relier des bâtiments ; on y voyage par l'hologramme", 20_000_000,
+		[]float64{0, 90, 180, 270}, content.Blueprint{
+			Shape: content.Dome{Radius: 3, WallH: 2.6}, Style: "habitat.white", Accent: "neon.cyan", Interior: "home",
+			Props: []content.Prop{
+				{Kit: "maptable"},
+				{Kit: "pouf", At: vec3{1.72, 0, 1.72}},
+				{Kit: "plant.big", At: vec3{-1.78, 0, 1.78}, Seed: 2},
+				{Kit: "pouf", At: vec3{-1.72, 0, -1.72}, Seed: 1},
+				{Kit: "lamp.floor", At: vec3{1.78, 0, -1.78}},
+			},
+		})
+	// The dwelling: the way through it along X, the bed on one side, the
+	// kitchen and the table on the other.
+	add("core:habitat", "Habitat", "Un dôme pour vivre : un lit, une cuisine, une table ; on s'y réveille après y avoir dormi", 60_000_000,
+		[]float64{0, 180}, content.Blueprint{
+			Shape: content.Dome{Radius: 4.5, WallH: 2.6}, Style: "habitat.white", Accent: "neon.amber", Interior: "home",
+			Props: []content.Prop{
+				{Kit: "rug", At: vec3{0, 0, -2.6}, Yaw: 90},
+				{Kit: "bed", At: vec3{0, 0, -3.0}, Yaw: 90},
+				{Kit: "lamp.floor", At: vec3{-1.35, 0, -3.75}},
+				{Kit: "armchair", At: vec3{2.3, 0, -2.35}, Yaw: 135},
+				{Kit: "plant.big", At: vec3{1.5, 0, -3.65}, Seed: 4},
+				{Kit: "shelf", At: vec3{-2.75, 0, -2.75}, Yaw: 45, Seed: 2},
+				{Kit: "kitchenette", At: vec3{0, 0, 3.6}, Yaw: -90, Seed: 3},
+				{Kit: "table.meal", At: vec3{2.35, 0, 2.2}, Seed: 1},
+				{Kit: "lockers", At: vec3{-2.65, 0, 2.75}, Yaw: -45, Seed: 1},
+				{Kit: "books", At: vec3{1.5, 0, -2.9}, Seed: 2},
+			},
+		})
+	// The greenhouse.
+	add("core:serre", "Serre", "Un dôme de verre plein de plantes, que l'on traverse", 80_000_000,
+		[]float64{0, 180}, content.Blueprint{
+			Shape: content.Dome{Radius: 5, WallH: 2.8}, Style: "habitat.white", Accent: "led.green", Glazed: true,
+			Props: []content.Prop{{Kit: "serre.plants", Seed: 5}},
+		})
 }

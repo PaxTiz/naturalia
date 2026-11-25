@@ -351,6 +351,8 @@ var Shelves = []struct{ ID, Name string }{
 	{"climbs", "Rampes"},
 	{"frames", "Structure"},
 	{"lights", "Lumières"},
+	{"buildings", "Bâtiments"},
+	{"links", "Liens"},
 	{"other", "Autres"},
 }
 

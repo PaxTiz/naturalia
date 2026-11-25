@@ -33,14 +33,21 @@ const (
 type spots struct {
 	target rl.RenderTexture2D
 	seen   [maxSpots]uint64 // what each cell shows (spotKey), 0 for nothing yet
-	last   []ecs.ID         // the lamps of the cells, kept in their cell as long as they light
+	last   []spotID         // the lamps of the cells, kept in their cell as long as they light
+}
+
+// spotID tells lamps apart: the one of an entity, or the n-th of a building
+// or a link.
+type spotID struct {
+	ent ecs.ID
+	n   int
 }
 
 func newSpots() *spots {
 	const res = spotGrid * spotCell
 	img := rl.GenImageColor(res, res, rl.White)
 	rl.ImageFormat(img, rl.UncompressedR32)
-	s := &spots{last: make([]ecs.ID, maxSpots)}
+	s := &spots{last: make([]spotID, maxSpots)}
 	s.target.Texture = rl.LoadTextureFromImage(img)
 	rl.UnloadImage(img)
 	rl.SetTextureFilter(s.target.Texture, rl.FilterPoint)
@@ -61,7 +68,7 @@ func nightAt(at vec3) float64 {
 
 // spot is a lamp lighting the scene.
 type spot struct {
-	id          ecs.ID
+	id          spotID
 	at, dir, up vec3 // where, where to, and the way its view's top points
 	power       float64
 	reach, edge float64
@@ -78,25 +85,20 @@ func (s *spot) cols(o vec3) []float32 {
 // spotsNear are the lamps that light the scene, the closest first.
 func (gfx *Graphics) spotsNear(g *game.Game) []spot {
 	var out []spot
-	for _, id := range g.EntitiesNear(spotDist + 20) {
-		def, ok := g.Content.Entities.Get(g.Kind(id))
-		if !ok || def.Light == nil || g.Held(id) {
-			continue
-		}
-		l := def.Light
-		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+	// A lamp standing in a frame; outdoors whatever it is in, if open.
+	add := func(id spotID, l *content.Light, pos, ax, up, az vec3, open bool) {
 		world := func(v vec3) vec3 { return ax.Scale(v.X).Add(up.Scale(v.Y)).Add(az.Scale(v.Z)) }
 		s := spot{id: id, at: pos.Add(world(l.At)), power: content.OrZero(l.Power, 1), reach: math.Min(content.OrZero(l.Range, 10), spotFarClip), col: vec3{1.0, 0.86, 0.68}}
 		s.dist = s.at.Sub(gfx.camEye).Length()
 		if s.dist > spotDist {
-			continue
+			return
 		}
 		s.power *= 1 - mathx.Smoothstep(spotFade, spotDist, s.dist)
 		if l.Night {
 			s.power *= nightAt(pos)
 		}
 		if s.power < 0.004 {
-			continue
+			return
 		}
 		d := l.Dir
 		if d == (vec3{}) {
@@ -110,8 +112,21 @@ func (gfx *Graphics) spotsNear(g *game.Game) []spot {
 			lin := func(c uint8) float64 { return math.Pow(float64(c)/255, 1.6) }
 			s.col = vec3{lin(t.Col.R), lin(t.Col.G), lin(t.Col.B)}
 		}
-		s.in = g.Indoors(s.at)
+		s.in = !open && g.Indoors(s.at)
 		out = append(out, s)
+	}
+	for _, id := range g.EntitiesNear(spotDist + 20) {
+		def, ok := g.Content.Entities.Get(g.Kind(id))
+		if !ok || def.Light == nil || g.Held(id) {
+			continue
+		}
+		pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+		add(spotID{ent: id}, def.Light, pos, ax, up, az, false)
+	}
+	for _, c := range g.CampsNear(gfx.camEye, spotDist) {
+		for i := range c.Layout.Lights {
+			add(spotID{c.Ent, 1 + i}, &c.Layout.Lights[i], c.Site.Origin, c.Site.X, c.Site.Y, c.Site.Z, true)
+		}
 	}
 	slices.SortFunc(out, func(a, b spot) int { return cmp.Compare(a.dist, b.dist) })
 	if len(out) > maxSpots { // those that make room fade out before they go
@@ -176,7 +191,7 @@ func (gfx *Graphics) drawSpots(g *game.Game) {
 		}
 	}
 	for i, s := range cells {
-		sp.last[i] = 0
+		sp.last[i] = spotID{}
 		if s == nil {
 			continue
 		}

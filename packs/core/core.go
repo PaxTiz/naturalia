@@ -431,7 +431,7 @@ var coreKits = map[string]content.Kit{
 	// Outside: on the roofs and around the buildings.
 	"solar.rack":        {Build: base.KitBuild(base.BuildSolarRack)},
 	"roof.vent":         {Build: base.KitBuild(base.BuildRoofVent)},
-	"greenhouse.plants": {Build: base.KitBuild(base.BuildGreenhousePlants), Obstacles: plantsObstacles()},
+	"greenhouse.plants": {Build: base.KitBuild(base.BuildGreenhousePlants), Obstacles: plantsObstacles(base.BaseBeds)},
 	"annex.tech":        {Build: base.KitBuild(base.BuildAnnex), Obstacles: obstacles(base.AnnexObstacles, 1.9)},
 	"plant.hanging":     {Build: base.KitBuild(base.BuildHangingPlant)},
 	"plant.big":         {Build: base.KitBuild(base.BuildBigPlant), Obstacles: []content.Obstacle{{vec3{}, 0.3}}},
@@ -471,8 +471,8 @@ var coreKits = map[string]content.Kit{
 
 // obstacles are round obstacles of radius r at the points at.
 // plantsObstacles: the greenhouse's beds.
-func plantsObstacles() []content.Obstacle {
-	at, radius := base.PlantsObstacles()
+func plantsObstacles(beds base.GreenBeds) []content.Obstacle {
+	at, radius := beds.Obstacles()
 	var out []content.Obstacle
 	for i, p := range at {
 		out = append(out, content.Obstacle{At: p, Radius: radius[i]})

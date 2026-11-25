@@ -135,3 +135,76 @@ func TestNeighbours(t *testing.T) {
 		t.Errorf("its level isn't saved")
 	}
 }
+
+// openPlain stands the player on a plain flat enough to set a building of
+// that kind down before them, its ghost in hand.
+func openPlain(t *testing.T, g *Game, item string) *Ghost {
+	t.Helper()
+	it, ok := g.Content.Items.Get(item)
+	if !ok {
+		t.Fatalf("no item %s", item)
+	}
+	g.Mode = ModePlay
+	for i := range 400 {
+		g.Player.Pos = g.World.Relief.Surface(planet.Toward(vec3{math.Cos(float64(i)), 0, math.Sin(float64(i))}, 300+5*float64(i)))
+		g.Player.Heading = planet.TangentAt(g.Player.Pos.Norm(), vec3{1, 0, 0.3})
+		g.phys = nil
+		g.stepPhysics(1.0 / 60)
+		g.Ghost = nil
+		g.hold(it)
+		if g.Ghost.OK {
+			return g.Ghost
+		}
+	}
+	t.Fatalf("nowhere to set %s down: %s", item, g.Ghost.Why)
+	return nil
+}
+
+// A building is picked in the catalog, paid for as it is set down, moved,
+// and taken back for its price by aiming at it.
+func TestBuildingCatalog(t *testing.T) {
+	g := baseGame(t)
+	for _, item := range []string{"core:carrefour", "core:habitat", "core:serre"} {
+		it, _ := g.Content.Items.Get(item)
+		found := false
+		for _, s := range g.Catalog() {
+			for _, o := range s.Items {
+				found = found || o.ID == item && s.Name == "Bâtiments"
+			}
+		}
+		if !found {
+			t.Errorf("%s isn't in the catalog", item)
+		}
+		g.State.Credits = it.Cost - 1
+		g.Ghost = nil
+		g.hold(it)
+		if g.Ghost.OK {
+			t.Errorf("%s: set down without the credits", item)
+		}
+		g.State.Credits = it.Cost
+		dir := openPlain(t, g, item).Pose.Dir
+		g.placeGhost()
+		g.Ghost = nil
+		if g.State.Credits != 0 || len(g.Camps()) != 1 {
+			t.Fatalf("%s: %v credits left, %d standing", item, g.State.Credits, len(g.Camps()))
+		}
+		c := g.Camps()[0]
+		flat := g.World.Relief.Height(dir)
+		// From outside, aiming at its wall.
+		out := content.Turn(vec3{1, 0, 0}, 45)
+		g.Player.Pos = g.World.Relief.Surface(c.ToWorld(out.Scale(c.Layout.Reach)))
+		g.Player.Heading, g.Player.Pitch = c.Site.Dir(out.Scale(-1)), 0
+		use, ok := g.NearbyUse()
+		if !ok || use.Prompt != "[E] Reprendre : "+it.Name {
+			t.Fatalf("%s: aimed at, E says %q", item, use.Prompt)
+		}
+		use.Use(g, use.At)
+		if g.State.Credits != it.Cost || len(g.Camps()) != 0 {
+			t.Errorf("%s: taken back, %v credits, %d standing", item, g.State.Credits, len(g.Camps()))
+		}
+		if h := g.World.Relief.Height(dir); math.Abs(h-g.World.Relief.Layers(dir)) > 1e-9 || len(g.World.Relief.Flat().Pads) != 0 {
+			t.Errorf("%s: the ground stays flat (%v, %v)", item, flat, h)
+		}
+		// From inside, its own things are used, not taken back.
+	}
+}

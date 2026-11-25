@@ -196,8 +196,8 @@ func (g *Game) nearbyEntity() (ecs.ID, float64) {
 			continue
 		}
 		def, ok := g.Content.Entities.Get(g.kind(id))
-		if !ok || (def.Prompt == "" && !def.Pickup) || def.Build && def.Pickup {
-			continue // a block is picked up by aiming at it (NearbyUse)
+		if !ok || (def.Prompt == "" && !def.Pickup) || (def.Build || isCamp(def)) && def.Pickup {
+			continue // a block is picked up by aiming at it, a building too (NearbyUse)
 		}
 		pos := g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir)
 		to := pos.Sub(g.Player.Pos)
@@ -230,6 +230,9 @@ func (g *Game) entityUse(id ecs.ID) base.Interactable {
 			if def.Pickup {
 				g.giveBack(id, def)
 				g.Ents.Kill(id)
+				if isCamp(def) {
+					g.standCamps()
+				}
 				g.sfx.Beep(0.02, 0.15, 0.12, 523, 392)
 			}
 		},

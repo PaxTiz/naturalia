@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"naturalia/internal/base"
+	"naturalia/internal/content"
 	"naturalia/internal/game"
 	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
@@ -139,11 +140,12 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 	// NA_SHOT_CAMP=dist,bearing sets a bootcamp that far from the base
 	// (bearing in degrees from +X toward +Z) and looks at it from 14 m
 	// before its door; NA_SHOT_CAMP_AT=x,z,yaw stands in its own frame
-	// instead (yaw in radians from +X toward +Z), NA_SHOT_Y that high.
+	// instead (yaw in radians from +X toward +Z), NA_SHOT_Y that high;
+	// NA_SHOT_CAMP_KIND is another building than the bootcamp.
 	if v := os.Getenv("NA_SHOT_CAMP"); s.file != "" && v != "" {
 		var dist, bearing float64
 		fmt.Sscanf(v, "%f,%f", &dist, &bearing)
-		if c, ok := g.ShotCamp("core:bootcamp", dist, bearing); ok {
+		if c, ok := g.ShotCamp(content.OrDefault(os.Getenv("NA_SHOT_CAMP_KIND"), "core:bootcamp"), dist, bearing); ok {
 			x, z, yaw := 14.0, 6.0, math.Pi*1.1
 			fmt.Sscanf(os.Getenv("NA_SHOT_CAMP_AT"), "%f,%f,%f", &x, &z, &yaw)
 			var y float64

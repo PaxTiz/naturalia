@@ -26,12 +26,13 @@ type Camp struct {
 	Uses      []Interactable
 	Obstacles []content.Obstacle
 	Furniture []Furniture
-	Table     vec3        // where the hologram's table stands, if it has one (Hologram)
-	Wake      vec3        // where the player wakes up, by the bed
-	Sign      vec3        // the middle of its name's sign, standing on the door's header, facing out
-	Beacon    vec3        // the light blinking on its roof
-	Reach     float64     // how far from its middle it stands: the ground is flat under it
-	Parts     *mesh.Parts // its static pieces
+	Lights    []content.Light // what lights its glass rooms, at night
+	Table     vec3            // where the hologram's table stands, if it has one (Hologram)
+	Wake      vec3            // where the player wakes up, by the bed
+	Sign      vec3            // the middle of its name's sign, standing on the door's header, facing out
+	Beacon    vec3            // the light blinking on its roof
+	Reach     float64         // how far from its middle it stands: the ground is flat under it
+	Parts     *mesh.Parts     // its static pieces
 	hologram  bool
 }
 
@@ -94,6 +95,9 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 		Uses: Interactables(), Obstacles: Obstacles(),
 		Table: TableSpot(), Reach: Ents.Building.Get(room).reach() + 0.6,
 	}
+	if r := c.Room; r.Hall == nil && r.Radius < 4 { // as bright as in the others, closer to its walls
+		c.Lamps[0].Power *= r.Radius * r.Radius / 16 * 0.65
+	}
 	for _, l := range locks {
 		c.Ports = append(c.Ports, Port{l})
 		c.Reach = math.Max(c.Reach, l.To.Length()+0.6)
@@ -110,7 +114,9 @@ func LayCamp(kits *content.Registry[content.Kit], plan content.Blueprint, ways [
 		c.Wake = AirlockEnd.Scale(0.4)
 	}
 	if c.Room.glazed() {
-		c.Beacon = c.Room.Center.Add(vec3{0, c.Room.WallH + c.Room.Radius*0.55 + 0.15, 0})
+		top := c.Room.WallH + c.Room.Radius*0.55
+		c.Beacon = c.Room.Center.Add(vec3{0, top + 0.15, 0})
+		c.Lights = append(c.Lights, content.Light{At: vec3{0, top - 0.5, 0}, Power: 3, Range: c.Room.Radius + top, Night: true})
 	} else {
 		c.Beacon = BeaconTop()
 	}

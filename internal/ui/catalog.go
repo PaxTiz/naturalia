@@ -257,7 +257,7 @@ func thumbColor(g *game.Game, token string) color.RGBA {
 func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 	key := thumbKey(g, it)
 	def, ok := g.Content.Entities.Get(it.Places)
-	if _, done := hud.catalog.thumbs[key]; done || !ok || len(def.Parts) == 0 {
+	if _, done := hud.catalog.thumbs[key]; done || !ok || len(def.Parts) == 0 && def.Camp == nil {
 		return false
 	}
 	if hud.catalog.thumbs == nil {
@@ -269,8 +269,15 @@ func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 	}
 	parts := g.Content.Painted(def, paint, def.Closed())
 	lo, hi := content.Bounds(def.Parts)
+	if l := g.CampLayout(def.ID); l != nil {
+		parts = l.Parts
+		lo, hi = vec3{-l.Reach, 0, -l.Reach}, vec3{l.Reach, l.Beacon.Y, l.Reach}
+	}
 	mid := lo.Add(hi).Scale(0.5)
 	size := math.Max(0.6, hi.Sub(lo).Length())
+	if def.Camp != nil {
+		size *= 0.7 // round: nothing in the corners
+	}
 
 	// The view: right, up, and toward the eye.
 	eye := vec3{1, 0.75, 0.62}.Norm()

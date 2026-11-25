@@ -1,6 +1,7 @@
 package render
 
 import (
+	"cmp"
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
@@ -8,6 +9,7 @@ import (
 	"naturalia/internal/game"
 	"naturalia/internal/mesh"
 	"naturalia/internal/palette"
+	"slices"
 	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -36,17 +38,70 @@ func (gfx *Graphics) campModels(kind string, l *base.Camp) *baseModels {
 	return m
 }
 
-// drawCamps draws the bootcamps around the camera: their meshes, their
-// door's leaves, their beacon.
-func (gfx *Graphics) drawCamps(g *game.Game) {
+// campRoof is how far above its floor a building may reach.
+const campRoof = 10.0
+
+// campSeen tells whether a building may be in a picture.
+func campSeen(c game.CampAt, seen sees) bool {
+	return seen(c.ToWorld(vec3{0, campRoof / 2, 0}), math.Hypot(c.Layout.Reach, campRoof/2))
+}
+
+// campFrame places a building's meshes.
+func (gfx *Graphics) campFrame(s base.Site, m *baseModels) rl.Matrix {
+	return basisMatrix(s.Origin.Add(s.Dir(m.Origin())).Sub(gfx.origin), s.X, s.Y, s.Z) // about the origin (object.vert)
+}
+
+// drawCampGlass draws the buildings' panes over the scene, as drawGlass
+// the base's, the farthest first.
+func (gfx *Graphics) drawCampGlass(g *game.Game, seen sees) {
+	list := g.CampsNear(gfx.camEye, campDrawDist)
+	dist := func(c game.CampAt) float64 { return c.Site.Origin.Sub(gfx.camEye).Length() }
+	slices.SortFunc(list, func(a, b game.CampAt) int { return cmp.Compare(dist(b), dist(a)) })
+	rl.DrawRenderBatchActive()
+	rl.DisableDepthMask()
+	gfx.setMat(content.MtPlain, 1, false)
+	for _, c := range list {
+		if !campSeen(c, seen) {
+			continue
+		}
+		m := gfx.campModels(g.Kind(c.Ent), c.Layout)
+		frame := gfx.campFrame(c.Site, m)
+		for i, k := range m.Keys {
+			if k.Lit != mesh.LitGlass {
+				continue
+			}
+			room := k.At
+			if room != (vec3{}) {
+				room = c.ToWorld(room)
+			}
+			t := m.toks[i]
+			gfx.setLighting(k.Lit, room)
+			rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
+			mat := m.models[i].GetMaterials()[0]
+			mat.GetMap(rl.MapAlbedo).Color = t.Col
+			rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
+			mat.GetMap(rl.MapAlbedo).Color = rl.White
+		}
+	}
+	rl.DrawRenderBatchActive()
+	rl.EnableDepthMask()
+	gfx.setLighting(mesh.LitSun, vec3{})
+}
+
+// drawCamps draws the bootcamps around the camera seen: their meshes,
+// their doors' leaves, their beacon.
+func (gfx *Graphics) drawCamps(g *game.Game, seen sees) {
 	rl.DisableBackfaceCulling()
 	defer rl.EnableBackfaceCulling()
 	for _, c := range g.CampsNear(gfx.camEye, campDrawDist) {
+		if !campSeen(c, seen) {
+			continue
+		}
 		m := gfx.campModels(g.Kind(c.Ent), c.Layout)
 		s := c.Site
 		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(s.Origin.Dot(s.Y))}, rl.ShaderUniformVec2)
 		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, v3f(s.Y), rl.ShaderUniformVec3)
-		frame := basisMatrix(s.Origin.Add(s.Dir(m.Origin())).Sub(gfx.origin), s.X, s.Y, s.Z) // about the origin (object.vert)
+		frame := gfx.campFrame(s, m)
 		for i, k := range m.Keys {
 			if k.Lit == mesh.LitGlass {
 				continue

@@ -216,7 +216,9 @@ func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
 		gfx.drawGlobeAt(g, cam, base.BaseSite(), base.TableSpot())
 	}
 	for _, c := range g.CampsNear(gfx.camEye, globeDrawDist) {
-		gfx.drawGlobeAt(g, cam, c.Site, c.Layout.Table)
+		if c.Layout.Hologram() {
+			gfx.drawGlobeAt(g, cam, c.Site, c.Layout.Table)
+		}
 	}
 }
 

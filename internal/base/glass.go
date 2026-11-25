@@ -85,46 +85,87 @@ func (b *building) glassFloor(r Room) {
 	}
 }
 
-// The greenhouse's beds: a ring along the glass, open toward the door at
-// +Z, and a round bed in the middle.
-const (
-	ringIn, ringOut = 2.7, 3.9
-	ringSegs        = 20
-	ringGap         = 0.36 // half the opening's angle, before the door
-	middleBed       = 1.1
+// GreenBeds are a greenhouse's beds: a ring along the glass, open toward
+// its doors, and a round bed in the middle.
+type GreenBeds struct {
+	in, out float64
+	segs    int
+	doors   []float64 // the ways of the doors, in radians
+	gap     float64   // half an opening's angle, before a door
+	middle  float64   // the middle bed's radius
+}
+
+var (
+	// BaseBeds are the base's greenhouse's: its door at +Z.
+	BaseBeds = GreenBeds{2.7, 3.9, 20, []float64{math.Pi / 2}, 0.36, 1.1}
+	// SerreBeds are those of the greenhouse set down anywhere, walked
+	// through from +X to -X around the middle.
+	SerreBeds = GreenBeds{3.1, 4.4, 22, []float64{0, math.Pi}, 0.3, 1.25}
 )
 
-// ringSegments are the angles of the ring's segments, the opening left out.
-func ringSegments() []float64 {
+// segments are the angles of the ring's segments, the openings left out.
+func (g GreenBeds) segments() []float64 {
 	var out []float64
-	for k := range ringSegs {
-		t := (float64(k) + 0.5) * 2 * math.Pi / ringSegs
-		if angleDist(t, math.Pi/2) > ringGap+math.Pi/ringSegs {
+	for k := range g.segs {
+		t := (float64(k) + 0.5) * 2 * math.Pi / float64(g.segs)
+		open := false
+		for _, d := range g.doors {
+			open = open || angleDist(t, d) <= g.gap+math.Pi/float64(g.segs)
+		}
+		if !open {
 			out = append(out, t)
 		}
 	}
 	return out
 }
 
-// PlantsObstacles: what stops the player among the greenhouse's beds, and
-// how wide each is.
-func PlantsObstacles() (at []vec3, radius []float64) {
-	mid := (ringIn + ringOut) / 2
-	for _, t := range ringSegments() {
+// Obstacles: what stops the player among the beds, and how wide each is.
+func (g GreenBeds) Obstacles() (at []vec3, radius []float64) {
+	mid := (g.in + g.out) / 2
+	for _, t := range g.segments() {
 		at = append(at, vec3{math.Cos(t), 0, math.Sin(t)}.Scale(mid))
-		radius = append(radius, 0.65)
+		radius = append(radius, (g.out-g.in)/2+0.05)
 	}
-	return append(at, vec3{}), append(radius, middleBed+0.2)
+	return append(at, vec3{}), append(radius, g.middle+0.2)
+}
+
+// BuildSerre: the greenhouse set down anywhere, full of plants, two young
+// trees growing out of its ring.
+func BuildSerre(b *building, at vec3, seed int) {
+	SerreBeds.build(b, at, seed)
+	for k, t := range []float64{math.Pi / 2, -math.Pi / 2} {
+		p := at.Add(vec3{math.Cos(t), 0, math.Sin(t)}.Scale((SerreBeds.in + SerreBeds.out) / 2)).Add(vec3{0, 0.45, 0})
+		b.tree(p, 0.7+0.1*float64(k), seed+k)
+	}
+	// A bench against the middle bed, on each side of the path.
+	for _, s := range []float64{-1, 1} {
+		p := at.Add(vec3{0, 0, s * (SerreBeds.middle + 0.24)})
+		b.out("wood.light").Box(p.Add(vec3{0, 0.43, 0}), vec3{1.5, 0.06, 0.38}, xAxis, 0.015)
+		for _, x := range []float64{-0.6, 0.6} {
+			b.out("ceramic.dark").Box(p.Add(vec3{x, 0.2, 0}), vec3{0.1, 0.4, 0.32}, xAxis, 0.01)
+		}
+	}
+}
+
+// tree grows a small tree of round facets on the soil at p.
+func (b *building) tree(p vec3, size float64, seed int) {
+	b.out("wood.brown").Prism(p, yUp, 0.1*size, 0.06*size, 1.5*size, 8, 0)
+	for i, l := range []struct{ y, r, h float64 }{{1.1, 0.95, 0.9}, {1.7, 0.7, 0.75}, {2.25, 0.42, 0.6}} {
+		tok := []string{"leaf.dark", "planter.green", "planter.lime"}[(i+seed)%3]
+		b.out(tok).Prism(p.Add(vec3{0, l.y * size, 0}), yUp, l.r*size, 0.1*size, l.h*size, 9, 0.03)
+	}
 }
 
 // BuildGreenhousePlants: a greenhouse full of plants, lit by the sun: beds
 // of fired ceramic in a ring along the glass, open toward the door at +Z,
 // thick with bushes, tomatoes on stakes, ferns, broad leaves and flowers;
 // a small tree in the round bed in the middle.
-func BuildGreenhousePlants(b *building, at vec3, seed int) {
-	mid, w := (ringIn+ringOut)/2, ringOut-ringIn
-	chord := 2 * mid * math.Sin(math.Pi/ringSegs) * 1.08
-	for k, t := range ringSegments() {
+func BuildGreenhousePlants(b *building, at vec3, seed int) { BaseBeds.build(b, at, seed) }
+
+func (g GreenBeds) build(b *building, at vec3, seed int) {
+	mid, w := (g.in+g.out)/2, g.out-g.in
+	chord := 2 * mid * math.Sin(math.Pi/float64(g.segs)) * 1.08
+	for k, t := range g.segments() {
 		out := vec3{math.Cos(t), 0, math.Sin(t)}
 		across := vec3{-out.Z, 0, out.X}
 		c := at.Add(out.Scale(mid))
@@ -137,8 +178,8 @@ func BuildGreenhousePlants(b *building, at vec3, seed int) {
 		}
 	}
 	// The middle bed and its tree.
-	b.out("ceramic.dark").Prism(at, yUp, middleBed, middleBed, 0.5, 24, 0.03)
-	b.out("soil").Prism(at.Add(vec3{0, 0.5, 0}), yUp, middleBed-0.08, middleBed-0.08, 0.02, 24, 0)
+	b.out("ceramic.dark").Prism(at, yUp, g.middle, g.middle, 0.5, 24, 0.03)
+	b.out("soil").Prism(at.Add(vec3{0, 0.5, 0}), yUp, g.middle-0.08, g.middle-0.08, 0.02, 24, 0)
 	b.out("wood.brown").Prism(at.Add(vec3{0, 0.5, 0}), yUp, 0.13, 0.08, 1.5, 8, 0)
 	for i, l := range []struct{ y, r, h float64 }{{1.4, 1.15, 1.0}, {2.05, 0.85, 0.85}, {2.65, 0.5, 0.7}} {
 		b.out([]string{"leaf.dark", "planter.green", "planter.lime"}[i]).Prism(at.Add(vec3{0, l.y, 0}), yUp, l.r, 0.12, l.h, 9, 0.04)

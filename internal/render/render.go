@@ -1,6 +1,7 @@
 package render
 
 import (
+	"cmp"
 	"fmt"
 	"image/color"
 	"math"
@@ -168,7 +169,7 @@ func New(g *game.Game) *Graphics {
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 	gfx.shadow = newShadowMap()
-	gfx.lampShadow = newLampShadow(min(base.Ents.Building.Len(), maxRooms))
+	gfx.lampShadow = newLampShadow(min(max(base.Ents.Building.Len(), maxShadeCamps), maxRooms))
 	gfx.spots = newSpots()
 	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(gfx.terrainSh, "shadowMap"))
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
@@ -288,49 +289,76 @@ func (gfx *Graphics) camera(g *game.Game) rl.Camera3D {
 }
 
 // shading is what the shaders light and shade: the base's buildings and
-// corridors closest to the camera, or the bootcamp the camera is by.
+// corridors closest to the camera, or those set down around it.
 type shading struct {
 	picked       bool
-	rooms, corrs []ecs.ID   // the base's
-	camp         *base.Camp // or a bootcamp's
-	campID       ecs.ID
-	site         base.Site  // the frame of either
-	lamps        []lampView // the lamps casting shadows
+	rooms, corrs []ecs.ID      // the base's
+	camps        []game.CampAt // or those set down, the closest first
+	site         base.Site     // the frame of the base, or of the closest
+	lamps        []lampView    // the lamps casting shadows
 }
 
-// campShadeDist is how close to a bootcamp's dome the camera comes for
-// the shaders to take it rather than the base.
-const campShadeDist = 40.0
+const (
+	// campShadeDist is how close to a building the camera comes for the
+	// shaders to take it rather than the base.
+	campShadeDist = 40.0
+	maxShadeCamps = 4 // how many of them
+)
+
+// sameCamps tells whether two lists hold the same buildings, where they
+// were, in any order.
+func sameCamps(a, b []game.CampAt) bool {
+	in := func(c game.CampAt, list []game.CampAt) bool {
+		return slices.ContainsFunc(list, func(o game.CampAt) bool { return o.Ent == c.Ent && o.Site == c.Site })
+	}
+	for _, c := range a {
+		if !in(c, b) {
+			return false
+		}
+	}
+	return len(a) == len(b)
+}
 
 // selectBase picks what the shaders light and shade, and its ceiling
 // lamps. The lamps' shadows are drawn again when the pick changes.
 func (gfx *Graphics) selectBase(g *game.Game) {
 	var next shading
-	if c, ok := gfx.nearCamp(g); ok {
-		next.camp, next.campID, next.site = c.Layout, c.Ent, c.Site
+	if next.camps = gfx.nearCamps(g); len(next.camps) > 0 {
+		next.site = next.camps[0].Site
 	} else {
 		at := base.ToLocal(gfx.camEye)
 		next.rooms, next.corrs, next.site = base.NearBuildings(at, maxRooms), base.NearCorridors(at, maxRooms), base.BaseSite()
 	}
 	sh := &gfx.shade
-	if sh.picked && slices.Equal(next.rooms, sh.rooms) && slices.Equal(next.corrs, sh.corrs) && next.campID == sh.campID && next.site == sh.site {
+	if sh.picked && slices.Equal(next.rooms, sh.rooms) && slices.Equal(next.corrs, sh.corrs) && sameCamps(next.camps, sh.camps) && (next.site == sh.site || len(next.camps) > 0) {
+		sh.camps, sh.site = next.camps, next.site // maybe in another order
 		return
 	}
 	next.picked = true
 	*sh = next
 	gfx.lampShadow.reset()
 	lamps, casting := base.Lamps(sh.rooms, sh.corrs), len(sh.rooms) // the rooms' first: one each
-	if sh.camp != nil {
-		lamps, casting = sh.camp.Lamps, 1
+	sites := []base.Site{sh.site}                                   // those of the lamps, the last for all that follow
+	if len(sh.camps) > 0 {
+		lamps, casting, sites = nil, len(sh.camps), nil
+		for _, c := range sh.camps {
+			lamps, sites = append(lamps, c.Layout.Lamps[0]), append(sites, c.Site)
+		}
+		for _, c := range sh.camps {
+			for _, l := range c.Layout.Lamps[1:] {
+				lamps, sites = append(lamps, l), append(sites, c.Site)
+			}
+		}
 	}
 	var lights, ranges, warm []float32
 	for i, l := range lamps[:min(len(lamps), maxLamps)] {
-		p := sh.site.ToWorld(l.At)
+		site := sites[min(i, len(sites)-1)]
+		p := site.ToWorld(l.At)
 		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
 		ranges = append(ranges, float32(l.Range))
 		warm = append(warm, float32(l.Warm))
 		if i < casting {
-			sh.lamps = append(sh.lamps, lampView{p.Sub(sh.site.Y.Scale(0.12)), sh.site.Y, sh.site.X})
+			sh.lamps = append(sh.lamps, lampView{p.Sub(site.Y.Scale(0.12)), site.Y, site.X})
 		}
 	}
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
@@ -340,17 +368,16 @@ func (gfx *Graphics) selectBase(g *game.Game) {
 	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
 }
 
-// nearCamp is the bootcamp whose dome is closest to the camera, within
+// nearCamps are the buildings set down closest to the camera, within
 // campShadeDist. None stands near the base (game.campFits).
-func (gfx *Graphics) nearCamp(g *game.Game) (game.CampAt, bool) {
-	best, found, bestD := game.CampAt{}, false, campShadeDist
-	for _, c := range g.CampsNear(gfx.camEye, campShadeDist) {
+func (gfx *Graphics) nearCamps(g *game.Game) []game.CampAt {
+	list := g.CampsNear(gfx.camEye, campShadeDist)
+	dist := func(c game.CampAt) float64 {
 		at := c.Site.ToLocal(gfx.camEye)
-		if d := math.Hypot(at.X, at.Z) - c.Layout.Reach; d < bestD {
-			best, found, bestD = c, true, d
-		}
+		return math.Hypot(at.X, at.Z) - c.Layout.Reach
 	}
-	return best, found
+	slices.SortFunc(list, func(a, b game.CampAt) int { return cmp.Compare(dist(a), dist(b)) })
+	return list[:min(len(list), maxShadeCamps)]
 }
 
 func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
@@ -387,12 +414,24 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		corridor(base.Ents.Corridor.Get(id))
 	}
 	obs := base.Obstacles()
-	if sh.camp != nil {
-		room(&sh.camp.Room)
-		for i := range sh.camp.Ports {
-			corridor(&sh.camp.Ports[i].Airlock)
+	if len(sh.camps) > 0 {
+		obs = nil
+		for _, c := range sh.camps { // in the frame of the closest
+			in := func(p vec3) vec3 { return sh.site.ToLocal(c.ToWorld(p)) }
+			r := c.Layout.Room
+			r.Center = in(r.Center)
+			room(&r)
+			for _, p := range c.Layout.Ports {
+				if a := p.Airlock; len(crs) < maxRooms*4 {
+					a.From, a.To = in(a.From), in(a.To)
+					corridor(&a)
+				}
+			}
+			for _, o := range c.Layout.Obstacles {
+				o.At = in(o.At)
+				obs = append(obs, o)
+			}
 		}
-		obs = sh.camp.Obstacles
 	}
 	// The slabs over the floors: no lamp shines through them.
 	var slabs, slabSize []float32
@@ -546,7 +585,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.shadow.render(gfx, g.Player.Pos, func() {
 		gfx.drawRocks(g)
 		gfx.drawBase(g)
-		gfx.drawCamps(g)
+		gfx.drawCamps(g, inShadowMap(g.Player.Pos))
 		gfx.drawEntities(g, inShadowMap(g.Player.Pos))
 	})
 	// The rooms' lamps cast shadows too, drawn once.
@@ -554,7 +593,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	if gfx.base != nil {
 		gfx.lampShadow.render(gfx, gfx.shade.lamps, func() {
 			gfx.drawBase(g)
-			gfx.drawCamps(g)
+			gfx.drawCamps(g, func(at vec3, r float64) bool { return at.Sub(gfx.camEye).Length() < 2*campShadeDist+r })
 		})
 		vp := gfx.lampShadow.cols(gfx.origin)
 		rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampVP"), vp, rl.ShaderUniformVec4, int32(len(vp)/4))
@@ -584,7 +623,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	// first: a wall behind a home's lining isn't shaded for nothing.
 	gfx.baseDepth()
 	gfx.drawBase(g)
-	gfx.drawCamps(g)
+	gfx.drawCamps(g, gfx.inView(cam))
 	gfx.drawEntities(g, gfx.inView(cam))
 	// Culling is off: patch winding differs from one cube face to the next.
 	rl.DisableBackfaceCulling()
@@ -598,6 +637,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.drawDevils(g)
 	gfx.drawGhost(g)
 	gfx.drawGlass()
+	gfx.drawCampGlass(g, gfx.inView(cam))
 	gfx.drawPanes(g, gfx.inView(cam))
 	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})

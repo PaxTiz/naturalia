@@ -109,14 +109,14 @@ func (g *Game) hold(it *content.Item) {
 	g.poseGhost()
 }
 
-// aimedBlock is the block to take back the player aims at, 0 for none, or
-// while they set something down.
+// aimedBlock is the block or the building to take back the player aims at,
+// 0 for none, or while they set something down.
 func (g *Game) aimedBlock() ecs.ID {
 	if g.Ghost != nil {
 		return 0
 	}
 	id := g.AimedMovable()
-	if def, ok := g.Content.Entities.Get(g.kind(id)); id == 0 || !ok || !def.Build || !def.Pickup {
+	if def, ok := g.Content.Entities.Get(g.kind(id)); id == 0 || !ok || !def.Build && !isCamp(def) || !def.Pickup {
 		return 0
 	}
 	return id
