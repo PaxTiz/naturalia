@@ -346,7 +346,7 @@ func (gfx *Graphics) nearCamp(g *game.Game) (game.CampAt, bool) {
 	best, found, bestD := game.CampAt{}, false, campShadeDist
 	for _, c := range g.CampsNear(gfx.camEye, campShadeDist) {
 		at := c.Site.ToLocal(gfx.camEye)
-		if d := math.Hypot(at.X, at.Z) - c.Layout.Room.Radius; d < bestD {
+		if d := math.Hypot(at.X, at.Z) - c.Layout.Reach; d < bestD {
 			best, found, bestD = c, true, d
 		}
 	}
@@ -389,7 +389,9 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	obs := base.Obstacles()
 	if sh.camp != nil {
 		room(&sh.camp.Room)
-		corridor(&sh.camp.Airlock)
+		for i := range sh.camp.Ports {
+			corridor(&sh.camp.Ports[i].Airlock)
+		}
 		obs = sh.camp.Obstacles
 	}
 	// The slabs over the floors: no lamp shines through them.
@@ -463,8 +465,15 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	}
 	for _, c := range g.CampsNear(gfx.camEye, campDrawDist) {
 		r := c.Layout.Room
+		if r.Plan().Glazed {
+			continue
+		}
 		at := c.ToWorld(r.Center.Add(vec3{0, r.WallH * 0.7, 0}))
-		casters = append(casters, float32(at.X), float32(at.Y), float32(at.Z), float32(r.Radius*1.05))
+		radius := r.Radius * 1.05
+		if r.Hall != nil {
+			radius = r.Hall.Size[0] * 0.55
+		}
+		casters = append(casters, float32(at.X), float32(at.Y), float32(at.Z), float32(radius))
 	}
 	n := min(len(casters)/4, maxCasters)
 	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))

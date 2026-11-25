@@ -64,8 +64,12 @@ func (gfx *Graphics) drawCamps(g *game.Game) {
 			rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
 			mat.GetMap(rl.MapAlbedo).Color = rl.White
 		}
-		gfx.drawCampDoor(g, c)
-		gfx.drawCampSign(c)
+		for i := range c.Layout.Ports {
+			gfx.drawCampDoor(g, c, i)
+		}
+		if c.Layout.Hologram() {
+			gfx.drawCampSign(c)
+		}
 		if math.Mod(g.Elapsed+float64(c.ID)*0.37, 1.2) < 0.3 {
 			gfx.setLighting(mesh.LitSun, vec3{})
 			gfx.setMat(content.MtPlain, 1, false)
@@ -77,12 +81,13 @@ func (gfx *Graphics) drawCamps(g *game.Game) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
 }
 
-// drawCampDoor draws the two leaves of a bootcamp's door, sliding apart as
-// the player comes close, and its light.
-func (gfx *Graphics) drawCampDoor(g *game.Game, c game.CampAt) {
+// drawCampDoor draws the two leaves of the door of a bootcamp's port i,
+// sliding apart as the player comes close, and its light.
+func (gfx *Graphics) drawCampDoor(g *game.Game, c game.CampAt, i int) {
 	s := c.Site
-	end, across := c.Layout.Door()
-	open := g.CampDoor(c.Ent)
+	port := c.Layout.Ports[i]
+	end, across, out := port.At(), port.Across(), port.Out()
+	open := g.CampDoor(c.Ent, i)
 	steel := gfx.tok("steel")
 	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.setMat(steel.Mat, steel.Scale, false)
@@ -98,7 +103,6 @@ func (gfx *Graphics) drawCampDoor(g *game.Game, c game.CampAt) {
 	if open < 0.9 {
 		lamp = palette.Gold
 	}
-	out := vec3{0, 1, 0}.Cross(across) // out of the door
 	at := end.Add(vec3{0, 2.6, 0}).Add(out.Scale(0.2))
 	gfx.putBasis(gfx.cube, s.ToWorld(at), ax.Scale(1.2), s.Y.Scale(0.08), az.Scale(0.04), lamp, 0, 1)
 }
@@ -130,7 +134,8 @@ func (gfx *Graphics) drawCampSign(c game.CampAt) {
 	gfx.setMat(content.MtDecal, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
 	rl.SetMaterialTexture(&gfx.signBox.GetMaterials()[0], rl.MapAlbedo, sg.tex)
-	// The box's front (+z) shows the texture: turned to face out (+x).
-	gfx.putBasis(gfx.signBox, c.ToWorld(c.Layout.Sign), s.Dir(vec3{0, 0, -campSignW}), s.Y.Scale(campSignH), s.X.Scale(0.06), rl.White, 0.2, 0.25)
+	// The box's front (+z) shows the texture: turned to face out.
+	port := c.Layout.Ports[0]
+	gfx.putBasis(gfx.signBox, c.ToWorld(c.Layout.Sign), s.Dir(port.Across().Scale(-campSignW)), s.Y.Scale(campSignH), s.Dir(port.Out()).Scale(0.06), rl.White, 0.2, 0.25)
 	gfx.setMat(content.MtPlain, 1, false)
 }

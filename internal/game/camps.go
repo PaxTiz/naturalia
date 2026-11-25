@@ -10,14 +10,17 @@ import (
 	"naturalia/internal/physics"
 	"naturalia/internal/planet"
 	"slices"
+	"strings"
 )
 
-// Bootcamps (docs/TELEPORTEURS.md) are entities whose kind lays out a
-// small dome (content.EntityDef.Camp): the base's code builds it once per
-// kind in its own frame (base.LayCamp), and each one stands it where it
-// was placed (base.Site).
+// Bootcamps (docs/TELEPORTEURS.md), and the other buildings set down
+// anywhere (docs/BATIMENTS.md), are entities whose kind lays out a building
+// (content.EntityDef.Camp): the base's code builds it once per kind in its
+// own frame (base.LayCamp), and each one stands it where it was placed
+// (base.Site). What it is for comes from what it holds: one travels to
+// those with a hologram, and wakes up in those with a bed.
 
-// Bootcamp is what a bootcamp keeps: an ID that stays the same from save
+// Bootcamp is what a building keeps: an ID that stays the same from save
 // to save, and its name.
 type Bootcamp struct {
 	ID   int       `json:"id"`
@@ -46,7 +49,7 @@ func (g *Game) campLayout(kind string) *base.Camp {
 	}
 	c, ok := g.layouts[def.ID]
 	if !ok {
-		c = base.LayCamp(&g.Content.Kits, *def.Camp)
+		c = base.LayCamp(&g.Content.Kits, *def.Camp, def.Ports)
 		if g.layouts == nil {
 			g.layouts = map[string]*base.Camp{}
 		}
@@ -148,11 +151,26 @@ func (g *Game) newCamp(id ecs.ID) *Bootcamp {
 	for _, b := range g.Ents.Camp.All() {
 		next = max(next, b.ID+1)
 	}
-	return g.Ents.Camp.Set(id, Bootcamp{ID: next, Name: campName(next)})
+	return g.Ents.Camp.Set(id, Bootcamp{ID: next, Name: g.campName(g.kind(id))})
 }
 
-// campName is a new bootcamp's name.
-func campName(n int) string { return fmt.Sprintf("Bootcamp %d", n) }
+// campName is a new building's name: its kind's, and the first number no
+// other has.
+func (g *Game) campName(kind string) string {
+	what := "Bootcamp"
+	if def, ok := g.Content.Entities.Get(kind); ok {
+		what = content.OrDefault(def.Name, what)
+	}
+	for n := 1; ; n++ {
+		name, free := fmt.Sprintf("%s %d", what, n), true
+		for _, b := range g.Ents.Camp.All() {
+			free = free && !strings.EqualFold(b.Name, name)
+		}
+		if free {
+			return name
+		}
+	}
+}
 
 // heldCamp is the bootcamp being moved, 0 for none.
 func (g *Game) heldCamp() ecs.ID {
@@ -168,15 +186,18 @@ func (g *Game) Kind(id ecs.ID) string { return g.kind(id) }
 // isCamp tells whether an entity's kind is a bootcamp.
 func isCamp(def *content.EntityDef) bool { return def != nil && def.Camp != nil }
 
-// CampDoor is how open a bootcamp's door is, 0 closed to 1 open.
-func (g *Game) CampDoor(id ecs.ID) float64 { return g.doors[id].open }
+// CampDoor is how open the door of a bootcamp's port i is, 0 closed to 1
+// open.
+func (g *Game) CampDoor(id ecs.ID, i int) float64 { return g.doors[doorKey{id, i}].open }
 
 // updateCampDoors slides the doors of the bootcamps near open when the
 // player comes close, as the base's airlock.
 func (g *Game) updateCampDoors(dt float64) {
 	for _, c := range g.CampsNear(g.Player.Pos, 30) {
-		door, _ := c.Layout.Door()
-		g.slideDoor(c.Ent, c.Site.ToLocal(g.Player.Pos).Sub(door).Length() < 4, dt)
+		at := c.Site.ToLocal(g.Player.Pos)
+		for i, p := range c.Layout.Ports {
+			g.slideDoor(doorKey{c.Ent, i}, at.Sub(p.At()).Length() < 4, dt)
+		}
 	}
 }
 
@@ -237,27 +258,13 @@ func (g *Game) poseCamp(gh *Ghost, l *base.Camp) {
 }
 
 // rayCamp is how far along a ray from o along d (length 1), within max,
-// it meets bootcamp c's walls or dome, seen as a round tower; never from
-// inside it.
+// it meets bootcamp c's walls or dome; never from inside it.
 func rayCamp(c CampAt, o, d vec3, max float64) (float64, bool) {
 	lo, ld := c.Site.ToLocal(o), c.Site.DirLocal(d)
-	r := c.Layout.Room
-	top := r.WallH + r.Radius*0.55
 	if c.Layout.Indoors(lo) {
 		return 0, false
 	}
-	// x² + z² = R² along the ray, seen from above.
-	a := ld.X*ld.X + ld.Z*ld.Z
-	b := 2 * (lo.X*ld.X + lo.Z*ld.Z)
-	k := lo.X*lo.X + lo.Z*lo.Z - r.Radius*r.Radius
-	if a < 1e-12 || b*b-4*a*k < 0 {
-		return 0, false
-	}
-	t := (-b - math.Sqrt(b*b-4*a*k)) / (2 * a)
-	if y := lo.Y + t*ld.Y; t < 0 || t > max || y < 0 || y > top {
-		return 0, false
-	}
-	return t, true
+	return c.Layout.Ray(lo, ld, max)
 }
 
 // ShotCamp sets a bootcamp of kind dist m from the base along a bearing

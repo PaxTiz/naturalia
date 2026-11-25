@@ -40,6 +40,9 @@ func (g *Game) Destinations() []Destination {
 	here := g.travelFrom()
 	out := []Destination{{Name: "Base", Dir: planet.BaseUp, Here: here == 0}}
 	for _, c := range g.Camps() {
+		if !c.Layout.Hologram() {
+			continue
+		}
 		out = append(out, Destination{Name: c.Name, Camp: c.Ent, Dir: c.Site.Origin.Norm(), Here: here == c.Ent})
 	}
 	for i := range out {

@@ -21,7 +21,7 @@ func TestBaseZFighting(t *testing.T) {
 	// The bootcamps, laid out apart.
 	for _, def := range c.Entities.All() {
 		if def.Camp != nil {
-			checkFights(t, def.ID, base.LayCamp(&c.Kits, *def.Camp).Parts)
+			checkFights(t, def.ID, base.LayCamp(&c.Kits, *def.Camp, def.Ports).Parts)
 		}
 	}
 }

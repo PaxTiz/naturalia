@@ -12,10 +12,16 @@ import (
 // door is how open a door is, 0 closed to 1 open, and where it is going.
 type door struct{ open, want float64 }
 
-// slideDoor moves entity id's door a frame toward open or closed.
-func (g *Game) slideDoor(id ecs.ID, open bool, dt float64) {
+// doorKey is a door of an entity: the one of its port, -1 for its leaves.
+type doorKey struct {
+	id   ecs.ID
+	port int
+}
+
+// slideDoor moves a door a frame toward open or closed.
+func (g *Game) slideDoor(id doorKey, open bool, dt float64) {
 	if g.doors == nil {
-		g.doors = map[ecs.ID]door{}
+		g.doors = map[doorKey]door{}
 	}
 	d := g.doors[id]
 	want := 0.0
@@ -61,7 +67,7 @@ func (g *Game) updateDoors(dt float64) {
 		for _, c := range cars {
 			open = open || g.byDoor(id, def, g.World.Relief.Surface(c), 4)
 		}
-		g.slideDoor(id, open, dt)
+		g.slideDoor(doorKey{id, -1}, open, dt)
 	}
 }
 
@@ -86,7 +92,7 @@ func leafParts(def *content.EntityDef) []content.PartJSON {
 }
 
 // LeafOpen is how open entity id's door is, 0 closed to 1 open.
-func (g *Game) LeafOpen(id ecs.ID) float64 { return g.doors[id].open }
+func (g *Game) LeafOpen(id ecs.ID) float64 { return g.doors[doorKey{id, -1}].open }
 
 // LeafShift is how far the leaf i of entity id's door has slid, in the
 // world.
@@ -96,6 +102,6 @@ func (g *Game) LeafShift(id ecs.ID, i int) vec3 {
 		return vec3{}
 	}
 	_, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
-	s := def.Leaves[i].Slide.Scale(g.doors[id].open)
+	s := def.Leaves[i].Slide.Scale(g.LeafOpen(id))
 	return ax.Scale(s.X).Add(up.Scale(s.Y)).Add(az.Scale(s.Z))
 }

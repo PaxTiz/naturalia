@@ -268,12 +268,16 @@ type EntityDef struct {
 	// goes out says trigger_enter and trigger_leave. It spans radius, or
 	// its parts without one, up to 1.5 m over them.
 	Trigger bool `json:"trigger"`
-	// Camp makes it a bootcamp (docs/TELEPORTEURS.md): a small closed dome
-	// laid out from this blueprint (its Shape, Style, Accent, Interior and
-	// Props), its door toward +X, where the player sleeps, opens the lab
-	// and travels from by the hologram. It stands upright, the ground
-	// flattened under it; it is moved, never picked up.
+	// Camp makes it a building set down anywhere, like the bootcamp: a dome
+	// or a hall laid out from this blueprint (its Shape or Hall, Style,
+	// Accent, Interior, Glazed and Props). The player travels to it by the
+	// hologram if it has one (maptable), wakes up in it if it has a bed. It
+	// stands upright, the ground flattened under it.
 	Camp *Blueprint `json:"camp"`
+	// Ports are the ways its doors face, in degrees from +X toward +Z, each
+	// at the end of an airlock: links lead from them (content.Link). One
+	// toward +X if left out.
+	Ports []float64 `json:"ports"`
 	// Data is the pack's own components, anything JSON holds, for its
 	// scripts (game.data).
 	Data map[string]any `json:"data"`

@@ -108,7 +108,7 @@ type Game struct {
 	Ghost       *Ghost                // the item being placed, drawn see-through (build.go)
 	solids      map[string][]solid    // each kind's parts, for rays (blocks.go)
 	layouts     map[string]*base.Camp // each kind of bootcamp's (camps.go)
-	doors       map[ecs.ID]door       // the doors near the player: bootcamps', blocks' (doors.go)
+	doors       map[doorKey]door      // the doors near the player: bootcamps', blocks' (doors.go)
 	Ents        *Ents                 // standing in the world
 	Riding      ecs.ID                // the vehicle driven, 0 on foot
 	drive       drive                 // the driven vehicle's motion
