@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -32,13 +33,16 @@ type Settings struct {
 	Mouse      float64 `json:"mouse"`
 	InvertY    bool    `json:"invert_y,omitempty"`
 	Fullscreen bool    `json:"fullscreen,omitempty"`
+	// Grid lines up what is set down, its lines GridStep m apart.
+	Grid     bool    `json:"grid"`
+	GridStep float64 `json:"grid_step"`
 	// Keys are the keys the player changed, by action (keys.go); KeyNames
 	// the labels learned from the keyboard.
 	Keys     map[string]int32 `json:"keys,omitempty"`
 	KeyNames map[int32]string `json:"key_names,omitempty"`
 }
 
-var defaultSettings = Settings{Volume: 0.7, Music: 0.9, Vacuum: 1, Mouse: 1}
+var defaultSettings = Settings{Volume: 0.7, Music: 0.9, Vacuum: 1, Mouse: 1, Grid: true, GridStep: 1}
 
 // The mouse's sensitivity's range, and its steps.
 const (
@@ -119,6 +123,9 @@ func (g *Game) loadSettings() {
 		g.Settings.Mouse = 1
 	}
 	g.Settings.Mouse = math.Max(MouseMin, math.Min(MouseMax, g.Settings.Mouse))
+	if !slices.Contains(GridSteps, g.Settings.GridStep) {
+		g.Settings.GridStep = defaultSettings.GridStep
+	}
 	for k, s := range g.Settings.KeyNames {
 		keyNames[k] = s
 	}

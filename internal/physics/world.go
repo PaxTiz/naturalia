@@ -228,17 +228,22 @@ func (w *World) Query(box AABB, fn func(*Body) bool) {
 // top, overlaps a body of the layers in mask (sensors aside), other than
 // skip.
 func (w *World) Overlap(s Shape, pos V2, angle, bottom, top float64, mask uint32, skip *Body) bool {
+	return w.OverlapAny(s, pos, angle, bottom, top, mask, func(b *Body) bool { return b != skip })
+}
+
+// OverlapAny is Overlap with the bodies fn says count, once they overlap.
+func (w *World) OverlapAny(s Shape, pos V2, angle, bottom, top float64, mask uint32, fn func(b *Body) bool) bool {
 	rot := MakeRot(angle)
 	box := s.aabb(pos, rot)
 	s.world(pos, rot, &w.poly[0])
 	hit := false
 	w.Query(box, func(b *Body) bool {
-		if b == skip || b.Sensor || b.Layer&mask == 0 || b.Bottom >= top || bottom >= b.Top {
+		if b.Sensor || b.Layer&mask == 0 || b.Bottom >= top || bottom >= b.Top {
 			return true
 		}
 		b.Shape.world(b.Pos, b.rot, &w.poly[1])
 		m := collide(&w.poly[0], &w.poly[1])
-		hit = m.N > 0 && m.MinSep() < 0
+		hit = m.N > 0 && m.MinSep() < 0 && fn(b)
 		return !hit
 	})
 	return hit

@@ -32,6 +32,10 @@ type Ghost struct {
 	// rel is its front and up in the frame it stands in (front toward
 	// the player, up, side), as the player turned it.
 	rel        [2]vec3
+	frame      [3]vec3
+	grid       *OnGrid // where it would stand on a grid (grid.go), if it does
+	fresh      bool    // the grid is its own: it founds it
+	Sheet      *Sheet  // the grid's lines shown
 	dist, lift float64 // free: how far ahead; on a surface: how high over it
 }
 
@@ -85,10 +89,21 @@ func (g *Game) updateItems() {
 		g.Ghost = nil
 		return
 	}
-	step := turnStep
+	if g.campLayout(def.ID) == nil {
+		if KeyPressed(ActGrid) {
+			g.ToggleGrid()
+		}
+		if KeyPressed(ActGridStep) && g.Settings.Grid {
+			g.NextGridStep()
+		}
+	}
+	step, quarter := turnStep, math.Pi/2
+	if gh.grid != nil { // on the grid, quarter turns come first
+		step, quarter = quarter, step
+	}
 	switch {
 	case KeyDown(ActTurnQuarter):
-		step = math.Pi / 2
+		step = quarter
 	case KeyDown(ActTurnDegree):
 		step = math.Pi / 180
 	}
@@ -117,6 +132,8 @@ func (g *Game) updateItems() {
 	if w := float64(rl.GetMouseWheelMove()); w != 0 {
 		if gh.Free {
 			gh.dist = math.Max(1.5, math.Min(15, gh.dist+w*0.3))
+		} else if gh.grid != nil { // a level a notch, down into the ground too
+			gh.lift = math.Max(-5, math.Min(5, gh.lift+w*planet.GridRise))
 		} else {
 			gh.lift = math.Max(0, math.Min(5, gh.lift+w*0.1))
 		}
@@ -177,15 +194,16 @@ func (g *Game) grab(id ecs.ID) {
 		return
 	}
 	n := e.Dir
-	face := planet.TangentAt(n, g.Player.Heading).Scale(-1)
-	if def.Ramp != nil || def.Kick > 0 {
-		face = face.Scale(-1)
+	face := g.facing(def, n)
+	if g.Settings.Grid {
+		if grid, ok := g.gridOf(id); ok { // as it stands on its grid
+			face, n = grid.Front(face), grid.Up
+		}
 	}
-	side := face.Cross(n)
 	ax, up, _ := e.Axes()
-	rel := func(v vec3) vec3 { return vec3{v.Dot(face), v.Dot(n), v.Dot(side)} }
 	pos, _, _, _ := g.Frame(e)
-	g.Ghost = &Ghost{Kind: def.ID, Moving: id, rel: [2]vec3{rel(ax), rel(up)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
+	g.Ghost = &Ghost{Kind: def.ID, Moving: id, frame: [3]vec3{face, n, face.Cross(n)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
+	g.Ghost.setRel(ax, up)
 	g.Ents.Air.Remove(id)
 	if bp := g.Ents.Body.Get(id); bp != nil && g.phys != nil {
 		g.phys.w.Remove(*bp)
@@ -201,116 +219,138 @@ func (gh *Ghost) turn(axis vec3, angle float64) {
 	gh.rel[1] = rotate(gh.rel[1], axis, angle).Norm()
 }
 
-// poseGhost sets the ghost where the player looks: resting by its lowest
-// point on the ground, or against the face of a block, lined up with it
-// on a 25 cm grid; or held in the air when free.
+// inFrame is a direction of the frame the ghost stands in, in the world.
+func (gh *Ghost) inFrame(v vec3) vec3 {
+	return gh.frame[0].Scale(v.X).Add(gh.frame[1].Scale(v.Y)).Add(gh.frame[2].Scale(v.Z))
+}
+
+// setRel takes the turns that give the front ax and the up up in the frame
+// the ghost stands in.
+func (gh *Ghost) setRel(ax, up vec3) {
+	rel := func(v vec3) vec3 { return vec3{v.Dot(gh.frame[0]), v.Dot(gh.frame[1]), v.Dot(gh.frame[2])} }
+	gh.rel = [2]vec3{rel(ax), rel(up)}
+}
+
+// aimSurface is the surface the player aims at to set a thing down: where,
+// its normal, and the block it is a face of, 0 for the ground.
+func (g *Game) aimSurface(def *content.EntityDef, eye, fwd vec3) (at, n vec3, on ecs.ID) {
+	hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach)
+	reach := hit.Sub(eye).Length()
+	if !ok {
+		hit, reach = g.World.Relief.Surface(eye.Add(planet.TangentAt(g.Player.LocalUp(), fwd).Scale(buildReach))), buildReach
+	}
+	if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach); ok && g.turnable(def) {
+		return bhit, bn, id
+	}
+	return hit, hit.Norm(), 0
+}
+
+// poseGhost sets the ghost where the player looks: on the grid (grid.go);
+// or without it, resting by its lowest point on the ground, or against the
+// face of a block, turned like it; or held in the air when free.
 func (g *Game) poseGhost() {
 	gh := g.Ghost
 	def, ok := g.Content.Entities.Get(gh.Kind)
 	if !ok {
 		return
 	}
+	gh.grid, gh.Sheet, gh.fresh, gh.Why = nil, nil, false, ""
 	if l := g.campLayout(def.ID); l != nil {
 		g.poseCamp(gh, l)
+		return
+	}
+	if g.Settings.Grid && g.poseOnGrid(gh, def) {
 		return
 	}
 	p := &g.Player
 	eye, fwd := p.Eye(), p.Forward()
 	at := eye.Add(fwd.Scale(gh.dist))
 	n := at.Norm() // the surface's up
-	face := planet.TangentAt(n, p.Heading).Scale(-1)
-	if def.Ramp != nil || def.Kick > 0 {
-		face = face.Scale(-1) // rising away from the player, toward where they drive
-	}
-	frame := [3]vec3{face, n, face.Cross(n)} // what the player's turns are from
-	var on ecs.ID                            // the block it rests against
+	face := g.facing(def, n)
+	gh.frame = [3]vec3{face, n, face.Cross(n)} // what the player's turns are from
+	var on ecs.ID                              // the block it rests against
 	if !gh.Free {
-		hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach)
-		reach := hit.Sub(eye).Length()
-		if !ok {
-			hit, reach = g.World.Relief.Surface(eye.Add(planet.TangentAt(p.LocalUp(), fwd).Scale(buildReach))), buildReach
-		}
-		at, n = hit, hit.Norm()
-		if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach); ok && g.turnable(def) {
-			at, n, on = bhit, bn, id
-			_, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
-			frame = [3]vec3{ax, up, az}
+		if at, n, on = g.aimSurface(def, eye, fwd); on != 0 {
+			_, ax, up, az := g.Frame(g.Ents.Transform.Get(on))
+			gh.frame = [3]vec3{ax, up, az}
 		}
 	}
-	world := func(v vec3) vec3 { return frame[0].Scale(v.X).Add(frame[1].Scale(v.Y)).Add(frame[2].Scale(v.Z)) }
-	ax, up := world(gh.rel[0]), world(gh.rel[1])
+	ax, up := gh.inFrame(gh.rel[0]), gh.inFrame(gh.rel[1])
+	lift := math.Max(0, gh.lift)
 	var origin vec3
-	if gh.Free {
+	switch {
+	case gh.Free:
 		lo, hi := content.Bounds(def.Parts)
 		mid := lo.Add(hi).Scale(0.5)
 		origin = at.Sub(ax.Scale(mid.X).Add(up.Scale(mid.Y)).Add(ax.Cross(up).Scale(mid.Z)))
-	} else {
-		low := 0.0
-		if len(def.Parts) > 0 {
-			low = math.Inf(1)
-			for _, c := range ghostCorners(def, ax, up, 0) {
-				low = math.Min(low, c.Dot(n))
-			}
-		}
-		origin = at.Sub(n.Scale(low - gh.lift))
-	}
-	if on != 0 {
-		origin = g.snapOn(on, origin, n)
-	} else if !gh.Free {
-		// On a slope: up to where none of it goes into the ground.
-		sink := 0.0
-		for _, c := range ghostCorners(def, ax, up, 0) {
-			sink = math.Max(sink, -g.World.Relief.Altitude(origin.Add(c)))
-		}
-		origin = origin.Add(n.Scale(sink))
+	case on != 0:
+		origin = at.Sub(n.Scale(lowest(def, ax, up, n) - lift))
+	default:
+		origin = g.restOnGround(def, at, n, ax, up, lift)
 	}
 	gh.Pose = Transform{Dir: origin.Norm()}
 	gh.Pose.Alt = origin.Length() - g.World.Relief.Surface(gh.Pose.Dir).Length()
 	gh.Pose.SetAxes(ax, up)
-	gh.OK = g.ghostFits(def, origin, ax, up)
+	gh.OK = g.ghostFits(def, origin, ax, up, false)
 }
 
-// snapOn moves a point resting on a face of block id onto a 25 cm grid in
-// the block's frame, along the face only.
-func (g *Game) snapOn(id ecs.ID, at, n vec3) vec3 {
-	const grid = 0.25
-	pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
-	off := at.Sub(pos)
-	for _, a := range [3]vec3{ax, up, az} {
-		if math.Abs(a.Dot(n)) > 0.9 {
-			continue // across the face: it rests on it
-		}
-		l := off.Dot(a)
-		off = off.Add(a.Scale(math.Round(l/grid)*grid - l))
+// lowest is how high along n the lowest point of a thing turned to ax and
+// up is, from its origin.
+func lowest(def *content.EntityDef, ax, up, n vec3) float64 {
+	if len(def.Parts) == 0 {
+		return 0
 	}
-	return pos.Add(off)
+	low := math.Inf(1)
+	for _, c := range ghostCorners(def, ax, up, 0) {
+		low = math.Min(low, c.Dot(n))
+	}
+	return low
+}
+
+// restOnGround is the origin of a thing turned to ax and up resting on the
+// ground at at, its up n, lift over it; on a slope, up to where none of it
+// goes into the ground.
+func (g *Game) restOnGround(def *content.EntityDef, at, n, ax, up vec3, lift float64) vec3 {
+	origin := at.Sub(n.Scale(lowest(def, ax, up, n) - lift))
+	sink := 0.0
+	for _, c := range ghostCorners(def, ax, up, 0) {
+		sink = math.Max(sink, -g.World.Relief.Altitude(origin.Add(c)))
+	}
+	return origin.Add(n.Scale(sink))
 }
 
 // ghostCorners are the corners of the box around an entity's parts,
 // turned to ax and up, from its origin, pulled in by in.
 func ghostCorners(def *content.EntityDef, ax, up vec3, in float64) []vec3 {
 	lo, hi := content.Bounds(def.Parts)
+	d := vec3{in, in, in}
+	return boxCorners(lo.Add(d), hi.Sub(d), ax, up)
+}
+
+// boxCorners are the corners of the box lo..hi turned to ax and up.
+func boxCorners(lo, hi, ax, up vec3) []vec3 {
 	az := ax.Cross(up)
-	var out []vec3
+	out := make([]vec3, 0, 8)
 	for i := range 8 {
-		x, y, z := lo.X+in, lo.Y+in, lo.Z+in
+		c := lo
 		if i&1 != 0 {
-			x = hi.X - in
+			c.X = hi.X
 		}
 		if i&2 != 0 {
-			y = hi.Y - in
+			c.Y = hi.Y
 		}
 		if i&4 != 0 {
-			z = hi.Z - in
+			c.Z = hi.Z
 		}
-		out = append(out, ax.Scale(x).Add(up.Scale(y)).Add(az.Scale(z)))
+		out = append(out, ax.Scale(c.X).Add(up.Scale(c.Y)).Add(az.Scale(c.Z)))
 	}
 	return out
 }
 
 // ghostFits tells if an entity would stand at origin, turned to ax and up,
-// without going into the ground or into anything that takes room.
-func (g *Game) ghostFits(def *content.EntityDef, origin, ax, up vec3) bool {
+// without going into the ground (unless it is graded under it) or into
+// anything that takes room.
+func (g *Game) ghostFits(def *content.EntityDef, origin, ax, up vec3, graded bool) bool {
 	if len(def.Parts) == 0 {
 		return true
 	}
@@ -319,7 +359,7 @@ func (g *Game) ghostFits(def *content.EntityDef, origin, ax, up vec3) bool {
 	bottom, top := math.Inf(1), math.Inf(-1)
 	for _, c := range corners {
 		w := origin.Add(c)
-		if g.World.Relief.Altitude(w) < -0.15 {
+		if !graded && g.World.Relief.Altitude(w) < -0.15 {
 			return false // into the ground, more than its bumps
 		}
 		if p := g.phys; p != nil {
@@ -331,7 +371,14 @@ func (g *Game) ghostFits(def *content.EntityDef, origin, ax, up vec3) bool {
 		return true
 	}
 	shape := physics.Hull(pts, 0)
-	return !g.phys.w.Overlap(shape, physics.V2{}, 0, bottom, top, layerStatic|layerEntity|layerVehicle|layerRobot|layerProp|layerPlayer, nil)
+	return !g.phys.w.OverlapAny(shape, physics.V2{}, 0, bottom, top, layerStatic|layerEntity|layerVehicle|layerRobot|layerProp|layerPlayer, func(b *physics.Body) bool {
+		// The engine's outlines and slices swell around a block that leans:
+		// with another block, their boxes tell.
+		if other, ok := g.Content.Entities.Get(g.kind(ecs.ID(b.ID))); b.ID != 0 && ok && other.Build {
+			return g.boxesMeet(def, origin, ax, up, ecs.ID(b.ID), 0.03)
+		}
+		return true
+	})
 }
 
 // placeGhost sets the ghost down: as a new entity, or the one moved at
@@ -350,6 +397,22 @@ func (g *Game) placeGhost() {
 		id = g.add(Placed{Kind: gh.Kind, Dir: e.Dir, Yaw: e.Yaw, Alt: e.Alt, Pitch: e.Pitch, Roll: e.Roll})
 		g.State.Items[gh.item]--
 	}
+	if def, ok := g.Content.Entities.Get(gh.Kind); ok && gh.grid != nil && def.Mass == 0 {
+		g.Ents.Grid.Set(id, *gh.grid)
+		g.regrade = true
+	} else if g.Ents.Grid.Has(id) {
+		g.Ents.Grid.Remove(id)
+	}
+	if gh.fresh { // the next one lines up on this one as it stands
+		face := gh.grid.Front(gh.frame[0])
+		ax, up, _ := e.Axes()
+		gh.frame = [3]vec3{face, gh.grid.Up, face.Cross(gh.grid.Up)}
+		gh.setRel(ax, up)
+	}
+	if gh.grid != nil {
+		gh.lift = 0 // the next one is level with this one
+	}
+	g.syncGround()
 	if def, ok := g.Content.Entities.Get(gh.Kind); ok && def.Mass > 0 && e.Alt > 0.05 {
 		g.Ents.Air.Set(id, Air{})
 	}

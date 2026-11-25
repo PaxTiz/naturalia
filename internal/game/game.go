@@ -117,6 +117,9 @@ type Game struct {
 	walls    []base.Segment // the base's walls, for collisions
 	phys     *phys          // the collisions' plane (physics.go)
 	relay    bool           // lay it again at the next step: a bootcamp set down, a trip
+	regrade  bool           // the ground under the blocks, graded again (grid.go)
+	graded   int            // how many things stood on grids when it was
+	loading  bool           // the saved entities are being set down
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
 	doorWant float64        // where they are going
 	HallOpen []float64      // the halls' big doors, in the order of base.Halls
@@ -159,6 +162,7 @@ func New(c *content.Content) *Game {
 		Ents:    newEnts(),
 		sfx:     audio.New(),
 	}
+	g.loading = true
 	g.load()
 	g.loadSettings()
 	for _, p := range g.State.Entities {
@@ -177,6 +181,8 @@ func New(c *content.Content) *Game {
 	}
 	base.Origin = planet.BaseUp.Scale(planet.Radius + g.World.Relief.BaseHeight())
 	g.standCamps()
+	g.syncGround()
+	g.loading = false
 	// A new game, or nowhere to stand (NaN too): wake up by the last bed.
 	if fresh || !(g.Player.Pos.Length() > planet.Radius/2) {
 		g.Player = Player{}
@@ -283,6 +289,7 @@ func (g *Game) Update(dt float64) {
 	g.updateFov(dt)
 	g.updateVehicle(dt)
 	g.updateItems()
+	g.syncGround()
 	g.updateBase(dt)
 	g.updateAim()
 	g.updateSweeping(dt)

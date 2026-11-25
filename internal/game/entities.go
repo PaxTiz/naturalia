@@ -27,6 +27,7 @@ type Ents struct {
 	Body      *ecs.Store[*physics.Body] // near the player, what takes room (physics.go)
 	Air       *ecs.Store[Air]           // tossed up
 	Camp      *ecs.Store[Bootcamp]      // bootcamps (camps.go)
+	Grid      *ecs.Store[OnGrid]        // set down on a grid (grid.go)
 }
 
 // Air is a thing tossed up by a knock: its speed up, and how fast it
@@ -36,7 +37,7 @@ type Air struct{ vz, tumble float64 }
 func newEnts() *Ents {
 	w := ecs.NewWorld()
 	return &Ents{World: w, Kind: ecs.NewStore[string](w), Transform: ecs.NewStore[Transform](w), Roam: ecs.NewStore[Roam](w),
-		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w), Camp: ecs.NewStore[Bootcamp](w)}
+		Body: ecs.NewStore[*physics.Body](w), Air: ecs.NewStore[Air](w), Camp: ecs.NewStore[Bootcamp](w), Grid: ecs.NewStore[OnGrid](w)}
 }
 
 // Transform is where an entity stands.
@@ -68,6 +69,7 @@ type Placed struct {
 	Pitch float64   `json:"pitch,omitempty"`
 	Roll  float64   `json:"roll,omitempty"`
 	Camp  *Bootcamp `json:"camp,omitempty"` // a bootcamp's ID and name
+	Grid  *OnGrid   `json:"grid,omitempty"` // where it stands on a grid
 }
 
 // add brings a saved entity into the world.
@@ -77,6 +79,9 @@ func (g *Game) add(p Placed) ecs.ID {
 	g.Ents.Transform.Set(id, Transform{p.Dir, p.Yaw, p.Alt, p.Pitch, p.Roll})
 	if v, ok := g.Content.Vehicles.Get(p.Kind); (ok && v.Auto()) || p.Home != (vec3{}) {
 		g.Ents.Roam.Set(id, Roam{Home: p.Home})
+	}
+	if p.Grid != nil {
+		g.Ents.Grid.Set(id, *p.Grid)
 	}
 	if def, _ := g.Content.Entities.Get(p.Kind); isCamp(def) {
 		if p.Camp != nil {
@@ -103,6 +108,10 @@ func (g *Game) placed() []Placed {
 		if b := g.Ents.Camp.Get(id); b != nil {
 			c := *b
 			p.Camp = &c
+		}
+		if o := g.Ents.Grid.Get(id); o != nil {
+			c := *o
+			p.Grid = &c
 		}
 		out = append(out, p)
 	}

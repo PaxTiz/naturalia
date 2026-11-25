@@ -132,7 +132,7 @@ func (g *Game) standCamps() {
 			pads = append(pads, planet.Pad{Dir: g.Ents.Transform.Get(id).Dir, Radius: l.Reach + 0.5})
 		}
 	}
-	g.World.Relief.SetPads(pads)
+	g.reshape(func() { g.World.Relief.SetPads(pads) })
 	for id, b := range g.Ents.Camp.All() {
 		t := g.Ents.Transform.Get(id)
 		t.Alt, t.Pitch, t.Roll = 0, 0, 0

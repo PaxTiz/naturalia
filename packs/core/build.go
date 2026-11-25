@@ -38,7 +38,7 @@ func registerBuild(c *content.Content) {
 	block("core:slope", "Pente", "4 × 2 m, monte de 1 m : à pied comme en véhicule", "ramp", 250, []content.PartJSON{
 		{Shape: "wedge", Token: "pad.concrete", Size: vec3{4, 1, 2}, Yaw: 180, Lit: "outdoor"},
 		box("hazard", vec3{-1.95, 1, 0}, vec3{0.1, 0.04, 2.02}, 0),
-		box("steel.dark", vec3{0, 0.03, -1.02}, vec3{4, 0.06, 0.06}, 0),
-		box("steel.dark", vec3{0, 0.03, 1.02}, vec3{4, 0.06, 0.06}, 0),
+		box("steel.dark", vec3{0, 0.03, -0.98}, vec3{4, 0.06, 0.06}, 0),
+		box("steel.dark", vec3{0, 0.03, 0.98}, vec3{4, 0.06, 0.06}, 0),
 	})
 }
