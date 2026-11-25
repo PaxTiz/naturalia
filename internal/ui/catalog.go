@@ -283,6 +283,10 @@ func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 		l := base.SampleLink(link)
 		parts = l.Parts()
 		lo, hi = vec3{-l.Length / 2, 0, -link.Width / 2}, vec3{l.Length / 2, link.Height, link.Width / 2}
+		if link.Under { // a shelter: all that is seen of it from outside
+			parts = l.Shells()[0].Parts()
+			lo, hi = vec3{0, 0, -link.Width / 2}, vec3{7, link.Height, link.Width / 2}
+		}
 	}
 	mid := lo.Add(hi).Scale(0.5)
 	size := math.Max(0.6, hi.Sub(lo).Length())

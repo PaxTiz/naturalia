@@ -211,6 +211,9 @@ func movable(def *content.EntityDef) bool { return def.Build || def.Pickup || is
 // player looks at, within reach, before the ground; 0 for none.
 func (g *Game) AimedMovable() ecs.ID {
 	eye, fwd := g.Player.Eye(), g.Player.Forward()
+	if g.Deep(eye) {
+		return 0 // through the ground
+	}
 	reach := buildReach
 	if hit, ok := g.World.Relief.Raycast(eye, fwd, buildReach); ok {
 		reach = hit.Sub(eye).Length()
@@ -332,6 +335,9 @@ func (g *Game) poseGhost() {
 	g.pose()
 	if it, ok := g.Content.Items.Get(gh.item); ok && gh.Moving == 0 && gh.OK && !g.canPay(it) {
 		gh.OK, gh.Why = false, "crédits insuffisants"
+	}
+	if g.Deep(g.Player.Eye()) { // the ground above is not to build on from there
+		gh.OK, gh.Why = false, "impossible sous terre"
 	}
 }
 

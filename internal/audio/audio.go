@@ -42,6 +42,7 @@ type Mixer struct {
 
 	// What the game asks for, read at each Update.
 	Outside  bool
+	Under    bool // in a tunnel: muffled, and steps echo
 	Sweeping bool
 	Running  bool
 	Power    float64 // tool strength, raises the motor's pitch
@@ -195,6 +196,19 @@ func (m *Mixer) Step(hard bool) {
 		if !m.Outside && !hard {
 			st.Gain *= 0.6
 		}
+		if m.Under { // the gallery gives it back, twice, duller
+			m.echo(st, steps[i], math.Pow(10, f.peak/20), 0.11, 0.3, 1800)
+			m.echo(st, steps[i], math.Pow(10, f.peak/20), 0.25, 0.13, 900)
+		}
+	}
+}
+
+// echo plays a sound again, delay seconds after st, so much quieter and
+// without what is over cut Hz.
+func (m *Mixer) echo(st *stream, sound []float32, level, delay, gain, cut float64) {
+	late := append(make([]float32, 2*int(delay*sampleRate)), sound...)
+	if e := m.play(&memDecoder{s: late}, busEffects, level); e != nil {
+		e.Pitch, e.Gain, e.Cut = st.Pitch, st.Gain*gain, cut
 	}
 }
 
@@ -244,6 +258,10 @@ func (m *Mixer) steer(dt float64) {
 		set(m.windMars, 0, 350, 1)
 		set(m.breath, 0, 0, 1)
 		set(m.machines, 1, 0, 1)
+	}
+	if m.Under { // no wind down there, the machines far behind the walls
+		set(m.windOut, 0, 350, 1)
+		set(m.machines, 0.5, 260, 0.85)
 	}
 	tool := 0.0
 	if m.Sweeping {

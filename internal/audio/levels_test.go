@@ -74,6 +74,7 @@ func TestMixerCeiling(t *testing.T) {
 		if k%3 == 0 {
 			m.Step(k%2 == 0)
 			m.Airlock()
+			m.Under = k > 100
 			m.Beep(0.01, 0.2, 10, 440, 880, 1760)
 		}
 		m.fill(buf)

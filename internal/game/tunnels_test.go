@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"naturalia/internal/base"
+	"naturalia/internal/content"
 	"naturalia/internal/planet"
 	"testing"
 )
@@ -86,6 +87,9 @@ func TestTunnelWalk(t *testing.T) {
 			t.Errorf("%s: paid %v for %.1f m", c.name, lk.Paid, l.Length)
 		}
 		checkFights(t, c.name, l.Parts())
+		for _, sh := range l.Shells() {
+			checkFights(t, c.name+", a shelter", sh.Parts())
+		}
 		l.Buried(func(at vec3, want float64) {
 			if d := -g.World.Relief.Altitude(at); d < math.Min(want, 1.4) {
 				t.Errorf("%s: %.2f m of ground over it, wants %.2f", c.name, d, want)
@@ -207,6 +211,13 @@ func TestTunnelKept(t *testing.T) {
 	if it, ok := g.NearbyUse(); ok {
 		t.Errorf("in it, E says %q", it.Prompt)
 	}
+	if it, _ := g.Content.Items.Get("core:block"); it != nil {
+		g.hold(it)
+		if g.poseGhost(); g.Ghost.OK {
+			t.Error("a block is set down from under the ground")
+		}
+		g.Ghost = nil
+	}
 	// No building where its vault would come out, some far over it.
 	lay := g.campLayout("core:bootcamp")
 	if g.campDigs(mid.Norm(), lay.Reach, mid.Length()-planet.Radius+3) == false {
@@ -226,6 +237,35 @@ func TestTunnelKept(t *testing.T) {
 	use.Use(g, use.At)
 	if len(g.Links()) != n-1 || g.State.Credits <= had || g.Under(mid) {
 		t.Error("not taken back")
+	}
+}
+
+// A mod's tunnel, wider, deeper and of its own materials, is dug as core's.
+func TestTunnelMod(t *testing.T) {
+	g, a, b := pair(t, "core:carrefour", "core:serre", vec3{60, 0, 0}, math.Pi, 0)
+	def := content.Link{ID: "t:mine", Name: "Mine", Under: true, Width: 4, Height: 3.2, Depth: 9, Max: 40, Wall: "core:steel"}
+	def.Fill()
+	g.Content.Links.Add("t:mine", def)
+	from, to := PortRef{a.ID, 0}, PortRef{b.ID, 0}
+	pf, _ := g.portAt(from)
+	pt, _ := g.portAt(to)
+	l, why := base.LayLink(&def, pf, pt, g.bareGround)
+	if l == nil {
+		t.Fatal(why)
+	}
+	if why := g.linkFits(l, from, to); why != "trop long" {
+		t.Errorf("%.1f m long: %q", l.Length, why)
+	}
+	g.State.Links = append(g.State.Links, Link{Kind: "t:mine", From: from, To: to})
+	g.layLinks()
+	pts := line(l, a, b, 0, 0, false)
+	g.Player.Pos, g.phys = g.World.Relief.Surface(pts[0]), nil
+	if d := follow(t, g, "a mod's", pts); d < 8 {
+		t.Errorf("%.1f m deep", d)
+	}
+	checkFights(t, "a mod's", l.Parts())
+	for _, sh := range l.Shells() {
+		checkFights(t, "a mod's shelter", sh.Parts())
 	}
 }
 
