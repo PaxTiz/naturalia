@@ -52,8 +52,6 @@ const (
 	personStep = 0.3 // pebbles and kerbs under the player's body
 	thingH     = 2.0 // entities and furniture, without a better idea
 	minRock    = 0.6 // smaller rocks are walked over
-	pushSpeed  = 1.6 // m/s: pushing a crate on foot goes slowly
-	pushAhead  = 0.4 // m: how far ahead the player sees it coming
 	tossed     = 4.0 // m/s: a thing hit harder flies off
 	tossFall   = 2.5 // times Mars's gravity on what flies off: it lands quick
 	rub        = 6.0 // the ground's friction on what is pushed around
@@ -153,13 +151,6 @@ func (g *Game) stepPhysics(dt float64) {
 		b.Top = b.Bottom + personH - personStep
 		// The speed asked, reached quickly: what pushed the player fades.
 		vel, want := p.vecPlane(pl.Pos, pl.vel), p.vecPlane(pl.Pos, pl.want)
-		// Slowed down before reaching a crate, not to kick it away.
-		if l := want.Len(); l > pushSpeed {
-			ahead := b.Pos.Add(want.Scale(pushAhead / l))
-			if p.w.Overlap(b.Shape, ahead, 0, b.Bottom, b.Top, layerProp, b) {
-				want = want.Scale(pushSpeed / l)
-			}
-		}
 		d := want.Sub(vel)
 		if l := d.Len(); l > walkAccel*dt {
 			d = d.Scale(walkAccel * dt / l)
@@ -192,7 +183,7 @@ func (g *Game) stepPhysics(dt float64) {
 	}
 	for _, hit := range p.w.Impacts {
 		for _, o := range [2]*physics.Body{hit.A, hit.B} {
-			if o.Layer == layerProp {
+			if o.Layer == layerProp && hit.A != b && hit.B != b {
 				g.toss(ecs.ID(o.ID), hit.Speed)
 			}
 		}
@@ -819,6 +810,7 @@ func (g *Game) entityBody(id ecs.ID, def *content.EntityDef) *physics.Body {
 		lo, hi := g.phys.partsBounds(def)
 		mid := physics.V2{X: (lo.X + hi.X) / 2, Y: g.phys.side * (lo.Z + hi.Z) / 2}
 		b.Kind, b.Layer, b.Mass = physics.Dynamic, layerProp, def.Mass
+		b.Firm = layerPlayer // nobody moves it with their body
 		b.Shape = physics.OffsetBox(math.Max(0.05, (hi.X-lo.X)/2-round), math.Max(0.05, (hi.Z-lo.Z)/2-round), mid, 0, round)
 		b.Friction, b.Restitution = frictionProp, bounceProp
 		if !g.Ents.Air.Has(id) {

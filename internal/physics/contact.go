@@ -16,6 +16,7 @@ type contact struct {
 	sensing bool
 
 	friction, restitution float64
+	mA, iA, mB, iB        float64 // inverse masses and inertias, 0 for a firm one
 }
 
 type cpoint struct {
@@ -60,11 +61,24 @@ func relative(a, b *Body, rA, rB V2) V2 {
 	return b.Vel.Add(crossSV(b.Spin, rB)).Sub(a.Vel.Add(crossSV(a.Spin, rA)))
 }
 
-func apply(a, b *Body, rA, rB, imp V2) {
-	a.Vel = a.Vel.Sub(imp.Scale(a.invMass))
-	a.Spin -= a.invI * rA.Cross(imp)
-	b.Vel = b.Vel.Add(imp.Scale(b.invMass))
-	b.Spin += b.invI * rB.Cross(imp)
+// weigh takes the bodies' masses, for this contact.
+func (c *contact) weigh() {
+	a, b := c.a, c.b
+	c.mA, c.iA, c.mB, c.iB = a.invMass, a.invI, b.invMass, b.invI
+	if a.Firm&b.Layer != 0 {
+		c.mA, c.iA = 0, 0
+	}
+	if b.Firm&a.Layer != 0 {
+		c.mB, c.iB = 0, 0
+	}
+}
+
+func (c *contact) apply(rA, rB, imp V2) {
+	a, b := c.a, c.b
+	a.Vel = a.Vel.Sub(imp.Scale(c.mA))
+	a.Spin -= c.iA * rA.Cross(imp)
+	b.Vel = b.Vel.Add(imp.Scale(c.mB))
+	b.Spin += c.iB * rB.Cross(imp)
 }
 
 // solve sets the speeds so that touching bodies don't go into each other.
@@ -80,6 +94,7 @@ func (w *World) solve(h float64) []*contact {
 		} else {
 			c.friction, c.restitution = math.Sqrt(a.Friction*b.Friction), math.Max(a.Restitution, b.Restitution)
 		}
+		c.weigh()
 		n := c.normal
 		t := V2{n.Y, -n.X}
 		for i := range c.n {
@@ -87,16 +102,16 @@ func (w *World) solve(h float64) []*contact {
 			p.rA, p.rB = p.point.Sub(a.Pos), p.point.Sub(b.Pos)
 			p.lA, p.lB = a.rot.Invert(p.rA), b.rot.Invert(p.rB)
 			rnA, rnB := p.rA.Cross(n), p.rB.Cross(n)
-			if k := a.invMass + b.invMass + a.invI*rnA*rnA + b.invI*rnB*rnB; k > 0 {
+			if k := c.mA + c.mB + c.iA*rnA*rnA + c.iB*rnB*rnB; k > 0 {
 				p.normalMass = 1 / k
 			}
 			rtA, rtB := p.rA.Cross(t), p.rB.Cross(t)
-			if k := a.invMass + b.invMass + a.invI*rtA*rtA + b.invI*rtB*rtB; k > 0 {
+			if k := c.mA + c.mB + c.iA*rtA*rtA + c.iB*rtB*rtB; k > 0 {
 				p.tangentMass = 1 / k
 			}
 			p.relVel = relative(a, b, p.rA, p.rB).Dot(n)
 			p.maxImpulse = 0
-			apply(a, b, p.rA, p.rB, n.Scale(p.normalImpulse).Add(t.Scale(p.tangentImpulse)))
+			c.apply(p.rA, p.rB, n.Scale(p.normalImpulse).Add(t.Scale(p.tangentImpulse)))
 		}
 		cs = append(cs, c)
 	}
@@ -122,7 +137,7 @@ func (w *World) solve(h float64) []*contact {
 			total := math.Max(p.normalImpulse+imp, 0)
 			imp = total - p.normalImpulse
 			p.normalImpulse = total
-			apply(c.a, c.b, p.rA, p.rB, c.normal.Scale(imp))
+			c.apply(p.rA, p.rB, c.normal.Scale(imp))
 		}
 	}
 	return cs
@@ -138,7 +153,7 @@ func (c *contact) solveVelocity(h float64) {
 		total := math.Max(-limit, math.Min(limit, p.tangentImpulse-p.tangentMass*vt))
 		imp := total - p.tangentImpulse
 		p.tangentImpulse = total
-		apply(a, b, p.rA, p.rB, t.Scale(imp))
+		c.apply(p.rA, p.rB, t.Scale(imp))
 	}
 	for i := range c.n {
 		p := &c.pts[i]
@@ -151,7 +166,7 @@ func (c *contact) solveVelocity(h float64) {
 		imp := total - p.normalImpulse
 		p.normalImpulse = total
 		p.maxImpulse = math.Max(p.maxImpulse, imp)
-		apply(a, b, p.rA, p.rB, n.Scale(imp))
+		c.apply(p.rA, p.rB, n.Scale(imp))
 	}
 }
 
@@ -170,15 +185,15 @@ func (w *World) correct(cs []*contact) {
 					continue
 				}
 				rnA, rnB := rA.Cross(n), rB.Cross(n)
-				k := a.invMass + b.invMass + a.invI*rnA*rnA + b.invI*rnB*rnB
+				k := c.mA + c.mB + c.iA*rnA*rnA + c.iB*rnB*rnB
 				if k <= 0 {
 					continue
 				}
 				imp := n.Scale(-corr / k)
-				a.Pos = a.Pos.Sub(imp.Scale(a.invMass))
-				a.Angle -= a.invI * rA.Cross(imp)
-				b.Pos = b.Pos.Add(imp.Scale(b.invMass))
-				b.Angle += b.invI * rB.Cross(imp)
+				a.Pos = a.Pos.Sub(imp.Scale(c.mA))
+				a.Angle -= c.iA * rA.Cross(imp)
+				b.Pos = b.Pos.Add(imp.Scale(c.mB))
+				b.Angle += c.iB * rB.Cross(imp)
 				a.rot, b.rot = MakeRot(a.Angle), MakeRot(b.Angle)
 			}
 		}

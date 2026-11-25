@@ -33,6 +33,9 @@ type Body struct {
 	// A sensor touches nothing: it tells who comes in and goes out.
 	Sensor                bool
 	Friction, Restitution float64
+	// Firm are the layers of those it stands firm against: they bump into
+	// it as into a wall, the others push it.
+	Firm uint32
 	// Damping slows it down, a share of its speed per second.
 	Damping, SpinDamping float64
 	ID                   uint32 // the game's: its entity
@@ -449,7 +452,7 @@ func (w *World) pair(a, b *Body) {
 	c.seen = w.pass
 	c.update(m)
 	// What sleeps wakes up when something moving comes against it.
-	if a.asleep && b.moves() || b.asleep && a.moves() {
+	if a.asleep && b.moves() && a.Firm&b.Layer == 0 || b.asleep && a.moves() && b.Firm&a.Layer == 0 {
 		a.Wake()
 		b.Wake()
 	}

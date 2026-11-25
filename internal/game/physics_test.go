@@ -4,6 +4,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
 	"testing"
@@ -237,23 +238,40 @@ func TestCrashIntoWall(t *testing.T) {
 	}
 }
 
-func TestPushCrate(t *testing.T) {
-	g := fleetGame(t, LoadContent(), map[string]int{})
-	start := g.Player.Pos
-	id := g.spawn("core:crate", g.World.Relief.Surface(start.Add(g.Player.Heading.Scale(2))))
-	from := g.Ents.Transform.Get(id).Dir
-	walk(g, g.Player.Heading, 3)
-	moved := planet.ArcDist(from, g.Ents.Transform.Get(id).Dir)
-	walked := planet.ArcDist(start.Norm(), g.Player.LocalUp())
-	if moved < 2 || walked > 1.5+pushSpeed*3 {
-		t.Errorf("crate pushed %.2f m, player walked %.2f m", moved, walked)
-	}
-	// Let go, it stops at once and falls asleep.
-	walk(g, g.Player.Heading.Scale(-1), 1)
-	at := g.Ents.Transform.Get(id).Dir
-	walk(g, g.Player.Heading.Scale(-1), 1)
-	if d := planet.ArcDist(at, g.Ents.Transform.Get(id).Dir); d > 0.01 || !(*g.Ents.Body.Get(id)).Asleep() {
-		t.Errorf("crate slid %.2f m on its own", d)
+// On foot, even running, a crate is a wall: it doesn't move nor turn, met
+// in the middle or by a corner, on the ground or on another.
+func TestWalkIntoCrate(t *testing.T) {
+	for _, off := range []float64{0, 0.5} {
+		g := fleetGame(t, LoadContent(), map[string]int{})
+		start := g.Player.Pos
+		right := g.Player.Heading.Cross(g.Player.LocalUp()).Norm()
+		id := g.spawn("core:crate", g.World.Relief.Surface(start.Add(g.Player.Heading.Scale(2)).Add(right.Scale(off))))
+		top := g.spawn("core:crate", g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir))
+		g.Ents.Transform.Get(top).Alt = 0.8
+		was, wasTop := *g.Ents.Transform.Get(id), *g.Ents.Transform.Get(top)
+		for range 3 {
+			for range 90 {
+				g.Player.want = g.Player.Heading.Scale(walkSpeed * sprintFactor)
+				g.stepPhysics(1.0 / 60)
+				g.Player.fall(1.0/60, g.World.Relief)
+			}
+			walk(g, g.Player.Heading.Scale(-1), 0.2)
+		}
+		for i, c := range []struct {
+			id  ecs.ID
+			was Transform
+		}{{id, was}, {top, wasTop}} {
+			e := g.Ents.Transform.Get(c.id)
+			if d := planet.ArcDist(c.was.Dir, e.Dir); d > 1e-3 || math.Abs(e.Yaw-c.was.Yaw) > 1e-3 || math.Abs(e.Alt-c.was.Alt) > 0.03 {
+				t.Errorf("off %.1f: crate %d moved %.3f m, turned %.3f, alt %.2f", off, i, d, e.Yaw-c.was.Yaw, e.Alt)
+			}
+			if g.Ents.Air.Has(c.id) {
+				t.Errorf("off %.1f: crate %d tossed", off, i)
+			}
+		}
+		if off == 0 && planet.ArcDist(start.Norm(), g.Player.LocalUp()) > 1.4 {
+			t.Error("went through the crate")
+		}
 	}
 }
 
