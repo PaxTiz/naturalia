@@ -738,7 +738,9 @@ func (g *Game) syncEntities() {
 
 // trigger tells if an entity does something to the vehicle driven over
 // it: a ramp lifts it, a pad throws it.
-func trigger(def *content.EntityDef) bool { return def.Ramp != nil || def.Kick > 0 || def.Trigger }
+func trigger(def *content.EntityDef) bool {
+	return !def.Build && (def.Ramp != nil || def.Kick > 0 || def.Trigger)
+}
 
 // senses tells packs who comes into the zones and goes out, keeps the
 // ramps and pads the driven vehicle is over, and kicks it off the pads it

@@ -153,11 +153,12 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 		}
 	}
 	// NA_SHOT_GRID=dist,step builds a small house on the grid that far
-	// ahead (NA_SHOT_GHOST then holds something to add to it).
+	// ahead, dist,step,1 ramps on two levels (NA_SHOT_GHOST then holds something to add to it).
 	if v := os.Getenv("NA_SHOT_GRID"); s.file != "" && v != "" {
 		dist, step := 10.0, 1.0
-		fmt.Sscanf(v, "%f,%f", &dist, &step)
-		g.ShotGrid(dist, step)
+		ramps := 0
+		fmt.Sscanf(v, "%f,%f,%d", &dist, &step, &ramps)
+		g.ShotGrid(dist, step, ramps != 0)
 	}
 	// NA_SHOT_NIGHTS=n counts n nights slept: what grows has grown.
 	if s.file != "" {

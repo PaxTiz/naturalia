@@ -284,8 +284,19 @@ func (g *Game) allow(a, b *physics.Body, m *physics.Manifold) bool {
 		}
 	}
 	for _, at := range look {
-		dir := p.dir(at)
-		if !g.clearAbove(id, dir.Scale(feet+step), dir, tall-step) {
+		dir, h := p.dir(at), feet
+		if a == p.car { // its front is up the slope it rolls on
+			r := g.Player.Pos.Length()
+			// From where its height is known: this step moves it on already.
+			top, _ := g.rollTo(g.Player.Pos, p.dir(at.Sub(n.Scale(0.5))).Scale(r), feet)
+			h = math.Max(feet, top)
+			// Its corners, over the edge of what it rolls on, go up with it.
+			ahead := at.Sub(a.Pos).Dot(physics.V2{X: math.Cos(a.Angle), Y: math.Sin(a.Angle)})
+			nose := a.Pos.Add(physics.V2{X: math.Cos(a.Angle), Y: math.Sin(a.Angle)}.Scale(ahead - math.Copysign(math.Min(0.5, math.Abs(ahead)), ahead)))
+			top, _ = g.rollTo(g.Player.Pos, p.dir(nose).Scale(r), feet)
+			h = math.Max(h, top)
+		}
+		if !g.clearAbove(id, dir.Scale(h+step), dir, tall-step) {
 			return true
 		}
 	}

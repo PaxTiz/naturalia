@@ -49,7 +49,7 @@ type Ghost struct {
 // around their up.
 func (g *Game) turnable(def *content.EntityDef) bool {
 	_, vehicle := g.Content.Vehicles.Get(def.ID)
-	return def.Ramp == nil && def.Kick <= 0 && !vehicle && !isCamp(def)
+	return (def.Ramp == nil || def.Build) && def.Kick <= 0 && !vehicle && !isCamp(def)
 }
 
 func (g *Game) updateItems() {

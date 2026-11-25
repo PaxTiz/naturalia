@@ -28,6 +28,7 @@ type drive struct {
 	boarded bool
 
 	r        float64 // its bottom, from Mars' center (0: not set yet)
+	at       vec3    // where the player was when r was set
 	vr       float64 // its vertical speed
 	air      bool    // off the ground, more than a bump
 	airtime  float64 // seconds since it last touched the ground
@@ -204,8 +205,33 @@ func (g *Game) groundAt(p vec3) float64 {
 	return r
 }
 
-// groundOn is groundAt, telling too if it is a block's top.
+// groundOn is groundAt, telling too if it is a block's top: what it gets
+// to from where it was last, going straight there, by steps it can roll
+// up. The steepest ramp is far under a step at each.
 func (g *Game) groundOn(p vec3) (r float64, block bool) {
+	d := &g.drive
+	if d.r <= 0 || d.at == (vec3{}) {
+		return g.groundFrom(p, d.r)
+	}
+	return g.rollTo(d.at, p, d.r)
+}
+
+// rollTo is how high a vehicle at from, its bottom at r, rolls once at to.
+func (g *Game) rollTo(from, to vec3, r float64) (top float64, block bool) {
+	const stride = 0.4
+	way := to.Sub(from)
+	n := int(math.Min(40, math.Max(1, math.Ceil(way.Length()/stride))))
+	h := r
+	for i := 1; i <= n; i++ {
+		top, block = g.groundFrom(from.Add(way.Scale(float64(i)/float64(n))), h)
+		h = math.Max(r, top)
+	}
+	return top, block
+}
+
+// groundFrom is what a vehicle at p, its bottom at h, rolls on there: the
+// highest thing up to a step over it.
+func (g *Game) groundFrom(p vec3, h float64) (r float64, block bool) {
 	r = g.World.Relief.Surface(p).Length()
 	for _, id := range g.drive.over {
 		def, ok := g.Content.Entities.Get(g.kind(id))
@@ -219,14 +245,14 @@ func (g *Game) groundOn(p vec3) (r float64, block bool) {
 		rp := def.Ramp
 		if math.Abs(x) < rp.Length/2 && math.Abs(z) < rp.Width/2 {
 			top := foot.Add(ax.Scale(x)).Add(az.Scale(z)).Add(up.Scale(rp.Height * (x/rp.Length + 0.5))).Length()
-			if e.Alt > 0.3 && g.drive.r > 0 && top > g.drive.r+carStep {
+			if e.Alt > 0.3 && h > 0 && top > h+carStep {
 				continue // it passes under
 			}
 			r = math.Max(r, top)
 		}
 	}
-	if g.drive.r > 0 { // and the blocks it rolls onto
-		if top := g.topUnder(p, g.drive.r+carStep, false, 0); top > r {
+	if h > 0 { // and the blocks it rolls onto
+		if top := g.topUnder(p, h+carStep, false, 0); top > r {
 			return top, true
 		}
 	}
@@ -356,6 +382,7 @@ func (g *Game) liftVehicle(dt float64) {
 	} else {
 		g.fall(v, d.in, marsGravity*content.OrZero(v.Gravity, 2), dt)
 	}
+	d.at = g.Player.Pos
 	d.in.jump = false
 }
 

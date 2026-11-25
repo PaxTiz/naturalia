@@ -77,7 +77,7 @@ func registerCore(c *content.Content) {
 	c.Items.Add("core:flag", content.Item{Name: "Drapeau", Desc: "À planter où tu veux : un repère visible de loin (F)",
 		Icon: "flag", Cost: 40, Places: "core:flag"})
 	c.Entities.Add("core:crate", content.EntityDef{Name: "Caisse", Pickup: true, Mass: 40, Parts: crateParts(0.8, "crate.ochre")})
-	c.Items.Add("core:crate", content.Item{Name: "Caisse", Desc: "Du matériel à poser (F) et à empiler : les véhicules la bousculent",
+	c.Items.Add("core:crate", content.Item{Name: "Caisse", Desc: "Du matériel à poser (F) : les véhicules la bousculent. Pour bâtir, prends plutôt le Bloc",
 		Icon: "crate", Cost: 25, Places: "core:crate"})
 
 	registerVehicles(c)

@@ -10,6 +10,8 @@ func registerBuild(c *content.Content) {
 		c.Entities.Add(id, content.EntityDef{Name: name, Pickup: true, Prompt: "Ramasser : " + name, Build: true, Cell: cell, Parts: parts})
 		c.Items.Add(id, content.Item{Name: name, Desc: desc, Icon: icon, Cost: cost, Places: id})
 	}
+	block("core:crate-1", "Bloc", "1 m de côté, fixe une fois posé : marches, socles, murets", "crate", 40, vec3{1, 1, 1},
+		crateParts(1, "crate.ochre"))
 	block("core:crate-2", "Grosse caisse", "2 m de côté, fixe une fois posée : on monte dessus, on empile", "crate", 120, vec3{2, 2, 2},
 		crateParts(2, "crate.slate"))
 	block("core:crate-4", "Très grosse caisse", "4 m de côté, fixe : de quoi bâtir vite", "crate", 400, vec3{4, 4, 4},
@@ -36,9 +38,10 @@ func registerBuild(c *content.Content) {
 		box("hazard", vec3{0, 0.125, 1.9}, vec3{0.26, 0.26, 0.2}, 0),
 	})
 	block("core:slope", "Pente", "4 × 2 m, monte de 1 m : à pied comme en véhicule", "ramp", 250, vec3{4, 1, 2}, []content.PartJSON{
-		{Shape: "wedge", Token: "pad.concrete", Size: vec3{4, 1, 2}, Yaw: 180, Lit: "outdoor"},
-		box("hazard", vec3{-1.95, 1, 0}, vec3{0.1, 0.04, 2.02}, 0),
-		box("steel.dark", vec3{0, 0.03, -0.98}, vec3{4, 0.06, 0.06}, 0),
-		box("steel.dark", vec3{0, 0.03, 0.98}, vec3{4, 0.06, 0.06}, 0),
+		{Shape: "wedge", Token: "pad.concrete", At: vec3{0.05, 0, 0}, Size: vec3{3.9, 0.975, 2}, Yaw: 180, Lit: "outdoor"},
+		box("hazard", vec3{-1.95, 0.4875, 0}, vec3{0.1, 0.975, 2}, 0),
+		{Shape: "wedge", Token: "hazard", At: vec3{-1.95, 0.975, 0}, Size: vec3{0.1, 0.025, 2}, Yaw: 180, Lit: "outdoor"},
+		box("steel.dark", vec3{-0.2, 0.03, -1}, vec3{3.4, 0.06, 0.02}, 0),
+		box("steel.dark", vec3{-0.2, 0.03, 1}, vec3{3.4, 0.06, 0.02}, 0),
 	})
 }

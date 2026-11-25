@@ -204,6 +204,73 @@ func snapRise(lo, hi float64, edges []float64) float64 {
 	return best
 }
 
+// rise is the way a ramp rises, in its own frame: one by its Ramp, or by
+// a wedge that makes up most of it.
+func rise(def *content.EntityDef) (vec3, bool) {
+	if def.Ramp != nil {
+		return vec3{1, 0, 0}, true
+	}
+	lo, hi := nominal(def)
+	for _, p := range def.Parts {
+		if p.Shape == "wedge" && p.Size.X*p.Size.Z > 0.6*(hi.X-lo.X)*(hi.Z-lo.Z) {
+			a := p.Yaw * math.Pi / 180
+			return vec3{math.Round(math.Cos(a)), 0, math.Round(math.Sin(a))}, true
+		}
+	}
+	return vec3{}, false
+}
+
+// riseOn is the way a ramp standing upright, turned to ax and up, rises
+// along a grid's axes.
+func riseOn(grid planet.Grid, def *content.EntityDef, ax, up vec3) (vec3, bool) {
+	l, ok := rise(def)
+	if !ok || up.Dot(grid.Up) < 1-1e-6 {
+		return vec3{}, false
+	}
+	d := grid.DirLocal(ax.Scale(l.X).Add(ax.Cross(up).Scale(l.Z)))
+	d = vec3{math.Round(d.X), 0, math.Round(d.Z)}
+	return d, d.Length() == 1
+}
+
+// join is where what fills lo..hi around its origin goes on from the ramp
+// that fills blo..bhi and rises along to: from its top (high) or its foot,
+// in its line, its edge meeting the ramp's: another ramp goes on rising,
+// anything else has its top there. own is the way it rises itself.
+func join(blo, bhi, to vec3, high bool, lo, hi, own vec3) vec3 {
+	i, j := 0, 2
+	if to.X == 0 {
+		i, j = 2, 0
+	}
+	s := along(to, i)
+	if !high {
+		s = -s
+	}
+	var pos vec3
+	if s > 0 {
+		setAlong(&pos, i, along(bhi, i)-along(lo, i))
+	} else {
+		setAlong(&pos, i, along(blo, i)-along(hi, i))
+	}
+	setAlong(&pos, j, (along(blo, j)+along(bhi, j)-along(lo, j)-along(hi, j))/2)
+	tall := hi.Y - lo.Y
+	edge := tall // how high its own edge there is
+	if own.Dot(to)*s*along(to, i) > 0.5 {
+		edge = 0
+	}
+	bottom := bhi.Y - edge
+	if !high {
+		bottom = blo.Y - edge
+		if edge > 0.5 {
+			bottom = blo.Y
+		}
+	}
+	pos.Y = math.Max(bottom, blo.Y-0.5) - lo.Y
+	if high && bottom < blo.Y {
+		pos.Y = blo.Y - lo.Y
+	}
+	return pos
+}
+
 // Level is a height chosen on a grid: a thing's bottom at y there.
 type Level struct {
 	planet.Grid
@@ -405,6 +472,25 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		up = at.Norm()
 		front = planet.TangentAt(up, front)
 	}
+	// Aimed at a ramp's slope or back: it goes on from there, turned like it.
+	var ramp vec3
+	joins, high := false, false
+	if on != 0 && !chosen && !gh.Free && (def.Build || def.Ramp != nil) {
+		under, _ := g.Content.Entities.Get(g.kind(on))
+		_, rax, rup, _ := g.Frame(g.Ents.Transform.Get(on))
+		if to, ok := riseOn(grid, under, rax, rup); ok {
+			l := grid.DirLocal(n)
+			if back := l.Dot(to) > 0.9; back || l.Dot(to) < -0.1 && l.Y > 0.1 {
+				blo, bhi, _ := g.boxOf(grid, on)
+				mid, half := blo.Add(bhi).Scale(0.5), bhi.Sub(blo).Scale(0.5)
+				ramp, joins = to, true
+				high = back || grid.Local(at).Sub(mid).Dot(to) > -0.3*math.Abs(half.Dot(to))
+				if own, ok := rise(def); ok && own.Z == 0 {
+					front = grid.Dir(to.Scale(own.X))
+				}
+			}
+		}
+	}
 	gh.frame = [3]vec3{front, up, front.Cross(up)}
 	ax, top := gh.inFrame(gh.rel[0]), gh.inFrame(gh.rel[1])
 	if fresh { // along the ghost's sides, as it was turned
@@ -448,7 +534,7 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 			n, normal, aim.Y = grid.Up, vec3{0, 1, 0}, bhi.Y
 		}
 	}
-	onTop := on != 0 && across == 1 && normal.Y > 0 && !gh.Free
+	onTop := on != 0 && across == 1 && normal.Y > 0 && !gh.Free && !joins
 	// ...then its sides on the lines.
 	if !fresh {
 		for _, i := range []int{0, 2} {
@@ -466,6 +552,11 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		if !fresh {
 			pos.Y += snapRise(pos.Y+lo.Y, pos.Y+hi.Y, g.gridEdges(grid, pos.Add(lo), pos.Add(hi)))
 		}
+	case joins:
+		own, _ := riseOn(grid, def, ax, top)
+		pos, column = join(blo, bhi, ramp, high, lo, hi, own), true
+		low, up, apart := g.groundUnder(grid, pos.Add(lo), pos.Add(hi))
+		ground = def.Build && !apart && graded(pos.Y+lo.Y, low, up, true)
 	case on != 0:
 		switch {
 		case onTop:
@@ -474,6 +565,13 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 			pos.Y = blo.Y - lo.Y
 		case across != 1: // a shelf on its side
 			pos.Y += snapRise(pos.Y+lo.Y, pos.Y+hi.Y, []float64{blo.Y, bhi.Y})
+		}
+		if k := 2 - across; across != 1 && sides { // flush with what is as long
+			if long := along(hi, k) - along(lo, k); math.Abs(long-along(bhi, k)+along(blo, k)) < 0.02 {
+				if flush := along(blo, k) - along(lo, k); math.Abs(flush-along(pos, k)) < 1.01 {
+					setAlong(&pos, k, flush)
+				}
+			}
 		}
 		// Against the cell's face, whatever its trims and hollows.
 		face := along(aim, across)
@@ -986,8 +1084,9 @@ func (g *Game) boxesMeet(def *content.EntityDef, origin, ax, up vec3, id ecs.ID,
 }
 
 // ShotGrid builds a small house on a grid dist m ahead, for screenshots:
-// two rows of slabs, walls along the far edge, a crate at their end.
-func (g *Game) ShotGrid(dist, step float64) {
+// two rows of slabs, walls along the far edge, a crate at their end; or
+// ramps on two levels.
+func (g *Game) ShotGrid(dist, step float64, ramps bool) {
 	g.Settings.Grid, g.Settings.GridStep = true, step
 	n := planet.Toward2(g.Player.LocalUp(), g.Player.Heading, dist)
 	at := g.World.Relief.Surface(n)
@@ -1005,6 +1104,18 @@ func (g *Game) ShotGrid(dist, step float64) {
 		o := vec3{x, y, z}
 		g.add(Placed{Kind: kind, Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll,
 			Grid: &OnGrid{Grid: grid, Lo: o.Add(lo), Hi: o.Add(hi), Ground: ground}})
+	}
+	if ramps {
+		grid.X = grid.X.Scale(-1)
+		stand("core:ramp", 0, 0, 0, true)
+		stand("core:ramp-base", 6, 0, 0, true)
+		stand("core:ramp-steep", 6, 2, 0, false)
+		for i := range 4 {
+			stand("core:crate-1", -2, float64(i%2), 4+float64(i/2), i%2 == 0)
+		}
+		g.regrade = true
+		g.syncGround()
+		return
 	}
 	for i := range 3 {
 		z := float64(i)*4 - 4

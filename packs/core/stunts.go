@@ -6,20 +6,38 @@ import (
 	"naturalia/internal/content"
 )
 
-// registerStunts adds what makes driving fun: a ramp and a boost pad to
-// set down anywhere, and credits for long jumps, paid like a mod would.
+// registerStunts adds what makes driving fun: ramps to build
+// with, a boost pad to set down anywhere, and credits for long jumps, paid like a mod would.
 func registerStunts(c *content.Content) {
-	c.Entities.Add("core:ramp", content.EntityDef{Name: "Tremplin", Pickup: true, Prompt: "Ramasser : Tremplin",
-		Ramp: &content.Ramp{Length: 6, Width: 4, Height: 1.8}, Cell: vec3{6, 1.8, 4},
-		Parts: []content.PartJSON{
-			{Shape: "wedge", Token: "steel", Size: vec3{6, 1.8, 4}, Lit: "outdoor"},
-			box("hazard", vec3{2.9, 1.8, 0}, vec3{0.2, 0.06, 4.02}, 0),
-			box("neon.orange", vec3{2.99, 1.65, 0}, vec3{0.03, 0.06, 3.8}, 0),
-			box("steel.dark", vec3{0, 0.04, -2.05}, vec3{6, 0.08, 0.1}, 0),
-			box("steel.dark", vec3{0, 0.04, 2.05}, vec3{6, 0.08, 0.1}, 0),
+	// One module: 6 m long, 4 m wide, levels of 2 m, as high as a big crate.
+	// Their tops are smooth: no trim for the wheels to jump on.
+	ramp := func(id, name, desc string, cost, height float64) {
+		const lip = 0.2 // m: the hazard strip at its end, flush
+		low := height * (6 - lip) / 6
+		c.Entities.Add(id, content.EntityDef{Name: name, Pickup: true, Prompt: "Ramasser : " + name, Build: true,
+			Cell: vec3{6, height, 4}, Ramp: &content.Ramp{Length: 6, Width: 4, Height: height},
+			Parts: []content.PartJSON{
+				{Shape: "wedge", Token: "steel", At: vec3{-lip / 2, 0, 0}, Size: vec3{6 - lip, low, 4}, Lit: "outdoor"},
+				box("hazard", vec3{3 - lip/2, low / 2, 0}, vec3{lip, low, 4}, 0),
+				{Shape: "wedge", Token: "hazard", At: vec3{3 - lip/2, low, 0}, Size: vec3{lip, height - low, 4}, Lit: "outdoor"},
+				box("neon.orange", vec3{3, height - 0.3, 0}, vec3{0.02, 0.06, 3.8}, 0),
+				box("steel.dark", vec3{0.3, 0.06, -2}, vec3{5.2, 0.12, 0.02}, 0),
+				box("steel.dark", vec3{0.3, 0.06, 2}, vec3{5.2, 0.12, 0.02}, 0),
+			}})
+		c.Items.Add(id, content.Item{Name: name, Desc: desc, Icon: "ramp", Cost: cost, Places: id})
+	}
+	ramp("core:ramp", "Tremplin", "6 × 4 m, monte de 2 m : vises-en le haut pour en ajouter un qui le prolonge", 2_000, 2)
+	ramp("core:ramp-steep", "Tremplin raide", "6 × 4 m, monte de 4 m : à mettre au bout d'un autre, pour les très grands sauts", 3_500, 4)
+	c.Entities.Add("core:ramp-base", content.EntityDef{Name: "Socle", Pickup: true, Prompt: "Ramasser : Socle", Build: true,
+		Cell: vec3{6, 2, 4}, Parts: []content.PartJSON{
+			box("steel", vec3{0, 1, 0}, vec3{6, 2, 4}, 0),
+			box("steel.dark", vec3{0, 0.06, -2}, vec3{6, 0.12, 0.02}, 0),
+			box("steel.dark", vec3{0, 0.06, 2}, vec3{6, 0.12, 0.02}, 0),
+			box("hazard", vec3{0, 1.8, -2}, vec3{6, 0.2, 0.02}, 0),
+			box("hazard", vec3{0, 1.8, 2}, vec3{6, 0.2, 0.02}, 0),
 		}})
-	c.Items.Add("core:ramp", content.Item{Name: "Tremplin", Desc: "À poser (F) devant toi : prends-le en véhicule, à fond",
-		Icon: "ramp", Cost: 2_000, Places: "core:ramp"})
+	c.Items.Add("core:ramp-base", content.Item{Name: "Socle", Desc: "6 × 4 m, 2 m de haut : porte un tremplin, ou continue sa hauteur",
+		Icon: "crate", Cost: 500, Places: "core:ramp-base"})
 
 	pad := []content.PartJSON{
 		box("steel.dark", vec3{0, 0.04, 0}, vec3{3.2, 0.08, 2.6}, 0.02),

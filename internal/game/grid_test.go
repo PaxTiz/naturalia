@@ -454,7 +454,7 @@ func TestGridOverHead(t *testing.T) {
 // Wherever its top is aimed at, whatever the step, the same block goes
 // exactly on the one under it: a clean column.
 func TestGridColumn(t *testing.T) {
-	for _, kind := range []string{"core:crate", "core:crate-2", "core:slab", "core:slope", "core:beam"} {
+	for _, kind := range []string{"core:crate", "core:crate-2", "core:slab", "core:beam"} {
 		for _, step := range GridSteps {
 			for _, off := range []vec3{{0.3, 0, 0.2}, {-0.35, 0, 0.4}, {0, 0, -0.3}} {
 				g := gridGame(t)
@@ -473,9 +473,6 @@ func TestGridColumn(t *testing.T) {
 				}
 				for i := 1; i <= tall; i++ {
 					at := last.Add(up.Scale(hi.Y - 0.01)).Add(fax.Scale(off.X * (hi.X - lo.X))).Add(az.Scale(off.Z * (hi.Z - lo.Z)))
-					if kind == "core:slope" { // its top is slanted: from above
-						at = last.Add(up.Scale(0.5))
-					}
 					next := put(g, kind, at, back)
 					if next == 0 {
 						t.Errorf("%s step %g off %v: %d doesn't fit (%q)", kind, step, off, i, g.Ghost.Why)
