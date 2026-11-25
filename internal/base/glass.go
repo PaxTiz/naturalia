@@ -24,7 +24,8 @@ func (b *building) glassShell(r Room) {
 	in := ToWorld(r.Center.Add(vec3{0, 1.2, 0}))
 	glass := b.Part("glass.pane", mesh.LitGlass, in)
 	frame := b.out(bp.Style)
-	for _, p := range r.panels() {
+	panels := r.panels()
+	for i, p := range panels {
 		out := vec3{math.Cos(p.angle), 0, math.Sin(p.angle)}
 		tangent := vec3{-out.Z, 0, out.X}
 		if p.y0 > 0 { // over a doorway, solid
@@ -34,9 +35,13 @@ func (b *building) glassShell(r Room) {
 			glass.Box(p.mid.Add(vec3{0, (glassSill + p.y1) / 2, 0}), vec3{p.width, p.y1 - glassSill, 0.03}, tangent, 0)
 		}
 		// A mullion at the panel's edge, over the joints, the collar on
-		// top.
+		// top; between two over a doorway, none in it.
 		edge := p.mid.Add(tangent.Scale(p.width / 2))
-		frame.Box(edge.Add(vec3{0, (0.01 + p.y1 - 0.13) / 2, 0}), vec3{0.07, p.y1 - 0.14, WallThick + 0.06}, tangent, 0.01)
+		foot := 0.01
+		if next := panels[(i+1)%len(panels)]; p.y0 > 0 && next.y0 > 0 {
+			foot = p.y0 + 0.01
+		}
+		frame.Box(edge.Add(vec3{0, (foot + p.y1 - 0.13) / 2, 0}), vec3{0.07, p.y1 - 0.13 - foot, WallThick + 0.06}, tangent, 0.01)
 		frame.Box(p.mid.Add(vec3{0, p.y1 - 0.06, 0}), vec3{p.width * 0.99, 0.12, WallThick + 0.08}, tangent, 0.02)
 	}
 	b.glassDome(r)
