@@ -6,8 +6,10 @@ import (
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
 	"naturalia/internal/mathx"
+	"naturalia/internal/mesh"
 	"naturalia/internal/physics"
 	"naturalia/internal/planet"
+	"slices"
 )
 
 // Blocks (docs/CONSTRUCTION.md) are entities to build with: fixed where
@@ -15,22 +17,29 @@ import (
 // of their parts: boxes, turned around their up, and wedges.
 
 // solid is a convex shape in an entity's frame: the points x with
-// n·x <= d for all its planes.
-type solid []plane
+// n·x <= d for all its planes; pts are its corners.
+type solid struct {
+	planes []plane
+	pts    []vec3
+}
 
 type plane struct {
 	n vec3
 	d float64
 }
 
-// solidsOf are the shapes of an entity's parts, figured once by kind;
-// a prism counts as the box around it.
+// solidsOf are the shapes of an entity's parts (or of its Shape), figured
+// once by kind; but for a block's, a prism counts as the box around it.
 func (g *Game) solidsOf(def *content.EntityDef) []solid {
 	if s, ok := g.solids[def.ID]; ok {
 		return s
 	}
 	var out []solid
-	for _, p := range def.Parts {
+	parts := def.Parts
+	if len(def.Shape) > 0 {
+		parts = def.Shape
+	}
+	for _, p := range parts {
 		a := p.Yaw * math.Pi / 180
 		ex, ey := vec3{math.Cos(a), 0, math.Sin(a)}, vec3{0, 1, 0}
 		ez := ex.Cross(ey)
@@ -38,14 +47,20 @@ func (g *Game) solidsOf(def *content.EntityDef) []solid {
 		case "wedge": // standing on at, rising toward +x
 			x, y, z := p.Size.X/2, p.Size.Y, p.Size.Z/2
 			slope := ey.Scale(1).Sub(ex.Scale(y / p.Size.X)).Norm() // up the slope's face
-			out = append(out, solid{
+			out = append(out, solid{[]plane{
 				{ey.Scale(-1), -ey.Dot(p.At)},
 				{ex, ex.Dot(p.At) + x},
 				{ez, ez.Dot(p.At) + z},
 				{ez.Scale(-1), -ez.Dot(p.At) + z},
 				{slope, slope.Dot(p.At.Add(ey.Scale(y / 2)))},
-			})
+			}, p.Corners()})
+		case "hull":
+			out = append(out, hullSolid(p.Corners()))
 		case "prism":
+			if def.Build {
+				out = append(out, hullSolid(p.Corners()))
+				break
+			}
 			lo, hi := content.Bounds([]content.PartJSON{p})
 			out = append(out, boxSolid(lo.Add(hi).Scale(0.5), [3]vec3{{1, 0, 0}, ey, {0, 0, 1}}, hi.Sub(lo).Scale(0.5)))
 		default:
@@ -63,7 +78,23 @@ func boxSolid(c vec3, ax [3]vec3, h vec3) solid {
 	half := [3]float64{h.X, h.Y, h.Z}
 	var s solid
 	for i, a := range ax {
-		s = append(s, plane{a, a.Dot(c) + half[i]}, plane{a.Scale(-1), -a.Dot(c) + half[i]})
+		s.planes = append(s.planes, plane{a, a.Dot(c) + half[i]}, plane{a.Scale(-1), -a.Dot(c) + half[i]})
+	}
+	for i := range 8 {
+		p := c
+		for k, a := range ax {
+			p = p.Add(a.Scale(half[k] * float64(i>>k&1*2-1)))
+		}
+		s.pts = append(s.pts, p)
+	}
+	return s
+}
+
+// hullSolid is the convex hull of points.
+func hullSolid(pts []vec3) solid {
+	s := solid{pts: pts}
+	for _, f := range mesh.HullFaces(pts) {
+		s.planes = append(s.planes, plane{f.N, f.D})
 	}
 	return s
 }
@@ -73,7 +104,7 @@ func boxSolid(c vec3, ax [3]vec3, h vec3) solid {
 func (s solid) hit(o, d vec3, max float64) (float64, vec3, bool) {
 	in, out := math.Inf(-1), max
 	var n vec3
-	for _, p := range s {
+	for _, p := range s.planes {
 		toward, room := p.n.Dot(d), p.d-p.n.Dot(o)
 		if math.Abs(toward) < 1e-12 {
 			if room < 0 {
@@ -90,7 +121,7 @@ func (s solid) hit(o, d vec3, max float64) (float64, vec3, bool) {
 			out = math.Min(out, t)
 		}
 	}
-	if in > out || in < 0 {
+	if in > out || in < 0 || len(s.planes) == 0 {
 		return 0, vec3{}, false
 	}
 	return in, n, true
@@ -98,12 +129,12 @@ func (s solid) hit(o, d vec3, max float64) (float64, vec3, bool) {
 
 // contains tells if x is inside the solid.
 func (s solid) contains(x vec3) bool {
-	for _, p := range s {
+	for _, p := range s.planes {
 		if p.n.Dot(x) > p.d {
 			return false
 		}
 	}
-	return true
+	return len(s.planes) > 0
 }
 
 // local is an entity's shape and frame, to turn world points into it.
@@ -232,9 +263,25 @@ func (g *Game) floorUnder(pos vec3) float64 {
 	return floor
 }
 
-// ceilingOver is how high over the ground at pos the lowest of the base's
-// floors over the player's head starts: 0 for none.
+// ceilingOver is how high over the ground at pos the lowest of the blocks
+// and of the base's floors over the player's head starts: 0 for none.
 func (g *Game) ceilingOver(pos vec3) float64 {
+	from := pos.Add(pos.Norm().Scale(stepUp + 0.05))
+	low, found := 2*personH, false
+	for id, t := range g.Ents.Transform.All() {
+		if planet.ArcDist(pos.Norm(), t.Dir) > 15 {
+			continue
+		}
+		if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || !def.Build || g.Held(id) {
+			continue
+		}
+		if d, _, ok := g.rayEntity(id, from, pos.Norm(), low); ok {
+			low, found = d, true
+		}
+	}
+	if found {
+		return g.World.Relief.Altitude(from) + low
+	}
 	if planet.ArcDist(pos.Norm(), planet.BaseUp) >= base.Extent {
 		return 0
 	}
@@ -318,17 +365,54 @@ func (g *Game) walkOnto(f base.Floor, a *physics.Body, n physics.V2) bool {
 	return true
 }
 
-// blockBody is a block's body: the outline of the box around its parts
-// seen from above, turned as it stands, from its lowest point to its
-// highest. It stays where it is.
-func (g *Game) blockBody(id ecs.ID, def *content.EntityDef) *physics.Body {
+// addBlock adds a block's bodies: one, or one for each part of its Shape.
+// It returns the first.
+func (g *Game) addBlock(id ecs.ID, def *content.EntityDef) *physics.Body {
 	const round = 0.02
+	pos, ax, up, az := g.Frame(g.Ents.Transform.Get(id))
+	if len(def.Shape) == 0 {
+		return g.phys.w.Add(g.blockBody(id, pos, ghostCorners(def, ax, up, round), round))
+	}
+	var first *physics.Body
+	for _, s := range g.solidsOf(def) {
+		var corners []vec3
+		var mid vec3
+		for _, c := range s.pts {
+			mid = mid.Add(c.Scale(1 / float64(len(s.pts))))
+		}
+		for _, c := range s.pts {
+			in := c.Sub(mid)
+			c = c.Sub(in.Norm().Scale(math.Min(round, in.Length()/2)))
+			corners = append(corners, ax.Scale(c.X).Add(up.Scale(c.Y)).Add(az.Scale(c.Z)))
+		}
+		b := g.phys.w.Add(g.blockBody(id, pos, corners, round))
+		if first == nil {
+			first = b
+		}
+	}
+	return first
+}
+
+// dropBodies takes entity id's bodies out of the collisions.
+func (g *Game) dropBodies(id ecs.ID) {
+	if bp := g.Ents.Body.Get(id); bp != nil && g.phys != nil {
+		for _, b := range slices.Clone(g.phys.w.Bodies()) {
+			if b == *bp || b.ID == uint32(id) {
+				g.phys.w.Remove(b)
+			}
+		}
+	}
+	g.Ents.Body.Remove(id)
+}
+
+// blockBody is a block's body: the outline of its corners (about pos) seen
+// from above, from the lowest to the highest. It stays where it is.
+func (g *Game) blockBody(id ecs.ID, pos vec3, corners []vec3, round float64) *physics.Body {
 	p := g.phys
-	pos, ax, up, _ := g.Frame(g.Ents.Transform.Get(id))
 	mid := p.plane(pos)
 	var pts []physics.V2
 	bottom, top := math.Inf(1), math.Inf(-1)
-	for _, c := range ghostCorners(def, ax, up, round) {
+	for _, c := range corners {
 		w := pos.Add(c)
 		pts = append(pts, p.plane(w).Sub(mid))
 		bottom, top = math.Min(bottom, p.height(w)), math.Max(top, p.height(w))

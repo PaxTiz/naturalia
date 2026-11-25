@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"log"
 	"math"
+	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 	"os"
 	"path/filepath"
@@ -186,6 +187,7 @@ func (m *modFile) register(c *Content) {
 	isEnt := func(id string) bool { _, ok := c.Entities.Get(id); return ok }
 	for name, e := range m.Entities {
 		refParts(e.Parts)
+		refParts(e.Shape)
 		e.Item = ""
 		c.Entities.Add(m.own(name), e)
 	}
@@ -312,20 +314,74 @@ type KitJSON struct {
 // PartJSON is one shape: a bevelled box, or a prism (a cylinder or a
 // truncated cone with that many sides) standing on At along Axis.
 type PartJSON struct {
-	Shape string  `json:"shape"` // "box", "prism" or "wedge" (a ramp rising toward +X, standing on at, sized like a box)
+	// Shape is "box", "prism", "wedge" (a ramp rising toward +X, standing on
+	// at, sized like a box) or "hull" (the convex hull of points).
+	Shape string  `json:"shape"`
 	Token string  `json:"token"`
 	At    vec3    `json:"at"`
 	Bevel float64 `json:"bevel"`
 	// box
 	Size vec3    `json:"size"`
 	Yaw  float64 `json:"yaw"` // degrees, turning its width (X) toward Z
+	// hull: from at, turned by yaw
+	Points []vec3 `json:"points"`
 	// prism
 	Axis  vec3    `json:"axis"` // default up
 	R0    float64 `json:"r0"`   // radius at the base...
 	R1    float64 `json:"r1"`   // ...and at the top, r0 if left out
 	H     float64 `json:"h"`
 	Sides int     `json:"sides"`
-	Lit   string  `json:"lit"` // "indoor" (default) or "outdoor"
+	Lit   string  `json:"lit"` // "indoor" (default), "outdoor", or "glass", seen through
+}
+
+// Turned is a point of the part's own frame in its piece's: turned by its
+// yaw, from its at.
+func (p PartJSON) Turned(v vec3) vec3 { return p.At.Add(Turn(v, p.Yaw)) }
+
+// Corners are the corners of the part's convex shape; a prism's, those of
+// its sides.
+func (p PartJSON) Corners() []vec3 {
+	var out []vec3
+	switch p.Shape {
+	case "hull":
+		for _, v := range p.Points {
+			out = append(out, p.Turned(v))
+		}
+	case "wedge":
+		x, y, z := p.Size.X/2, p.Size.Y, p.Size.Z/2
+		for _, v := range []vec3{{-x, 0, -z}, {-x, 0, z}, {x, 0, -z}, {x, 0, z}, {x, y, -z}, {x, y, z}} {
+			out = append(out, p.Turned(v))
+		}
+	case "prism":
+		axis := p.Axis
+		if axis == (vec3{}) {
+			axis = vec3{0, 1, 0}
+		}
+		axis = axis.Norm()
+		u, w := mathx.TangentBasis(axis)
+		n := min(max(3, orInt(p.Sides, 12)), 12)
+		for k := range n {
+			a := 2 * math.Pi * float64(k) / float64(n)
+			d := u.Scale(math.Cos(a)).Add(w.Scale(math.Sin(a)))
+			out = append(out, p.At.Add(d.Scale(p.R0)), p.At.Add(axis.Scale(p.H)).Add(d.Scale(OrZero(p.R1, p.R0))))
+		}
+	default:
+		h := p.Size.Scale(0.5)
+		for i := range 8 {
+			v := vec3{-h.X, -h.Y, -h.Z}
+			if i&1 != 0 {
+				v.X = h.X
+			}
+			if i&2 != 0 {
+				v.Y = h.Y
+			}
+			if i&4 != 0 {
+				v.Z = h.Z
+			}
+			out = append(out, p.Turned(v))
+		}
+	}
+	return out
 }
 
 func (k KitJSON) Kit() Kit {
@@ -363,6 +419,8 @@ func buildParts(b *mesh.Parts, at vec3, parts []PartJSON) {
 		lit := float32(mesh.LitIndoor)
 		if p.Lit == "outdoor" {
 			lit = mesh.LitSun
+		} else if p.Lit == "glass" {
+			lit = mesh.LitGlass
 		}
 		m := b.Part(p.Token, lit, vec3{})
 		switch p.Shape {
@@ -372,6 +430,12 @@ func buildParts(b *mesh.Parts, at vec3, parts []PartJSON) {
 				axis = vec3{0, 1, 0}
 			}
 			m.Prism(at.Add(p.At), axis.Norm(), p.R0, OrZero(p.R1, p.R0), p.H, max(3, orInt(p.Sides, 12)), p.Bevel)
+		case "hull":
+			pts := p.Corners()
+			for i := range pts {
+				pts[i] = at.Add(pts[i])
+			}
+			m.Hull(pts)
 		case "wedge":
 			a := p.Yaw * math.Pi / 180
 			m.Wedge(at.Add(p.At), p.Size, vec3{math.Cos(a), 0, math.Sin(a)})

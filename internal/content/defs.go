@@ -247,6 +247,14 @@ type EntityDef struct {
 	// middle of its base; without one, its parts', rounded to 25 mm. Parts
 	// may stick out of it a little: trims.
 	Cell vec3 `json:"cell"`
+	// Shape is what a block is to bump into, walk on and aim at: convex parts,
+	// each on its own, so that a doorway is walked through. Without one, the
+	// player bumps into the box around its parts and walks on them.
+	Shape []PartJSON `json:"shape"`
+	// Rise is the way a block climbs, in its own frame, when it is neither a
+	// ramp nor mostly a wedge: stairs. What is aimed at its top goes on
+	// from there.
+	Rise vec3 `json:"rise"`
 	// Trigger makes it a zone, walked and driven through: who comes in and
 	// goes out says trigger_enter and trigger_leave. It spans radius, or
 	// its parts without one, up to 1.5 m over them.
@@ -404,6 +412,10 @@ func Bounds(parts []PartJSON) (lo, hi vec3) {
 	}
 	for _, p := range parts {
 		switch p.Shape {
+		case "hull":
+			for _, v := range p.Corners() {
+				grow(v, vec3{})
+			}
 		case "prism":
 			axis := p.Axis
 			if axis == (vec3{}) {

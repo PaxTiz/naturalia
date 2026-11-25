@@ -210,6 +210,9 @@ func rise(def *content.EntityDef) (vec3, bool) {
 	if def.Ramp != nil {
 		return vec3{1, 0, 0}, true
 	}
+	if def.Rise != (vec3{}) {
+		return def.Rise, true
+	}
 	lo, hi := nominal(def)
 	for _, p := range def.Parts {
 		if p.Shape == "wedge" && p.Size.X*p.Size.Z > 0.6*(hi.X-lo.X)*(hi.Z-lo.Z) {
@@ -1040,6 +1043,95 @@ func (g *Game) reshape(change func()) {
 		t := g.Ents.Transform.Get(id)
 		t.Alt = h - g.World.Relief.Height(t.Dir)
 	}
+}
+
+// blocksMeet tells whether a block turned to ax and up from origin meets
+// block id, by more than room: their boxes, or the parts of what has a
+// Shape.
+func (g *Game) blocksMeet(def *content.EntityDef, origin, ax, up vec3, id ecs.ID, room float64) bool {
+	other, ok := g.Content.Entities.Get(g.kind(id))
+	if !ok || !g.boxesMeet(def, origin, ax, up, id, room) {
+		return false
+	}
+	if len(def.Shape) == 0 && len(other.Shape) == 0 {
+		return true
+	}
+	pos, bx, bu, _ := g.Frame(g.Ents.Transform.Get(id))
+	as, bs := g.pieces(def, vec3{}, ax, up), g.pieces(other, pos.Sub(origin), bx, bu)
+	for _, a := range as {
+		for _, b := range bs {
+			if a.meets(b, room) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// pieces are what a block takes up, turned to ax and up from at: the parts
+// of its Shape, or the box it is meant to fill.
+func (g *Game) pieces(def *content.EntityDef, at, ax, up vec3) []solid {
+	az := ax.Cross(up)
+	dir := func(v vec3) vec3 { return ax.Scale(v.X).Add(up.Scale(v.Y)).Add(az.Scale(v.Z)) }
+	list := g.solidsOf(def)
+	if len(def.Shape) == 0 {
+		lo, hi := nominal(def)
+		list = []solid{boxSolid(lo.Add(hi).Scale(0.5), [3]vec3{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, hi.Sub(lo).Scale(0.5))}
+	}
+	out := make([]solid, len(list))
+	for i, s := range list {
+		for _, p := range s.planes {
+			n := dir(p.n)
+			out[i].planes = append(out[i].planes, plane{n, p.d + n.Dot(at)})
+		}
+		for _, p := range s.pts {
+			out[i].pts = append(out[i].pts, at.Add(dir(p)))
+		}
+	}
+	return out
+}
+
+// meets tells whether two solids overlap by more than room every way.
+func (s solid) meets(o solid, room float64) bool {
+	apart := func(v vec3) bool {
+		l := v.Length()
+		if l < 1e-6 {
+			return false
+		}
+		v = v.Scale(1 / l)
+		a0, a1 := math.Inf(1), math.Inf(-1)
+		for _, p := range s.pts {
+			a0, a1 = math.Min(a0, p.Dot(v)), math.Max(a1, p.Dot(v))
+		}
+		b0, b1 := math.Inf(1), math.Inf(-1)
+		for _, p := range o.pts {
+			b0, b1 = math.Min(b0, p.Dot(v)), math.Max(b1, p.Dot(v))
+		}
+		return math.Min(a1, b1)-math.Max(a0, b0) < room
+	}
+	for _, a := range s.planes {
+		if apart(a.n) {
+			return false
+		}
+	}
+	for _, b := range o.planes {
+		if apart(b.n) {
+			return false
+		}
+	}
+	// The edges of a convex shape are along the crossings of its faces.
+	for i, a := range s.planes {
+		for _, a2 := range s.planes[:i] {
+			for j, b := range o.planes {
+				for _, b2 := range o.planes[:j] {
+					if apart(a.n.Cross(a2.n).Cross(b.n.Cross(b2.n))) {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
 }
 
 // boxesMeet tells whether a box turned to ax and up from origin meets the

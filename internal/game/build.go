@@ -235,10 +235,7 @@ func (g *Game) grab(id ecs.ID) {
 	}
 	g.Ghost.setRel(ax, up)
 	g.Ents.Air.Remove(id)
-	if bp := g.Ents.Body.Get(id); bp != nil && g.phys != nil {
-		g.phys.w.Remove(*bp)
-		g.Ents.Body.Remove(id)
-	}
+	g.dropBodies(id)
 	g.poseGhost()
 	g.sfx.Beep(0.02, 0.1, 0.1, 523, 392)
 }
@@ -452,7 +449,7 @@ func (g *Game) ghostFits(def *content.EntityDef, origin, ax, up vec3, graded boo
 		// The engine's outlines and slices swell around a block that leans:
 		// with another block, their boxes tell.
 		if other, ok := g.Content.Entities.Get(g.kind(ecs.ID(b.ID))); b.ID != 0 && ok && other.Build {
-			return g.boxesMeet(def, origin, ax, up, ecs.ID(b.ID), 0.03)
+			return g.blocksMeet(def, origin, ax, up, ecs.ID(b.ID), 0.03)
 		}
 		return true
 	})

@@ -680,6 +680,10 @@ func (g *Game) syncEntities() {
 	slices.Sort(near) // the same bodies in the same order: steps repeat exactly
 	for id, bp := range g.Ents.Body.All() {
 		if _, ok := slices.BinarySearch(near, id); !ok || id == g.Riding || id == g.held() {
+			if (*bp).Kind == physics.Static {
+				g.dropBodies(id)
+				continue
+			}
 			p.w.Remove(*bp)
 			g.Ents.Body.Remove(id)
 		}
@@ -698,7 +702,7 @@ func (g *Game) syncEntities() {
 		case bp != nil && (*bp).Kind == physics.Static:
 			continue // a block: it stays put
 		case bp == nil && def.Build:
-			g.Ents.Body.Set(id, p.w.Add(g.blockBody(id, def)))
+			g.Ents.Body.Set(id, g.addBlock(id, def))
 			continue
 		}
 		e := g.Ents.Transform.Get(id)
