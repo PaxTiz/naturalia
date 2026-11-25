@@ -474,11 +474,15 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 			keys = [][2]string{keys[0], keys[1], {game.KeyLabel(game.ActTurnY), "tourner"}, keys[5]}
 		} else {
 			last := keys[5]
+			if !gh.Aligned() {
+				keys = append(keys[:3], append([][2]string{{game.KeyLabel(game.ActAlign), "aligner"}}, keys[3:]...)...)
+			}
+			moves := len(keys) - 1
 			if g.Settings.Grid {
-				keys = append(keys[:5], [2]string{game.KeyLabel(game.ActGrid), "sans grille"},
+				keys = append(keys[:moves], [2]string{game.KeyLabel(game.ActGrid), "sans grille"},
 					[2]string{game.KeyLabel(game.ActGridStep), "pas " + strings.Replace(fmt.Sprintf("%g m", g.Settings.GridStep), ".", ",", 1)}, last)
 			} else {
-				keys = append(keys[:5], [2]string{game.KeyLabel(game.ActGrid), "grille"}, last)
+				keys = append(keys[:moves], [2]string{game.KeyLabel(game.ActGrid), "grille"}, last)
 			}
 		}
 		if moving {

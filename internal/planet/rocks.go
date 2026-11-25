@@ -8,6 +8,10 @@ import (
 // RockShapes is how many rock models there are to pick from.
 const RockShapes = 5
 
+// SmallRock is the size under which a rock is moved out of the way of what
+// is built; bigger boulders stay.
+const SmallRock = 1.0
+
 // Rock is a boulder lying on the ground.
 type Rock struct {
 	Dir   vec3 // from Mars' center
@@ -19,7 +23,7 @@ type Rock struct {
 
 // rocksIn lists the rocks of a dust tile: placed procedurally, mostly small
 // stones, now and then a big boulder. None around the base, under a
-// bootcamp nor on the polar ice.
+// bootcamp nor on the polar ice, no small one under a block.
 func (w *World) rocksIn(k TileKey) []Rock {
 	f, tx, ty := k.Split()
 	count := int(mathx.Hash3(f, tx, ty, w.Seed+201) * 8 * w.Relief.set.Rocks)
@@ -33,7 +37,8 @@ func (w *World) rocksIn(k TileKey) []Rock {
 			size = 1.4 + 1.3*mathx.Hash3(f, tx, ty, s+4) // a big boulder
 		}
 		d := cellDir(f, ci, cj)
-		if ArcDist(d, BaseUp) < padRadius+size+4 || w.Relief.Ice(d) > 0.3 || w.Relief.OnPad(d, size+2) {
+		if ArcDist(d, BaseUp) < padRadius+size+4 || w.Relief.Ice(d) > 0.3 || w.Relief.OnPad(d, size+2) ||
+			size < SmallRock && w.Relief.Built(d, size) {
 			continue
 		}
 		rocks = append(rocks, Rock{d, size, int(mathx.Hash3(f, tx, ty, s+5) * RockShapes), mathx.Hash3(f, tx, ty, s+6) * 2 * math.Pi, mathx.Hash3(f, tx, ty, s+7)})

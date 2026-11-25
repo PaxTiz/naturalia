@@ -238,3 +238,101 @@ func TestGridSlides(t *testing.T) {
 		t.Errorf("%v apart", d)
 	}
 }
+
+// What was set down askew, taken in hand, is straightened on the grid; far
+// from it too, where it is kept on its lines.
+func TestGridAlign(t *testing.T) {
+	g := gridGame(t)
+	a := put(g, "core:slab", ahead(g, 6), 6)
+	grid, _ := g.gridOf(a)
+	put(g, "core:slab", ahead(g, 12), 6) // keeps the grid
+	g.Ghost.turn(vec3{0, 1, 0}, 0.3)
+	g.Ghost.turn(vec3{1, 0, 0}, 0.2)
+	ax, up := g.Ghost.inFrame(g.Ghost.rel[0]), g.Ghost.inFrame(g.Ghost.rel[1])
+	g.Ents.Transform.Get(a).SetAxes(ax, up)
+	g.Ghost = nil
+	g.grab(a)
+	if g.Ghost.Aligned() {
+		t.Fatal("askew, it says it is straight")
+	}
+	aligned := func(when string) {
+		t.Helper()
+		ax, up, _ := g.Ghost.Pose.Axes()
+		if gh := g.Ghost; !gh.Aligned() || gh.grid == nil || !gh.grid.Same(grid) || !square(grid, ax, up) ||
+			math.Abs(gh.grid.Lo.X-math.Round(gh.grid.Lo.X)) > 1e-6 {
+			t.Errorf("%s: %+v, rel %v", when, gh.grid, gh.rel)
+		}
+	}
+	g.alignGhost()
+	aligned("beside the grid")
+	// 40 m away, beyond any thing's grid, the key keeps it on its own.
+	g.Player.Pos = g.World.Relief.Surface(planet.Toward2(g.Player.LocalUp(), g.Player.Heading, -40))
+	g.Ghost.home = nil
+	g.poseGhost()
+	if g.Ghost.Aligned() {
+		t.Error("far away, it stayed on the grid by itself")
+	}
+	g.alignGhost()
+	aligned("far away")
+	// With the grid off, the key brings it back.
+	g.Settings.Grid = false
+	g.alignGhost()
+	if !g.Settings.Grid {
+		t.Error("the grid is still off")
+	}
+}
+
+// A small rock gives way to a block, on the grid or not, and comes back
+// once it is taken off; a boulder stays.
+func TestBuildOnRocks(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		c := LoadContent()
+		g := fleetGame(t, c, map[string]int{})
+		set := c.Terrain
+		set.Gems = 0
+		g.World = planet.NewWorld(7, &set)
+		g.Settings.Grid, g.Settings.GridStep = on, 1
+		small, boulder := planet.Rock{}, planet.Rock{}
+		for _, r := range g.World.RocksNear(g.Player.Pos, 400) {
+			if planet.ArcDist(r.Dir, planet.BaseUp) < 130 {
+				continue
+			}
+			alone := true
+			for _, o := range g.World.RocksNear(r.Dir, 7) {
+				alone = alone && (o.Dir == r.Dir || o.Size < 0.5)
+			}
+			if alone && r.Size > minRock && r.Size < planet.SmallRock {
+				small = r
+			} else if r.Size > 1.4 {
+				boulder = r
+			}
+		}
+		there := func(r planet.Rock) bool {
+			for _, o := range g.World.RocksNear(r.Dir, 1) {
+				if o.Dir == r.Dir {
+					return true
+				}
+			}
+			return false
+		}
+		if small.Size == 0 || boulder.Size == 0 {
+			t.Fatal("no rock to build on")
+		}
+		g.Player.Pos = g.World.Relief.Surface(small.Dir)
+		id := put(g, "core:crate-2", g.World.Relief.Surface(small.Dir), 6)
+		if id == 0 || there(small) {
+			t.Errorf("grid %v: block %v (%q), the small rock still there: %v", on, id, g.Ghost.Why, there(small))
+			continue
+		}
+		g.Ents.Kill(id)
+		g.syncGround()
+		if !there(small) {
+			t.Errorf("grid %v: the block taken off, no rock", on)
+		}
+		g.Ghost = nil
+		g.Player.Pos = g.World.Relief.Surface(boulder.Dir)
+		if id := put(g, "core:crate-2", g.World.Relief.Surface(boulder.Dir), 6); id != 0 && !there(boulder) {
+			t.Errorf("grid %v: a boulder gave way", on)
+		}
+	}
+}

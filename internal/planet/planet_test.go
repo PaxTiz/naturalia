@@ -121,7 +121,7 @@ func TestPlots(t *testing.T) {
 		}
 		prev = h
 	}
-	if !r.OnPad(mid, 0.5) || r.OnPad(far, 0.5) {
+	if !r.Built(mid, 0.5) || r.Built(far, 0.5) {
 		t.Error("rocks on the plot, or none beyond")
 	}
 	if h := r.Natural(mid) - r.raw(mid); math.Abs(h) > 1e-9 {

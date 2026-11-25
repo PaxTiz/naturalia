@@ -33,10 +33,12 @@ type Ghost struct {
 	// the player, up, side), as the player turned it.
 	rel        [2]vec3
 	frame      [3]vec3
-	grid       *OnGrid // where it would stand on a grid (grid.go), if it does
-	fresh      bool    // the grid is its own: it founds it
-	Sheet      *Sheet  // the grid's lines shown
-	dist, lift float64 // free: how far ahead; on a surface: how high over it
+	grid       *OnGrid      // where it would stand on a grid (grid.go), if it does
+	home       *planet.Grid // the one it is kept on, far from any (alignGhost)
+	from       *planet.Grid // the one it was taken from
+	fresh      bool         // the grid is its own: it founds it
+	Sheet      *Sheet       // the grid's lines shown
+	dist, lift float64      // free: how far ahead; on a surface: how high over it
 }
 
 // turnable: what is driven over (ramps, pads) and vehicles only turn
@@ -92,6 +94,10 @@ func (g *Game) updateItems() {
 	if g.campLayout(def.ID) == nil {
 		if KeyPressed(ActGrid) {
 			g.ToggleGrid()
+			gh.home = nil
+		}
+		if KeyPressed(ActAlign) {
+			g.alignGhost()
 		}
 		if KeyPressed(ActGridStep) && g.Settings.Grid {
 			g.NextGridStep()
@@ -195,14 +201,16 @@ func (g *Game) grab(id ecs.ID) {
 	}
 	n := e.Dir
 	face := g.facing(def, n)
-	if g.Settings.Grid {
-		if grid, ok := g.gridOf(id); ok { // as it stands on its grid
+	var from *planet.Grid
+	if grid, ok := g.gridOf(id); ok {
+		from = &grid
+		if g.Settings.Grid { // as it stands on its grid
 			face, n = grid.Front(face), grid.Up
 		}
 	}
 	ax, up, _ := e.Axes()
 	pos, _, _, _ := g.Frame(e)
-	g.Ghost = &Ghost{Kind: def.ID, Moving: id, frame: [3]vec3{face, n, face.Cross(n)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
+	g.Ghost = &Ghost{Kind: def.ID, Moving: id, from: from, frame: [3]vec3{face, n, face.Cross(n)}, dist: math.Max(1.5, pos.Sub(g.Player.Eye()).Length())}
 	g.Ghost.setRel(ax, up)
 	g.Ents.Air.Remove(id)
 	if bp := g.Ents.Body.Get(id); bp != nil && g.phys != nil {
@@ -383,6 +391,9 @@ func (g *Game) ghostFits(def *content.EntityDef, origin, ax, up vec3, graded boo
 	}
 	shape := physics.Hull(pts, 0)
 	return !g.phys.w.OverlapAny(shape, physics.V2{}, 0, bottom, top, layerStatic|layerEntity|layerVehicle|layerRobot|layerProp|layerPlayer, func(b *physics.Body) bool {
+		if def.Build && g.phys.stones[b] {
+			return false // a small rock: moved out of the way
+		}
 		// The engine's outlines and slices swell around a block that leans:
 		// with another block, their boxes tell.
 		if other, ok := g.Content.Entities.Get(g.kind(ecs.ID(b.ID))); b.ID != 0 && ok && other.Build {
@@ -410,10 +421,10 @@ func (g *Game) placeGhost() {
 	}
 	if def, ok := g.Content.Entities.Get(gh.Kind); ok && gh.grid != nil && def.Mass == 0 {
 		g.Ents.Grid.Set(id, *gh.grid)
-		g.regrade = true
 	} else if g.Ents.Grid.Has(id) {
 		g.Ents.Grid.Remove(id)
 	}
+	g.regrade = true
 	if gh.fresh { // the next one lines up on this one as it stands
 		face := gh.grid.Front(gh.frame[0])
 		ax, up, _ := e.Axes()

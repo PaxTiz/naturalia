@@ -72,6 +72,7 @@ type phys struct {
 	side       float64 // +1 if a vehicle's right side (+Z) is the plane's left of its nose
 	doorSegs   []base.Segment
 	doors      []*physics.Body
+	stones     map[*physics.Body]bool       // small rocks, moved out of the way of what is built
 	floors     map[*physics.Body]base.Floor // the base's floors, which the player walks up (allow)
 	carried    map[ecs.ID]moving            // from the plane before, until put back
 	held       ecs.ID                       // the bootcamp being moved: its walls are out
@@ -505,8 +506,14 @@ func (g *Game) layPlane() {
 		}
 		at := g.World.Relief.Surface(r.Dir)
 		bottom, top := p.slice(at, r.Size*0.8)
-		p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(r.Size * 0.75), Pos: p.plane(at),
+		b := p.w.Add(&physics.Body{Kind: physics.Static, Shape: physics.Circle(r.Size * 0.75), Pos: p.plane(at),
 			Bottom: bottom, Top: top, Layer: layerStatic, Mask: ^uint32(0), Friction: frictionWall, Restitution: bounceWall})
+		if r.Size < planet.SmallRock {
+			if p.stones == nil {
+				p.stones = map[*physics.Body]bool{}
+			}
+			p.stones[b] = true
+		}
 	}
 }
 

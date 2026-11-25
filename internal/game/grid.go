@@ -5,6 +5,7 @@ import (
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/ecs"
+	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
 	"slices"
 )
@@ -129,10 +130,11 @@ func (g *Game) gridOf(id ecs.ID) (planet.Grid, bool) {
 	return gridOn(def, pos, ax, up)
 }
 
-// gridAt is the grid taken up at a point: the nearest thing's.
-func (g *Game) gridAt(at vec3) (planet.Grid, bool) {
-	best, reach, found := planet.Grid{}, gridNear, false
-	for _, id := range g.EntitiesNear(buildReach + gridNear + 15) {
+// gridAt is the grid taken up at a point: the nearest thing's, within
+// reach.
+func (g *Game) gridAt(at vec3, reach float64) (planet.Grid, bool) {
+	best, found := planet.Grid{}, false
+	for _, id := range g.EntitiesNear(buildReach + reach + 15) {
 		if g.Held(id) {
 			continue
 		}
@@ -221,7 +223,10 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 			return false
 		}
 	} else {
-		grid, ok = g.gridAt(at)
+		grid, ok = g.gridAt(at, gridNear)
+		if !ok && gh.home != nil && gh.home.Reaches(at) {
+			grid, ok = *gh.home, true
+		}
 	}
 	fresh := !ok
 	face := g.facing(def, at.Norm())
@@ -345,6 +350,74 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 	return true
 }
 
+// alignGhost straightens the ghost on the grid: its sides along the lines,
+// by the smallest turn. Away from any grid, it is kept on the one it was
+// taken from, or else the nearest; without one in reach, it is turned like
+// the one it will found.
+func (g *Game) alignGhost() {
+	gh := g.Ghost
+	def, ok := g.Content.Entities.Get(gh.Kind)
+	if !ok {
+		return
+	}
+	if !g.Settings.Grid {
+		g.ToggleGrid()
+	}
+	eye, fwd := g.Player.Eye(), g.Player.Forward()
+	at := eye.Add(fwd.Scale(gh.dist))
+	if !gh.Free {
+		at, _, _ = g.aimSurface(def, eye, fwd)
+	}
+	if grid, ok := g.gridAt(at, gridNear); ok {
+		gh.home = &grid
+	} else if gh.from != nil && gh.from.Reaches(at) {
+		gh.home = gh.from
+	} else if grid, ok := g.gridAt(at, planet.GridSpan); ok {
+		gh.home = &grid
+	}
+	g.poseGhost() // in the frame of that grid
+	axes := [3]vec3{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+	nearest := func(v vec3, but int) (vec3, int) {
+		best := -1
+		for i := range 3 {
+			if i != but && (best < 0 || math.Abs(along(v, i)) > math.Abs(along(v, best))+1e-9) {
+				best = i
+			}
+		}
+		return axes[best].Scale(math.Copysign(1, along(v, best))), best
+	}
+	ax, up := gh.rel[0], gh.rel[1]
+	if !g.turnable(def) {
+		gh.rel[1] = axes[1]
+		gh.rel[0], _ = nearest(ax, 1)
+	} else if math.Max(math.Abs(up.X), math.Max(math.Abs(up.Y), math.Abs(up.Z))) >= math.Max(math.Abs(ax.X), math.Max(math.Abs(ax.Y), math.Abs(ax.Z)))-1e-9 {
+		var i int // the straighter of the two first
+		gh.rel[1], i = nearest(up, -1)
+		gh.rel[0], _ = nearest(ax, i)
+	} else {
+		var i int
+		gh.rel[0], i = nearest(ax, -1)
+		gh.rel[1], _ = nearest(up, i)
+	}
+	gh.lift = 0
+	g.poseGhost()
+	g.sfx.Beep(0.02, 0.1, 0.1, 523, 659)
+}
+
+// Aligned tells whether the ghost is straight on a grid: alignGhost would
+// change nothing.
+func (gh *Ghost) Aligned() bool {
+	if gh.grid == nil || gh.fresh && gh.from != nil && gh.home == nil {
+		return false
+	}
+	for _, v := range gh.rel {
+		if math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))) < 1-1e-6 {
+			return false
+		}
+	}
+	return true
+}
+
 // sheet is the grid's lines under the box, on the side it rests on.
 func (g *Game) sheet(o *OnGrid, across int, step float64, normal vec3) *Sheet {
 	mid := o.Lo.Add(o.Hi).Scale(0.5)
@@ -457,13 +530,14 @@ func (g *Game) gridLevel(grid planet.Grid, lo, hi vec3, fresh bool, lift float64
 	return level, ground, ground || high-level < 0.15
 }
 
-// syncGround grades the ground under the blocks standing on it, when some
-// were set down or taken off.
+// syncGround grades the ground under the blocks standing on it, and clears
+// it of small rocks under the others, when some were set down or taken off.
 func (g *Game) syncGround() {
-	if !g.regrade && g.graded == g.Ents.Grid.Len() {
+	if !g.regrade && g.graded == g.Ents.Len() {
 		return
 	}
-	g.regrade, g.graded = false, g.Ents.Grid.Len()
+	g.regrade, g.graded = false, g.Ents.Len()
+	relief := g.World.Relief
 	var plots []planet.Plot
 	for _, o := range g.Ents.Grid.All() {
 		if !o.Ground {
@@ -471,14 +545,37 @@ func (g *Game) syncGround() {
 		}
 		p := o.Plot(o.Lo, o.Hi, o.Lo.Y)
 		// Left from another Mars, it would raise a mountain.
-		if d := p.At.Norm(); math.Abs(p.At.Length()-planet.Radius-g.World.Relief.Natural(d)) < 3*planet.MaxGrade {
+		if d := p.At.Norm(); math.Abs(p.At.Length()-planet.Radius-relief.Natural(d)) < 3*planet.MaxGrade {
 			plots = append(plots, p)
 		}
 	}
-	if slices.Equal(plots, g.World.Relief.Flat().Plots) {
-		return
+	if !slices.Equal(plots, relief.Flat().Plots.List) {
+		g.reshape(func() { relief.SetPlots(plots) })
 	}
-	g.reshape(func() { g.World.Relief.SetPlots(plots) })
+	var bare []planet.Plot
+	for id, t := range g.Ents.Transform.All() {
+		def, ok := g.Content.Entities.Get(g.kind(id))
+		if o := g.Ents.Grid.Get(id); !ok || !def.Build || o != nil && o.Ground {
+			continue
+		}
+		pos, ax, up, _ := g.Frame(t)
+		grid, ok := gridOn(def, pos, ax, up)
+		if !ok { // tipped over: the box around it
+			n := pos.Norm()
+			t1, _ := mathx.TangentBasis(n)
+			grid = planet.Grid{At: pos, X: t1, Up: n}
+		}
+		lo, hi := boxIn(grid, def, ax, up)
+		at := grid.Local(pos)
+		lo, hi = at.Add(lo), at.Add(hi)
+		if p := grid.Plot(lo, hi, lo.Y); relief.Altitude(p.At) < planet.SmallRock {
+			bare = append(bare, p)
+		}
+	}
+	if !slices.Equal(bare, relief.Flat().Bare.List) {
+		relief.SetBare(bare)
+		g.relay = true
+	}
 }
 
 // reshape changes the ground: what is built, and what stands over the

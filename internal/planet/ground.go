@@ -89,12 +89,56 @@ type works struct{ now atomic.Pointer[Flat] }
 // Flat is the ground flattened at some time.
 type Flat struct {
 	Pads  []Pad
-	Plots []Plot
-	cells map[[3]int32][]int32 // the plots that reach into each cell of the mean sphere
+	Plots PlotSet // graded
+	Bare  PlotSet // under what stands on the ground as it is: only cleared of stones
 }
 
-// flatCell is the side of the cells the plots are kept in, in m.
+// PlotSet is plots, kept by the cells of the mean sphere they reach into.
+type PlotSet struct {
+	List  []Plot
+	cells map[[3]int32][]int32
+}
+
+// flatCell is the side of the cells, in m.
 const flatCell = 16.0
+
+func newPlotSet(list []Plot) PlotSet {
+	s := PlotSet{List: list, cells: map[[3]int32][]int32{}}
+	cell := func(v float64) int32 { return int32(math.Floor(v / flatCell)) }
+	for i, p := range list {
+		a := p.area()
+		c := a.Dir.Scale(Radius)
+		for x := cell(c.X - a.Reach); x <= cell(c.X+a.Reach); x++ {
+			for y := cell(c.Y - a.Reach); y <= cell(c.Y+a.Reach); y++ {
+				for z := cell(c.Z - a.Reach); z <= cell(c.Z+a.Reach); z++ {
+					k := [3]int32{x, y, z}
+					s.cells[k] = append(s.cells[k], int32(i))
+				}
+			}
+		}
+	}
+	return s
+}
+
+// near are the plots that may reach the ground along d.
+func (s *PlotSet) near(d vec3) []int32 {
+	if len(s.cells) == 0 {
+		return nil
+	}
+	p := d.Scale(Radius / flatCell)
+	return s.cells[[3]int32{int32(math.Floor(p.X)), int32(math.Floor(p.Y)), int32(math.Floor(p.Z))}]
+}
+
+// within tells whether d is on one of the plots, or within margin m of its
+// edge (less than its bank).
+func (s *PlotSet) within(d vec3, margin float64) bool {
+	for _, i := range s.near(d) {
+		if dist, _ := s.List[i].dist(d); dist < margin {
+			return true
+		}
+	}
+	return false
+}
 
 // SetPads flattens the ground under these discs (Dir and Radius), and no
 // others.
@@ -110,20 +154,15 @@ func (r Relief) SetPads(list []Pad) {
 // SetPlots grades the ground under these rectangles, and no others.
 func (r Relief) SetPlots(list []Plot) {
 	f := *r.Flat()
-	f.Plots, f.cells = list, map[[3]int32][]int32{}
-	cell := func(v float64) int32 { return int32(math.Floor(v / flatCell)) }
-	for i, p := range list {
-		a := p.area()
-		c := a.Dir.Scale(Radius)
-		for x := cell(c.X - a.Reach); x <= cell(c.X+a.Reach); x++ {
-			for y := cell(c.Y - a.Reach); y <= cell(c.Y+a.Reach); y++ {
-				for z := cell(c.Z - a.Reach); z <= cell(c.Z+a.Reach); z++ {
-					k := [3]int32{x, y, z}
-					f.cells[k] = append(f.cells[k], int32(i))
-				}
-			}
-		}
-	}
+	f.Plots = newPlotSet(list)
+	r.works.now.Store(&f)
+}
+
+// SetBare clears the ground of stones under these rectangles, and no
+// others, as it is.
+func (r Relief) SetBare(list []Plot) {
+	f := *r.Flat()
+	f.Bare = newPlotSet(list)
 	r.works.now.Store(&f)
 }
 
@@ -145,7 +184,7 @@ func (f *Flat) Areas() map[Area]any {
 	for _, p := range f.Pads {
 		out[p.area()] = p
 	}
-	for _, p := range f.Plots {
+	for _, p := range f.Plots.List {
 		out[p.area()] = p
 	}
 	return out
@@ -158,23 +197,14 @@ func (f *Flat) flatten(d vec3, h float64) float64 {
 	return h
 }
 
-// near are the plots that may reach the ground along d.
-func (f *Flat) near(d vec3) []int32 {
-	if len(f.cells) == 0 {
-		return nil
-	}
-	p := d.Scale(Radius / flatCell)
-	return f.cells[[3]int32{int32(math.Floor(p.X)), int32(math.Floor(p.Y)), int32(math.Floor(p.Z))}]
-}
-
 // grade blends height h at d to the plots around: on one (its margin
 // too), their lowest plane, so that none pokes through another; around,
 // the planes of those near, the nearer the more, then the relief.
 func (f *Flat) grade(d vec3, h float64) float64 {
 	low, natural := math.Inf(1), 1.0
 	sum, weight := 0.0, 0.0
-	for _, i := range f.near(d) {
-		dist, plane := f.Plots[i].dist(d)
+	for _, i := range f.Plots.near(d) {
+		dist, plane := f.Plots.List[i].dist(d)
 		if dist <= PlotMargin {
 			low = math.Min(low, plane)
 			continue
@@ -198,21 +228,22 @@ func (f *Flat) grade(d vec3, h float64) float64 {
 	return flat + (h-flat)*natural
 }
 
-// OnPad tells whether d is on flattened ground (the base's aside), or
-// within margin m of its edge.
+// OnPad tells whether d is on a bootcamp's pad, or within margin m of its
+// edge.
 func (r Relief) OnPad(d vec3, margin float64) bool {
-	f := r.Flat()
-	for _, p := range f.Pads {
+	for _, p := range r.Flat().Pads {
 		if d.Dot(p.Dir) > p.cosOut && ArcDist(d, p.Dir) < p.Radius+margin {
 			return true
 		}
 	}
-	for _, i := range f.near(d) {
-		if dist, _ := f.Plots[i].dist(d); dist < margin {
-			return true
-		}
-	}
 	return false
+}
+
+// Built tells whether d is under a block standing on the ground, or within
+// margin m of its edge.
+func (r Relief) Built(d vec3, margin float64) bool {
+	f := r.Flat()
+	return f.Plots.within(d, margin) || f.Bare.within(d, margin)
 }
 
 // ByPad tells whether d is where the base's pad or a bootcamp's shapes

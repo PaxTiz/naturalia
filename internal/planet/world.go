@@ -194,7 +194,7 @@ func (w *World) gemIn(k TileKey) (Gem, bool) {
 	i := tx*TileCells + 8 + int(mathx.Hash3(f, tx, ty, w.Seed+102)*(TileCells-16))
 	j := ty*TileCells + 8 + int(mathx.Hash3(f, tx, ty, w.Seed+103)*(TileCells-16))
 	d := cellDir(f, i, j)
-	if ArcDist(d, BaseUp) < clearRadius || w.Relief.OnPad(d, 1) {
+	if ArcDist(d, BaseUp) < clearRadius || w.Relief.OnPad(d, 1) || w.Relief.Built(d, 1) {
 		return Gem{}, false
 	}
 	return Gem{k, d}, true

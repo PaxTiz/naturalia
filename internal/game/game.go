@@ -118,7 +118,7 @@ type Game struct {
 	phys     *phys          // the collisions' plane (physics.go)
 	relay    bool           // lay it again at the next step: a bootcamp set down, a trip
 	regrade  bool           // the ground under the blocks, graded again (grid.go)
-	graded   int            // how many things stood on grids when it was
+	graded   int            // how many things there were when it was
 	loading  bool           // the saved entities are being set down
 	DoorOpen float64        // airlock doors: 0 closed, 1 open
 	doorWant float64        // where they are going
