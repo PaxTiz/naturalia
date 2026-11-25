@@ -336,3 +336,116 @@ func TestBuildOnRocks(t *testing.T) {
 		}
 	}
 }
+
+// Aimed high on its side, over the player's head, a block goes on top,
+// edge to edge; aimed again low on the tower's foot, higher still.
+func TestGridStack(t *testing.T) {
+	for _, kind := range []string{"core:crate-2", "core:wall"} {
+		g := gridGame(t)
+		first := put(g, kind, ahead(g, 6), 6)
+		grid, _ := g.gridOf(first)
+		lo, hi, _ := g.boxOf(grid, first)
+		pos, ax, up, _ := g.Frame(g.Ents.Transform.Get(first))
+		tall := hi.Y - lo.Y
+		high := pos.Add(up.Scale(tall * 0.8)).Add(ax.Scale(hi.X - lo.X).Scale(0.4))
+		for i := 1; i <= 2; i++ {
+			id := put(g, kind, high, 5)
+			if id == 0 {
+				t.Fatalf("%s %d doesn't fit: %q", kind, i, g.Ghost.Why)
+			}
+			l, h, _ := g.boxOf(grid, id)
+			want := vec3{lo.X, lo.Y + tall*float64(i), lo.Z}
+			if l.Sub(want).Length() > 1e-6 || h.Y-l.Y-tall > 1e-6 {
+				t.Errorf("%s %d at %v, want %v", kind, i, l, want)
+			}
+		}
+		// Low on its side, the next one is beside it, level with it.
+		g.Ghost.lift = 0
+		id := put(g, kind, pos.Add(up.Scale(tall*0.3)).Add(ax.Scale((hi.X-lo.X)*0.5)), 5)
+		if id == 0 {
+			t.Fatalf("%s beside doesn't fit: %q", kind, g.Ghost.Why)
+		}
+		if l, _, _ := g.boxOf(grid, id); math.Abs(l.Y-lo.Y) > 1e-6 {
+			t.Errorf("%s beside it is %.3f m off its level", kind, l.Y-lo.Y)
+		}
+	}
+}
+
+// A roof aimed at a wall's head goes over the room it closes.
+func TestGridRoof(t *testing.T) {
+	g := gridGame(t)
+	slab := put(g, "core:slab", ahead(g, 8), 8)
+	grid, _ := g.gridOf(slab)
+	pos, ax, up, _ := g.Frame(g.Ents.Transform.Get(slab))
+	wall := put(g, "core:wall", pos.Add(up.Scale(0.2)).Sub(ax.Scale(1.8)), 6)
+	if wall == 0 {
+		t.Fatal("no wall")
+	}
+	wpos, _, _, _ := g.Frame(g.Ents.Transform.Get(wall))
+	roof := put(g, "core:slab", wpos.Add(up.Scale(2.1)).Add(ax.Scale(0.1)), 5)
+	if roof == 0 {
+		t.Fatalf("no roof: %q", g.Ghost.Why)
+	}
+	lo, _, _ := g.boxOf(grid, roof)
+	slo, _, _ := g.boxOf(grid, slab)
+	if want := slo.Add(vec3{0, 2.7, 0}); lo.Sub(want).Length() > 1e-6 {
+		t.Errorf("the roof is at %v, want %v", lo, want)
+	}
+}
+
+// Crates rest on blocks and on each other, and fall once what bears them
+// is gone.
+func TestCratesStack(t *testing.T) {
+	for _, on := range []bool{true, false} {
+		g := gridGame(t)
+		g.Settings.Grid = on
+		settle := func() {
+			for range 180 {
+				g.stepPhysics(1.0 / 60)
+			}
+		}
+		slab := put(g, "core:slab", ahead(g, 6), 6)
+		pos, _, up, _ := g.Frame(g.Ents.Transform.Get(slab))
+		first := put(g, "core:crate", pos.Add(up.Scale(0.2)), 4)
+		settle()
+		p1, _, _, _ := g.Frame(g.Ents.Transform.Get(first))
+		second := put(g, "core:crate", p1.Add(up.Scale(0.8)), 3)
+		if first == 0 || second == 0 {
+			t.Fatalf("grid %v: don't fit: %v %v %q", on, first, second, g.Ghost.Why)
+		}
+		settle()
+		p1b, _, _, _ := g.Frame(g.Ents.Transform.Get(first))
+		p2, _, _, _ := g.Frame(g.Ents.Transform.Get(second))
+		if d := p1.Sub(pos).Dot(up); math.Abs(d-0.2) > 0.03 {
+			t.Errorf("grid %v: the first crate is %.2f m over the slab's foot", on, d)
+		}
+		if d := p2.Sub(p1b); math.Abs(d.Dot(up)-0.8) > 0.03 || d.Sub(up.Scale(d.Dot(up))).Length() > 0.3 {
+			t.Errorf("grid %v: the second crate is at %v from the first", on, d)
+		}
+		if p1b.Sub(p1).Length() > 0.05 {
+			t.Errorf("grid %v: the first crate moved %.2f m", on, p1b.Sub(p1).Length())
+		}
+		g.Ents.Kill(first)
+		settle()
+		if p, _, _, _ := g.Frame(g.Ents.Transform.Get(second)); math.Abs(p.Sub(pos).Dot(up)-0.2) > 0.03 || g.Ents.Air.Has(second) {
+			t.Errorf("grid %v: the second crate is %.2f m over the slab's foot", on, p.Sub(pos).Dot(up))
+		}
+	}
+}
+
+// Aimed just over a wall's head, a block goes on it, not behind it.
+func TestGridOverHead(t *testing.T) {
+	g := gridGame(t)
+	wall := put(g, "core:wall", ahead(g, 5), 5)
+	grid, _ := g.gridOf(wall)
+	lo, hi, _ := g.boxOf(grid, wall)
+	pos, _, up, _ := g.Frame(g.Ents.Transform.Get(wall))
+	id := put(g, "core:wall", pos.Add(up.Scale(2.7)), 4)
+	if id == 0 {
+		t.Fatalf("doesn't fit: %q", g.Ghost.Why)
+	}
+	l, _, _ := g.boxOf(grid, id)
+	if want := (vec3{lo.X, hi.Y, lo.Z}); l.Sub(want).Length() > 1e-6 {
+		t.Errorf("at %v, want %v", l, want)
+	}
+}

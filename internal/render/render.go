@@ -66,7 +66,6 @@ type Graphics struct {
 	doorPanel                                         rl.Model
 	hallLeaf                                          rl.Model                 // a door leaf of the halls, scaled to size
 	entities                                          map[string][]entityModel // by entity ID, built on first draw
-	grids                                             map[float64][]rl.Model   // the lines of the building grid, by step
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
@@ -436,11 +435,12 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(ao)}, rl.ShaderUniformVec2)
 
 	brush := []float32{0, 0, 0, 0}
-	if g.AimOK && g.Mode == game.ModePlay {
+	if g.AimOK && g.Mode == game.ModePlay && g.Ghost == nil {
 		brush = []float32{float32(g.Aim.X), float32(g.Aim.Y), float32(g.Aim.Z), float32(g.Tool().Radius)}
 	}
 	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
 	gfx.uploadSteps(&g.Steps)
+	gfx.setGrid(g)
 
 	// Soft round shadows of the base's domes, for when the base is beyond
 	// the shadow map.

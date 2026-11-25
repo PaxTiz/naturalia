@@ -250,13 +250,25 @@ func (g *Game) aimSurface(def *content.EntityDef, eye, fwd vec3) (at, n vec3, on
 	if !g.turnable(def) {
 		return hit, hit.Norm(), 0
 	}
-	if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach); ok {
+	if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach, def.Mass > 0); ok {
 		return bhit, bn, id
+	}
+	if !ok && g.Settings.Grid { // just over a block's head: on it
+		side := g.Player.Right()
+		for deg := 3.0; deg <= 15; deg += 3 {
+			low := rotate(fwd, side, -deg*math.Pi/180)
+			if _, ground := g.World.Relief.Raycast(eye, low, buildReach); ground {
+				break
+			}
+			if id, bhit, bn, ok := g.aimBlock(eye, low, buildReach, def.Mass > 0); ok {
+				return bhit, bn, id
+			}
+		}
 	}
 	if !ok { // too far ahead: on what stands there, from above
 		n := hit.Norm()
 		if h := eye.Length() - hit.Length(); h > 0 {
-			if id, bhit, bn, ok := g.aimBlock(hit.Add(n.Scale(h)), n.Scale(-1), h); ok {
+			if id, bhit, bn, ok := g.aimBlock(hit.Add(n.Scale(h)), n.Scale(-1), h, def.Mass > 0); ok {
 				return bhit, bn, id
 			}
 		}
@@ -362,6 +374,26 @@ func boxCorners(lo, hi, ax, up vec3) []vec3 {
 			c.Z = hi.Z
 		}
 		out = append(out, ax.Scale(c.X).Add(up.Scale(c.Y)).Add(az.Scale(c.Z)))
+	}
+	return out
+}
+
+// GhostEdges are the edges of the box the ghost fills, in the world.
+func (g *Game) GhostEdges() [][2]vec3 {
+	def, ok := g.Content.Entities.Get(g.Ghost.Kind)
+	if !ok || len(def.Parts) == 0 {
+		return nil
+	}
+	lo, hi := nominal(def)
+	pos, ax, up, _ := g.Frame(&g.Ghost.Pose)
+	c := boxCorners(lo, hi, ax, up)
+	var out [][2]vec3
+	for i := range c {
+		for _, bit := range []int{1, 2, 4} {
+			if i&bit == 0 {
+				out = append(out, [2]vec3{pos.Add(c[i]), pos.Add(c[i|bit])})
+			}
+		}
 	}
 	return out
 }

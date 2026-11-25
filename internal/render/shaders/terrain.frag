@@ -21,6 +21,7 @@ uniform sampler2D texture3; // painted dust: R tone, G clumps, A height
 out vec4 finalColor;
 #include "common.glsl"
 #include "texture.glsl"
+#include "grid.glsl"
 const float regolithTile = ${regolithTile};
 const float dustTile = ${dustTile};
 // Same cube projection as the game code (cubeFaces in mathx.go).
@@ -166,5 +167,6 @@ void main() {
         col = mix(col, vec3(0.45, 1.0, 0.95), ring * 0.75 + fill);
     }
 
+    col = buildGrid(col, normalize(fragNormal));
     finalColor = vec4(finish(col, dist), 1.0);
 }

@@ -223,7 +223,7 @@ func (g *Game) groundOn(p vec3) (r float64, block bool) {
 		}
 	}
 	if g.drive.r > 0 { // and the blocks it rolls onto
-		if top := g.topUnder(p, g.drive.r+carStep, false); top > r {
+		if top := g.topUnder(p, g.drive.r+carStep, false, 0); top > r {
 			return top, true
 		}
 	}

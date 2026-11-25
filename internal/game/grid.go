@@ -30,11 +30,13 @@ type OnGrid struct {
 	Ground bool `json:"ground,omitempty"`
 }
 
-// Sheet is the part of the grid shown under the ghost: the point At of its
-// lines nearest to the ghost, and the two axes they follow.
+// Sheet is the part of the grid shown around the ghost: the lines every
+// Step along its axes from At, out to Reach. Feet go from what is under
+// the ghost's corners up to them, where it hangs over it.
 type Sheet struct {
-	At, U, V vec3
-	Step     float64
+	At, X, Up, Z vec3
+	Step, Reach  float64
+	Feet         [4][2]vec3
 }
 
 // ToggleGrid switches the grid on or off.
@@ -60,9 +62,12 @@ func (g *Game) facing(def *content.EntityDef, n vec3) vec3 {
 	return face.Scale(-1)
 }
 
-// nominal is the box a thing is meant to fill, in its own frame: its
-// parts' but for the centimeter their trims stick out.
+// nominal is the box a thing is meant to fill, in its own frame: its cell,
+// or its parts' but for the centimeter their trims stick out.
 func nominal(def *content.EntityDef) (lo, hi vec3) {
+	if c := def.Cell; c != (vec3{}) {
+		return vec3{-c.X / 2, 0, -c.Z / 2}, vec3{c.X / 2, c.Y, c.Z / 2}
+	}
 	lo, hi = content.Bounds(def.Parts)
 	for _, v := range []*float64{&lo.X, &lo.Y, &lo.Z, &hi.X, &hi.Y, &hi.Z} {
 		*v = planet.Snap(*v, 0.025)
@@ -219,8 +224,13 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 	var grid planet.Grid
 	ok := false
 	if on != 0 {
-		if grid, ok = g.gridOf(on); !ok {
-			return false
+		if grid, ok = g.gridOf(on); !ok { // a crate's, only to stack on it
+			t := g.Ents.Transform.Get(on)
+			under, _ := g.Content.Entities.Get(g.kind(on))
+			pos, ax, up, _ := g.Frame(t)
+			if grid, ok = gridOn(under, pos, ax, up); !ok {
+				return false
+			}
 		}
 	} else {
 		grid, ok = g.gridAt(at, gridNear)
@@ -264,6 +274,17 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 			across = i
 		}
 	}
+	// High on a block's side, it goes on top: the player doesn't see the top
+	// of what is taller than them.
+	stacked := false
+	var blo, bhi vec3
+	if on != 0 {
+		blo, bhi, _ = g.boxOf(grid, on)
+		if tall := bhi.Y - blo.Y; across != 1 && tall >= 0.6 && aim.Y > blo.Y+0.6*tall {
+			stacked, across = true, 1
+			n, normal, aim.Y = grid.Up, vec3{0, 1, 0}, bhi.Y
+		}
+	}
 	// ...then its sides on the lines.
 	if !fresh {
 		for _, i := range []int{0, 2} {
@@ -282,14 +303,18 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 			pos.Y += snapRise(pos.Y+lo.Y, pos.Y+hi.Y, g.gridEdges(grid, pos.Add(lo), pos.Add(hi)))
 		}
 	case on != 0:
-		blo, bhi, _ := g.boxOf(grid, on)
-		if across != 1 {
+		switch {
+		case across == 1 && normal.Y > 0:
+			g.stackOver(grid, &pos, lo, hi, blo, bhi, stacked)
+		case across != 1 && hi.Y-lo.Y >= (bhi.Y-blo.Y)/2: // beside it, level with it
+			pos.Y = blo.Y - lo.Y
+		case across != 1: // a shelf on its side
 			pos.Y += snapRise(pos.Y+lo.Y, pos.Y+hi.Y, []float64{blo.Y, bhi.Y})
 		}
-		// Against the face, but for the block's trims.
+		// Against the cell's face, whatever its trims and hollows.
 		face := along(aim, across)
 		for _, e := range []float64{along(blo, across), along(bhi, across)} {
-			if math.Abs(e-face) < 0.06 {
+			if math.Abs(e-face) < 0.15 {
 				face = e
 			}
 		}
@@ -299,8 +324,14 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		for _, c := range boxCorners(a, b, ax, top) {
 			low = math.Min(low, c.Dot(n))
 		}
-		gap := pos.Sub(aim).Dot(normal) + low - lift
+		gap := pos.Sub(aim).Dot(normal) + low
 		setAlong(&pos, across, along(pos, across)-gap/along(normal, across))
+		pos.Y += lift
+		// Beside a block on the ground: on the ground too.
+		if o := g.Ents.Grid.Get(on); def.Build && across != 1 && o != nil && o.Ground && o.Same(grid) && math.Abs(pos.Y+lo.Y-o.Lo.Y) < 1e-6 {
+			low, high, apart := g.groundUnder(grid, pos.Add(lo), pos.Add(hi))
+			ground = !apart && o.Lo.Y-low <= planet.MaxGrade && high-o.Lo.Y <= planet.MaxGrade
+		}
 	case def.Build:
 		var level float64
 		level, ground, fits = g.gridLevel(grid, pos.Add(lo), pos.Add(hi), fresh, lift)
@@ -332,7 +363,7 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 	gh.OK = set(pos)
 	// Aimed too near another block, or a wall's end in another's thickness:
 	// slid out of it.
-	if !gh.OK && sides && !fresh {
+	if !gh.OK && sides && !fresh && !stacked {
 		for _, d := range g.slides(grid, pos.Add(lo), pos.Add(hi), across) {
 			if set(pos.Add(d)) {
 				pos, gh.OK = pos.Add(d), true
@@ -343,10 +374,31 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 			set(pos)
 		}
 	}
+	// No room there: on top of what takes it, as high as it goes.
+	if !gh.OK && !fresh && !gh.Free {
+		p := pos
+		for range 12 {
+			top, ok := g.topOver(grid, p.Add(lo), p.Add(hi), def.Mass > 0)
+			if !ok {
+				break
+			}
+			p.Y = top - lo.Y
+			graded := ground
+			ground = false
+			if set(p) {
+				pos, gh.OK, fits, gh.Why = p, true, true, ""
+				break
+			}
+			ground = graded
+		}
+		if !gh.OK {
+			set(pos)
+		}
+	}
 	gh.OK = gh.OK && fits
 	gh.fresh = fresh
 	gh.grid = &OnGrid{Grid: grid, Lo: pos.Add(lo), Hi: pos.Add(hi), Ground: ground}
-	gh.Sheet = g.sheet(gh.grid, across, step, normal)
+	gh.Sheet = g.sheet(gh.grid, step)
 	return true
 }
 
@@ -418,19 +470,96 @@ func (gh *Ghost) Aligned() bool {
 	return true
 }
 
-// sheet is the grid's lines under the box, on the side it rests on.
-func (g *Game) sheet(o *OnGrid, across int, step float64, normal vec3) *Sheet {
+// sheet is the grid's lines around the box, and how far over what is
+// under them its corners hang.
+func (g *Game) sheet(o *OnGrid, step float64) *Sheet {
 	mid := o.Lo.Add(o.Hi).Scale(0.5)
-	for i := range 3 {
-		setAlong(&mid, i, planet.Snap(along(mid, i), step))
-	}
-	side, off := along(o.Lo, across), 0.03
-	if along(normal, across) < 0 {
-		side, off = along(o.Hi, across), -0.03
-	}
-	setAlong(&mid, across, side+off)
+	at := vec3{planet.Snap(mid.X, step), o.Lo.Y, planet.Snap(mid.Z, step)}
 	axes := o.Axes()
-	return &Sheet{At: o.World(mid), U: axes[(across+1)%3], V: axes[(across+2)%3], Step: step}
+	s := &Sheet{At: o.World(at), X: axes[0], Up: axes[1], Z: axes[2], Step: step,
+		Reach: math.Hypot(o.Hi.X-o.Lo.X, o.Hi.Z-o.Lo.Z)/2 + 2 + 2*step}
+	for i, x := range []float64{o.Lo.X + 0.03, o.Hi.X - 0.03} {
+		for j, z := range []float64{o.Lo.Z + 0.03, o.Hi.Z - 0.03} {
+			foot := o.World(vec3{x, o.Lo.Y, z})
+			r := foot.Length()
+			under := math.Max(g.World.Relief.SurfaceRadius(foot.Norm()), g.topUnder(foot, r+0.05, true, 0))
+			if r-under > 0.1 {
+				s.Feet[i*2+j] = [2]vec3{foot.Norm().Scale(under), foot}
+			}
+		}
+	}
+	return s
+}
+
+// stackOver lines up a thing filling lo..hi around pos over a block that
+// fills blo..bhi: edge to edge with it where they are as long; within it
+// where it is shorter; and where it is longer (a roof on a wall), if the
+// block was aimed at from its side, from one of its edges, over the most
+// of what else would bear it.
+func (g *Game) stackOver(grid planet.Grid, pos *vec3, lo, hi, blo, bhi vec3, side bool) {
+	for _, i := range []int{0, 2} {
+		long, under := along(hi, i)-along(lo, i), along(bhi, i)-along(blo, i)
+		at := along(*pos, i)
+		first, last := along(blo, i)-along(lo, i), along(bhi, i)-along(hi, i) // edge to edge
+		switch {
+		case math.Abs(long-under) < 0.02:
+			if side || under < g.Settings.GridStep || math.Abs(first-at) < 0.3 {
+				at = first
+			}
+		case long < under:
+			if side {
+				at = math.Max(first, math.Min(last, at))
+			}
+		case side && under < 1: // across a wall
+			me := along(grid.Local(g.Player.Pos), i)
+			best := -1.0
+			for _, c := range []float64{first, last} {
+				p := *pos
+				setAlong(&p, i, c)
+				score := g.borne(grid, p.Add(lo), p.Add(hi), bhi.Y)
+				mid := c + (along(lo, i)+along(hi, i))/2
+				if (mid > along(blo, i)) == (me > along(blo, i)) { // toward the player, all else equal
+					score += 1e-3
+				}
+				if score > best {
+					at, best = c, score
+				}
+			}
+		}
+		setAlong(pos, i, at)
+	}
+}
+
+// borne is how much of the rectangle lo..hi of a grid is over blocks no
+// higher than y.
+func (g *Game) borne(grid planet.Grid, lo, hi vec3, y float64) float64 {
+	sum := 0.0
+	g.onGridNear(grid, lo, hi, func(_ ecs.ID, blo, bhi vec3) {
+		x := math.Min(hi.X, bhi.X) - math.Max(lo.X, blo.X)
+		z := math.Min(hi.Z, bhi.Z) - math.Max(lo.Z, blo.Z)
+		if bhi.Y <= y+0.01 && x > 0 && z > 0 {
+			sum += x * z
+		}
+	})
+	return sum
+}
+
+// topOver is the highest top of the blocks (with things, the crates too)
+// that meet the box lo..hi of a grid.
+func (g *Game) topOver(grid planet.Grid, lo, hi vec3, things bool) (top float64, ok bool) {
+	const room = 0.03
+	top = math.Inf(-1)
+	for _, id := range g.EntitiesNear(buildReach + gridNear + 15) {
+		def, known := g.Content.Entities.Get(g.kind(id))
+		if !known || g.Held(id) || !(def.Build || things && def.Mass > 0) {
+			continue
+		}
+		blo, bhi, _ := g.boxOf(grid, id)
+		if blo.X < hi.X-room && lo.X < bhi.X-room && blo.Y < hi.Y-room && lo.Y < bhi.Y-room && blo.Z < hi.Z-room && lo.Z < bhi.Z-room {
+			top, ok = math.Max(top, bhi.Y), true
+		}
+	}
+	return top, ok
 }
 
 // onGridNear calls fn for the blocks within gridNear of the box lo..hi of
@@ -486,24 +615,31 @@ func (g *Game) slides(grid planet.Grid, lo, hi vec3, across int) []vec3 {
 	return out
 }
 
+// groundUnder is the lowest and the highest of the natural ground under
+// the rectangle lo..hi of a grid, in its frame; apart if the base's pad or
+// a bootcamp's shapes it: it isn't graded.
+func (g *Game) groundUnder(grid planet.Grid, lo, hi vec3) (low, high float64, apart bool) {
+	r := g.World.Relief
+	low, high = math.Inf(1), math.Inf(-1)
+	for _, kx := range []float64{0, 0.5, 1} {
+		for _, kz := range []float64{0, 0.5, 1} {
+			at := vec3{lo.X + (hi.X-lo.X)*kx, 0, lo.Z + (hi.Z-lo.Z)*kz}
+			d := grid.World(at).Norm()
+			h := grid.Local(d.Scale(planet.Radius + r.Natural(d))).Y
+			low, high = math.Min(low, h), math.Max(high, h)
+			apart = apart || r.ByPad(d)
+		}
+	}
+	return low, high, apart
+}
+
 // gridLevel is the height a block filling lo..hi (seen from above) of a
 // grid stands at on the ground, raised by lift: level with the blocks
 // standing on the ground near, or the level of the grid nearest to the
 // ground. ground tells whether the ground is graded to it, ok whether the
 // block may stand there.
 func (g *Game) gridLevel(grid planet.Grid, lo, hi vec3, fresh bool, lift float64) (level float64, ground, ok bool) {
-	r := g.World.Relief
-	var heights []float64 // of the natural ground under it, in the grid's frame
-	apart := false
-	for _, kx := range []float64{0, 0.5, 1} {
-		for _, kz := range []float64{0, 0.5, 1} {
-			at := vec3{lo.X + (hi.X-lo.X)*kx, 0, lo.Z + (hi.Z-lo.Z)*kz}
-			d := grid.World(at).Norm()
-			heights = append(heights, grid.Local(d.Scale(planet.Radius+r.Natural(d))).Y)
-			apart = apart || r.ByPad(d)
-		}
-	}
-	low, high := slices.Min(heights), slices.Max(heights)
+	low, high, apart := g.groundUnder(grid, lo, hi)
 	rest := (low + high) / 2
 	if apart { // not graded: on top of the ground as it is
 		rest = high

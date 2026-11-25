@@ -62,8 +62,30 @@ func (gfx *Graphics) entityModels(def *content.EntityDef) []entityModel {
 	return models
 }
 
+// setGrid gives the shaders the building grid's lines, around the ghost on
+// one (grid.glsl).
+func (gfx *Graphics) setGrid(g *game.Game) {
+	size := []float32{0, 0}
+	var s game.Sheet
+	if g.Ghost != nil && g.Ghost.Sheet != nil {
+		s = *g.Ghost.Sheet
+		size = []float32{float32(s.Step), float32(s.Reach)}
+	}
+	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "gridSize"), size, rl.ShaderUniformVec2)
+		if s.Reach == 0 {
+			continue
+		}
+		for name, v := range map[string]vec3{"gridRel": s.At.Sub(gfx.origin), "gridX": s.X, "gridUp": s.Up, "gridZ": s.Z} {
+			rl.SetShaderValue(sh, rl.GetShaderLocation(sh, name), v3f(v), rl.ShaderUniformVec3)
+		}
+	}
+}
+
 // drawGhost draws the item being placed see-through, glowing cyan where
-// it fits, red where it doesn't. Last, over the scene, not hiding it.
+// it fits, red where it doesn't. Last, over the scene. Its depth is laid
+// first: only its faces turned to the player show, it reads as a solid.
+// Where it hangs over something, its corners' feet go down to it.
 func (gfx *Graphics) drawGhost(g *game.Game) {
 	gh := g.Ghost
 	if gh == nil {
@@ -73,30 +95,44 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	if !ok {
 		return
 	}
-	col := color.RGBA{110, 235, 245, 90}
+	col := color.RGBA{95, 225, 238, 150}
 	if !gh.OK {
-		col = color.RGBA{255, 90, 70, 100}
+		col = color.RGBA{255, 90, 70, 150}
 	}
 	pos, ax, up, az := g.Frame(&gh.Pose)
+	draw := func() {
+		for _, m := range gfx.entityModels(def) {
+			gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.22)
+		}
+		if l := g.CampLayout(def.ID); l != nil { // a bootcamp: its meshes, all alike
+			rl.DisableBackfaceCulling()
+			for _, md := range gfx.campModels(def.ID, l).models {
+				gfx.putBasis(md, pos, ax, up, az, col, 0, 0.22)
+			}
+			rl.EnableBackfaceCulling()
+		}
+		rl.DrawRenderBatchActive()
+	}
 	rl.DrawRenderBatchActive()
-	rl.DisableDepthMask()
 	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
+	// No lines on the ghost itself.
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "gridSize"), []float32{0, 0}, rl.ShaderUniformVec2)
 	if gh.Sheet != nil {
-		gfx.drawSheet(gh.Sheet)
-	}
-	for _, m := range gfx.entityModels(def) {
-		gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.5)
-	}
-	if l := g.CampLayout(def.ID); l != nil { // a bootcamp: its meshes, all alike
-		rl.DisableBackfaceCulling()
-		for _, md := range gfx.campModels(def.ID, l).models {
-			gfx.putBasis(md, pos, ax, up, az, col, 0, 0.5)
+		for _, f := range gh.Sheet.Feet {
+			gfx.segment(gfx.cyl, f[0], f[1], 0.012, color.RGBA{col.R, col.G, col.B, 255}, 0, 0.5)
 		}
-		rl.EnableBackfaceCulling()
+	}
+	rl.ColorMask(false, false, false, false)
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
+	draw()
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
+	rl.ColorMask(true, true, true, true)
+	draw()
+	for _, e := range g.GhostEdges() {
+		gfx.segment(gfx.cyl, e[0], e[1], 0.014, color.RGBA{col.R, col.G, col.B, 255}, 0, 0.45)
 	}
 	rl.DrawRenderBatchActive()
-	rl.EnableDepthMask()
 }
 
 // buildEntity merges an entity's parts into one model per material, in

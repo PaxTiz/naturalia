@@ -161,12 +161,12 @@ func (g *Game) clearAbove(id ecs.ID, o, up vec3, h float64) bool {
 }
 
 // aimBlock is the nearest block a ray from o along d meets within max:
-// which, where, and the face's normal.
-func (g *Game) aimBlock(o, d vec3, max float64) (ecs.ID, vec3, vec3, bool) {
+// which, where, and the face's normal; with things, crates count too.
+func (g *Game) aimBlock(o, d vec3, max float64, things bool) (ecs.ID, vec3, vec3, bool) {
 	var best ecs.ID
 	var normal vec3
 	for _, id := range g.EntitiesNear(max + 12) {
-		if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || !def.Build {
+		if def, ok := g.Content.Entities.Get(g.kind(id)); !ok || !(def.Build || things && def.Mass > 0) || g.Held(id) {
 			continue
 		}
 		if t, n, ok := g.rayEntity(id, o, d, max); ok {
@@ -184,15 +184,19 @@ const (
 )
 
 // topUnder is the highest top of a block (with things, of a crate too)
-// straight under at, below from (both from Mars' center); 0 for none.
-func (g *Game) topUnder(at vec3, from float64, things bool) float64 {
+// straight under at, below from (both from Mars' center), but for skip; 0
+// for none.
+func (g *Game) topUnder(at vec3, from float64, things bool, skip ecs.ID) float64 {
 	start := at.Norm().Scale(from)
 	reach := g.World.Relief.Altitude(start)
 	if reach <= 0 {
 		return 0
 	}
 	top := 0.0
-	for _, id := range g.EntitiesNear(15) {
+	for id, t := range g.Ents.Transform.All() {
+		if id == skip || planet.ArcDist(start.Norm(), t.Dir) > 15 {
+			continue
+		}
 		def, ok := g.Content.Entities.Get(g.kind(id))
 		if !ok || !(def.Build || things && def.Mass > 0) || g.Ents.Air.Has(id) || id == g.held() {
 			continue
@@ -214,7 +218,7 @@ func (g *Game) floorUnder(pos vec3) float64 {
 	floor := 0.0
 	for _, off := range [...]vec3{{}, t1.Scale(0.22), t1.Scale(-0.22), t2.Scale(0.22), t2.Scale(-0.22)} {
 		at := pos.Add(off)
-		if top := g.topUnder(at, pos.Length()+stepUp, true); top > 0 {
+		if top := g.topUnder(at, pos.Length()+stepUp, true, 0); top > 0 {
 			floor = math.Max(floor, top-g.World.Relief.Surface(at).Length())
 		}
 		// The base's floors: a mezzanine, its stairs.
@@ -250,6 +254,9 @@ func (g *Game) allow(a, b *physics.Body, m *physics.Manifold) bool {
 	n := m.Normal // from a to b
 	if b == p.player || b == p.car {
 		a, b, n = b, a, n.Scale(-1)
+	}
+	if a.Layer == layerProp || b.Layer == layerProp {
+		return !g.rests(a, b) && !g.rests(b, a)
 	}
 	if (a != p.player && a != p.car) || b.Kind != physics.Static {
 		return true

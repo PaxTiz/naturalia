@@ -206,6 +206,7 @@ func (g *Game) stepPhysics(dt float64) {
 	g.senses(v)
 	g.entitiesAfter(dt)
 	g.updateTossed(dt)
+	g.updateResting()
 }
 
 // bump: something came at the walking player that fast, and threw them
@@ -251,13 +252,14 @@ func (g *Game) rubs(id ecs.ID, on bool) {
 func (g *Game) updateTossed(dt float64) {
 	for id, a := range g.Ents.Air.All() {
 		e := g.Ents.Transform.Get(id)
+		floor := g.restUnder(id)
 		e.Alt += a.vz * dt
 		a.vz -= tossFall * marsGravity * dt
 		e.Pitch += a.tumble * dt
-		if e.Alt > 0 {
+		if e.Alt > floor {
 			continue
 		}
-		e.Alt = 0
+		e.Alt = floor
 		if a.vz < -2 {
 			a.vz, a.tumble = -a.vz*0.3, a.tumble*0.5 // a bounce
 			continue
@@ -268,6 +270,75 @@ func (g *Game) updateTossed(dt float64) {
 		g.Ents.Air.Remove(id)
 		g.rubs(id, true)
 	}
+}
+
+// restUnder is how high over the ground the highest block or crate under
+// thing id stands: what it lands and rests on; 0 for the ground.
+func (g *Game) restUnder(id ecs.ID) float64 {
+	e := g.Ents.Transform.Get(id)
+	def, ok := g.Content.Entities.Get(g.kind(id))
+	if !ok {
+		return 0
+	}
+	pos, ax, _, az := g.Frame(e)
+	lo, hi := content.Bounds(def.Parts)
+	in := math.Min(hi.X-lo.X, hi.Z-lo.Z) * 0.3
+	floor := 0.0
+	for _, off := range [...]vec3{{}, ax.Scale(in), ax.Scale(-in), az.Scale(in), az.Scale(-in)} {
+		at := pos.Add(off)
+		if top := g.topUnder(at, at.Length()+0.2, true, id); top > 0 {
+			floor = math.Max(floor, top-g.World.Relief.SurfaceRadius(pos.Norm()))
+		}
+	}
+	return floor
+}
+
+// updateResting keeps the things resting on others at their height as they
+// are pushed along, and drops those that lost what was under them.
+func (g *Game) updateResting() {
+	for _, id := range g.EntitiesNear(physReach) {
+		e := g.Ents.Transform.Get(id)
+		def, ok := g.Content.Entities.Get(g.kind(id))
+		if !ok || def.Mass <= 0 || e.Alt <= 0 || g.Ents.Air.Has(id) || g.Held(id) {
+			continue
+		}
+		if floor := g.restUnder(id); floor < e.Alt-0.05 {
+			g.Ents.Air.Set(id, Air{})
+			g.rubs(id, false)
+		} else {
+			e.Alt = floor
+		}
+	}
+}
+
+// rests tells if thing a stands on b, a block or another thing, rather
+// than against it: nothing of b is above its foot where they meet.
+func (g *Game) rests(a, b *physics.Body) bool {
+	id, under := ecs.ID(a.ID), ecs.ID(b.ID)
+	if a.Layer != layerProp || id == 0 || under == 0 {
+		return false
+	}
+	e := g.Ents.Transform.Get(id)
+	def, ok := g.Content.Entities.Get(g.kind(under))
+	if e == nil || e.Alt <= 0.05 || !ok || !(def.Build || def.Mass > 0) {
+		return false
+	}
+	p := g.phys
+	dir := p.dir(a.Pos)
+	foot := g.World.Relief.SurfaceRadius(e.Dir) + e.Alt
+	if b.Layer == layerProp {
+		ue := g.Ents.Transform.Get(under)
+		_, hi := p.partsBounds(def)
+		return g.World.Relief.SurfaceRadius(ue.Dir)+ue.Alt+hi.Y <= foot+0.1
+	}
+	t1, t2 := mathx.TangentBasis(dir)
+	r := a.Shape.Radius + 0.5
+	for _, off := range [...]vec3{{}, t1.Scale(r), t1.Scale(-r), t2.Scale(r), t2.Scale(-r)} {
+		if !g.clearAbove(under, dir.Scale(foot+0.1).Add(off), dir, a.Top-a.Bottom) {
+			return false
+		}
+	}
+	return true
 }
 
 // entitiesAfter moves the things pushed around where the collisions left
@@ -665,6 +736,9 @@ func (g *Game) syncEntities() {
 			hi.Y += triggerH
 		}
 		b.Bottom, b.Top = p.slice(at.Add(e.Dir.Scale(e.Alt)), hi.Y)
+		if b.Layer == layerProp && e.Alt > 0.05 { // on top of something: not into it
+			b.Bottom += bodyFeet + 0.03
+		}
 		if b.Layer == layerDrone {
 			b.Bottom = b.Top - hi.Y + lo.Y
 		}

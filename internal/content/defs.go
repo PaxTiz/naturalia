@@ -243,6 +243,10 @@ type EntityDef struct {
 	// Build makes it a block to build with: set down turned any way, it
 	// stays put, and the player walks on it.
 	Build bool `json:"build"`
+	// Cell is the size it fills on the building grid, standing on the
+	// middle of its base; without one, its parts', rounded to 25 mm. Parts
+	// may stick out of it a little: trims.
+	Cell vec3 `json:"cell"`
 	// Trigger makes it a zone, walked and driven through: who comes in and
 	// goes out says trigger_enter and trigger_leave. It spans radius, or
 	// its parts without one, up to 1.5 m over them.
