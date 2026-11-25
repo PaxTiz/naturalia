@@ -9,7 +9,6 @@ import (
 	"naturalia/internal/mathx"
 	"naturalia/internal/mesh"
 	"naturalia/internal/planet"
-	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -61,9 +60,9 @@ func (gfx *Graphics) pebblesIn(g *game.Game, k planet.TileKey) []pebble {
 // drawPebbles draws the pebbles near the player, one instanced call per
 // shape. They sink into thick dust and come out where it is swept.
 func (gfx *Graphics) drawPebbles(g *game.Game) {
-	if pads := g.World.Relief.Pads(); gfx.nearPebbles == nil || !slices.Equal(pads, gfx.pebblePads) {
-		gfx.nearPebbles = map[planet.TileKey][]pebble{} // none under a bootcamp set down
-		gfx.pebblePads = slices.Clone(pads)
+	if flat := g.World.Relief.Flat(); gfx.nearPebbles == nil || flat != gfx.pebbleFlat {
+		gfx.nearPebbles = map[planet.TileKey][]pebble{} // none under what was set down
+		gfx.pebbleFlat = flat
 	}
 	near := map[planet.TileKey]bool{}
 	var mats [pebbleShapes][]rl.Matrix

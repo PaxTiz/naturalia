@@ -77,7 +77,7 @@ type Graphics struct {
 	Terrain     *Terrain                    // the ground as drawn, in levels of detail
 	nearGems    []planet.Gem                // crystals around the player, refreshed every frame
 	nearPebbles map[planet.TileKey][]pebble // per tile, around the player
-	pebblePads  []planet.Pad                // the bootcamps' pads they were placed around
+	pebbleFlat  *planet.Flat                // the flattened ground they were placed around
 	stats       Stats
 	camEye      vec3 // the camera's position in double precision (camera)
 	camLook     vec3 // where it looks, and its up, in double precision too

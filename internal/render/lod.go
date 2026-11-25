@@ -31,7 +31,8 @@ type lodNode struct {
 	children      []*lodNode
 	mesh          rl.Mesh
 	state         int  // nodeEmpty, nodePending or nodeReady
-	redo          bool // ready, built again meanwhile: the ground changed under it (Refresh)
+	redo          bool // ready, built again meanwhile: the ground changed under it (refresh)
+	stale         bool // the ground changed again while it was being built
 	lastUsed      uint64
 }
 
@@ -61,12 +62,13 @@ type Terrain struct {
 	// (raylib-go's UnloadMesh is broken without cgo, and recycling is faster.)
 	pool  []rl.Mesh
 	frame uint64
-	pads  []planet.Pad // the flattened discs the meshes were built with
+	flat  *planet.Flat // the flattened ground the meshes were built with
 }
 
 func NewTerrain(relief planet.Relief) *Terrain {
 	t := &Terrain{
 		Relief:  relief,
+		flat:    relief.Flat(),
 		jobs:    make(chan *lodNode, 8192),
 		results: make(chan nodeData, 8192),
 	}
@@ -311,38 +313,54 @@ func (t *Terrain) upload(limit int) {
 				t.loaded = append(t.loaded, r.n)
 			}
 			r.n.mesh, r.n.state, r.n.redo = mesh, nodeReady, false
+			if r.n.stale {
+				r.n.stale, r.n.redo = false, true
+				t.pending++
+				t.jobs <- r.n
+			}
 		default:
 			return
 		}
 	}
 }
 
-// refreshPads builds again the meshes over the ground flattened or given
-// back since the last frame, where a bootcamp was set down or moved off.
-// They are drawn as they were until then.
-func (t *Terrain) refreshPads() {
-	pads := t.Pads()
-	if slices.Equal(pads, t.pads) {
+// refreshFlat builds again the meshes over the ground flattened or given
+// back since the last frame, where a bootcamp or a block was set down or
+// moved off. They are drawn as they were until then.
+func (t *Terrain) refreshFlat() {
+	flat := t.Flat()
+	if flat == t.flat {
 		return
 	}
-	for _, list := range [2][]planet.Pad{pads, t.pads} {
-		for _, p := range list {
-			if !slices.Contains(pads, p) || !slices.Contains(t.pads, p) {
-				for _, r := range t.roots {
-					t.refresh(r, p.Dir, (p.Radius+planet.PadBlend)/planet.Radius)
-				}
-			}
+	now, was := flat.Areas(), t.flat.Areas()
+	t.flat = flat
+	again := func(a planet.Area) {
+		for _, r := range t.roots {
+			t.refresh(r, a.Dir, a.Reach/planet.Radius)
 		}
 	}
-	t.pads = slices.Clone(pads)
+	for a, v := range now {
+		if was[a] != v {
+			again(a)
+		}
+	}
+	for a := range was {
+		if now[a] == nil {
+			again(a)
+		}
+	}
 }
 
-// refresh builds again the ready meshes of n and under within angle a of d.
+// refresh builds again the meshes of n and under within angle a of d; one
+// being built, maybe with the ground as it was, is once more after.
 func (t *Terrain) refresh(n *lodNode, d vec3, a float64) {
 	if math.Acos(math.Max(-1, math.Min(1, n.center.Dot(d)))) > n.angulRad+a {
 		return
 	}
-	if n.state == nodeReady && !n.redo {
+	switch {
+	case n.state == nodePending || n.redo:
+		n.stale = true
+	case n.state == nodeReady:
 		n.redo = true
 		t.pending++
 		t.jobs <- n
@@ -356,7 +374,7 @@ func (t *Terrain) refresh(n *lodNode, d vec3, a float64) {
 // queues the meshes it is missing.
 func (t *Terrain) Visible(eye vec3) []*lodNode {
 	t.frame++
-	t.refreshPads()
+	t.refreshFlat()
 	t.upload(uploadsPerTick)
 	// Beyond this angle around Mars, even mountain tops are below the horizon.
 	horizon := math.Acos(math.Min(1, planet.Radius/eye.Length())) + math.Acos(planet.Radius/(planet.Radius+planet.MaxMountain))

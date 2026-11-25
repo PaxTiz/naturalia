@@ -80,3 +80,55 @@ func TestPads(t *testing.T) {
 		t.Errorf("taken off, the ground stays %f m off", d)
 	}
 }
+
+// A plot lays its plane under it and its margin, blends back beyond its
+// bank, and two side by side at different levels don't poke through each
+// other.
+func TestPlots(t *testing.T) {
+	set := DefaultSettings()
+	w := NewWorld(42, &set)
+	r := w.Relief
+	mid := Toward(vec3{1, 0, 0.5}, 900)
+	x, _ := mathx.TangentBasis(mid)
+	at := r.Surface(mid).Add(mid.Scale(1))
+	low := Plot{At: at, X: x, Up: mid, Half: [2]float64{2, 2}}
+	high := low
+	high.At = at.Add(x.Scale(4)).Add(mid.Scale(0.5))
+	over := func(p Plot, dx float64) float64 { // the ground over the plot's plane, dx from its middle
+		q := r.Surface(p.At.Add(x.Scale(dx)))
+		return q.Sub(p.At).Dot(mid)
+	}
+	far := Toward2(mid, x, -(2 + PlotMargin + PlotBlend + 0.1))
+	before := r.Height(far)
+	r.SetPlots([]Plot{low, high})
+	for _, dx := range []float64{-2.5, -2, 0, 1.9} {
+		if h := over(low, dx); math.Abs(h) > 1e-9 {
+			t.Errorf("%.1f m from its middle, %f m off the plane", dx, h)
+		}
+	}
+	if h := over(high, 1); math.Abs(h) > 1e-9 {
+		t.Errorf("on the high plot, %f m off", h)
+	}
+	if h := r.Height(far); h != before {
+		t.Errorf("past its bank, the ground moved %f m", h-before)
+	}
+	// The bank is a slope: no step wider than the one between the plots.
+	prev := over(low, -2)
+	for dx := -2.0; dx > -9; dx -= 0.05 {
+		h := over(low, dx)
+		if math.Abs(h-prev) > 0.06 {
+			t.Errorf("a step of %.2f m at %.2f", h-prev, dx)
+		}
+		prev = h
+	}
+	if !r.OnPad(mid, 0.5) || r.OnPad(far, 0.5) {
+		t.Error("rocks on the plot, or none beyond")
+	}
+	if h := r.Natural(mid) - r.raw(mid); math.Abs(h) > 1e-9 {
+		t.Errorf("the natural ground moved %f m", h)
+	}
+	r.SetPlots(nil)
+	if h := r.Height(mid) - r.raw(mid); math.Abs(h) > 1e-9 {
+		t.Errorf("taken off, the ground stays %f m off", h)
+	}
+}

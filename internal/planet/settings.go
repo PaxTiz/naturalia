@@ -3,13 +3,12 @@ package planet
 import (
 	"math"
 	"naturalia/internal/mathx"
+	"slices"
 )
 
 // Settings is how Mars is generated, open to packs: each layer of
 // the relief is scaled (0 removes it), and packs add their own shapes.
-// The relief is computed on many threads, for every vertex of the planet:
-// layers must be pure Go functions, quick, without state. Scripts can't
-// shape the ground, JSON features and Go layers can.
+// Scripts can't shape the ground, JSON features and Go layers (Layer) can.
 type Settings struct {
 	Plains    float64 `json:"plains"`    // long gentle swells
 	Hills     float64 `json:"hills"`     // rounded hills, in regions
@@ -25,9 +24,9 @@ type Settings struct {
 
 	Features []Feature `json:"features"` // shapes added by mods
 
-	// Layers are added to the height in Go, by compiled packs: d is the
-	// unit direction, p the point on the mean sphere.
-	Layers []func(seed uint64, d, p vec3) float64 `json:"-"`
+	// Layers are what the ground's height is the sum of (layers.go): Mars'
+	// own, then those of compiled packs (SetLayer).
+	Layers []Layer `json:"-"`
 }
 
 // Feature is a shape set on the ground: Dir is the local direction
@@ -45,7 +44,18 @@ func DefaultSettings() Settings {
 	return Settings{
 		Plains: 1, Hills: 1, Dunes: 1, Mountains: 1, Craters: 1,
 		Volcano: 1, Canyon: 1, IceCap: 1, Gems: 0.12, Rocks: 1, Sol: 1200,
+		Layers: CoreLayers(),
 	}
+}
+
+// SetLayer adds a layer, or puts it in the place of the one with its ID.
+func (t *Settings) SetLayer(l Layer) {
+	t.Layers = slices.Clone(t.Layers) // settings are copied around
+	if i := slices.IndexFunc(t.Layers, func(o Layer) bool { return o.ID == l.ID }); i >= 0 {
+		t.Layers[i] = l
+		return
+	}
+	t.Layers = append(t.Layers, l)
 }
 
 // Prepare places the features, once every pack is loaded.
