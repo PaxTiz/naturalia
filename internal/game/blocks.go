@@ -252,6 +252,7 @@ func (g *Game) floorUnder(pos vec3) float64 {
 		if top := g.topUnder(at, pos.Length()+stepUp, true, 0); top > 0 {
 			floor = math.Max(floor, top-g.World.Relief.Surface(at).Length())
 		}
+		floor = math.Max(floor, g.roofUnder(at))
 		// The base's floors: a mezzanine, its stairs.
 		if !atBase {
 			continue

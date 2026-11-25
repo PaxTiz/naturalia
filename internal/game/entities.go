@@ -242,7 +242,7 @@ func (g *Game) entityUse(id ecs.ID) base.Interactable {
 // NearbyUse returns what the player can use right now: the closest
 // interactable within reach that they roughly face.
 func (g *Game) NearbyUse() (base.Interactable, bool) {
-	if id, _ := g.nearbyEntity(); id != 0 {
+	if id, _ := g.nearbyEntity(); id != 0 && !g.Deep(g.Player.Eye()) {
 		return g.entityUse(id), true
 	}
 	best, found := base.Interactable{}, false

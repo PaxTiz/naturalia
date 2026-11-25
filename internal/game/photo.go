@@ -162,6 +162,7 @@ func (g *Game) EnterPhoto() {
 // frozen, or just back to playing (the key that left would act again).
 func (g *Game) updatePhoto(dt float64) bool {
 	ph := &g.Photo
+	was := ph.Pos
 	if KeyPressed(ActPhoto) || rl.IsKeyPressed(rl.KeyEscape) {
 		g.setMode(ModePlay)
 		return true
@@ -210,7 +211,11 @@ func (g *Game) updatePhoto(dt float64) bool {
 	if off := ph.Pos.Sub(g.Player.Eye()); off.Length() > photoTether {
 		ph.Pos = g.Player.Eye().Add(off.Norm().Scale(photoTether))
 	}
-	if g.World.Relief.Altitude(ph.Pos) < 0.15 {
+	if f, c, ok := g.burrow.At(ph.Pos); ok {
+		ph.Pos = ph.up().Scale(math.Max(f+0.15, math.Min(c-0.1, ph.Pos.Length())))
+	} else if g.Deep(was) {
+		ph.Pos = was
+	} else if g.World.Relief.Altitude(ph.Pos) < 0.15 {
 		ph.Pos = g.World.Relief.Surface(ph.Pos).Add(ph.up().Scale(0.15))
 	}
 	up := ph.up()

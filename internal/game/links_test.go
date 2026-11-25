@@ -10,7 +10,7 @@ import (
 )
 
 // pair is a game with a building standing on flat ground, and another at a
-// point of its frame, turned by yaw, its floor raised by rise.
+// point of its frame, turned by yaw, its floor raised by rise (NaN: on the ground there).
 func pair(t *testing.T, a, b string, at vec3, yaw, rise float64) (*Game, CampAt, CampAt) {
 	t.Helper()
 	g := baseGame(t)
@@ -29,7 +29,9 @@ func pair(t *testing.T, a, b string, at vec3, yaw, rise float64) (*Game, CampAt,
 		idb := g.add(Placed{Kind: b, Dir: there})
 		e := g.Ents.Transform.Get(idb)
 		e.SetAxes(planet.TangentAt(there, ca.Site.Dir(vec3{math.Cos(yaw), 0, math.Sin(yaw)})), there)
-		g.Ents.Camp.Get(idb).Level = &level
+		if !math.IsNaN(rise) { // on the ground as it is
+			g.Ents.Camp.Get(idb).Level = &level
+		}
 		g.standCamps()
 		ca, _ = g.campOf(ida)
 		cb, _ := g.campOf(idb)
@@ -54,7 +56,13 @@ func look(g *Game, r PortRef) {
 // "" if it did.
 func laid(t *testing.T, g *Game, from, to PortRef) string {
 	t.Helper()
-	it, _ := g.Content.Items.Get("core:sas")
+	return laidAs(t, g, "core:sas", from, to)
+}
+
+// laidAs is laid, for a link of any kind.
+func laidAs(t *testing.T, g *Game, kind string, from, to PortRef) string {
+	t.Helper()
+	it, _ := g.Content.Items.Get(kind)
 	g.Ghost = nil
 	g.hold(it)
 	for _, r := range []PortRef{from, to} {
@@ -105,7 +113,7 @@ func TestLinkWalk(t *testing.T) {
 		if want := 500_000 * math.Ceil(l.Layout.Length-1e-6); credits-g.State.Credits != want || l.Paid != want {
 			t.Errorf("%s: paid %v for %.1f m", c.name, credits-g.State.Credits, l.Layout.Length)
 		}
-		checkFights(t, c.name, l.Layout.Parts)
+		checkFights(t, c.name, l.Layout.Parts())
 		if !g.Linked(a.ID, c.from) || g.CampDoor(b.Ent, c.to) != 1 {
 			t.Errorf("%s: its ports aren't open", c.name)
 		}
@@ -178,9 +186,9 @@ func TestLinkRefused(t *testing.T) {
 		to   int
 		why  string
 	}{
-		{"core:carrefour", "core:serre", vec3{50, 0, 0}, math.Pi, 0, 0, "trop long"},
-		{"core:carrefour", "core:bootcamp", vec3{20, 0, 0}, math.Pi, 1.4, 0, "trop pentu"},
-		{"core:carrefour", "core:bootcamp", vec3{30, 0, 0}, math.Pi, 1.8, 0, "trop de dénivelé"},
+		{"core:carrefour", "core:serre", vec3{50, 0, 0}, math.Pi, 0, 0, "trop long : il faut un tunnel"},
+		{"core:carrefour", "core:bootcamp", vec3{20, 0, 0}, math.Pi, 1.4, 0, "trop pentu : il faut un tunnel"},
+		{"core:carrefour", "core:bootcamp", vec3{30, 0, 0}, math.Pi, 1.8, 0, "trop de dénivelé : il faut un tunnel"},
 		{"core:carrefour", "core:bootcamp", vec3{20, 0, 0}, 0, 0, 0, "ces portes se tournent trop le dos"},
 	} {
 		g, a, b := pair(t, c.a, c.b, c.at, c.yaw, c.rise)
@@ -306,7 +314,7 @@ func TestLinkMod(t *testing.T) {
 	g.Content.Links.Add("t:tube", def)
 	from, _ := g.portAt(PortRef{a.ID, 0})
 	to, _ := g.portAt(PortRef{b.ID, 0})
-	l := base.LayLink(&def, from, to)
+	l, _ := base.LayLink(&def, from, to, g.bareGround)
 	if l == nil {
 		t.Fatal("not laid")
 	}

@@ -107,6 +107,7 @@ type Game struct {
 	MessageT    float64               // ...for this long still
 	hand        string                // ID of the item F places (R cycles, the catalog picks)
 	links       []LinkAt              // the links standing (links.go)
+	burrow      *planet.Burrow        // what is dug under the ground (tunnels.go)
 	linked      map[PortRef]bool      // the ports they lead to
 	Ghost       *Ghost                // the item being placed, drawn see-through (build.go)
 	solids      map[string][]solid    // each kind's parts, for rays (blocks.go)
@@ -196,7 +197,12 @@ func New(c *content.Content) *Game {
 		g.Player.Pos, g.Player.Heading = g.WakeSpot()
 		g.wakeUp = true
 	}
-	g.Player.Pos = g.World.Relief.Surface(g.Player.Pos)
+	g.Player.burrow = g.burrow
+	if f, _, ok := g.burrow.At(g.Player.Pos); ok { // saved in a tunnel
+		g.Player.Pos = g.Player.Pos.Norm().Scale(f)
+	} else {
+		g.Player.Pos = g.World.Relief.Surface(g.Player.Pos)
+	}
 	g.walls = base.Walls()
 	g.syncFleet()
 	g.garageYard()
@@ -324,6 +330,7 @@ func (g *Game) updateAim() {
 	p := &g.Player
 	eye, fwd := p.Eye(), p.Forward()
 	g.Aim, g.AimOK = g.World.Relief.Raycast(eye, fwd, g.Tool().Reach)
+	g.AimOK = g.AimOK && !p.under
 	if g.AimOK && (planet.ArcDist(g.Aim.Norm(), planet.BaseUp) < base.Reach || base.Covered(base.ToLocal(g.Aim)) || g.Indoors(g.Aim.Add(g.Aim.Norm().Scale(0.5)))) {
 		g.AimOK = false // the ground under the base and the bootcamps isn't swept
 	}

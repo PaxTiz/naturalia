@@ -7,8 +7,8 @@ import (
 	"naturalia/internal/mesh"
 )
 
-// A link (content.Link) is a glass tube on the ground from a building's port
-// to another's: straight, with one bend, or with a small one as it leaves
+// A link (content.Link) goes from a building's port to another's: a glass
+// tube on the ground, or a tunnel under it (tunnel.go). A tube is straight, with one bend, or with a small one as it leaves
 // each port. It is laid out from the two ports in a frame of its own (its
 // middle at the origin, +X toward the second port), never saved.
 //
@@ -17,6 +17,7 @@ import (
 // PortAt is a port of a building standing somewhere.
 type PortAt struct {
 	At, Out vec3    // in the world: the middle of its outer door, on the floor, and the way out
+	Up      vec3    // its building's
 	Landing float64 // how far out of it the ground is the building's, level
 }
 
@@ -24,7 +25,7 @@ type PortAt struct {
 // margin m around its Reach.
 func (c *Camp) PortAt(s Site, i int, margin float64) PortAt {
 	p := c.Ports[i]
-	return PortAt{s.ToWorld(p.At()), s.Dir(p.Out()), math.Max(1.2, c.Reach+margin-p.At().Length()+0.1)}
+	return PortAt{s.ToWorld(p.At()), s.Dir(p.Out()), s.Y, math.Max(1.2, c.Reach+margin-p.At().Length()+0.1)}
 }
 
 // Link is a link laid out, in its own frame.
@@ -37,10 +38,11 @@ type Link struct {
 	Slope    float64 // of its ramp, 0.08 for 8 %
 	Walls    []Segment
 	Lights   []content.Light
-	Parts    *mesh.Parts
 	Key      string // the same for two links of the same shape
+	parts    *mesh.Parts
 	legs     []linkLeg
 	sections []linkSection
+	dug      *tunnel // under the ground
 }
 
 // linkLeg is a straight stretch between two points of a link, its floor's
@@ -74,8 +76,21 @@ func turnAngle(a, b vec3) float64 {
 	return math.Acos(math.Max(-1, math.Min(1, a.Dot(b))))
 }
 
-// LayLink lays out a link between two ports; nil if it would bend too much.
-func LayLink(def *content.Link, from, to PortAt) *Link {
+// LayLink lays out a link between two ports, or tells why it can't be.
+// ground is how far from Mars' center the ground is, in a direction, as it
+// was before anything was built: a tunnel goes under it.
+func LayLink(def *content.Link, from, to PortAt, ground func(dir vec3) float64) (*Link, string) {
+	if def.Under {
+		return layTunnel(def, from, to, ground)
+	}
+	if l := layTube(def, from, to); l != nil {
+		return l, ""
+	}
+	return nil, "ces portes se tournent trop le dos"
+}
+
+// layTube lays out a tube; nil if it would bend too much.
+func layTube(def *content.Link, from, to PortAt) *Link {
 	o := from.At.Lerp(to.At, 0.5)
 	up := o.Norm()
 	x := to.At.Sub(from.At)
@@ -120,6 +135,14 @@ func LayLink(def *content.Link, from, to PortAt) *Link {
 	l.cut()
 	l.build()
 	return l
+}
+
+// Parts are its meshes, built on first use: a tunnel is long.
+func (l *Link) Parts() *mesh.Parts {
+	if l.parts == nil {
+		l.parts = l.dig()
+	}
+	return l.parts
 }
 
 // crossing is where the ways out of two ports at a and b meet, past where
@@ -284,7 +307,7 @@ func (l *Link) build() {
 		}
 	}
 	b.Unfight()
-	l.Parts = b.Parts
+	l.parts = b.Parts
 
 	for i := range len(l.sections) - 1 {
 		s, e := l.sections[i], l.sections[i+1]
@@ -317,6 +340,10 @@ func (l *Link) build() {
 // Ways are the rectangles of ground under its ramp, in the world: their
 // middle, the way along, up, and half their sides.
 func (l *Link) Ways(see func(at, x, up vec3, half [2]float64)) {
+	if l.dug != nil {
+		l.dug.ways(see)
+		return
+	}
 	for _, g := range l.legs[1 : len(l.legs)-1] {
 		d := g.b.Sub(g.a)
 		long := d.Length()
@@ -326,8 +353,13 @@ func (l *Link) Ways(see func(at, x, up vec3, half [2]float64)) {
 	}
 }
 
-// Path goes through points of its floor, one every half metre.
+// Path goes through points of its floor, one every half metre, where it
+// stands on the ground: but the shelters of a tunnel, none.
 func (l *Link) Path(see func(p vec3)) {
+	if l.dug != nil {
+		l.dug.path(func(at vec3) { see(l.Site.ToLocal(at)) })
+		return
+	}
 	for _, g := range l.legs {
 		n := int(math.Ceil(g.b.Sub(g.a).Length() / 0.5))
 		for k := range n + 1 {
@@ -336,9 +368,18 @@ func (l *Link) Path(see func(p vec3)) {
 	}
 }
 
-// Legs are its straight stretches, seen from above: their corners, at the
-// floor's height.
+// Legs are its straight stretches on the ground, seen from above: their
+// corners, at the floor's height.
 func (l *Link) Legs(see func(corners [4]vec3)) {
+	if l.dug != nil {
+		l.dug.legs(func(c [4]vec3) {
+			for i := range c {
+				c[i] = l.Site.ToLocal(c[i])
+			}
+			see(c)
+		})
+		return
+	}
 	for _, g := range l.legs {
 		s := vec3{0, 1, 0}.Cross(level(g.b.Sub(g.a)).Norm()).Scale(l.Def.Width / 2)
 		see([4]vec3{g.a.Add(s), g.b.Add(s), g.b.Sub(s), g.a.Sub(s)})
@@ -358,6 +399,9 @@ func (g linkLeg) in(p vec3) (t, y, z, long float64) {
 
 // Indoors tells whether a point of its frame is in it.
 func (l *Link) Indoors(p vec3) bool {
+	if l.dug != nil {
+		return l.dug.holds(l.Site.ToWorld(p))
+	}
 	for _, g := range l.legs {
 		t, y, z, long := g.in(p)
 		if t > -0.05-g.pad[0] && t < long+0.05+g.pad[1] && y > -0.5 && y < l.Def.Height && math.Abs(z) < l.Def.Width/2 {
@@ -373,6 +417,9 @@ func (l *Link) Ray(o, d vec3, max float64) (float64, bool) {
 	best, ok := max, false
 	if l.Indoors(o) {
 		return 0, false
+	}
+	if l.dug != nil {
+		return l.dug.ray(l.Site.ToWorld(o), l.Site.Dir(d), max)
 	}
 	for _, g := range l.legs {
 		t0, y0, z0, long := g.in(o)
@@ -398,7 +445,12 @@ func (l *Link) Ray(o, d vec3, max float64) (float64, bool) {
 // SampleLink is a link of a kind alone, 6 m long, for its picture.
 func SampleLink(def *content.Link) *Link {
 	const r = 3000.0
-	return LayLink(def, PortAt{vec3{-3, r, 0}, vec3{1, 0, 0}, 1.2}, PortAt{vec3{3, r, 0}, vec3{-1, 0, 0}, 1.2})
+	if def.Under {
+		l, _ := layTunnel(def, PortAt{vec3{-14, r, 0}, vec3{1, 0, 0}, vec3{0, 1, 0}, 1.2}, PortAt{vec3{14, r, 0}, vec3{-1, 0, 0}, vec3{0, 1, 0}, 1.2},
+			func(vec3) float64 { return r })
+		return l
+	}
+	return layTube(def, PortAt{vec3{-3, r, 0}, vec3{1, 0, 0}, vec3{0, 1, 0}, 1.2}, PortAt{vec3{3, r, 0}, vec3{-1, 0, 0}, vec3{0, 1, 0}, 1.2})
 }
 
 // Blocks tells whether something at a point of the camp's frame would be

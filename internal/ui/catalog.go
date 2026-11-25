@@ -281,7 +281,7 @@ func (hud *HUD) paintThumb(g *game.Game, it *content.Item) bool {
 	}
 	if isLink {
 		l := base.SampleLink(link)
-		parts = l.Parts
+		parts = l.Parts()
 		lo, hi = vec3{-l.Length / 2, 0, -link.Width / 2}, vec3{l.Length / 2, link.Height, link.Width / 2}
 	}
 	mid := lo.Add(hi).Scale(0.5)

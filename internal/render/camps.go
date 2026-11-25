@@ -64,7 +64,7 @@ func (gfx *Graphics) linkModels(l *base.Link) *baseModels {
 	}
 	m := gfx.links[l.Key]
 	if m == nil {
-		m = gfx.uploadBase(l.Parts, gfx.objectSh)
+		m = gfx.uploadBase(l.Parts(), gfx.objectSh)
 		for _, md := range m.models {
 			gfx.bindMaps(md)
 		}

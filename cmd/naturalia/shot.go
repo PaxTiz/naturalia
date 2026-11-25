@@ -155,7 +155,7 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 				for i := range at {
 					at[i], _ = strconv.ParseFloat(v[1+i], 64)
 				}
-				from, ok := g.ShotLink(c, v[0], vec3{at[0], 0, at[1]}, at[2], len(v) == 4)
+				from, ok := g.ShotLink(c, shotLink(), v[0], vec3{at[0], 0, at[1]}, at[2], len(v) == 4)
 				if len(v) > 4 {
 					s.link = &from
 				}
@@ -253,7 +253,7 @@ func (s *shotRun) tick(g *game.Game) {
 	// raised by so many stops of the wheel, once playing; again each frame the pause of an unfocused window put
 	// it away.
 	if s.link != nil && s.frames >= 60 && g.Ghost == nil {
-		g.HoldLink(*s.link)
+		g.HoldLink(shotLink(), *s.link)
 	}
 	if v := os.Getenv("NA_SHOT_GHOST"); v != "" && s.frames >= 60 && g.Ghost == nil {
 		item, deg, _ := strings.Cut(v, ",")
@@ -309,3 +309,7 @@ func (s *shotRun) tick(g *game.Game) {
 		}
 	}
 }
+
+// shotLink is the kind of link of a screenshot: NA_SHOT_LINK_KIND, a glass
+// one if it is left out.
+func shotLink() string { return content.OrDefault(os.Getenv("NA_SHOT_LINK_KIND"), "core:sas") }

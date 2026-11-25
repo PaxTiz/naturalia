@@ -349,16 +349,30 @@ type Link struct {
 	Max    float64 `json:"max"`    // and 30 m
 	Rise   float64 `json:"rise"`   // how much higher an end may be than the other, 1.5 m if left out
 	Slope  float64 `json:"slope"`  // of its ramp at most, 0.08 (8 %) if left out
-	// What it is made of: tokens, core's SAS' if left out.
+	// Under digs it under the ground, from a shelter with stairs down at
+	// each end: a gallery, its vault Height over its floor.
+	Under bool    `json:"under"`
+	Depth float64 `json:"depth"` // under the ground of its floor, 5.4 m if left out
+	Cover float64 `json:"cover"` // the ground kept over its vault, 2.5 m if left out
+	// What it is made of: tokens, core's SAS' if left out (its tunnel's, if
+	// Under).
 	Frame string `json:"frame"`
 	Glass string `json:"glass"`
 	Floor string `json:"floor"`
 	Curb  string `json:"curb"`
 	Light string `json:"light"`
+	Wall  string `json:"wall"` // a tunnel's vault
 }
 
 // Fill gives a link what it leaves out.
 func (l *Link) Fill() {
+	if l.Under {
+		l.Width, l.Height, l.Step = OrZero(l.Width, 3), OrZero(l.Height, 2.8), OrZero(l.Step, 4)
+		l.Min, l.Max, l.Slope = OrZero(l.Min, 15), OrZero(l.Max, 200), OrZero(l.Slope, 0.1)
+		l.Depth, l.Cover = OrZero(l.Depth, 5.4), OrZero(l.Cover, 2.5)
+		l.Depth = math.Max(l.Depth, l.Height+l.Cover)
+		l.Wall = OrDefault(l.Wall, "core:pad.concrete")
+	}
 	l.Width, l.Height, l.Step = OrZero(l.Width, 2.6), OrZero(l.Height, 2.6), OrZero(l.Step, 2)
 	l.Min, l.Max = OrZero(l.Min, 3), OrZero(l.Max, 30)
 	l.Rise, l.Slope = OrZero(l.Rise, 1.5), OrZero(l.Slope, 0.08)

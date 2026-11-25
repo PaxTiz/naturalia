@@ -300,6 +300,9 @@ func (g *Game) campFits(l *base.Camp, dir vec3, level *float64, moving ecs.ID) (
 	if why != "" {
 		return false, why
 	}
+	if g.campDigs(dir, l.Reach+padMargin, h) {
+		return false, "un tunnel passe trop près du sol"
+	}
 	if g.World.Relief.PadSlope(dir, l.Reach+padMargin, h) > maxCampSlope {
 		return false, "sol trop pentu"
 	}

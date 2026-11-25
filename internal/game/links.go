@@ -44,6 +44,7 @@ type LinkGhost struct {
 	Aim    *PortRef   // the port aimed at
 	Layout *base.Link // the way it would take, between the two
 	Cost   float64
+	why    string     // why there is none
 	key    [2]PortRef // what Layout goes between
 }
 
@@ -79,6 +80,7 @@ func (g *Game) layLinks() {
 	was := g.links
 	g.links, g.linked = nil, map[PortRef]bool{}
 	var ways []planet.Plot
+	var digs [][]planet.Hollow
 	for _, k := range g.State.Links {
 		def, ok := g.Content.Links.Get(k.Kind)
 		from, okFrom := g.portAt(k.From)
@@ -86,7 +88,7 @@ func (g *Game) layLinks() {
 		if !ok || !okFrom || !okTo || g.linked[k.From] || g.linked[k.To] {
 			continue
 		}
-		l := base.LayLink(def, from, to)
+		l, _ := base.LayLink(def, from, to, g.bareGround)
 		if l == nil {
 			continue
 		}
@@ -95,6 +97,7 @@ func (g *Game) layLinks() {
 		}
 		g.links = append(g.links, LinkAt{k, l})
 		g.linked[k.From], g.linked[k.To] = true, true
+		digs = append(digs, l.Hollows())
 		l.Ways(func(at, x, up vec3, half [2]float64) {
 			ways = append(ways, planet.Plot{At: at, X: x, Up: up, Half: half})
 		})
@@ -102,8 +105,14 @@ func (g *Game) layLinks() {
 	if len(ways) > 0 || len(g.World.Relief.Flat().Ways.List) > 0 {
 		g.reshape(func() { g.World.Relief.SetWays(ways) })
 	}
+	g.burrow = planet.NewBurrow(digs)
+	g.Player.burrow = g.burrow
 	g.relay = true
 }
+
+// bareGround is how far from Mars' center the ground is in a direction, as
+// it was before anything was built on it.
+func (g *Game) bareGround(dir vec3) float64 { return planet.Radius + g.World.Relief.Layers(dir) }
 
 // Links are the links standing.
 func (g *Game) Links() []LinkAt { return g.links }
@@ -195,11 +204,11 @@ func (g *Game) poseLink(gh *Ghost) {
 		return
 	}
 	if k.Layout == nil || k.key != [2]PortRef{*k.From, *k.Aim} {
-		k.Layout, k.key = nil, [2]PortRef{*k.From, *k.Aim}
+		k.Layout, k.why, k.key = nil, "", [2]PortRef{*k.From, *k.Aim}
 		from, _ := g.portAt(*k.From)
 		to, _ := g.portAt(*k.Aim)
 		if k.From.Building != k.Aim.Building {
-			k.Layout = base.LayLink(k.Def, from, to)
+			k.Layout, k.why = base.LayLink(k.Def, from, to, g.bareGround)
 		}
 	}
 	if k.From.Building == k.Aim.Building {
@@ -207,7 +216,7 @@ func (g *Game) poseLink(gh *Ghost) {
 		return
 	}
 	if k.Layout == nil {
-		gh.Why = "ces portes se tournent trop le dos"
+		gh.Why = k.why
 		return
 	}
 	k.Cost = 0
@@ -216,6 +225,9 @@ func (g *Game) poseLink(gh *Ghost) {
 		k.Cost = it.Cost * math.Ceil(k.Layout.Length-1e-6)
 	}
 	gh.Why = g.linkFits(k.Layout, *k.From, *k.Aim)
+	if slices.Contains([]string{"trop long", "trop de dénivelé", "trop pentu", "sol trop accidenté"}, gh.Why) && !k.Def.Under {
+		gh.Why += " : il faut un tunnel"
+	}
 	if gh.Why == "" && g.State.Credits < k.Cost {
 		gh.Why = "crédits insuffisants"
 	}
@@ -231,6 +243,10 @@ func (g *Game) linkFits(l *base.Link, from, to PortRef) string {
 		return "trop court"
 	case l.Length > def.Max:
 		return "trop long"
+	case l.Under():
+		if why := g.tunnelFits(l); why != "" {
+			return why
+		}
 	case l.Rise > def.Rise:
 		return "trop de dénivelé"
 	case l.Slope > def.Slope:
@@ -283,7 +299,7 @@ func (g *Game) linkFits(l *base.Link, from, to PortRef) string {
 			}
 		})
 	}
-	if p := g.phys; why == "" && p != nil {
+	if p := g.phys; why == "" && p != nil && planet.ArcDist(p.up, l.Site.Origin.Norm()) < physReach {
 		l.Legs(func(c [4]vec3) {
 			var pts []physics.V2
 			bottom, top := math.Inf(1), math.Inf(-1)
@@ -371,7 +387,7 @@ func (k *LinkGhost) LinkLabel() string {
 // ShotLink sets another building at a point of one's frame, turned by yaw
 // (radians), and links their closest ports, for screenshots; or is about to,
 // the first port chosen.
-func (g *Game) ShotLink(c CampAt, kind string, at vec3, yaw float64, lay bool) (PortRef, bool) {
+func (g *Game) ShotLink(c CampAt, link, kind string, at vec3, yaw float64, lay bool) (PortRef, bool) {
 	dir := c.ToWorld(at).Norm()
 	id := g.add(Placed{Kind: kind, Dir: dir})
 	t := g.Ents.Transform.Get(id)
@@ -399,15 +415,15 @@ func (g *Game) ShotLink(c CampAt, kind string, at vec3, yaw float64, lay bool) (
 	if !lay {
 		return from, true
 	}
-	g.State.Links = append(g.State.Links, Link{"core:sas", from, to, 0})
+	g.State.Links = append(g.State.Links, Link{link, from, to, 0})
 	n := len(g.links)
 	g.layLinks()
 	return from, len(g.links) > n
 }
 
 // HoldLink holds a link from a port, for screenshots.
-func (g *Game) HoldLink(from PortRef) {
-	if it, ok := g.Content.Items.Get("core:sas"); ok {
+func (g *Game) HoldLink(link string, from PortRef) {
+	if it, ok := g.Content.Items.Get(link); ok {
 		g.State.Credits = math.Max(g.State.Credits, 1e8)
 		g.State.Recent = append(g.State.Recent, it.ID)
 		g.hold(it)

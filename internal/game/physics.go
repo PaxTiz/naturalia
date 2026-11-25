@@ -178,8 +178,7 @@ func (g *Game) stepPhysics(dt float64) {
 	case b.Mask != 0:
 		pl.Pos = p.dir(b.Pos).Scale(r)
 		pl.vel = p.vecWorld(pl.Pos, b.Vel)
-		pl.floor = g.floorUnder(pl.Pos)
-		pl.ceiling = g.ceilingOver(pl.Pos)
+		g.standPlayer()
 	}
 	for _, hit := range p.w.Impacts {
 		for _, o := range [2]*physics.Body{hit.A, hit.B} {
@@ -564,6 +563,9 @@ func (g *Game) layPlane() {
 	for _, l := range g.LinksNear(up.Scale(p.r0), physReach) {
 		for _, s := range l.Layout.Walls {
 			g.addWall(s, l.Layout.Site)
+		}
+		for _, s := range l.Layout.Sides() {
+			g.addSide(s.A, s.B, s.Low, s.High)
 		}
 	}
 	p.doorSegs, p.doors = nil, nil

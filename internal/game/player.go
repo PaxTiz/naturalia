@@ -29,6 +29,8 @@ type Player struct {
 	onGround   bool
 	floor      float64 // what the feet stand on, over the ground: a block's top (stepPhysics)
 	ceiling    float64 // over the ground, where a floor over the head starts; 0 for none
+	under      bool    // in a burrow: floor and ceiling are its own, under the ground
+	burrow     *planet.Burrow
 	WalkPhase  float64
 	MoveAmount float64 // 0 when standing, 1 when walking: drives the tool bob
 	seated     bool    // driving: the vehicle moves the player, who only looks around
@@ -52,7 +54,12 @@ func (p *Player) FlySpeed(alt float64) float64 {
 func (p *Player) SetFly(on bool, t planet.Relief) {
 	p.Fly, p.vr = on, 0
 	if !on {
-		p.Pos, p.onGround = t.Surface(p.Pos), true
+		p.onGround = true
+		if f, _, ok := p.burrow.At(p.Pos); ok {
+			p.Pos = p.Pos.Norm().Scale(f)
+		} else {
+			p.Pos = t.Surface(p.Pos)
+		}
 	}
 }
 
@@ -133,7 +140,7 @@ func (p *Player) fall(dt float64, t planet.Relief) {
 	p.vr -= marsGravity * dt
 	p.Pos = p.Pos.Add(p.LocalUp().Scale(p.vr * dt))
 	// The head bumps into a floor overhead.
-	if over := t.Altitude(p.Pos) + personH - p.ceiling; p.ceiling > 0 && over > 0 && p.vr > 0 {
+	if over := t.Altitude(p.Pos) + personH - p.ceiling; (p.ceiling > 0 || p.under) && over > 0 && p.vr > 0 {
 		p.Pos, p.vr = p.Pos.Sub(p.LocalUp().Scale(over)), 0
 	}
 
@@ -191,8 +198,14 @@ func (p *Player) fly(dt float64, t planet.Relief, control bool) {
 	if KeyDown(ActRun) {
 		speed *= 4
 	}
+	was := p.Pos
+	_, _, in := p.burrow.At(was)
 	p.Pos = p.Pos.Add(move.Norm().Scale(speed * dt))
-	if t.Altitude(p.Pos) < 0 {
+	if f, c, ok := p.burrow.At(p.Pos); ok { // in a tunnel: between its floor and its vault
+		p.Pos = p.Pos.Norm().Scale(math.Max(f, math.Min(c-personH, p.Pos.Length())))
+	} else if in && t.Altitude(was) < -0.5 {
+		p.Pos = was // its walls
+	} else if t.Altitude(p.Pos) < 0 {
 		p.Pos = t.Surface(p.Pos)
 	}
 	p.tangentHeading()

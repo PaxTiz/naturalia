@@ -89,6 +89,9 @@ func registerBuildings(c *content.Content) {
 	c.Links.Add("core:sas", content.Link{Name: "SAS"})
 	c.Items.Add("core:sas", content.Item{Name: "SAS transparent", Desc: "Un passage vitré d'un bâtiment à un autre : vise une porte, puis l'autre (3 à 30 m)", Icon: "crate",
 		Cost: 500_000, Link: "sas", Shelf: "links"})
+	c.Links.Add("core:tunnel", content.Link{Name: "Tunnel", Under: true})
+	c.Items.Add("core:tunnel", content.Item{Name: "Tunnel", Desc: "Une galerie creusée sous le sol d'un bâtiment à un autre, quel que soit le relief : vise une porte, puis l'autre (15 à 200 m)", Icon: "crate",
+		Cost: 1_000_000, Link: "tunnel", Shelf: "links"})
 
 	// The garage: its big door toward whoever sets it down, two bays, the
 	// terminal by the port at the back.
