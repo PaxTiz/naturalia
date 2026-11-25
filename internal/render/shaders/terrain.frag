@@ -18,6 +18,12 @@ uniform vec4 stepDirs[48];  // xyz heading, w strength
 uniform float stepCount;
 uniform sampler2D texture2; // painted regolith: R tone, G pebbles, B hollows, A height
 uniform sampler2D texture3; // painted dust: R tone, G clumps, A height
+#ifdef HOLES
+uniform vec4 holeAt[8];     // open over the tunnels' stairs: a frame's origin, from origin; w: from how far along its X...
+uniform vec4 holeX[8];      // ...its X, w: to how far
+uniform vec4 holeZ[8];      // its Z, w: how far on both sides
+uniform float holeCount;
+#endif
 out vec4 finalColor;
 #include "common.glsl"
 #include "texture.glsl"
@@ -53,6 +59,14 @@ float dustAt(vec3 d) {
 }
 
 void main() {
+#ifdef HOLES // the patches around them only: a discard costs all that is drawn with it
+    for (int i = 0; i < 8; i++) {
+        if (float(i) >= holeCount) break;
+        vec3 off = fragRel - holeAt[i].xyz;
+        float x = dot(off, holeX[i].xyz);
+        if (x > holeAt[i].w && x < holeX[i].w && abs(dot(off, holeZ[i].xyz)) < holeZ[i].w && dot(off, off) < 144.0) discard;
+    }
+#endif
     vec3 n = normalize(fragNormal);
     vec3 v = normalize(viewRel - fragRel);
     vec3 up = normalize(fragPos);

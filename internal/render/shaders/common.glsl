@@ -145,6 +145,7 @@ uniform float blobCount;
 uniform vec4 baseSlabs[8];     // the floors up in the base: local middle x, z, the way along x, z
 uniform vec4 baseSlabSize[8];  // half their length, half their width, their bottom and top
 uniform float slabCount;
+uniform float baseNear;        // 0 from a tunnel's gallery: nothing of it is
 
 // slabEdge is how far outside slab i the local point p stands, seen from
 // above: below 0 under it.
@@ -178,7 +179,9 @@ float occ(float d, float r, vec3 n, vec3 pn) {
 float baseAO(vec3 n) {
     vec3 p = toBase(fragRel - baseRel);
     n = toBase(n);
-    if (dot(p.xz, p.xz) > 1600.0) return 1.0;
+    if (dot(p.xz, p.xz) > 1600.0 || baseNear < 0.5) return 1.0;
+    float under = smoothstep(0.1, 0.7, -p.y); // a tunnel's stairs
+    if (under >= 1.0) return 1.0;
     float ao = 1.0 - 0.7 * occ(p.y - 0.02, 0.8, n, vec3(0, 1, 0));
     bool inCorr = false;
     for (int i = 0; i < 8; i++) {
@@ -226,7 +229,7 @@ float baseAO(vec3 n) {
         if (r < R) ao *= 1.0 - 0.7 * occ(R - 0.1 - r, 0.8, n, -rn);
         else if (!inCorr) ao *= 1.0 - 0.65 * occ(r - R - 0.14, 1.4, n, rn) * (1.0 - smoothstep(H, H + 1.5, p.y));
     }
-    return ao;
+    return mix(ao, 1.0, under);
 }
 
 // finish fades distant surfaces into the dusty air: first a violet veil,

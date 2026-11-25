@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mesh"
 	"naturalia/internal/planet"
 )
 
@@ -546,52 +545,40 @@ func (t *tunnel) ray(o, d vec3, max float64) (float64, bool) {
 	return 0, false
 }
 
-// dig builds a tunnel's meshes.
-func (l *Link) dig() *mesh.Parts {
-	t, def := l.dug, l.Def
-	b := &building{Parts: mesh.NewParts(vec3{})}
-	w, h := def.Width/2, def.Height
-	loc := func(s tunnelSection, x, y float64) vec3 {
-		return l.Site.ToLocal(s.at.Add(s.across.Scale(x)).Add(s.up.Scale(y)))
+// galleryIn is how far past the stairs nothing of the outside is seen.
+const galleryIn = 2.5
+
+// InGallery tells whether a point of the world is in a tunnel's gallery,
+// far enough from its stairs to see nothing of the outside.
+func (l *Link) InGallery(p vec3) bool {
+	if l.dug == nil || !l.dug.holds(p) {
+		return false
 	}
-	// A piece from a section to the next, by its corners across them.
-	run := func(tok string, lit float32, s, e tunnelSection, xy ...[2]float64) {
-		var pts []vec3
-		for _, c := range xy {
-			pts = append(pts, loc(s, c[0], c[1]), loc(e, c[0], c[1]))
-		}
-		b.Part(tok, lit, vec3{}).Hull(pts)
-	}
-	prof := t.profile()
-	for i := range len(t.sections) - 1 {
-		s, e := t.sections[i], t.sections[i+1]
-		for _, x := range []float64{-1, 1} {
-			for k := range len(prof) - 1 {
-				p, q := prof[k], prof[k+1]
-				run(def.Wall, mesh.LitIndoor, s, e, [2]float64{x * p[0], p[1]}, [2]float64{x * q[0], q[1]},
-					[2]float64{x * (p[0] + 0.15*p[0]/w), p[1] + 0.1*p[1]/h}, [2]float64{x * (q[0] + 0.15*q[0]/w), q[1] + 0.1*q[1]/h})
-			}
-		}
-		if s.head < 0 && e.head < 0 || s.x == linkStart || e.x == linkStart {
-			run(def.Floor, mesh.LitIndoor, s, e, [2]float64{-w, -0.15}, [2]float64{w, -0.15}, [2]float64{-w, FloorTop}, [2]float64{w, FloorTop})
+	for _, h := range l.dug.heads {
+		q := h.ToLocal(p)
+		if q.X < h.run()+galleryIn && q.X > -1 && math.Abs(q.Z) < l.Def.Width && q.Y < l.Def.Height && q.Y > -h.drop-1 {
+			return false
 		}
 	}
-	for _, hd := range t.heads {
-		for k := range hd.steps {
-			x, y := headLanding+float64(k)*stepRun, -float64(k+1)*hd.drop/float64(hd.steps)+FloorTop
-			var pts []vec3
-			for _, c := range [][2]float64{{x, y}, {x + stepRun, y}, {x, y - 0.3}, {x + stepRun, y - 0.3}} {
-				pts = append(pts, l.Site.ToLocal(hd.ToWorld(vec3{c[0], c[1], -w})), l.Site.ToLocal(hd.ToWorld(vec3{c[0], c[1], w})))
-			}
-			b.Part(def.Floor, mesh.LitIndoor, vec3{}).Hull(pts)
-		}
-	}
-	b.Unfight()
-	return b.Parts
+	return true
 }
 
-// profile is half the vault's outline, from its floor to its top.
-func (t *tunnel) profile() [][2]float64 {
-	w, h := t.def.Width/2, t.def.Height
-	return [][2]float64{{w, 0}, {w, 0.55 * h}, {0.87 * w, 0.75 * h}, {0.62 * w, 0.89 * h}, {0.3 * w, 0.975 * h}, {0, h}}
+// Near is how far a point of the world is from the closest end of a tunnel.
+func (l *Link) Near(p vec3) float64 {
+	near := math.Inf(1)
+	for _, h := range l.dug.heads {
+		near = math.Min(near, h.Origin.Sub(p).Length())
+	}
+	return near
+}
+
+// Plan is the way of a tunnel's gallery, its floor's middle, in the world.
+func (l *Link) Plan() []vec3 {
+	var out []vec3
+	if l.dug != nil {
+		for _, n := range l.dug.nodes {
+			out = append(out, n.at)
+		}
+	}
+	return out
 }

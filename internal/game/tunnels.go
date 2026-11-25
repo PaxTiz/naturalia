@@ -118,3 +118,27 @@ func (g *Game) campDigs(dir vec3, radius, level float64) bool {
 	}
 	return bad
 }
+
+// ShotTunnel is a point of the first tunnel's floor, that far along it, and
+// the way there, for screenshots.
+func (g *Game) ShotTunnel(along float64) (at, heading vec3, ok bool) {
+	for _, l := range g.links {
+		if !l.Layout.Under() {
+			continue
+		}
+		var pts []vec3
+		for _, p := range l.Layout.Pts {
+			pts = append(pts, l.Layout.Site.ToWorld(p))
+		}
+		for i := range len(pts) - 1 {
+			d := pts[i+1].Sub(pts[i])
+			if long := d.Length(); along <= long || i == len(pts)-2 {
+				at = pts[i].Add(d.Scale(math.Min(1, along/long)))
+				return at, planet.TangentAt(at.Norm(), d), true
+			} else {
+				along -= long
+			}
+		}
+	}
+	return at, heading, false
+}

@@ -84,6 +84,9 @@ func (s *spot) cols(o vec3) []float32 {
 
 // spotsNear are the lamps that light the scene, the closest first.
 func (gfx *Graphics) spotsNear(g *game.Game) []spot {
+	if gfx.gallery != nil {
+		return nil
+	}
 	var out []spot
 	// A lamp standing in a frame; outdoors whatever it is in, if open.
 	add := func(id spotID, l *content.Light, pos, ax, up, az vec3, open bool) {
@@ -230,7 +233,7 @@ func (gfx *Graphics) drawSpots(g *game.Game) {
 		vp = append(vp, s.cols(gfx.origin)...)
 	}
 	gfx.stats.Lamps = len(list)
-	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
+	for _, sh := range gfx.lit() {
 		loc := func(name string) int32 { return rl.GetShaderLocation(sh, name) }
 		rl.SetShaderValue(sh, loc("spotCount"), []float32{float32(n)}, rl.ShaderUniformFloat)
 		// An int, as the shader takes it, in a float's bits.

@@ -196,7 +196,7 @@ func (gfx *Graphics) setGrid(g *game.Game) {
 		s = *g.Ghost.Sheet
 		size = []float32{float32(s.Step), float32(s.Reach)}
 	}
-	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
+	for _, sh := range gfx.lit() {
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "gridSize"), size, rl.ShaderUniformVec2)
 		if s.Reach == 0 {
 			continue
@@ -227,7 +227,11 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	pos, ax, up, az := g.Frame(&gh.Pose)
 	draw := func() {
 		if gh.Link != nil {
-			if l := gh.Link.Layout; l != nil {
+			if l := gh.Link.Layout; l != nil && l.Under() {
+				rl.DisableBackfaceCulling()
+				gfx.drawTunnelGhost(l, col)
+				rl.EnableBackfaceCulling()
+			} else if l != nil {
 				rl.DisableBackfaceCulling()
 				m := gfx.linkModels(l)
 				for i, md := range m.models {
@@ -274,6 +278,9 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	rl.ColorMask(true, true, true, true)
 	draw()
 	if gh.Link != nil {
+		if l := gh.Link.Layout; l != nil && l.Under() {
+			gfx.drawTunnelWay(l, col)
+		}
 		gfx.drawPorts(g, gh.Link, col)
 		rl.DrawRenderBatchActive()
 		return

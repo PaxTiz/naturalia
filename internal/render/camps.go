@@ -59,18 +59,7 @@ func linkSeen(l *base.Link, seen sees) bool {
 // linkModels are a link's meshes, uploaded on first use and kept for the
 // links of the same shape.
 func (gfx *Graphics) linkModels(l *base.Link) *baseModels {
-	if gfx.links == nil {
-		gfx.links = map[string]*baseModels{}
-	}
-	m := gfx.links[l.Key]
-	if m == nil {
-		m = gfx.uploadBase(l.Parts(), gfx.objectSh)
-		for _, md := range m.models {
-			gfx.bindMaps(md)
-		}
-		gfx.links[l.Key] = m
-	}
-	return m
+	return gfx.keptModels(l.Key, l.Parts)
 }
 
 // drawSited draws meshes standing at a site: their glass, or the rest.
@@ -119,7 +108,7 @@ func (gfx *Graphics) drawCampGlass(g *game.Game, seen sees) {
 		gfx.drawSited(gfx.campModels(g.Kind(c.Ent), c.Layout), c.Site, true)
 	}
 	for _, l := range g.LinksNear(gfx.camEye, campDrawDist) {
-		if linkSeen(l.Layout, seen) {
+		if !l.Layout.Under() && linkSeen(l.Layout, seen) {
 			gfx.drawSited(gfx.linkModels(l.Layout), l.Layout.Site, true)
 		}
 	}
@@ -164,8 +153,15 @@ func (gfx *Graphics) drawCamps(g *game.Game, seen sees) {
 			gfx.putBasis(gfx.sphere, c.ToWorld(c.Layout.Beacon), s.X.Scale(0.09), s.Y.Scale(0.09), s.Z.Scale(0.09), palette.Red, 0, 1)
 		}
 	}
+	gfx.drawLinks(g, seen)
+}
+
+// drawLinks draws the links between the buildings.
+func (gfx *Graphics) drawLinks(g *game.Game, seen sees) {
 	for _, l := range g.LinksNear(gfx.camEye, campDrawDist) {
-		if linkSeen(l.Layout, seen) {
+		if l.Layout.Under() {
+			gfx.drawTunnel(l.Layout, seen)
+		} else if linkSeen(l.Layout, seen) {
 			gfx.wearAt(l.Layout.Site)
 			gfx.drawSited(gfx.linkModels(l.Layout), l.Layout.Site, false)
 		}

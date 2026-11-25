@@ -19,9 +19,11 @@ func (gfx *Graphics) uploadSteps(f *game.Footprints) {
 		pos = append(pos, float32(s.Pos.X), float32(s.Pos.Y), float32(s.Pos.Z), 0)
 		dir = append(dir, float32(s.Dir.X), float32(s.Dir.Y), float32(s.Dir.Z), float32(strength))
 	}
-	if count > 0 {
-		rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.steps, pos, rl.ShaderUniformVec4, int32(count))
-		rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.stepDirs, dir, rl.ShaderUniformVec4, int32(count))
+	for _, s := range gfx.grounds() {
+		if count > 0 {
+			rl.SetShaderValueV(s.sh, s.loc.steps, pos, rl.ShaderUniformVec4, int32(count))
+			rl.SetShaderValueV(s.sh, s.loc.stepDirs, dir, rl.ShaderUniformVec4, int32(count))
+		}
+		rl.SetShaderValue(s.sh, s.loc.stepCount, []float32{float32(count)}, rl.ShaderUniformFloat)
 	}
-	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.stepCount, []float32{float32(count)}, rl.ShaderUniformFloat)
 }

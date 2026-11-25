@@ -361,7 +361,9 @@ type Link struct {
 	Floor string `json:"floor"`
 	Curb  string `json:"curb"`
 	Light string `json:"light"`
-	Wall  string `json:"wall"` // a tunnel's vault
+	Wall  string `json:"wall"` // a tunnel's vault...
+	Rock  string `json:"rock"` // ...where the rock is left bare...
+	Pipe  string `json:"pipe"` // ...and what runs along it
 }
 
 // Fill gives a link what it leaves out.
@@ -371,7 +373,8 @@ func (l *Link) Fill() {
 		l.Min, l.Max, l.Slope = OrZero(l.Min, 15), OrZero(l.Max, 200), OrZero(l.Slope, 0.1)
 		l.Depth, l.Cover = OrZero(l.Depth, 5.4), OrZero(l.Cover, 2.5)
 		l.Depth = math.Max(l.Depth, l.Height+l.Cover)
-		l.Wall = OrDefault(l.Wall, "core:pad.concrete")
+		l.Wall, l.Rock, l.Pipe = OrDefault(l.Wall, "core:concrete.light"), OrDefault(l.Rock, "core:rock.bare"), OrDefault(l.Pipe, "core:pipe.yellow")
+		l.Frame, l.Floor = OrDefault(l.Frame, "core:home.rib"), OrDefault(l.Floor, "core:concrete.floor")
 	}
 	l.Width, l.Height, l.Step = OrZero(l.Width, 2.6), OrZero(l.Height, 2.6), OrZero(l.Step, 2)
 	l.Min, l.Max = OrZero(l.Min, 3), OrZero(l.Max, 30)

@@ -43,6 +43,7 @@ type Link struct {
 	legs     []linkLeg
 	sections []linkSection
 	dug      *tunnel // under the ground
+	lamps    []Lamp
 }
 
 // linkLeg is a straight stretch between two points of a link, its floor's

@@ -14,6 +14,7 @@ import (
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
 	"slices"
+	"strings"
 	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -44,6 +45,8 @@ type shaderLocs struct {
 // shapes are meshes built in code and every surface is painted by shaders.
 type Graphics struct {
 	terrainSh, objectSh, skySh, holoSh rl.Shader
+	holedSh                            rl.Shader // the terrain's, open over the tunnels (tunnels.go)
+	gLoc                               shaderLocs
 	tLoc, oLoc, sLoc, hLoc             shaderLocs
 	devilSh                            rl.Shader
 	dLoc                               shaderLocs
@@ -53,6 +56,8 @@ type Graphics struct {
 
 	sphere, hemi, cyl, cone, cube, crystal, sky, holo rl.Model
 	terrainMat                                        *rl.Material // own allocation: see New
+	holedMat                                          *rl.Material
+	holes                                             []vec3 // where it is open
 	signBox                                           rl.Model
 	rocks, pebbles                                    []rl.Model
 	post                                              *postFX
@@ -88,10 +93,13 @@ type Graphics struct {
 	camEye      vec3 // the camera's position in double precision (camera)
 	camLook     vec3 // where it looks, and its up, in double precision too
 	camUp       vec3
-	near, far   float64 // the view's clip planes, set each frame by clipPlanes
-	hazeThin    float32 // and the haze's thinning with altitude (common.glsl)
-	skyAir      float32 // the sky fading to space with altitude (sky.frag)
-	origin      vec3    // the shaders' origin this frame (setUniforms)
+	near, far   float64    // the view's clip planes, set each frame by clipPlanes
+	gallery     *base.Link // the tunnel whose gallery the camera is in (tunnels.go)
+	under       float64    // how far under the ground it is, 0 to 1
+	casting     bool       // drawing a shadow map
+	hazeThin    float32    // and the haze's thinning with altitude (common.glsl)
+	skyAir      float32    // the sky fading to space with altitude (sky.frag)
+	origin      vec3       // the shaders' origin this frame (setUniforms)
 }
 
 func loadShader(fs string) (rl.Shader, shaderLocs) { return loadShaderVS(glsl("mesh.vert"), fs) }
@@ -118,6 +126,7 @@ func New(g *game.Game) *Graphics {
 	gfx.Terrain = NewTerrain(g.World.Relief)
 	gfx.post = newPostFX()
 	gfx.terrainSh, gfx.tLoc = loadShaderVS(glsl("terrain.vert"), glsl("terrain.frag"))
+	gfx.holedSh, gfx.gLoc = loadShaderVS(glsl("terrain.vert"), strings.Replace(glsl("terrain.frag"), "#version 330\n", "#version 330\n#define HOLES\n", 1))
 	gfx.objectSh, gfx.oLoc = loadShaderVS(glsl("object.vert"), glsl("object.frag"))
 	gfx.objectSh.UpdateLocation(rl.ShaderLocVertexInstancetransform, rl.GetShaderLocationAttrib(gfx.objectSh, "instanceTransform"))
 	gfx.skySh, gfx.sLoc = loadShader(glsl("sky.frag"))
@@ -150,12 +159,14 @@ func New(g *game.Game) *Graphics {
 
 	gfx.smallcaps = LoadFont(gosmallcaps.TTF, 96) // for the signs
 
-	rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, "sunAxis"), v3f(planet.SunAxis()), rl.ShaderUniformVec3)
-	for name, v := range map[string]float32{
-		"faceCells": planet.FaceCells, "tileCells": planet.TileCells, "tilesPerFace": planet.TilesPerFace,
-		"atlasTiles": atlasTiles, "marsRadius": planet.Radius,
-	} {
-		rl.SetShaderValue(gfx.terrainSh, rl.GetShaderLocation(gfx.terrainSh, name), []float32{v}, rl.ShaderUniformFloat)
+	for _, t := range gfx.grounds() {
+		rl.SetShaderValue(t.sh, rl.GetShaderLocation(t.sh, "sunAxis"), v3f(planet.SunAxis()), rl.ShaderUniformVec3)
+		for name, v := range map[string]float32{
+			"faceCells": planet.FaceCells, "tileCells": planet.TileCells, "tilesPerFace": planet.TilesPerFace,
+			"atlasTiles": atlasTiles, "marsRadius": planet.Radius,
+		} {
+			rl.SetShaderValue(t.sh, rl.GetShaderLocation(t.sh, name), []float32{v}, rl.ShaderUniformFloat)
+		}
 	}
 	// One material shared by every terrain patch. Patches are freed with
 	// UnloadMesh only: unloading a model would also free this shader.
@@ -166,15 +177,20 @@ func New(g *game.Game) *Graphics {
 	mat := rl.LoadMaterialDefault()
 	gfx.terrainMat = &mat
 	gfx.terrainMat.Shader = gfx.terrainSh
-	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapNormal, rl.GetShaderLocation(gfx.terrainSh, "texture2"))
-	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapRoughness, rl.GetShaderLocation(gfx.terrainSh, "texture3"))
+	for _, t := range gfx.grounds() {
+		t.sh.UpdateLocation(rl.ShaderLocMapNormal, rl.GetShaderLocation(t.sh, "texture2"))
+		t.sh.UpdateLocation(rl.ShaderLocMapRoughness, rl.GetShaderLocation(t.sh, "texture3"))
+		t.sh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(t.sh, "shadowMap"))
+	}
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapNormal, gfx.tex.regolith)
 	rl.SetMaterialTexture(gfx.terrainMat, rl.MapRoughness, gfx.tex.dust)
 	gfx.shadow = newShadowMap()
 	gfx.lampShadow = newLampShadow(min(max(base.Ents.Building.Len(), maxShadeCamps), maxRooms))
 	gfx.spots = newSpots()
-	gfx.terrainSh.UpdateLocation(rl.ShaderLocMapBrdf, rl.GetShaderLocation(gfx.terrainSh, "shadowMap"))
 	rl.SetMaterialTexture(gfx.terrainMat, mapShadow, gfx.shadow.target.Texture)
+	holed := mat // the same textures
+	gfx.holedMat = &holed
+	gfx.holedMat.Shader = gfx.holedSh
 
 	gfx.signBox = model(rl.GenMeshCube(1, 1, 1), gfx.objectSh)
 	for i, c := range []color.RGBA{palette.AccentCyan, palette.AccentBlue, palette.AccentCyan, palette.AccentOrange} {
@@ -216,8 +232,16 @@ type shaderWithLocs struct {
 }
 
 func (gfx *Graphics) shaders() []shaderWithLocs {
-	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.objectSh, gfx.oLoc}, {gfx.skySh, gfx.sLoc}, {gfx.holoSh, gfx.hLoc}, {gfx.devilSh, gfx.dLoc}}
+	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.holedSh, gfx.gLoc}, {gfx.objectSh, gfx.oLoc}, {gfx.skySh, gfx.sLoc}, {gfx.holoSh, gfx.hLoc}, {gfx.devilSh, gfx.dLoc}}
 }
+
+// grounds are the terrain's: whole, and open over the tunnels.
+func (gfx *Graphics) grounds() []shaderWithLocs {
+	return []shaderWithLocs{{gfx.terrainSh, gfx.tLoc}, {gfx.holedSh, gfx.gLoc}}
+}
+
+// lit are those the sun, the lamps and the shadows light.
+func (gfx *Graphics) lit() []rl.Shader { return []rl.Shader{gfx.terrainSh, gfx.holedSh, gfx.objectSh} }
 
 func v3f(v vec3) []float32 { return []float32{float32(v.X), float32(v.Y), float32(v.Z)} }
 
@@ -298,6 +322,8 @@ type shading struct {
 	camps        []game.CampAt // or those set down, the closest first
 	site         base.Site     // the frame of the base, or of the closest
 	lamps        []lampView    // the lamps casting shadows
+	lights       []base.Lamp   // all of them, in the world
+	tunnels      bool          // the last lights set had tunnels' too
 }
 
 const (
@@ -332,6 +358,7 @@ func (gfx *Graphics) selectBase(g *game.Game) {
 		next.rooms, next.corrs, next.site = base.NearBuildings(at, maxRooms), base.NearCorridors(at, maxRooms), base.BaseSite()
 	}
 	sh := &gfx.shade
+	defer gfx.setLights(g)
 	if sh.picked && slices.Equal(next.rooms, sh.rooms) && slices.Equal(next.corrs, sh.corrs) && sameCamps(next.camps, sh.camps) && (next.site == sh.site || len(next.camps) > 0) {
 		sh.camps, sh.site = next.camps, next.site // maybe in another order
 		return
@@ -352,22 +379,45 @@ func (gfx *Graphics) selectBase(g *game.Game) {
 			}
 		}
 	}
-	var lights, ranges, warm []float32
 	for i, l := range lamps[:min(len(lamps), maxLamps)] {
 		site := sites[min(i, len(sites)-1)]
-		p := site.ToWorld(l.At)
-		lights = append(lights, float32(p.X), float32(p.Y), float32(p.Z), float32(l.Power))
+		l.At = site.ToWorld(l.At)
+		sh.lights = append(sh.lights, l)
+		if i < casting {
+			sh.lamps = append(sh.lamps, lampView{l.At.Sub(site.Y.Scale(0.12)), site.Y, site.X})
+		}
+	}
+	sh.tunnels = true // set them
+}
+
+// setLights gives the shaders the lamps picked, and the tunnels' around:
+// those only, from a gallery.
+func (gfx *Graphics) setLights(g *game.Game) {
+	sh := &gfx.shade
+	list, casting := sh.lights, len(sh.lamps)
+	if gfx.gallery != nil {
+		list, casting = nil, 0
+	}
+	more := gfx.tunnelLamps(g, maxLamps-min(len(list), maxLamps*2/3))
+	if len(more) == 0 && !sh.tunnels {
+		return
+	}
+	sh.tunnels = len(more) > 0
+	list = append(list[:min(len(list), maxLamps-len(more)):min(len(list), maxLamps-len(more))], more...)
+	var lights, ranges, warm []float32
+	for _, l := range list {
+		lights = append(lights, float32(l.At.X), float32(l.At.Y), float32(l.At.Z), float32(l.Power))
 		ranges = append(ranges, float32(l.Range))
 		warm = append(warm, float32(l.Warm))
-		if i < casting {
-			sh.lamps = append(sh.lamps, lampView{p.Sub(site.Y.Scale(0.12)), site.Y, site.X})
-		}
+	}
+	if len(list) == 0 { // raylib takes no empty array
+		lights, ranges, warm = make([]float32, 4), make([]float32, 1), make([]float32, 1)
 	}
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightRange"), ranges, rl.ShaderUniformFloat, int32(len(ranges)))
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightWarm"), warm, rl.ShaderUniformFloat, int32(len(warm)))
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(len(sh.lamps))}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lampCount"), []float32{float32(casting)}, rl.ShaderUniformFloat)
 	rl.SetShaderValueV(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lights"), lights, rl.ShaderUniformVec4, int32(len(lights)/4))
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(lights) / 4)}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "lightCount"), []float32{float32(len(list))}, rl.ShaderUniformFloat)
 }
 
 // nearCamps are the buildings set down closest to the camera, within
@@ -451,7 +501,7 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 			blobs = append(blobs, float32(ob.At.X), float32(ob.At.Z), float32(ob.Radius), 0)
 		}
 	}
-	for _, sh := range []rl.Shader{gfx.terrainSh, gfx.objectSh} {
+	for _, sh := range gfx.lit() {
 		rl.SetShaderValueV(sh, rl.GetShaderLocation(sh, "baseBlobs"), blobs, rl.ShaderUniformVec4, int32(len(blobs)/4))
 		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "blobCount"), []float32{float32(len(blobs) / 4)}, rl.ShaderUniformFloat)
 		if len(slabs) > 0 { // raylib takes no empty array
@@ -477,17 +527,27 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 	rl.SetShaderValue(gfx.skySh, rl.GetShaderLocation(gfx.skySh, "air"), []float32{gfx.skyAir}, rl.ShaderUniformFloat)
 	// Objects take the relief's shadow from where the player stands: those
 	// that matter are close, far ones are too small to tell.
-	sun, ao := gfx.Terrain.light(gfx.Terrain.Surface(g.Player.Pos))
-	gfx.stats.Sun, gfx.stats.AO = sun, ao
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(ao)}, rl.ShaderUniformVec2)
+	sun, hid := gfx.Terrain.light(gfx.Terrain.Surface(g.Player.Pos))
+	gfx.stats.Sun, gfx.stats.AO = sun, hid
+	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.ground, []float32{float32(sun), float32(hid)}, rl.ShaderUniformVec2)
 
 	brush := []float32{0, 0, 0, 0}
 	if g.AimOK && g.Mode == game.ModePlay && g.Ghost == nil {
 		brush = []float32{float32(g.Aim.X), float32(g.Aim.Y), float32(g.Aim.Z), float32(g.Tool().Radius)}
 	}
-	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.brush, brush, rl.ShaderUniformVec4)
+	for _, t := range gfx.grounds() {
+		rl.SetShaderValue(t.sh, t.loc.brush, brush, rl.ShaderUniformVec4)
+	}
 	gfx.uploadSteps(&g.Steps)
 	gfx.setGrid(g)
+	gfx.setHoles(g)
+	ao := float32(1)
+	if gfx.gallery != nil {
+		ao = 0
+	}
+	for _, sh := range gfx.lit() {
+		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "baseNear"), []float32{ao}, rl.ShaderUniformFloat)
+	}
 
 	// Soft round shadows of the base's domes, for when the base is beyond
 	// the shadow map.
@@ -517,10 +577,12 @@ func (gfx *Graphics) setUniforms(g *game.Game, cam rl.Camera3D) {
 		casters = append(casters, float32(at.X), float32(at.Y), float32(at.Z), float32(radius))
 	}
 	n := min(len(casters)/4, maxCasters)
-	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
-	rl.SetShaderValue(gfx.terrainSh, gfx.tLoc.casterCount, []float32{float32(n)}, rl.ShaderUniformFloat)
 	cols := gfx.shadow.cols(o)
-	rl.SetShaderValueV(gfx.terrainSh, gfx.tLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
+	for _, t := range gfx.grounds() {
+		rl.SetShaderValueV(t.sh, t.loc.casters, casters[:n*4], rl.ShaderUniformVec4, int32(n))
+		rl.SetShaderValue(t.sh, t.loc.casterCount, []float32{float32(n)}, rl.ShaderUniformFloat)
+		rl.SetShaderValueV(t.sh, t.loc.lightVP, cols, rl.ShaderUniformVec4, 4)
+	}
 	rl.SetShaderValueV(gfx.objectSh, gfx.oLoc.lightVP, cols, rl.ShaderUniformVec4, 4)
 }
 
@@ -574,6 +636,7 @@ func (gfx *Graphics) toolCols(cam rl.Camera3D) []float32 {
 // (the interface).
 func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	cam := gfx.camera(g)
+	gfx.lookUnder(g)
 	gfx.clipPlanes(g)
 	gfx.setOrigin()
 
@@ -584,15 +647,19 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.stats.Patches = len(patches)
 	gfx.nearGems = g.World.GemsNear(g.Player.Pos, gemDrawDist)
 	// Objects cast their shadows first, then the scene is lit with them.
-	gfx.shadow.render(gfx, g.Player.Pos, func() {
-		gfx.drawRocks(g)
-		gfx.drawBase(g)
-		gfx.drawCamps(g, inShadowMap(g.Player.Pos))
-		gfx.drawEntities(g, inShadowMap(g.Player.Pos))
-	})
+	outside := gfx.gallery == nil // what is outside may be seen
+	gfx.casting = true
+	if outside {
+		gfx.shadow.render(gfx, g.Player.Pos, func() {
+			gfx.drawRocks(g)
+			gfx.drawBase(g)
+			gfx.drawCamps(g, inShadowMap(g.Player.Pos))
+			gfx.drawEntities(g, inShadowMap(g.Player.Pos))
+		})
+	}
 	// The rooms' lamps cast shadows too, drawn once.
 	gfx.setUniforms(g, cam)
-	if gfx.base != nil {
+	if gfx.base != nil && outside {
 		gfx.lampShadow.render(gfx, gfx.shade.lamps, func() {
 			gfx.drawBase(g)
 			gfx.drawCamps(g, func(at vec3, r float64) bool { return at.Sub(gfx.camEye).Length() < 2*campShadeDist+r })
@@ -602,8 +669,10 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	}
 
 	gfx.drawSpots(g)
+	gfx.casting = false
 
 	sunUp := gfx.camEye.Norm().Dot(planet.SunDir)
+	sunUp += (1 - sunUp) * gfx.under // the same light at any hour, under the ground
 	indoors := g.Indoors(gfx.camEye)
 	gfx.post.adapt(float64(rl.GetFrameTime()), sunUp, indoors)
 	gfx.post.resize()
@@ -614,33 +683,43 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.setViewProj(view, gfx.camEye)
 
 	// Sky: a big sphere around the camera, seen from inside, behind everything.
-	rl.DisableBackfaceCulling()
-	rl.DisableDepthMask()
-	rl.DrawModel(gfx.sky, cam.Position, 400, rl.White)
-	rl.EnableDepthMask()
-	rl.EnableBackfaceCulling()
+	if outside {
+		rl.DisableBackfaceCulling()
+		rl.DisableDepthMask()
+		rl.DrawModel(gfx.sky, cam.Position, 400, rl.White)
+		rl.EnableDepthMask()
+		rl.EnableBackfaceCulling()
+	}
 
 	// The base first: the terrain it hides then fails the depth test before
 	// its costly shader runs (most of the screen, indoors). Its depth is laid
 	// first: a wall behind a home's lining isn't shaded for nothing.
-	gfx.baseDepth()
-	gfx.drawBase(g)
-	gfx.drawCamps(g, gfx.inView(cam))
-	gfx.drawEntities(g, gfx.inView(cam))
-	// Culling is off: patch winding differs from one cube face to the next.
-	rl.DisableBackfaceCulling()
-	for _, n := range patches {
-		rl.DrawMesh(n.mesh, *gfx.terrainMat, rl.MatrixIdentity())
+	if outside {
+		gfx.baseDepth()
+		gfx.drawBase(g)
+		gfx.drawCamps(g, gfx.inView(cam))
+		gfx.drawEntities(g, gfx.inView(cam))
+		// Culling is off: patch winding differs from one cube face to the next.
+		rl.DisableBackfaceCulling()
+		for _, n := range patches {
+			mat := gfx.terrainMat
+			if gfx.holed(n) {
+				mat = gfx.holedMat
+			}
+			rl.DrawMesh(n.mesh, *mat, rl.MatrixIdentity())
+		}
+		rl.EnableBackfaceCulling()
+		gfx.drawRocks(g)
+		gfx.drawPebbles(g)
+		gfx.drawGems(g)
+		gfx.drawDevils(g)
+		gfx.drawGhost(g)
+		gfx.drawGlass()
+		gfx.drawCampGlass(g, gfx.inView(cam))
+		gfx.drawPanes(g, gfx.inView(cam))
+	} else {
+		gfx.drawTunnel(gfx.gallery, gfx.inView(cam))
 	}
-	rl.EnableBackfaceCulling()
-	gfx.drawRocks(g)
-	gfx.drawPebbles(g)
-	gfx.drawGems(g)
-	gfx.drawDevils(g)
-	gfx.drawGhost(g)
-	gfx.drawGlass()
-	gfx.drawCampGlass(g, gfx.inView(cam))
-	gfx.drawPanes(g, gfx.inView(cam))
 	if indoors {
 		gfx.setLighting(mesh.LitIndoor, vec3{})
 	}
@@ -695,7 +774,7 @@ func (gfx *Graphics) drawGems(g *game.Game) {
 func (gfx *Graphics) clipPlanes(g *game.Game) {
 	alt := g.World.Relief.Altitude(gfx.camEye)
 	gfx.near = math.Max(0.15, math.Min(20, alt*0.002))
-	gfx.hazeThin = float32(1 / (1 + max(0, alt-20)/150))
+	gfx.hazeThin = float32(1/(1+max(0, alt-20)/150)) * gfx.hazeUnder()
 	gfx.skyAir = float32(1 - mathx.Smoothstep(300, 5000, alt))
 	gfx.far = math.Max(9000, gfx.camEye.Length()+planet.Radius)
 	rl.SetClipPlanes(gfx.near, gfx.far)

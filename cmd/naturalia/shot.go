@@ -169,6 +169,15 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 			fmt.Sscanf(os.Getenv("NA_SHOT_Y"), "%f", &y)
 			g.Player.Pos = c.Site.ToWorld(vec3{x, base.FloorTop + y, z})
 			g.Player.Heading = c.Site.Dir(vec3{math.Cos(yaw), 0, math.Sin(yaw)})
+			// NA_SHOT_TUNNEL=m,turn stands in the tunnel (NA_SHOT_LINK_KIND)
+			// that far along it, looking that way, turned (radians).
+			var along, turn float64
+			if n, _ := fmt.Sscanf(os.Getenv("NA_SHOT_TUNNEL"), "%f,%f", &along, &turn); n > 0 {
+				if at, way, ok := g.ShotTunnel(along); ok {
+					up := at.Norm()
+					g.Player.Pos, g.Player.Heading = at, way.Scale(math.Cos(turn)).Add(up.Cross(way).Scale(math.Sin(turn)))
+				}
+			}
 			g.Player.Pitch = 0.05
 			fmt.Sscanf(os.Getenv("NA_SHOT_PITCH"), "%f", &g.Player.Pitch)
 			s.placed, s.heading, s.pitch = true, g.Player.Heading, g.Player.Pitch
