@@ -82,6 +82,9 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	rl.DisableDepthMask()
 	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
+	if gh.Sheet != nil {
+		gfx.drawSheet(gh.Sheet)
+	}
 	for _, m := range gfx.entityModels(def) {
 		gfx.putBasis(m.model, pos, ax, up, az, col, 0, 0.5)
 	}

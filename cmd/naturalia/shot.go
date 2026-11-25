@@ -152,6 +152,13 @@ func newShotRun(g *game.Game, gfx *render.Graphics, hud *ui.HUD) *shotRun {
 			gfx.Terrain.Warm(g.Player.Eye(), 20*time.Second)
 		}
 	}
+	// NA_SHOT_GRID=dist,step builds a small house on the grid that far
+	// ahead (NA_SHOT_GHOST then holds something to add to it).
+	if v := os.Getenv("NA_SHOT_GRID"); s.file != "" && v != "" {
+		dist, step := 10.0, 1.0
+		fmt.Sscanf(v, "%f,%f", &dist, &step)
+		g.ShotGrid(dist, step)
+	}
 	// NA_SHOT_NIGHTS=n counts n nights slept: what grows has grown.
 	if s.file != "" {
 		fmt.Sscanf(os.Getenv("NA_SHOT_NIGHTS"), "%d", &g.State.Nights)
@@ -219,8 +226,9 @@ func (s *shotRun) tick(g *game.Game) {
 	}
 	s.frames++
 	// NA_SHOT_GHOST=item,degrees holds that item's ghost, tipped over,
-	// once playing.
-	if v := os.Getenv("NA_SHOT_GHOST"); v != "" && s.frames == 60 {
+	// once playing; again each frame the pause of an unfocused window put
+	// it away.
+	if v := os.Getenv("NA_SHOT_GHOST"); v != "" && s.frames >= 60 && g.Ghost == nil {
 		item, deg, _ := strings.Cut(v, ",")
 		var d float64
 		fmt.Sscanf(deg, "%f", &d)

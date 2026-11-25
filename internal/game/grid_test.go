@@ -222,3 +222,19 @@ func TestGridMove(t *testing.T) {
 		t.Errorf("moved, it leans, at %v", pos)
 	}
 }
+
+// Aimed on another's edge, a block slides edge to edge with it.
+func TestGridSlides(t *testing.T) {
+	g := gridGame(t)
+	a := put(g, "core:slab", ahead(g, 7), 7)
+	grid, _ := g.gridOf(a)
+	pos, ax, _, _ := g.Frame(g.Ents.Transform.Get(a))
+	b := put(g, "core:slab", pos.Add(ax.Scale(2.7)), 5)
+	if b == 0 {
+		t.Fatalf("doesn't fit: %q", g.Ghost.Why)
+	}
+	p, _, _, _ := g.Frame(g.Ents.Transform.Get(b))
+	if d := grid.DirLocal(p.Sub(pos)); math.Abs(math.Abs(d.X)-4) > 1e-6 && math.Abs(math.Abs(d.Z)-4) > 1e-6 {
+		t.Errorf("%v apart", d)
+	}
+}

@@ -307,8 +307,12 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		at := g.World.Relief.Surface(grid.World(pos))
 		pos = grid.Local(g.restOnGround(def, at, up, ax, top, math.Max(0, gh.lift)))
 	}
-	if fresh { // its origin is the ghost's lowest corner
+	if fresh { // its origin is a block's lowest corner, another thing's foot
 		corner := pos.Add(lo)
+		if !def.Build {
+			mid := pos.Add(lo.Add(hi).Scale(0.5))
+			corner.X, corner.Z = mid.X, mid.Z
+		}
 		grid.At = grid.World(corner)
 		pos = pos.Sub(corner)
 	}
@@ -321,7 +325,8 @@ func (g *Game) poseOnGrid(gh *Ghost, def *content.EntityDef) bool {
 		return g.ghostFits(def, origin, ax, top, ground)
 	}
 	gh.OK = set(pos)
-	// A corner: where a wall ends in another's thickness, slid out of it.
+	// Aimed too near another block, or a wall's end in another's thickness:
+	// slid out of it.
 	if !gh.OK && sides && !fresh {
 		for _, d := range g.slides(grid, pos.Add(lo), pos.Add(hi), across) {
 			if set(pos.Add(d)) {
@@ -377,10 +382,10 @@ func (g *Game) gridEdges(grid planet.Grid, lo, hi vec3) []float64 {
 	return out
 }
 
-// slides are the ways out of the blocks the box lo..hi overlaps a little,
-// the shortest first.
+// slides are the ways out of the blocks the box lo..hi overlaps, edge to
+// edge with them, the shortest first.
 func (g *Game) slides(grid planet.Grid, lo, hi vec3, across int) []vec3 {
-	const far = 0.5
+	const far = 2.0
 	var out []vec3
 	g.onGridNear(grid, lo, hi, func(_ ecs.ID, blo, bhi vec3) {
 		for _, i := range []int{0, 2} {
@@ -540,4 +545,36 @@ func (g *Game) boxesMeet(def *content.EntityDef, origin, ax, up vec3, id ecs.ID,
 		}
 	}
 	return true
+}
+
+// ShotGrid builds a small house on a grid dist m ahead, for screenshots:
+// two rows of slabs, walls along the far edge, a crate at their end.
+func (g *Game) ShotGrid(dist, step float64) {
+	g.Settings.Grid, g.Settings.GridStep = true, step
+	n := planet.Toward2(g.Player.LocalUp(), g.Player.Heading, dist)
+	at := g.World.Relief.Surface(n)
+	grid := planet.Grid{At: at, X: planet.TangentAt(n, g.Player.Heading).Scale(-1), Up: n}
+	stand := func(kind string, x, y, z float64, ground bool) {
+		def, ok := g.Content.Entities.Get(kind)
+		if !ok {
+			return
+		}
+		origin := grid.World(vec3{x, y, z})
+		t := Transform{Dir: origin.Norm()}
+		t.Alt = origin.Length() - g.World.Relief.Surface(t.Dir).Length()
+		t.SetAxes(grid.X, grid.Up)
+		lo, hi := boxIn(grid, def, grid.X, grid.Up)
+		o := vec3{x, y, z}
+		g.add(Placed{Kind: kind, Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll,
+			Grid: &OnGrid{Grid: grid, Lo: o.Add(lo), Hi: o.Add(hi), Ground: ground}})
+	}
+	for i := range 3 {
+		z := float64(i)*4 - 4
+		stand("core:slab", -2, 0, z, true)
+		stand("core:slab", 2, 0, z, true)
+		stand("core:wall", -3.9, 0.2, z, false)
+	}
+	stand("core:crate-2", -1, 0, 7, true)
+	g.regrade = true
+	g.syncGround()
 }

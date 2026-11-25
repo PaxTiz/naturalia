@@ -472,6 +472,14 @@ func (hud *HUD) drawHeldItem(g *game.Game) {
 			{game.KeyLabel(game.ActStick), stick}, {"MOLETTE", "décaler"}, {"CLIC DROIT", "ranger"}}
 		if g.CampLayout(gh.Kind) != nil { // upright, on the ground: only turned
 			keys = [][2]string{keys[0], keys[1], {game.KeyLabel(game.ActTurnY), "tourner"}, keys[5]}
+		} else {
+			last := keys[5]
+			if g.Settings.Grid {
+				keys = append(keys[:5], [2]string{game.KeyLabel(game.ActGrid), "sans grille"},
+					[2]string{game.KeyLabel(game.ActGridStep), "pas " + strings.Replace(fmt.Sprintf("%g m", g.Settings.GridStep), ".", ",", 1)}, last)
+			} else {
+				keys = append(keys[:5], [2]string{game.KeyLabel(game.ActGrid), "grille"}, last)
+			}
 		}
 		if moving {
 			keys = append(keys[:1], keys[2:]...)

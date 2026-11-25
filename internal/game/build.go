@@ -239,8 +239,19 @@ func (g *Game) aimSurface(def *content.EntityDef, eye, fwd vec3) (at, n vec3, on
 	if !ok {
 		hit, reach = g.World.Relief.Surface(eye.Add(planet.TangentAt(g.Player.LocalUp(), fwd).Scale(buildReach))), buildReach
 	}
-	if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach); ok && g.turnable(def) {
+	if !g.turnable(def) {
+		return hit, hit.Norm(), 0
+	}
+	if id, bhit, bn, ok := g.aimBlock(eye, fwd, reach); ok {
 		return bhit, bn, id
+	}
+	if !ok { // too far ahead: on what stands there, from above
+		n := hit.Norm()
+		if h := eye.Length() - hit.Length(); h > 0 {
+			if id, bhit, bn, ok := g.aimBlock(hit.Add(n.Scale(h)), n.Scale(-1), h); ok {
+				return bhit, bn, id
+			}
+		}
 	}
 	return hit, hit.Norm(), 0
 }
@@ -432,7 +443,9 @@ func (g *Game) HoldGhost(item string, deg float64) {
 	if !ok {
 		return
 	}
-	g.GiveItem(it.ID, 1)
+	if g.State.Items[it.ID] == 0 {
+		g.GiveItem(it.ID, 1)
+	}
 	for g.itemSel = 0; g.itemSel < g.Content.Items.Len(); g.itemSel++ {
 		if h, _ := g.HeldItem(); h == it {
 			break
@@ -440,4 +453,5 @@ func (g *Game) HoldGhost(item string, deg float64) {
 	}
 	g.Ghost = &Ghost{Kind: content.Qualify(it.Places), item: it.ID, rel: [2]vec3{{1, 0, 0}, {0, 1, 0}}, dist: 4}
 	g.Ghost.turn(vec3{1, 0, 0}, deg*math.Pi/180)
+	g.poseGhost()
 }

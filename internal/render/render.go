@@ -66,6 +66,7 @@ type Graphics struct {
 	doorPanel                                         rl.Model
 	hallLeaf                                          rl.Model                 // a door leaf of the halls, scaled to size
 	entities                                          map[string][]entityModel // by entity ID, built on first draw
+	grids                                             map[float64][]rl.Model   // the lines of the building grid, by step
 	screens                                           []rl.Texture2D
 	signs                                             []sign
 	smallcaps                                         rl.Font
