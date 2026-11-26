@@ -8,7 +8,7 @@ uniform float exposure;
 uniform float sunUp;        // sun height where the player stands
 uniform float time;
 uniform vec3 sunScreen;     // xy: the sun on screen (uv), z: light shafts strength
-// The photo mode's settings (post.go's look): the depth of field...
+// The photo mode's settings (post.go, Look): the depth of field...
 uniform sampler2D depthTex; // the scene's depth buffer
 uniform vec4 dof;           // x: focus (m, 0 at the screen's center), y: largest blur (px), zw: clip planes
 // ...and the grading: filter, contrast, saturation, vignette.

@@ -7,12 +7,12 @@ uniform mat4 matModel;
 uniform float time;
 uniform vec4 devil; // x: seed, y: strength
 uniform vec3 origin;
-// viewProj is the camera about origin, computed in double precision (relVP):
+// viewProj is the camera about origin, computed in double precision (gpu.RelVP):
 // projecting fragRel rather than the world position keeps the quarter
 // millimeter of float grain off the screen, where it made close surfaces
 // fight for each pixel as the camera moved.
 uniform vec4 viewProj[4];
-uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (setViewProj)
+uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (gpu.Renderer.SetView)
 out vec3 fragRel;
 out vec3 fragPos;
 out vec3 fragNormal;

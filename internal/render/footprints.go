@@ -3,8 +3,6 @@ package render
 import (
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
-
-	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // uploadSteps sends the prints to the terrain shader: positions, then heading
@@ -21,9 +19,9 @@ func (gfx *Graphics) uploadSteps(f *game.Footprints) {
 	}
 	for _, s := range gfx.grounds() {
 		if count > 0 {
-			rl.SetShaderValueV(s.sh, s.loc.steps, pos, rl.ShaderUniformVec4, int32(count))
-			rl.SetShaderValueV(s.sh, s.loc.stepDirs, dir, rl.ShaderUniformVec4, int32(count))
+			s.Vec4s("steps", pos)
+			s.Vec4s("stepDirs", dir)
 		}
-		rl.SetShaderValue(s.sh, s.loc.stepCount, []float32{float32(count)}, rl.ShaderUniformFloat)
+		s.Float("stepCount", float32(count))
 	}
 }

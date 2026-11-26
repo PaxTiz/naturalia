@@ -5,6 +5,7 @@ import (
 	"math"
 	"naturalia/internal/content"
 	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
 	"naturalia/internal/planet"
@@ -31,9 +32,9 @@ const (
 )
 
 type spots struct {
-	target rl.RenderTexture2D
-	seen   [maxSpots]uint64 // what each cell shows (spotKey), 0 for nothing yet
-	last   []spotID         // the lamps of the cells, kept in their cell as long as they light
+	*gpu.DepthMap
+	seen [maxSpots]uint64 // what each cell shows (spotKey), 0 for nothing yet
+	last []spotID         // the lamps of the cells, kept in their cell as long as they light
 }
 
 // spotID tells lamps apart: the one of an entity, or the n-th of a building
@@ -44,21 +45,7 @@ type spotID struct {
 }
 
 func newSpots() *spots {
-	const res = spotGrid * spotCell
-	img := rl.GenImageColor(res, res, rl.White)
-	rl.ImageFormat(img, rl.UncompressedR32)
-	s := &spots{last: make([]spotID, maxSpots)}
-	s.target.Texture = rl.LoadTextureFromImage(img)
-	rl.UnloadImage(img)
-	rl.SetTextureFilter(s.target.Texture, rl.FilterPoint)
-	rl.SetTextureWrap(s.target.Texture, rl.WrapClamp)
-	s.target.ID = rl.LoadFramebuffer()
-	rl.FramebufferAttach(s.target.ID, s.target.Texture.ID, rl.AttachmentColorChannel0, rl.AttachmentTexture2d, 0)
-	if !rl.FramebufferComplete(s.target.ID) {
-		panic("lamps' shadow framebuffer incomplete")
-	}
-	rl.DisableFramebuffer()
-	return s
+	return &spots{DepthMap: gpu.NewDepthMap(spotGrid, spotCell, spotNearClip, spotFarClip, true), last: make([]spotID, maxSpots)}
 }
 
 // nightAt is how much the lamps of the night are lit at a point: 0 by day.
@@ -77,9 +64,9 @@ type spot struct {
 	dist        float64
 }
 
-// camera is its view about o.
-func (s *spot) cols(o vec3) []float32 {
-	return relVP(s.at, s.at.Add(s.dir), s.up, o, rl.MatrixPerspective(spotFov*math.Pi/180, 1, spotNearClip, spotFarClip))
+// lens is its view.
+func (s *spot) lens() gpu.Lens {
+	return gpu.Lens{Eye: s.at, Look: s.at.Add(s.dir), Up: s.up, Fovy: spotFov}
 }
 
 // spotsNear are the lamps that light the scene, the closest first.
@@ -221,7 +208,7 @@ func (gfx *Graphics) drawSpots(g *game.Game) {
 			continue
 		}
 		n = i + 1
-		p := s.at.Sub(gfx.origin)
+		p := s.at.Sub(gfx.eng.Origin)
 		at = append(at, float32(p.X), float32(p.Y), float32(p.Z), float32(s.power))
 		dir = append(dir, float32(s.dir.X), float32(s.dir.Y), float32(s.dir.Z), float32(s.edge))
 		col = append(col, float32(s.col.X), float32(s.col.Y), float32(s.col.Z), float32(s.reach))
@@ -230,52 +217,91 @@ func (gfx *Graphics) drawSpots(g *game.Game) {
 			k = 1
 		}
 		in = append(in, k)
-		vp = append(vp, s.cols(gfx.origin)...)
+		vp = append(vp, gfx.spots.Cols(s.lens(), gfx.eng.Origin)...)
 	}
 	gfx.stats.Lamps = len(list)
 	for _, sh := range gfx.lit() {
-		loc := func(name string) int32 { return rl.GetShaderLocation(sh, name) }
-		rl.SetShaderValue(sh, loc("spotCount"), []float32{float32(n)}, rl.ShaderUniformFloat)
+		sh.Float("spotCount", float32(n))
 		// An int, as the shader takes it, in a float's bits.
-		rl.SetShaderValue(sh, loc("spotMap"), []float32{math.Float32frombits(spotSlot)}, rl.ShaderUniformInt)
+		sh.Int("spotMap", spotSlot)
 		if n == 0 {
 			continue
 		}
-		rl.SetShaderValueV(sh, loc("spotAt"), at, rl.ShaderUniformVec4, maxSpots)
-		rl.SetShaderValueV(sh, loc("spotDir"), dir, rl.ShaderUniformVec4, maxSpots)
-		rl.SetShaderValueV(sh, loc("spotCol"), col, rl.ShaderUniformVec4, maxSpots)
-		rl.SetShaderValueV(sh, loc("spotIn"), in, rl.ShaderUniformFloat, maxSpots)
-		rl.SetShaderValueV(sh, loc("spotVP"), vp, rl.ShaderUniformVec4, 4*maxSpots)
+		sh.Vec4s("spotAt", at)
+		sh.Vec4s("spotDir", dir)
+		sh.Vec4s("spotCol", col)
+		sh.Floats("spotIn", in)
+		sh.Vec4s("spotVP", vp)
 	}
 	rl.ActiveTextureSlot(spotSlot)
-	rl.EnableTexture(sp.target.Texture.ID)
+	rl.EnableTexture(sp.Target.Texture.ID)
 	rl.ActiveTextureSlot(0)
 }
 
 // drawSpot draws lamp s's view into cell i, over what it held.
 func (gfx *Graphics) drawSpot(g *game.Game, i int, s *spot) {
-	const cell = int32(spotCell)
-	x, y := int32(i%spotGrid)*cell, int32(i/spotGrid)*cell
-	rl.BeginTextureMode(gfx.spots.target)
-	rl.EnableScissorTest()
-	rl.Scissor(x, y, cell, cell)
-	rl.ClearBackground(rl.White)
-	rl.SetClipPlanes(spotNearClip, spotFarClip)
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
-	rl.BeginMode3D(rl.Camera3D{Position: ToRL(s.at), Target: ToRL(s.at.Add(s.dir)), Up: ToRL(s.up), Fovy: spotFov, Projection: rl.CameraPerspective})
-	rl.Viewport(x, y, cell, cell)
-	gfx.setViewProj(s.cols(s.at), s.at)
-	rl.SetBlendFactors(glOne, glOne, glMin)
-	rl.BeginBlendMode(rl.BlendCustom)
-	rl.DisableBackfaceCulling()
-	gfx.still = true // what moves isn't in the key
-	gfx.drawEntities(g, func(at vec3, r float64) bool { return at.Sub(s.at).Length() < s.reach+r })
-	gfx.still = false
-	rl.EnableBackfaceCulling()
-	rl.EndBlendMode()
-	rl.EndMode3D()
-	rl.DisableScissorTest()
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
-	rl.SetClipPlanes(gfx.near, gfx.far)
-	rl.EndTextureMode()
+	sp := gfx.spots
+	sp.Begin(gfx.eng, false)
+	sp.Draw(gfx.eng, i, s.lens(), true, func() {
+		gfx.still = true // what moves isn't in the key
+		gfx.drawEntities(g, func(at vec3, r float64) bool { return at.Sub(s.at).Length() < s.reach+r })
+		gfx.still = false
+	})
+	sp.End(gfx.eng)
+}
+
+// lampShadow holds the shadows of the rooms' ceiling lamps: one wide
+// perspective view straight down from each lamp, in the cells of a grid
+// (3×3 at most). The base never moves: they are drawn once, and again only
+// when other rooms come closer (selectBase). Every room kept keeps its
+// shadows, so nothing pops in when the player walks in.
+type lampShadow struct {
+	*gpu.DepthMap
+	lamps []lampView // where the cameras stand, looking down
+	done  bool
+}
+
+// lampView is a lamp's camera: where it stands, the up it looks down
+// from (a bootcamp's isn't the world's), and the way the top of its view
+// points.
+type lampView struct{ at, up, side vec3 }
+
+func (l lampView) lens() gpu.Lens {
+	return gpu.Lens{Eye: l.at, Look: l.at.Sub(l.up), Up: l.side, Fovy: lampFov}
+}
+
+const (
+	lampShadowCell = 1024 // each lamp's view; the rooms' lamps are the first lights of base.Lamps
+	lampFov        = 150.0
+)
+
+func newLampShadow(lamps int) *lampShadow {
+	grid := int(math.Ceil(math.Sqrt(float64(max(1, lamps)))))
+	return &lampShadow{DepthMap: gpu.NewDepthMap(grid, lampShadowCell, 0.1, 30, true)}
+}
+
+// cols gives the lamps' cameras about origin o, four columns each.
+func (s *lampShadow) cols(o vec3) []float32 {
+	var c []float32
+	for _, l := range s.lamps {
+		c = append(c, s.Cols(l.lens(), o)...)
+	}
+	return c
+}
+
+// reset has the lamps' views drawn again.
+func (s *lampShadow) reset() { s.done, s.lamps = false, nil }
+
+// render draws every lamp's view into its cell, once.
+func (s *lampShadow) render(gfx *Graphics, lamps []lampView, draw func()) {
+	if s.done {
+		return
+	}
+	s.done = true
+	s.Begin(gfx.eng, true)
+	for i, lamp := range lamps[:min(len(lamps), s.Grid*s.Grid)] {
+		s.lamps = append(s.lamps, lamp)
+		s.Draw(gfx.eng, i, lamp.lens(), false, draw)
+	}
+	s.End(gfx.eng)
 }

@@ -1,12 +1,18 @@
-package render
+package gpu
 
 import (
+	"embed"
 	"math"
 	"naturalia/internal/engine/mathx"
-	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+//go:embed shaders/*
+var shaderFiles embed.FS
+
+// shaders are the engine's own: those of the image.
+var shaders = Sources{FS: shaderFiles, Dir: "shaders", Consts: map[string]float64{"bloomStrength": bloomStrength}}
 
 const (
 	bloomLevels   = 6
@@ -16,10 +22,10 @@ const (
 	pixelRGBA16F rl.PixelFormat = 13
 )
 
-// postFX renders the 3D scene in HDR into a float texture, then makes the
+// Post renders the 3D scene in HDR into a float texture, then makes the
 // image: bloom, exposure, tone curve, color grading, vignette, grain and
 // FXAA (MSAA is lost when rendering into a texture).
-type postFX struct {
+type Post struct {
 	w, h          int32
 	scene         rl.RenderTexture2D
 	bloom         [bloomLevels]rl.RenderTexture2D
@@ -53,12 +59,12 @@ func hdrTarget(w, h int32, depth bool) rl.RenderTexture2D {
 	return rt
 }
 
-func newPostFX() *postFX {
-	p := &postFX{exposure: baseExposure}
-	p.down = rl.LoadShaderFromMemory(glsl("post.vert"), glsl("bloom_down.frag"))
-	p.up = rl.LoadShaderFromMemory(glsl("post.vert"), glsl("bloom_up.frag"))
-	p.img = rl.LoadShaderFromMemory(glsl("post.vert"), glsl("image.frag"))
-	p.fxaa = rl.LoadShaderFromMemory(glsl("post.vert"), glsl("fxaa.frag"))
+func newPost() *Post {
+	p := &Post{exposure: baseExposure}
+	p.down = rl.LoadShaderFromMemory(shaders.Read("post.vert"), shaders.Read("bloom_down.frag"))
+	p.up = rl.LoadShaderFromMemory(shaders.Read("post.vert"), shaders.Read("bloom_up.frag"))
+	p.img = rl.LoadShaderFromMemory(shaders.Read("post.vert"), shaders.Read("image.frag"))
+	p.fxaa = rl.LoadShaderFromMemory(shaders.Read("post.vert"), shaders.Read("fxaa.frag"))
 	p.locs.texel = rl.GetShaderLocation(p.down, "texel")
 	p.locs.first = rl.GetShaderLocation(p.down, "first")
 	p.locs.exposure = rl.GetShaderLocation(p.img, "exposure")
@@ -72,7 +78,7 @@ func newPostFX() *postFX {
 }
 
 // resize (re)creates the targets when the window changes size.
-func (p *postFX) resize() {
+func (p *Post) resize() {
 	w, h := int32(rl.GetRenderWidth()), int32(rl.GetRenderHeight())
 	if w == p.w && h == p.h {
 		return
@@ -97,7 +103,7 @@ func (p *postFX) resize() {
 
 // adapt moves the exposure toward what the scene needs: brighter at night,
 // and higher indoors, so stepping out into the day dazzles for a moment.
-func (p *postFX) adapt(dt, sunUp float64, inside bool) {
+func (p *Post) adapt(dt, sunUp float64, inside bool) {
 	target := baseExposure * (2.6 - 1.6*mathx.Smoothstep(-0.15, 0.2, sunUp))
 	if inside {
 		target = baseExposure * 1.25
@@ -117,19 +123,19 @@ func blit(src rl.Texture2D, w, h int32) {
 		rl.NewRectangle(0, 0, float32(w), float32(h)), rl.Vector2{}, 0, rl.White)
 }
 
-// look is how the picture is taken: the photo mode's settings, or the
-// game's own look.
-type look struct {
-	exposure        float64 // stops over the adapted exposure
-	focus, blur     float64 // focus distance (m, 0 for auto) and largest blur (px, 0 for none)
-	near, far       float64 // the view's clip planes, to read the depth
-	filter          int     // index in game.PhotoFilters
-	contrast, sat   float64 // -1 to 1
-	vignette, grain float64
+// Look is how the picture is taken: a photo's settings, or the game's
+// own look.
+type Look struct {
+	Exposure        float64 // stops over the adapted exposure
+	Focus, Blur     float64 // focus distance (m, 0 for auto) and largest blur (px, 0 for none)
+	Near, Far       float64 // the view's clip planes, to read the depth (Renderer.Draw)
+	Filter          int     // index of a filter in image.frag
+	Contrast, Sat   float64 // -1 to 1
+	Vignette, Grain float64
 }
 
 // finish turns the HDR scene into the final image on the screen.
-func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64, lk look) {
+func (p *Post) finish(cam rl.Camera3D, sun vec3, sunUp, clock float64, lk Look) {
 	// Bloom: halve again and again, then add each level back into the one
 	// above, blurring as it grows.
 	rl.BeginShaderMode(p.down)
@@ -154,16 +160,16 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64, lk look) {
 	rl.EndBlendMode()
 	rl.EndShaderMode()
 
-	rl.SetShaderValue(p.img, p.locs.exposure, []float32{float32(p.exposure * math.Exp2(lk.exposure))}, rl.ShaderUniformFloat)
-	rl.SetShaderValue(p.img, p.locs.dof, []float32{float32(lk.focus), float32(lk.blur), float32(lk.near), float32(lk.far)}, rl.ShaderUniformVec4)
-	rl.SetShaderValue(p.img, p.locs.look, []float32{float32(lk.filter), float32(lk.contrast), float32(lk.sat), float32(lk.vignette)}, rl.ShaderUniformVec4)
+	rl.SetShaderValue(p.img, p.locs.exposure, []float32{float32(p.exposure * math.Exp2(lk.Exposure))}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(p.img, p.locs.dof, []float32{float32(lk.Focus), float32(lk.Blur), float32(lk.Near), float32(lk.Far)}, rl.ShaderUniformVec4)
+	rl.SetShaderValue(p.img, p.locs.look, []float32{float32(lk.Filter), float32(lk.Contrast), float32(lk.Sat), float32(lk.Vignette)}, rl.ShaderUniformVec4)
 	rl.SetShaderValue(p.img, p.locs.sunUp, []float32{float32(sunUp)}, rl.ShaderUniformFloat)
 	rl.SetShaderValue(p.img, p.locs.time, []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
 	// Light shafts when the sun is low and ahead.
 	eye := vec3{float64(cam.Position.X), float64(cam.Position.Y), float64(cam.Position.Z)}
 	fwd := vec3{float64(cam.Target.X), float64(cam.Target.Y), float64(cam.Target.Z)}.Sub(eye).Norm()
-	shafts := mathx.Smoothstep(0.3, 0.85, fwd.Dot(planet.SunDir)) * mathx.Smoothstep(-0.12, 0.0, sunUp) * (1 - mathx.Smoothstep(0.15, 0.45, sunUp))
-	sp := rl.GetWorldToScreen(ToRL(eye.Add(planet.SunDir.Scale(1000))), cam)
+	shafts := mathx.Smoothstep(0.3, 0.85, fwd.Dot(sun)) * mathx.Smoothstep(-0.12, 0.0, sunUp) * (1 - mathx.Smoothstep(0.15, 0.45, sunUp))
+	sp := rl.GetWorldToScreen(ToRL(eye.Add(sun.Scale(1000))), cam)
 	sw, sh := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
 	rl.SetShaderValue(p.img, p.locs.sunScreen, []float32{sp.X / sw, 1 - sp.Y/sh, float32(shafts * 0.2)}, rl.ShaderUniformVec3)
 	// Written as is, without blending: the alpha holds the luma for FXAA,
@@ -181,15 +187,8 @@ func (p *postFX) finish(cam rl.Camera3D, sunUp, clock float64, lk look) {
 	rl.EndTextureMode()
 	// Then the edges are smoothed, straight to the screen.
 	rl.SetShaderValue(p.fxaa, rl.GetShaderLocation(p.fxaa, "time"), []float32{float32(math.Mod(clock, 100))}, rl.ShaderUniformFloat)
-	rl.SetShaderValue(p.fxaa, p.locs.grain, []float32{float32(lk.grain * 0.1)}, rl.ShaderUniformFloat)
+	rl.SetShaderValue(p.fxaa, p.locs.grain, []float32{float32(lk.Grain * 0.1)}, rl.ShaderUniformFloat)
 	rl.BeginShaderMode(p.fxaa)
 	blit(p.ldr.Texture, int32(rl.GetScreenWidth()), int32(rl.GetScreenHeight()))
 	rl.EndShaderMode()
-}
-
-func b2f(b bool) float32 {
-	if b {
-		return 1
-	}
-	return 0
 }

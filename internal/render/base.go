@@ -6,6 +6,7 @@ import (
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/engine/mesh"
 	"naturalia/internal/game"
@@ -17,8 +18,8 @@ import (
 // setLighting selects how the next objects are lit; room is the world point
 // that litTowards walls face.
 func (gfx *Graphics) setLighting(mode float32, room vec3) {
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.lighting, []float32{mode}, rl.ShaderUniformFloat)
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.room, v3f(room), rl.ShaderUniformVec3)
+	gfx.objectSh.Float("lighting", mode)
+	gfx.objectSh.Vec3("room", room)
 }
 
 // yawFor returns the rotation around Y (radians) that turns a model's +X
@@ -64,17 +65,17 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	rl.DisableBackfaceCulling()
 	defer rl.EnableBackfaceCulling()
 	if gfx.base == nil {
-		gfx.base = gfx.uploadBase(base.Build(&g.Content.Kits), gfx.objectSh)
-		gfx.doorPanel = doorPanelModel(gfx.objectSh)
-		gfx.hallLeaf = upload(base.LeafModel(), gfx.objectSh)
+		gfx.base = gfx.uploadBase(base.Build(&g.Content.Kits), gfx.objectSh.Shader)
+		gfx.doorPanel = doorPanelModel(gfx.objectSh.Shader)
+		gfx.hallLeaf = upload(base.LeafModel(), gfx.objectSh.Shader)
 		for _, m := range append(gfx.base.models, gfx.doorPanel, gfx.hallLeaf) {
 			gfx.bindMaps(m)
 		}
 	}
 
 	// Red dust settles on the faces turned up and at the foot of the walls.
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(base.Origin.Y)}, rl.ShaderUniformVec2)
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, []float32{0, 1, 0}, rl.ShaderUniformVec3)
+	gfx.objectSh.Vec2("wear", 1, float32(base.Origin.Y))
+	gfx.objectSh.Vec3("wearUp", vec3{0, 1, 0})
 	gfx.base.draw(gfx)
 	gfx.drawGrowth(g)
 	for _, f := range base.AllFurniture() {
@@ -90,7 +91,7 @@ func (gfx *Graphics) drawBase(g *game.Game) {
 	gfx.drawSigns(g)
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
+	gfx.objectSh.Vec2("wear", 0, 0)
 }
 
 // grown is a piece of furniture that grows, at a stage.
@@ -109,7 +110,7 @@ func (gfx *Graphics) drawGrowth(g *game.Game) {
 		k := grown{id, base.Stage(id, g.State.Nights)}
 		m := gfx.growth[k]
 		if m == nil {
-			m = gfx.uploadBase(base.BuildGrowth(&g.Content.Kits, k.id, k.stage), gfx.objectSh)
+			m = gfx.uploadBase(base.BuildGrowth(&g.Content.Kits, k.id, k.stage), gfx.objectSh.Shader)
 			for _, md := range m.models {
 				gfx.bindMaps(md)
 			}
@@ -244,7 +245,7 @@ func (gfx *Graphics) drawGlobe(g *game.Game, cam rl.Camera3D) {
 func (gfx *Graphics) drawGlobeAt(g *game.Game, cam rl.Camera3D, site base.Site, table vec3) {
 	up := site.Y
 	center := site.ToWorld(table.Add(vec3{0, globeHeight, 0}))
-	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.globeCenter, v3f(center), rl.ShaderUniformVec3)
+	gfx.holoSh.Vec3("globeCenter", center)
 	// Turn the player's spot on Mars toward the viewer, a bit raised,
 	// with a slow sway so the hologram feels alive.
 	toViewer := g.Player.Eye().Sub(center)
@@ -252,20 +253,20 @@ func (gfx *Graphics) drawGlobeAt(g *game.Game, cam rl.Camera3D, site base.Site, 
 	sway := math.Sin(g.Elapsed*0.35) * 0.45
 	toViewer = toViewer.Scale(math.Cos(sway)).Add(up.Cross(toViewer).Scale(math.Sin(sway)))
 	facing := toViewer.Add(up.Scale(0.2)).Norm()
-	rl.SetShaderValueMatrix(gfx.holoSh, gfx.hLoc.globeRot, rotationBetween(facing, g.Player.LocalUp()))
-	rl.SetShaderValue(gfx.holoSh, gfx.hLoc.playerDir, v3f(g.Player.LocalUp()), rl.ShaderUniformVec3)
+	gfx.holoSh.Matrix("globeRot", rotationBetween(facing, g.Player.LocalUp()))
+	gfx.holoSh.Vec3("playerDir", g.Player.LocalUp())
 	gfx.globeMarks(g)
 	rl.SetMaterialTexture(&gfx.holo.GetMaterials()[0], rl.MapDiffuse, gfx.dust.Coverage())
 
 	rl.DrawRenderBatchActive()
 	rl.DisableDepthMask()
 	rl.BeginBlendMode(rl.BlendAdditive)
-	rl.DrawModel(gfx.holo, ToRL(center), globeRadius, rl.White)
+	rl.DrawModel(gfx.holo, gpu.ToRL(center), globeRadius, rl.White)
 	// Soft light rising from the table to the globe.
 	for i := range 6 {
 		f := float64(i) / 5
 		p := site.ToWorld(table.Add(vec3{0, 1.0 + f*(globeHeight-1.0), 0}))
-		rl.DrawBillboard(cam, gfx.glow, ToRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
+		rl.DrawBillboard(cam, gfx.glow, gpu.ToRL(p), float32(0.9+f*1.2), color.RGBA{60, 180, 220, uint8(40 - 25*f)})
 	}
 	rl.EndBlendMode()
 	rl.EnableDepthMask()
@@ -290,9 +291,9 @@ func (gfx *Graphics) globeMarks(g *game.Game) {
 		}
 	}
 	if len(marks) > 0 {
-		rl.SetShaderValueV(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "marks"), marks, rl.ShaderUniformVec4, int32(len(marks)/4))
+		gfx.holoSh.Vec4s("marks", marks)
 	}
-	rl.SetShaderValue(gfx.holoSh, rl.GetShaderLocation(gfx.holoSh, "markCount"), []float32{float32(len(marks) / 4)}, rl.ShaderUniformFloat)
+	gfx.holoSh.Float("markCount", float32(len(marks)/4))
 }
 
 const (
@@ -332,7 +333,7 @@ func (gfx *Graphics) setMat(kind int, scale float32, objSpace bool) {
 	if objSpace {
 		o = 1
 	}
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.mat, []float32{float32(kind), scale, o}, rl.ShaderUniformVec3)
+	gfx.objectSh.Vec3("matInfo", vec3{float64(kind), float64(scale), float64(o)})
 }
 
 // tok is a material by ID; an unknown one shows up magenta.
@@ -360,7 +361,7 @@ func (gfx *Graphics) uploadBase(parts *mesh.Parts, sh rl.Shader) *baseModels {
 }
 
 // at is where the meshes are drawn, about the shaders' origin.
-func (b *baseModels) at(gfx *Graphics) rl.Vector3 { return ToRL(b.Origin().Sub(gfx.origin)) }
+func (b *baseModels) at(gfx *Graphics) rl.Vector3 { return gpu.ToRL(b.Origin().Sub(gfx.eng.Origin)) }
 
 func (b *baseModels) draw(gfx *Graphics) {
 	for i, k := range b.Keys {
@@ -370,7 +371,7 @@ func (b *baseModels) draw(gfx *Graphics) {
 		t := b.toks[i]
 		gfx.setMat(t.Mat, t.Scale, false)
 		gfx.setLighting(k.Lit, k.At)
-		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
+		gfx.objectSh.Vec2("surface", t.Spec, t.Emissive)
 		rl.DrawModel(b.models[i], b.at(gfx), 1, t.Col)
 	}
 }
@@ -384,14 +385,14 @@ func (gfx *Graphics) baseDepth() {
 	}
 	rl.DisableBackfaceCulling()
 	rl.ColorMask(false, false, false, false)
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
+	gfx.eng.Depth(true)
 	for i, k := range gfx.base.Keys {
 		if k.Lit != mesh.LitGlass {
 			rl.DrawModel(gfx.base.models[i], gfx.base.at(gfx), 1, rl.White)
 		}
 	}
 	rl.DrawRenderBatchActive()
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
+	gfx.eng.Depth(false)
 	rl.ColorMask(true, true, true, true)
 	rl.EnableBackfaceCulling()
 }

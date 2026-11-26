@@ -6,6 +6,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
 	"naturalia/internal/palette"
@@ -387,7 +388,7 @@ func (hud *HUD) Draw(g *game.Game, cam rl.Camera3D, rs render.Stats) {
 		if f.Pos.Sub(g.Player.Eye()).Dot(g.Player.Forward()) <= 0 {
 			continue // behind the camera
 		}
-		sp := rl.GetWorldToScreen(render.ToRL(f.Pos), cam)
+		sp := rl.GetWorldToScreen(gpu.ToRL(f.Pos), cam)
 		hud.textCenter(f.Text, sp.X+1*u, sp.Y+2*u, 26*u, withAlpha(color.RGBA{0, 0, 0, 170}, f.Life))
 		hud.textCenter(f.Text, sp.X, sp.Y, 26*u, withAlpha(f.C, f.Life))
 	}
@@ -796,7 +797,7 @@ func (hud *HUD) drawBaseMarker(g *game.Game, cam rl.Camera3D) {
 	if target.Sub(g.Player.Eye()).Dot(g.Player.Forward()) <= 0 {
 		return
 	}
-	sp := rl.GetWorldToScreen(render.ToRL(target), cam)
+	sp := rl.GetWorldToScreen(gpu.ToRL(target), cam)
 	if sp.X < 0 || sp.X > w || sp.Y < 0 || sp.Y > h {
 		return
 	}
@@ -1081,10 +1082,10 @@ type HUD struct {
 
 func New() *HUD {
 	return &HUD{
-		font:      render.LoadFont(goregular.TTF, 64),
-		bold:      render.LoadFont(gobold.TTF, 64),
-		smallcaps: render.LoadFont(gosmallcaps.TTF, 96),
-		mono:      render.LoadFont(gomonobold.TTF, 64),
+		font:      gpu.LoadFont(goregular.TTF, 64),
+		bold:      gpu.LoadFont(gobold.TTF, 64),
+		smallcaps: gpu.LoadFont(gosmallcaps.TTF, 96),
+		mono:      gpu.LoadFont(gomonobold.TTF, 64),
 		visor:     render.GenVisor(),
 		hover:     -1,
 		confirm:   -1,

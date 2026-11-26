@@ -56,17 +56,17 @@ func (gfx *Graphics) setHoles(g *game.Game) {
 	gfx.holes = gfx.holes[:0]
 	for _, h := range list[:min(len(list), maxHoles)] {
 		gfx.holes = append(gfx.holes, h.s.Origin)
-		o := h.s.Origin.Sub(gfx.origin)
+		o := h.s.Origin.Sub(gfx.eng.Origin)
 		at = append(at, float32(o.X), float32(o.Y), float32(o.Z), float32(h.x0))
 		x = append(x, float32(h.s.X.X), float32(h.s.X.Y), float32(h.s.X.Z), float32(h.x1))
 		z = append(z, float32(h.s.Z.X), float32(h.s.Z.Y), float32(h.s.Z.Z), float32(h.half))
 	}
 	n := int32(len(at) / 4)
-	rl.SetShaderValue(gfx.holedSh, rl.GetShaderLocation(gfx.holedSh, "holeCount"), []float32{float32(n)}, rl.ShaderUniformFloat)
+	gfx.holedSh.Float("holeCount", float32(n))
 	if n > 0 {
-		rl.SetShaderValueV(gfx.holedSh, rl.GetShaderLocation(gfx.holedSh, "holeAt"), at, rl.ShaderUniformVec4, n)
-		rl.SetShaderValueV(gfx.holedSh, rl.GetShaderLocation(gfx.holedSh, "holeX"), x, rl.ShaderUniformVec4, n)
-		rl.SetShaderValueV(gfx.holedSh, rl.GetShaderLocation(gfx.holedSh, "holeZ"), z, rl.ShaderUniformVec4, n)
+		gfx.holedSh.Vec4s("holeAt", at)
+		gfx.holedSh.Vec4s("holeX", x)
+		gfx.holedSh.Vec4s("holeZ", z)
 	}
 }
 
@@ -177,7 +177,7 @@ func (gfx *Graphics) keptModels(key string, parts func() *mesh.Parts) *baseModel
 	}
 	m := gfx.links[key]
 	if m == nil {
-		m = gfx.uploadBase(parts(), gfx.objectSh)
+		m = gfx.uploadBase(parts(), gfx.objectSh.Shader)
 		for _, md := range m.models {
 			gfx.bindMaps(md)
 		}

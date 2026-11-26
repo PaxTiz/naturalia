@@ -3,6 +3,7 @@ package render
 import (
 	"image/color"
 	"math"
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
 	"naturalia/internal/planet"
@@ -81,7 +82,7 @@ func (gfx *Graphics) drawRocks(g *game.Game) {
 		az := ax.Cross(up)
 		ground := gfx.Terrain.Surface(r.Dir)
 		size := r.Size * (1 - mathx.Smoothstep(game.RockDrawDist*0.8, game.RockDrawDist, ground.Sub(g.Player.Pos).Length()))
-		mats[r.Shape] = append(mats[r.Shape], basisMatrix(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
+		mats[r.Shape] = append(mats[r.Shape], gpu.Basis(ground.Sub(up.Scale(size*0.12)), ax.Scale(size), up.Scale(size), az.Scale(size)))
 	}
 	gfx.drawInstanced(gfx.rocks, mats[:], func(k int) color.RGBA {
 		v := 140 + 15*float64(k)

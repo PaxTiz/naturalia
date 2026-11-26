@@ -7,12 +7,12 @@ in vec3 vertexPosition;
 in vec3 vertexNormal;
 in vec2 vertexTexCoord;
 uniform vec3 origin;
-// viewProj is the camera about origin, computed in double precision (relVP):
+// viewProj is the camera about origin, computed in double precision (gpu.RelVP):
 // projecting fragRel rather than the world position keeps the quarter
 // millimeter of float grain off the screen, where it made close surfaces
 // fight for each pixel as the camera moved.
 uniform vec4 viewProj[4];
-uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (setViewProj)
+uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (gpu.Renderer.SetView)
 uniform vec4 lightVP[4]; // the shadow map's camera about origin, by columns
 uniform vec3 sunDir;
 uniform vec3 sunAxis; // Mars' spin axis: the sun turns around it

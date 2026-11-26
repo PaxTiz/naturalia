@@ -1,6 +1,7 @@
 package render
 
 import (
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/game"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -8,18 +9,18 @@ import (
 
 // look reads the photo mode's settings into the picture's; out of it, the
 // game's usual look.
-func (gfx *Graphics) look(g *game.Game) look {
-	lk := look{vignette: 0.45, grain: 0.2, near: gfx.near, far: gfx.far}
+func (gfx *Graphics) look(g *game.Game) gpu.Look {
+	lk := gpu.Look{Vignette: 0.45, Grain: 0.2}
 	if g.Mode != game.ModePhoto {
 		return lk
 	}
 	s := &g.Photo.Set
-	lk.exposure = s[game.PhotoExposure]
-	lk.focus = game.FocusDistances[int(s[game.PhotoFocus])]
+	lk.Exposure = s[game.PhotoExposure]
+	lk.Focus = game.FocusDistances[int(s[game.PhotoFocus])]
 	// The largest blur grows with the window, to look the same at any size.
-	lk.blur = s[game.PhotoAperture] * 0.03 * float64(rl.GetRenderHeight())
-	lk.filter = int(s[game.PhotoFilter])
-	lk.contrast, lk.sat = s[game.PhotoContrast], s[game.PhotoSaturation]
-	lk.vignette, lk.grain = s[game.PhotoVignette], s[game.PhotoGrain]
+	lk.Blur = s[game.PhotoAperture] * 0.03 * float64(rl.GetRenderHeight())
+	lk.Filter = int(s[game.PhotoFilter])
+	lk.Contrast, lk.Sat = s[game.PhotoContrast], s[game.PhotoSaturation]
+	lk.Vignette, lk.Grain = s[game.PhotoVignette], s[game.PhotoGrain]
 	return lk
 }

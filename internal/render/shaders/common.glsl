@@ -235,7 +235,7 @@ float baseAO(vec3 n) {
 // finish fades distant surfaces into the dusty air: first a violet veil,
 // then the sky's own color along the view, so relief stacks up in flat
 // layers. The result is HDR: the exposure and the tone curve come later,
-// on the whole image (post.go).
+// on the whole image (gpu.Post).
 vec3 finish(vec3 col, float dist) {
     dist *= hazeThin;
     vec3 d = normalize(fragRel - viewRel);

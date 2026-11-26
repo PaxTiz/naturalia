@@ -39,11 +39,8 @@ func (gfx *Graphics) inView(cam rl.Camera3D) sees {
 }
 
 // inShadowMap: what casts its shadow into the sun's map around center.
-func inShadowMap(center vec3) sees {
-	return func(at vec3, radius float64) bool {
-		d := at.Sub(center)
-		return d.Sub(planet.SunDir.Scale(d.Dot(planet.SunDir))).Length() < shadowRadius*math.Sqrt2+radius
-	}
+func (gfx *Graphics) inShadowMap(center vec3) sees {
+	return func(at vec3, radius float64) bool { return gfx.shadow.Covers(center, planet.SunDir, at, radius) }
 }
 
 // entityReach is how far from its origin an entity's parts go, figured
@@ -197,12 +194,12 @@ func (gfx *Graphics) setGrid(g *game.Game) {
 		size = []float32{float32(s.Step), float32(s.Reach)}
 	}
 	for _, sh := range gfx.lit() {
-		rl.SetShaderValue(sh, rl.GetShaderLocation(sh, "gridSize"), size, rl.ShaderUniformVec2)
+		sh.Vec2("gridSize", size[0], size[1])
 		if s.Reach == 0 {
 			continue
 		}
-		for name, v := range map[string]vec3{"gridRel": s.At.Sub(gfx.origin), "gridX": s.X, "gridUp": s.Up, "gridZ": s.Z} {
-			rl.SetShaderValue(sh, rl.GetShaderLocation(sh, name), v3f(v), rl.ShaderUniformVec3)
+		for name, v := range map[string]vec3{"gridRel": s.At.Sub(gfx.eng.Origin), "gridX": s.X, "gridUp": s.Up, "gridZ": s.Z} {
+			sh.Vec3(name, v)
 		}
 	}
 }
@@ -265,16 +262,16 @@ func (gfx *Graphics) drawGhost(g *game.Game) {
 	gfx.setLighting(mesh.LitSun, vec3{})
 	gfx.setMat(content.MtPlain, 1, false)
 	// No lines on the ghost itself.
-	rl.SetShaderValue(gfx.objectSh, rl.GetShaderLocation(gfx.objectSh, "gridSize"), []float32{0, 0}, rl.ShaderUniformVec2)
+	gfx.objectSh.Vec2("gridSize", 0, 0)
 	if gh.Sheet != nil {
 		for _, f := range gh.Sheet.Feet {
 			gfx.segment(gfx.cyl, f[0], f[1], 0.012, color.RGBA{col.R, col.G, col.B, 255}, 0, 0.5)
 		}
 	}
 	rl.ColorMask(false, false, false, false)
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{1}, rl.ShaderUniformFloat)
+	gfx.eng.Depth(true)
 	draw()
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.shadowPass, []float32{0}, rl.ShaderUniformFloat)
+	gfx.eng.Depth(false)
 	rl.ColorMask(true, true, true, true)
 	draw()
 	if gh.Link != nil {
@@ -321,7 +318,7 @@ func buildEntity(def *content.EntityDef, finish string, parts []content.PartJSON
 		if len(m.V) == 0 {
 			continue
 		}
-		model := upload(m, gfx.objectSh)
+		model := upload(m, gfx.objectSh.Shader)
 		gfx.bindMaps(model)
 		out = append(out, entityModel{model, gfx.tok(k.Tok), k.Lit == mesh.LitGlass})
 	}

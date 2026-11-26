@@ -21,7 +21,7 @@ func (gfx *Graphics) drawDevils(g *game.Game) {
 		up := d.Dir
 		t1, t2 := mathx.TangentBasis(up)
 		foot := g.World.Relief.Surface(d.Dir).Sub(up.Scale(1))
-		rl.SetShaderValue(gfx.devilSh, gfx.devilLoc, []float32{float32(d.Seed), float32(d.Strength()), 0, 0}, rl.ShaderUniformVec4)
+		gfx.devilSh.Vec4("devil", float32(d.Seed), float32(d.Strength()), 0, 0)
 		ax, ay, az := t1.Scale(d.Radius), up.Scale(d.Height), t2.Scale(d.Radius)
 		rl.DrawMesh(gfx.devilMesh, gfx.devilMat, rl.Matrix{
 			M0: float32(ax.X), M1: float32(ax.Y), M2: float32(ax.Z),

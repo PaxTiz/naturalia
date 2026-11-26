@@ -14,12 +14,12 @@ uniform float instanced;
 // surfaces don't fight. Other meshes have unit normals: layer 0.
 const float layerStep = 1.0 / 1048576.0; // 2^-20 of the NDC depth
 uniform vec3 origin;
-// viewProj is the camera about origin, computed in double precision (relVP):
+// viewProj is the camera about origin, computed in double precision (gpu.RelVP):
 // projecting fragRel rather than the world position keeps the quarter
 // millimeter of float grain off the screen, where it made close surfaces
 // fight for each pixel as the camera moved.
 uniform vec4 viewProj[4];
-uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (setViewProj)
+uniform vec3 viewAt; // the camera's eye, about origin: viewProj is about it (gpu.Renderer.SetView)
 // matModel places a mesh about origin, not about Mars' center: rounded
 // 3 km out, the points of flush surfaces would part by a quarter
 // millimeter and fight. Instances (rocks, pebbles) keep world transforms.

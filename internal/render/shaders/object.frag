@@ -12,7 +12,7 @@ uniform vec4 lights[24];  // ceiling lamps: xyz position, w intensity
 uniform float lightRange[24]; // how far each reaches: its room's walls are in the way
 uniform float lightWarm[24];  // 1 for an amber lamp (a warm room's, furniture's), 0 white
 uniform float lightCount;
-uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a cell of a grid each (shadow.go)
+uniform sampler2D lampShadowMap; // depth seen from the rooms' lamps, a cell of a grid each (spots.go, lampShadow)
 uniform vec4 lampVP[32];         // their cameras about origin, four columns each
 uniform float lampCount;         // the first lights, one per room
 uniform float lampGrid;          // cells per side of the map

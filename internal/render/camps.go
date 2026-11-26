@@ -6,6 +6,7 @@ import (
 	"naturalia/internal/base"
 	"naturalia/internal/content"
 	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/engine/mesh"
 	"naturalia/internal/game"
 	"naturalia/internal/palette"
@@ -29,7 +30,7 @@ func (gfx *Graphics) campModels(kind string, l *base.Camp) *baseModels {
 	}
 	m := gfx.camps[kind]
 	if m == nil {
-		m = gfx.uploadBase(l.Parts, gfx.objectSh)
+		m = gfx.uploadBase(l.Parts, gfx.objectSh.Shader)
 		for _, md := range m.models {
 			gfx.bindMaps(md)
 		}
@@ -48,7 +49,7 @@ func campSeen(c game.CampAt, seen sees) bool {
 
 // campFrame places a building's meshes.
 func (gfx *Graphics) campFrame(s base.Site, m *baseModels) rl.Matrix {
-	return basisMatrix(s.Origin.Add(s.Dir(m.Origin())).Sub(gfx.origin), s.X, s.Y, s.Z) // about the origin (object.vert)
+	return gpu.Basis(s.Origin.Add(s.Dir(m.Origin())).Sub(gfx.eng.Origin), s.X, s.Y, s.Z) // about the origin (object.vert)
 }
 
 // linkSeen tells whether a link may be in a picture.
@@ -78,7 +79,7 @@ func (gfx *Graphics) drawSited(m *baseModels, s base.Site, glass bool) {
 			gfx.setMat(t.Mat, t.Scale, false)
 		}
 		gfx.setLighting(k.Lit, room)
-		rl.SetShaderValue(gfx.objectSh, gfx.oLoc.surface, []float32{t.Spec, t.Emissive}, rl.ShaderUniformVec2)
+		gfx.objectSh.Vec2("surface", t.Spec, t.Emissive)
 		mat := m.models[i].GetMaterials()[0]
 		mat.GetMap(rl.MapAlbedo).Color = t.Col
 		rl.DrawMesh(m.models[i].GetMeshes()[0], mat, frame)
@@ -88,8 +89,8 @@ func (gfx *Graphics) drawSited(m *baseModels, s base.Site, glass bool) {
 
 // wearAt has what is drawn worn by the dust as it stands at a site.
 func (gfx *Graphics) wearAt(s base.Site) {
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{1, float32(s.Origin.Dot(s.Y))}, rl.ShaderUniformVec2)
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wearUp, v3f(s.Y), rl.ShaderUniformVec3)
+	gfx.objectSh.Vec2("wear", 1, float32(s.Origin.Dot(s.Y)))
+	gfx.objectSh.Vec3("wearUp", s.Y)
 }
 
 // drawCampGlass draws the buildings' panes over the scene, as drawGlass
@@ -168,7 +169,7 @@ func (gfx *Graphics) drawLinks(g *game.Game, seen sees) {
 	}
 	gfx.setMat(content.MtPlain, 1, false)
 	gfx.setLighting(mesh.LitSun, vec3{})
-	rl.SetShaderValue(gfx.objectSh, gfx.oLoc.wear, []float32{0, 0}, rl.ShaderUniformVec2)
+	gfx.objectSh.Vec2("wear", 0, 0)
 }
 
 // drawCampDoor draws the two leaves of the door of a bootcamp's port i,
