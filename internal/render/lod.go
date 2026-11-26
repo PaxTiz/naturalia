@@ -2,12 +2,11 @@ package render
 
 import (
 	"math"
+	"naturalia/internal/engine/gpu"
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/planet"
-	"runtime"
 	"slices"
 	"time"
-	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -42,43 +41,23 @@ const (
 	nodeReady
 )
 
-type nodeData struct {
-	n            *lodNode
-	verts, norms []float32
-	uvs          []float32 // ground kind for the shader: polar ice, volcanic basalt
-}
-
 // Terrain draws the relief with a level of detail that follows the player:
 // fine near them, coarse far away. Meshes are computed by background
-// workers and uploaded on the main thread.
+// workers and uploaded on the main thread (gpu.Stream).
 type Terrain struct {
 	planet.Relief
-	roots   [6]*lodNode
-	jobs    chan *lodNode
-	results chan nodeData
-	loaded  []*lodNode
-	pending int
-	// Freed meshes, reused for new nodes: they all share the same layout.
-	// (raylib-go's UnloadMesh is broken without cgo, and recycling is faster.)
-	pool  []rl.Mesh
-	frame uint64
-	flat  *planet.Flat // the flattened ground the meshes were built with
+	roots  [6]*lodNode
+	stream *gpu.Stream[*lodNode]
+	loaded []*lodNode
+	frame  uint64
+	flat   *planet.Flat // the flattened ground the meshes were built with
 }
 
 func NewTerrain(relief planet.Relief) *Terrain {
-	t := &Terrain{
-		Relief:  relief,
-		flat:    relief.Flat(),
-		jobs:    make(chan *lodNode, 8192),
-		results: make(chan nodeData, 8192),
-	}
-	for range runtime.NumCPU() {
-		go func() {
-			for n := range t.jobs {
-				t.results <- t.build(n)
-			}
-		}()
-	}
+	t := &Terrain{Relief: relief, flat: relief.Flat()}
+	// Every patch is a raylib plane of (nodeQuads+3)² vertices: its outer
+	// ring becomes the skirt (build).
+	t.stream = gpu.NewStream(func() rl.Mesh { return rl.GenMeshPlane(1, 1, nodeQuads+2, nodeQuads+2) }, t.build)
 	for f := range 6 {
 		t.roots[f] = t.newNode(f, 0, -1, -1, 2)
 		t.request(t.roots[f])
@@ -101,13 +80,12 @@ func (t *Terrain) request(n *lodNode) {
 		return
 	}
 	n.state = nodePending
-	t.pending++
-	t.jobs <- n
+	t.stream.Request(n)
 }
 
 // build computes a node's vertices: a grid sampled on the sphere plus a
 // skirt hanging below its border, which hides cracks between levels.
-func (t *Terrain) build(n *lodNode) nodeData {
+func (t *Terrain) build(n *lodNode) gpu.Data {
 	const g = nodeQuads + 3 // grid with a 1-vertex border, for normals
 	pos := make([]vec3, g*g)
 	for j := range g {
@@ -187,7 +165,9 @@ func (t *Terrain) build(n *lodNode) nodeData {
 			uvs[(vz*side+vx)*2+1] = courseCode(l.set) + kind[1]*0.99
 		}
 	}
-	return nodeData{n, verts, norms, uvs}
+	// The texture coordinates carry the relief's light and the ground's
+	// kind for the shader: polar ice, volcanic basalt.
+	return gpu.Data{Verts: verts, Norms: norms, UVs: uvs}
 }
 
 // The relief's shadow is baked in the vertices: the sun follows the same
@@ -288,40 +268,20 @@ func (t *Terrain) light(p vec3) (sun, ao float64) {
 	return t.sunThrough(p, planet.SunDir), t.occlusion(p)
 }
 
-// upload turns finished node data into GPU meshes, a few per frame.
+// upload puts finished patches on the GPU, a few per frame.
 func (t *Terrain) upload(limit int) {
-	for range limit {
-		select {
-		case r := <-t.results:
-			t.pending--
-			var mesh rl.Mesh
-			if k := len(t.pool); k > 0 {
-				mesh, t.pool = t.pool[k-1], t.pool[:k-1]
-			} else {
-				mesh = rl.GenMeshPlane(1, 1, nodeQuads+2, nodeQuads+2)
-			}
-			n := int(mesh.VertexCount)
-			copy(unsafe.Slice(mesh.Vertices, n*3), r.verts)
-			copy(unsafe.Slice(mesh.Normals, n*3), r.norms)
-			copy(unsafe.Slice(mesh.Texcoords, n*2), r.uvs)
-			rl.UpdateMeshBuffer(mesh, 0, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Vertices)), n*12), 0)
-			rl.UpdateMeshBuffer(mesh, 1, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Texcoords)), n*8), 0)
-			rl.UpdateMeshBuffer(mesh, 2, unsafe.Slice((*byte)(unsafe.Pointer(mesh.Normals)), n*12), 0)
-			if r.n.redo && r.n.state == nodeReady { // built again: the old mesh goes
-				t.pool = append(t.pool, r.n.mesh)
-			} else {
-				t.loaded = append(t.loaded, r.n)
-			}
-			r.n.mesh, r.n.state, r.n.redo = mesh, nodeReady, false
-			if r.n.stale {
-				r.n.stale, r.n.redo = false, true
-				t.pending++
-				t.jobs <- r.n
-			}
-		default:
-			return
+	t.stream.Upload(limit, func(n *lodNode, mesh rl.Mesh) {
+		if n.redo && n.state == nodeReady { // built again: the old mesh goes
+			t.stream.Free(n.mesh)
+		} else {
+			t.loaded = append(t.loaded, n)
 		}
-	}
+		n.mesh, n.state, n.redo = mesh, nodeReady, false
+		if n.stale {
+			n.stale, n.redo = false, true
+			t.stream.Request(n)
+		}
+	})
 }
 
 // refreshFlat builds again the meshes over the ground flattened or given
@@ -362,8 +322,7 @@ func (t *Terrain) refresh(n *lodNode, d vec3, a float64) {
 		n.stale = true
 	case n.state == nodeReady:
 		n.redo = true
-		t.pending++
-		t.jobs <- n
+		t.stream.Request(n)
 	}
 	for _, c := range n.children {
 		t.refresh(c, d, a)
@@ -433,7 +392,7 @@ func (t *Terrain) evict() {
 		if n.lastUsed == t.frame || n.level == 0 {
 			continue
 		}
-		t.pool = append(t.pool, n.mesh)
+		t.stream.Free(n.mesh)
 		n.mesh, n.state = rl.Mesh{}, nodeEmpty
 	}
 	t.loaded = slices.DeleteFunc(t.loaded, func(n *lodNode) bool { return n.state != nodeReady })
@@ -445,7 +404,7 @@ func (t *Terrain) Warm(eye vec3, timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		t.Visible(eye)
-		if t.pending == 0 {
+		if t.stream.Pending() == 0 {
 			return
 		}
 		t.upload(1 << 20)

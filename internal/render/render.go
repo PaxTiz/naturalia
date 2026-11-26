@@ -852,6 +852,6 @@ type Stats struct {
 
 func (gfx *Graphics) Stats() Stats {
 	s := gfx.stats
-	s.Loaded, s.Pending = len(gfx.Terrain.loaded), gfx.Terrain.pending
+	s.Loaded, s.Pending = len(gfx.Terrain.loaded), gfx.Terrain.stream.Pending()
 	return s
 }
