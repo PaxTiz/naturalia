@@ -3,7 +3,6 @@ package render
 import (
 	"cmp"
 	"image/color"
-	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/engine/mathx"
 	"naturalia/internal/engine/mesh"
@@ -22,21 +21,6 @@ const (
 	tunnelSight = 60.0 // m from its shelters, a tunnel's inside may be seen
 	lampSight   = 75.0 // m: how far a tunnel's lamps light it
 )
-
-// lookUnder finds where the camera is, before anything is drawn: in a
-// tunnel's gallery, or not.
-func (gfx *Graphics) lookUnder(g *game.Game) {
-	gfx.gallery = nil
-	for _, l := range g.LinksNear(gfx.camEye, 5) {
-		if l.Layout.InGallery(gfx.camEye) {
-			gfx.gallery = l.Layout
-		}
-	}
-	gfx.under = 0
-	if g.Under(gfx.camEye) {
-		gfx.under = mathx.Smoothstep(0.5, 3, -g.World.Relief.Altitude(gfx.camEye))
-	}
-}
 
 // setHoles gives the terrain the holes over the closest tunnels' stairs.
 func (gfx *Graphics) setHoles(g *game.Game) {
@@ -115,8 +99,8 @@ func (gfx *Graphics) tunnelLamps(g *game.Game, most int) []base.Lamp {
 
 // tunnelSeen tells whether the inside of a tunnel may be seen.
 func (gfx *Graphics) tunnelSeen(l *base.Link) bool {
-	if !l.Under() || gfx.gallery != nil {
-		return l == gfx.gallery
+	if !l.Under() || !gfx.space.Open() {
+		return l == gfx.space.Hollow
 	}
 	return l.Near(gfx.camEye) < tunnelSight || l.Indoors(l.Site.ToLocal(gfx.camEye))
 }
@@ -124,7 +108,7 @@ func (gfx *Graphics) tunnelSeen(l *base.Link) bool {
 // drawTunnel draws a tunnel's shelters, and its inside if it may be seen;
 // its inside casts no shadow.
 func (gfx *Graphics) drawTunnel(l *base.Link, seen sees) {
-	if gfx.gallery == nil {
+	if gfx.space.Open() {
 		for _, sh := range l.Shells() {
 			if seen(sh.Site.Origin, 9) {
 				gfx.wearAt(sh.Site)
@@ -185,7 +169,3 @@ func (gfx *Graphics) keptModels(key string, parts func() *mesh.Parts) *baseModel
 	}
 	return m
 }
-
-// hazeUnder is how much of the haze is left for the camera: none under the
-// ground.
-func (gfx *Graphics) hazeUnder() float32 { return float32(math.Max(0, 1-gfx.under)) }

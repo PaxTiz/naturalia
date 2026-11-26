@@ -71,7 +71,7 @@ func (s *spot) lens() gpu.Lens {
 
 // spotsNear are the lamps that light the scene, the closest first.
 func (gfx *Graphics) spotsNear(g *game.Game) []spot {
-	if gfx.gallery != nil {
+	if !gfx.space.Open() {
 		return nil
 	}
 	var out []spot

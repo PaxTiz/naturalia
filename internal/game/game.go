@@ -292,12 +292,12 @@ func (g *Game) Update(dt float64) {
 	g.stepPhysics(dt)
 	g.liftVehicle(dt)
 	g.Player.fall(dt, g.World.Relief)
-	outside := !g.Indoors(g.Player.Eye())
+	space := g.SpaceAt(g.Player.Eye())
 	if g.Riding == 0 && g.Steps.update(&g.Player) { // seated, the player stays on the ground
-		g.sfx.Step(!outside || g.Player.floor > 0.01 || g.Player.under) // the base's floor, a block
+		g.sfx.Step(space.Indoors || g.Player.floor > 0.01 || g.Player.under) // the base's floor, a block
 	}
-	g.sfx.Outside = outside
-	g.sfx.Under = g.Deep(g.Player.Eye())
+	g.sfx.Outside = space.Wind()
+	g.sfx.Under = space.Echo()
 	g.sfx.Running = g.Mode == ModePlay && g.Riding == 0 && g.Player.want.Length() > walkSpeed*1.2
 	g.sfx.Sweeping = g.Sweeping && g.Riding == 0 // no tool sound from the seat
 	g.sfx.Power = math.Min(1, (g.powerMult()-1)/3)

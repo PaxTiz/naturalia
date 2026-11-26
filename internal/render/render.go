@@ -77,8 +77,7 @@ type Graphics struct {
 	camLook     vec3 // where it looks, and its up, in double precision too
 	camUp       vec3
 	camFov      float64
-	gallery     *base.Link // the tunnel whose gallery the camera is in (tunnels.go)
-	under       float64    // how far under the ground it is, 0 to 1
+	space       game.Space // where the camera is: what is seen, how it is lit
 	casting     bool       // drawing a shadow map
 	hazeThin    float32    // and the haze's thinning with altitude (common.glsl)
 	skyAir      float32    // the sky fading to space with altitude (sky.frag)
@@ -337,11 +336,11 @@ func (gfx *Graphics) selectBase(g *game.Game) {
 }
 
 // setLights gives the shaders the lamps picked, and the tunnels' around:
-// those only, from a gallery.
+// those only, shut in a gallery (game.Space).
 func (gfx *Graphics) setLights(g *game.Game) {
 	sh := &gfx.shade
 	list, casting := sh.lights, len(sh.lamps)
-	if gfx.gallery != nil {
+	if !gfx.space.Open() {
 		list, casting = nil, 0
 	}
 	more := gfx.tunnelLamps(g, maxLamps-min(len(list), maxLamps*2/3))
@@ -481,7 +480,7 @@ func (gfx *Graphics) setUniforms(g *game.Game) {
 	gfx.setGrid(g)
 	gfx.setHoles(g)
 	ao := float32(1)
-	if gfx.gallery != nil {
+	if !gfx.space.Open() {
 		ao = 0
 	}
 	for _, sh := range gfx.lit() {
@@ -530,7 +529,7 @@ func (gfx *Graphics) setUniforms(g *game.Game) {
 func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	view := gfx.camera(g)
 	cam := view.Camera()
-	gfx.lookUnder(g)
+	gfx.space = g.SpaceAt(gfx.camEye)
 	gfx.clipPlanes(g)
 	gfx.eng.Look(view)
 
@@ -541,9 +540,9 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.stats.Patches = len(patches)
 	gfx.nearGems = g.World.GemsNear(g.Player.Pos, gemDrawDist)
 	// Objects cast their shadows first, then the scene is lit with them.
-	outside := gfx.gallery == nil // what is outside may be seen
+	open := gfx.space.Open() // the outside is seen: its shadows are drawn
 	gfx.casting = true
-	if outside {
+	if open {
 		gfx.shadow.Render(gfx.eng, g.Player.Pos, planet.SunDir, func() {
 			gfx.drawRocks(g)
 			gfx.drawBase(g)
@@ -553,7 +552,7 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	}
 	// The rooms' lamps cast shadows too, drawn once.
 	gfx.setUniforms(g)
-	if gfx.base != nil && outside {
+	if gfx.base != nil && open {
 		gfx.lampShadow.render(gfx, gfx.shade.lamps, func() {
 			gfx.drawBase(g)
 			gfx.drawCamps(g, func(at vec3, r float64) bool { return at.Sub(gfx.camEye).Length() < 2*campShadeDist+r })
@@ -564,24 +563,22 @@ func (gfx *Graphics) Draw(g *game.Game, overlay func(cam rl.Camera3D)) {
 	gfx.drawSpots(g)
 	gfx.casting = false
 
-	sunUp := gfx.camEye.Norm().Dot(planet.SunDir)
-	sunUp += (1 - sunUp) * gfx.under // the same light at any hour, under the ground
-	indoors := g.Indoors(gfx.camEye)
 	gfx.eng.Draw(gpu.Frame{
-		Layers:  gfx.layers(g, cam, outside, indoors, patches),
+		Layers:  gfx.layers(g, cam, patches),
 		Sun:     planet.SunDir,
-		SunUp:   sunUp,
-		Indoors: indoors,
+		SunUp:   gfx.space.Light(gfx.camEye.Norm().Dot(planet.SunDir)),
+		Indoors: gfx.space.Indoors,
 		Clock:   g.Elapsed,
 		Look:    gfx.look(g),
 		Overlay: overlay,
 	})
 }
 
-// layers are what is drawn of the scene, in order.
-func (gfx *Graphics) layers(g *game.Game, cam rl.Camera3D, outside, indoors bool, patches []*lodNode) []gpu.Layer {
+// layers are what is drawn of the scene, in order: what is seen from the
+// camera's space.
+func (gfx *Graphics) layers(g *game.Game, cam rl.Camera3D, patches []*lodNode) []gpu.Layer {
 	held := gpu.Layer{Name: "tool", Tool: true, Draw: func() {
-		if indoors {
+		if gfx.space.Indoors {
 			gfx.setLighting(mesh.LitIndoor, vec3{})
 		}
 		gfx.drawTool(g)
@@ -592,8 +589,8 @@ func (gfx *Graphics) layers(g *game.Game, cam rl.Camera3D, outside, indoors bool
 		{Name: "glows", Draw: func() { gfx.drawGlows(g, cam) }},
 		{Name: "globe", Draw: func() { gfx.drawGlobe(g, cam) }},
 	}
-	if !outside {
-		return append([]gpu.Layer{{Name: "tunnel", Draw: func() { gfx.drawTunnel(gfx.gallery, gfx.inView(cam)) }}}, over...)
+	if l := gfx.space.Hollow; l != nil { // shut in: only it
+		return append([]gpu.Layer{{Name: "tunnel", Draw: func() { gfx.drawTunnel(l, gfx.inView(cam)) }}}, over...)
 	}
 	return append([]gpu.Layer{
 		// A big sphere around the camera, seen from inside.
@@ -670,7 +667,7 @@ func (gfx *Graphics) drawGems(g *game.Game) {
 // High up in creative flight, see the whole visible half of Mars.
 func (gfx *Graphics) clipPlanes(g *game.Game) {
 	alt := g.World.Relief.Altitude(gfx.camEye)
-	gfx.hazeThin = float32(1/(1+max(0, alt-20)/150)) * gfx.hazeUnder()
+	gfx.hazeThin = float32(1/(1+max(0, alt-20)/150)) * float32(gfx.space.Haze())
 	gfx.skyAir = float32(1 - mathx.Smoothstep(300, 5000, alt))
 	gfx.eng.Clip(math.Max(0.15, math.Min(20, alt*0.002)), math.Max(9000, gfx.camEye.Length()+planet.Radius))
 }
