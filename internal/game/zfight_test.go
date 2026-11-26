@@ -2,7 +2,7 @@ package game
 
 import (
 	"naturalia/internal/base"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 	"testing"
 )
 

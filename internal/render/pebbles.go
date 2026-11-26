@@ -5,9 +5,9 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
+	"naturalia/internal/engine/mathx"
+	"naturalia/internal/engine/mesh"
 	"naturalia/internal/game"
-	"naturalia/internal/mathx"
-	"naturalia/internal/mesh"
 	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

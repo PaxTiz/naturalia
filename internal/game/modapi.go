@@ -5,9 +5,9 @@ import (
 	"image/color"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/physics"
 	"naturalia/internal/palette"
-	"naturalia/internal/physics"
 	"naturalia/internal/planet"
 	"slices"
 )

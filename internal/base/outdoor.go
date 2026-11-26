@@ -2,7 +2,7 @@ package base
 
 import (
 	"math"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 )
 
 // Kit pieces for the outside of the buildings: what stands on their roofs

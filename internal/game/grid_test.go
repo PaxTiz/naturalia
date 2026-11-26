@@ -3,7 +3,7 @@ package game
 import (
 	"encoding/json"
 	"math"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
 	"naturalia/internal/planet"
 	"testing"
 )

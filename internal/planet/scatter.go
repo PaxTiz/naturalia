@@ -2,7 +2,7 @@ package planet
 
 import (
 	"math"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 )
 
 // Scattered features live on 3D grids of cells, so the whole planet costs

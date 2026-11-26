@@ -5,8 +5,8 @@ import (
 	"iter"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mathx"
 	"slices"
 )
 

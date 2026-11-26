@@ -4,7 +4,7 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
 	"naturalia/internal/planet"
 )
 

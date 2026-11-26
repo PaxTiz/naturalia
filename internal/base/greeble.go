@@ -3,9 +3,9 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mathx"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mathx"
+	"naturalia/internal/engine/mesh"
 )
 
 // Greebles: the small machinery that makes the base look built and lived

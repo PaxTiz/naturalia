@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"math/rand/v2"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 )
 
 const (

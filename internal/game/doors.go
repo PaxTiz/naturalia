@@ -3,7 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
 )
 
 // Doors slide open as someone comes close: the bootcamps' (camps.go), and

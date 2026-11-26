@@ -3,7 +3,7 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 )
 
 // The lookout up on the great hall's mezzanine, behind the bay window: a

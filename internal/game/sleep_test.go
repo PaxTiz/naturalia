@@ -3,7 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/base"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
 	"testing"
 )
 

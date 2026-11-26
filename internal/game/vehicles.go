@@ -5,9 +5,9 @@ import (
 	"math"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mathx"
-	"naturalia/internal/physics"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mathx"
+	"naturalia/internal/engine/physics"
 	"naturalia/internal/planet"
 )
 

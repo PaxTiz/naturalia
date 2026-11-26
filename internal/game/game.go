@@ -7,8 +7,8 @@ import (
 	"naturalia/internal/audio"
 	"naturalia/internal/base"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mathx"
 	"naturalia/internal/palette"
 	"naturalia/internal/planet"
 

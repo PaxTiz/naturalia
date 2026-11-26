@@ -4,8 +4,8 @@ import (
 	"cmp"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mesh"
 	"slices"
 )
 

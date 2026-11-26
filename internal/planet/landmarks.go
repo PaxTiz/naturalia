@@ -2,7 +2,7 @@ package planet
 
 import (
 	"math"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 )
 
 // The three landmarks of Mars, placed around the base so that the volcano

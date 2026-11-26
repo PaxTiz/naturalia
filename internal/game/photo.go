@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 	"os"
 	"path/filepath"
 	"time"

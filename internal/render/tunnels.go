@@ -5,9 +5,9 @@ import (
 	"image/color"
 	"math"
 	"naturalia/internal/base"
+	"naturalia/internal/engine/mathx"
+	"naturalia/internal/engine/mesh"
 	"naturalia/internal/game"
-	"naturalia/internal/mathx"
-	"naturalia/internal/mesh"
 	"slices"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

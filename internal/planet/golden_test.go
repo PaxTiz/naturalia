@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand/v2"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 	"os"
 	"testing"
 )

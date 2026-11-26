@@ -3,7 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

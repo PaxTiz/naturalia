@@ -4,9 +4,9 @@ import (
 	"cmp"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
-	"naturalia/internal/mathx"
 	"naturalia/internal/planet"
 	"slices"
 

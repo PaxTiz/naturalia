@@ -3,7 +3,7 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 )
 
 // The ground around the base: paths of concrete slabs from the entry's

@@ -3,7 +3,7 @@ package game
 import (
 	"math"
 	"naturalia/internal/base"
-	"naturalia/internal/physics"
+	"naturalia/internal/engine/physics"
 	"naturalia/internal/planet"
 )
 

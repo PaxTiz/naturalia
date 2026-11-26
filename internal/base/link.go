@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 )
 
 // A link (content.Link) goes from a building's port to another's: a glass

@@ -3,8 +3,8 @@ package game
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/physics"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/physics"
 	"naturalia/internal/planet"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

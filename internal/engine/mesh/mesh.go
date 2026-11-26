@@ -2,7 +2,7 @@ package mesh
 
 import (
 	"math"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 )
 
 // Meshes are built on the CPU, triangle by triangle, then merged: one

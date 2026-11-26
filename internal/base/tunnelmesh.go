@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/mathx"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mathx"
+	"naturalia/internal/engine/mesh"
 )
 
 // A tunnel's meshes: its inside, lit by its own lamps, in the link's frame;

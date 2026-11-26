@@ -3,8 +3,8 @@ package base
 import (
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mesh"
 )
 
 // Floors are where the player walks up in a building (content.Floor): a

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"naturalia/internal/content"
-	"naturalia/internal/ecs"
+	"naturalia/internal/engine/ecs"
 	"naturalia/internal/planet"
 	"testing"
 )

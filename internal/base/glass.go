@@ -2,7 +2,7 @@ package base
 
 import (
 	"math"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 )
 
 // Glazed domes (content.Blueprint.Glazed): a geodesic dome of glass on a

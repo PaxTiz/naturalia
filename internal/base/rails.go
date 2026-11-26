@@ -2,8 +2,8 @@ package base
 
 import (
 	"math"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mesh"
 )
 
 // Guard rails run along the edges of the slabs that open onto the room

@@ -2,8 +2,8 @@ package base
 
 import (
 	"math"
-	"naturalia/internal/ecs"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/ecs"
+	"naturalia/internal/engine/mesh"
 )
 
 // Home interiors (interior: "home" on a blueprint): the living spaces are

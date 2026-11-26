@@ -2,7 +2,7 @@ package base
 
 import (
 	"math"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 )
 
 // BuildShowcase: a display cabinet of the research lab, 1.2 m wide, its

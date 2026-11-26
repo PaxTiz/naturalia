@@ -3,7 +3,7 @@ package content
 import (
 	"image/color"
 	"math"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 	"slices"
 )
 

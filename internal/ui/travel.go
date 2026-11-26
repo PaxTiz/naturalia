@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"image/color"
 	"math"
+	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
-	"naturalia/internal/mathx"
 	"naturalia/internal/palette"
 	"strings"
 

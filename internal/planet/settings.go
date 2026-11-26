@@ -2,7 +2,7 @@ package planet
 
 import (
 	"math"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 	"slices"
 )
 

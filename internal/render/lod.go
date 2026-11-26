@@ -2,7 +2,7 @@ package render
 
 import (
 	"math"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 	"naturalia/internal/planet"
 	"runtime"
 	"slices"

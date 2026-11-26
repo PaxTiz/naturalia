@@ -2,7 +2,7 @@ package planet
 
 import (
 	"math"
-	"naturalia/internal/mathx"
+	"naturalia/internal/engine/mathx"
 )
 
 // Layer is a shape the relief is made of: plains, dunes, the volcano... The

@@ -1,8 +1,8 @@
 package render
 
 import (
+	"naturalia/internal/engine/mathx"
 	"naturalia/internal/game"
-	"naturalia/internal/mathx"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

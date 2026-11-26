@@ -2,7 +2,7 @@ package base
 
 import (
 	"math"
-	"naturalia/internal/mesh"
+	"naturalia/internal/engine/mesh"
 )
 
 // The bedroom wing: the one room of the base made to be lived in, and the
