@@ -55,11 +55,7 @@ func (p *Player) SetFly(on bool, t planet.Relief) {
 	p.Fly, p.vr = on, 0
 	if !on {
 		p.onGround = true
-		if f, _, ok := p.burrow.At(p.Pos); ok {
-			p.Pos = p.Pos.Norm().Scale(f)
-		} else {
-			p.Pos = t.Surface(p.Pos)
-		}
+		p.Pos, _ = planet.Places{Relief: t, Burrow: p.burrow}.Ground(p.Pos)
 	}
 }
 

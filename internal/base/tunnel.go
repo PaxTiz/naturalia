@@ -42,7 +42,7 @@ type tunnel struct {
 	heads    [2]tunnelHead
 	nodes    []tunnelNode // the gallery's: the feet of the stairs at both ends
 	sections []tunnelSection
-	digs     *planet.Burrow
+	digs     *planet.Digs
 	hollows  []planet.Hollow
 }
 
@@ -391,7 +391,7 @@ func (t *tunnel) hollow() {
 	for i := range n - 1 {
 		add(t.nodes[i].at, t.nodes[i+1].at, [2]float64{pad(i), pad(i + 1)})
 	}
-	t.digs = planet.NewBurrow([][]planet.Hollow{t.hollows})
+	t.digs = planet.NewDigs([][]planet.Hollow{t.hollows})
 }
 
 // holds tells whether a point of the world is in it.

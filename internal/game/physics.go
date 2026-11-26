@@ -277,7 +277,7 @@ func (g *Game) restUnder(id ecs.ID) float64 {
 	for _, off := range [...]vec3{{}, ax.Scale(in), ax.Scale(-in), az.Scale(in), az.Scale(-in)} {
 		at := pos.Add(off)
 		if top := g.topUnder(at, at.Length()+0.2, true, id); top > 0 {
-			floor = math.Max(floor, top-g.World.Relief.SurfaceRadius(pos.Norm()))
+			floor = math.Max(floor, top-g.footRadius(e))
 		}
 	}
 	return floor
@@ -315,11 +315,11 @@ func (g *Game) rests(a, b *physics.Body) bool {
 	}
 	p := g.phys
 	dir := p.dir(a.Pos)
-	foot := g.World.Relief.SurfaceRadius(e.Dir) + e.Alt
+	foot := g.footRadius(e) + e.Alt
 	if b.Layer == layerProp {
 		ue := g.Ents.Transform.Get(under)
 		_, hi := p.partsBounds(def)
-		return g.World.Relief.SurfaceRadius(ue.Dir)+ue.Alt+hi.Y <= foot+0.1
+		return g.footRadius(ue)+ue.Alt+hi.Y <= foot+0.1
 	}
 	t1, t2 := mathx.TangentBasis(dir)
 	r := a.Shape.Radius + 0.5
@@ -431,7 +431,7 @@ func (g *Game) clearance(id ecs.ID) float64 {
 	reach := b.Shape.Radius + 1
 	box := physics.AABB{Lo: b.Pos.Sub(physics.V2{X: reach, Y: reach}), Hi: b.Pos.Add(physics.V2{X: reach, Y: reach})}
 	box = box.Union(physics.AABB{Lo: box.Lo.Add(b.Vel), Hi: box.Hi.Add(b.Vel)}) // where it is in a second
-	ground := p.height(g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir))
+	ground := p.height(g.foot(g.Ents.Transform.Get(id)))
 	top := 0.0
 	p.w.Query(box, func(o *physics.Body) bool {
 		if o != b && o.Layer != 0 && o.Layer != layerDrone && !o.Sensor {
@@ -529,7 +529,7 @@ func (g *Game) layPlane() {
 	p.w.Mix, p.w.Allow = mix, g.allow
 	for id, bp := range g.Ents.Body.All() {
 		if b := *bp; b.Kind == physics.Dynamic && !b.Asleep() && g.phys != nil {
-			at := g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir)
+			at := g.foot(g.Ents.Transform.Get(id))
 			p.carried[id] = moving{g.phys.vecWorld(at, b.Vel), b.Spin * g.phys.side}
 		}
 		g.Ents.Body.Remove(id)
@@ -728,7 +728,7 @@ func (g *Game) syncEntities() {
 			continue
 		}
 		e := g.Ents.Transform.Get(id)
-		at := g.World.Relief.Surface(e.Dir)
+		at := g.foot(e)
 		if bp == nil {
 			bp = g.Ents.Body.Set(id, p.w.Add(g.entityBody(id, def)))
 			ax, _, _ := entityAxes(e.Dir, e.Yaw)
@@ -792,7 +792,7 @@ func (g *Game) senses(v *content.Vehicle) {
 			ev.Name = content.EvTriggerIn
 		}
 		if e := g.Ents.Transform.Get(id); e != nil {
-			ev.At = g.World.Relief.Surface(e.Dir)
+			ev.At = g.foot(e)
 		}
 		g.emit(ev)
 	}

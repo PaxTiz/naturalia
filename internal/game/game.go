@@ -198,11 +198,7 @@ func New(c *content.Content) *Game {
 		g.wakeUp = true
 	}
 	g.Player.burrow = g.burrow
-	if f, _, ok := g.burrow.At(g.Player.Pos); ok { // saved in a tunnel
-		g.Player.Pos = g.Player.Pos.Norm().Scale(f)
-	} else {
-		g.Player.Pos = g.World.Relief.Surface(g.Player.Pos)
-	}
+	g.Player.Pos, _ = g.Ground(g.Player.Pos) // maybe saved in a tunnel
 	g.walls = base.Walls()
 	g.syncFleet()
 	g.garageYard()

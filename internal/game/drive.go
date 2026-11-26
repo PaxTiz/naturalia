@@ -273,7 +273,7 @@ func entityAxes(dir vec3, yaw float64) (ax, up, az vec3) {
 // by its pitch and roll.
 func (g *Game) Frame(e *Transform) (pos, ax, up, az vec3) {
 	ax, up, az = e.Axes()
-	return g.World.Relief.Surface(e.Dir).Add(e.Dir.Scale(e.Alt)), ax, up, az
+	return g.foot(e).Add(e.Dir.Scale(e.Alt)), ax, up, az
 }
 
 // move sets the vehicle's speed along the ground for dt, and where it

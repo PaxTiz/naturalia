@@ -48,6 +48,9 @@ type Transform struct {
 	Dir vec3 // from Mars' center, unit
 	Yaw float64
 	Alt float64 // over the ground: what flies or hovers
+	// Floor is what it stands on: the floor of a hollow under the ground
+	// (planet.Volume), from Mars' center; 0 for the relief.
+	Floor float64
 	// The driven vehicle leans on slopes and in jumps: nose up, right
 	// side down, in radians.
 	Pitch, Roll float64
@@ -75,13 +78,14 @@ type Placed struct {
 	Grid  *OnGrid   `json:"grid,omitempty"`  // where it stands on a grid
 	Paint string    `json:"paint,omitempty"` // its finish
 	Paid  float64   `json:"paid,omitempty"`  // in credits, to set it down
+	Floor float64   `json:"floor,omitempty"` // Transform.Floor: none in older saves, the relief
 }
 
 // add brings a saved entity into the world.
 func (g *Game) add(p Placed) ecs.ID {
 	id := g.Ents.New()
 	g.Ents.Kind.Set(id, p.Kind)
-	g.Ents.Transform.Set(id, Transform{p.Dir, p.Yaw, p.Alt, p.Pitch, p.Roll})
+	g.Ents.Transform.Set(id, Transform{Dir: p.Dir, Yaw: p.Yaw, Alt: p.Alt, Pitch: p.Pitch, Roll: p.Roll, Floor: p.Floor})
 	if v, ok := g.Content.Vehicles.Get(p.Kind); (ok && v.Auto()) || p.Home != (vec3{}) {
 		g.Ents.Roam.Set(id, Roam{Home: p.Home})
 	}
@@ -112,7 +116,7 @@ func (g *Game) placed() []Placed {
 	var out []Placed
 	for id := range g.Ents.All() {
 		t := g.Ents.Transform.Get(id)
-		p := Placed{Kind: g.kind(id), Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll}
+		p := Placed{Kind: g.kind(id), Dir: t.Dir, Yaw: t.Yaw, Alt: t.Alt, Pitch: t.Pitch, Roll: t.Roll, Floor: t.Floor}
 		if r := g.Ents.Roam.Get(id); r != nil {
 			p.Home = r.Home
 		}
@@ -199,7 +203,7 @@ func (g *Game) nearbyEntity() (ecs.ID, float64) {
 		if !ok || (def.Prompt == "" && !def.Pickup) || (def.Build || isCamp(def)) && def.Pickup {
 			continue // a block is picked up by aiming at it, a building too (NearbyUse)
 		}
-		pos := g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir)
+		pos := g.foot(g.Ents.Transform.Get(id))
 		to := pos.Sub(g.Player.Pos)
 		d := to.Length()
 		if d > entityReach+def.Radius || d >= bestDist || (d > 0.8 && g.Player.Heading.Dot(to.Norm()) < 0.3) {
@@ -217,7 +221,7 @@ func (g *Game) entityUse(id ecs.ID) base.Interactable {
 	if prompt == "" {
 		prompt = "Ramasser : " + def.Name
 	}
-	at := base.ToLocal(g.World.Relief.Surface(g.Ents.Transform.Get(id).Dir))
+	at := base.ToLocal(g.foot(g.Ents.Transform.Get(id)))
 	if v, ok := g.vehicleOf(id); ok && !v.Auto() {
 		return base.Interactable{Kit: def.ID, At: at, Prompt: prompt,
 			Use: func(content.Game, vec3) { g.getIn(id) }}

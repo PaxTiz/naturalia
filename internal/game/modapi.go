@@ -108,7 +108,7 @@ func (g *Game) Near(kind string, dist float64) []content.EntityState {
 		if d > dist || (kind != "" && g.kind(id) != kind) {
 			continue
 		}
-		out = append(out, content.EntityState{ID: uint32(id), Kind: g.kind(id), At: g.World.Relief.Surface(e.Dir), Alt: e.Alt, Dist: d})
+		out = append(out, content.EntityState{ID: uint32(id), Kind: g.kind(id), At: g.foot(e), Alt: e.Alt, Dist: d})
 	}
 	slices.SortFunc(out, func(a, b content.EntityState) int { return cmp.Compare(a.Dist, b.Dist) })
 	return out

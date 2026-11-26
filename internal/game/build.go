@@ -542,7 +542,7 @@ func (g *Game) placeGhost() {
 	}
 	g.sfx.Beep(0.02, 0.15, 0.12, 392, 523)
 	if gh.Moving == 0 {
-		g.emit(content.Event{Name: content.EvPlace, ID: gh.Kind, At: g.World.Relief.Surface(e.Dir)})
+		g.emit(content.Event{Name: content.EvPlace, ID: gh.Kind, At: g.foot(&e)})
 	}
 }
 

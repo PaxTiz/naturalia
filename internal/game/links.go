@@ -105,7 +105,7 @@ func (g *Game) layLinks() {
 	if len(ways) > 0 || len(g.World.Relief.Flat().Ways.List) > 0 {
 		g.reshape(func() { g.World.Relief.SetWays(ways) })
 	}
-	g.burrow = planet.NewBurrow(digs)
+	g.burrow = planet.NewBurrow(planet.NewDigs(digs))
 	g.Player.burrow = g.burrow
 	g.relay = true
 }

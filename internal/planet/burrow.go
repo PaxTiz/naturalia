@@ -2,11 +2,53 @@ package planet
 
 import "math"
 
-// Burrow is what is dug under the ground: stairwells, galleries. The relief
-// knows one height a direction, the ground's, and keeps it: a burrow stands
-// beside it, for those who walk in it. It is entered where it comes up to
-// the surface, and nowhere else.
+// Volume is a hollow under the ground: the tunnels' galleries (Digs),
+// later the caves. The relief knows one height a direction, the ground's,
+// and keeps it: a volume stands beside it, for those who walk in it, with
+// its own floor and ceiling around a point. It is entered where it comes up
+// to the surface, and nowhere else.
+type Volume interface {
+	// At is the floor and the ceiling around a point, from Mars' center;
+	// ok if it is in the volume.
+	At(p vec3) (floor, ceiling float64, ok bool)
+}
+
+// Burrow is every hollow under the ground: several volumes, asked as one.
 type Burrow struct {
+	vols []Volume
+}
+
+// NewBurrow is the burrow of some volumes; nil ones are left out.
+func NewBurrow(vols ...Volume) *Burrow {
+	b := &Burrow{}
+	for _, v := range vols {
+		if v != nil {
+			b.vols = append(b.vols, v)
+		}
+	}
+	return b
+}
+
+// At is the floor and the ceiling of the burrow around a point, from Mars'
+// center; ok if it is in it. In two volumes at once, the floor under the
+// feet that is highest wins: the upper of two stories.
+func (b *Burrow) At(p vec3) (floor, ceiling float64, ok bool) {
+	if b == nil {
+		return 0, 0, false
+	}
+	r := p.Length()
+	for _, v := range b.vols {
+		f, c, in := v.At(p)
+		if in && (!ok || f > floor && f <= r+hollowUnder) {
+			floor, ceiling, ok = f, c, true
+		}
+	}
+	return floor, ceiling, ok
+}
+
+// Digs are what is dug under the ground together: stairwells, galleries,
+// in straight stretches (Hollow).
+type Digs struct {
 	digs []dig
 }
 
@@ -29,9 +71,10 @@ type Hollow struct {
 // hollowUnder is how far under its floor feet still count as in a hollow.
 const hollowUnder = 1.0
 
-// NewBurrow is the burrow of some digs.
-func NewBurrow(digs [][]Hollow) *Burrow {
-	b := &Burrow{}
+// NewDigs are some digs, each a list of stretches dug together; nil for
+// none.
+func NewDigs(digs [][]Hollow) *Digs {
+	b := &Digs{}
 	for _, list := range digs {
 		if len(list) == 0 {
 			continue
@@ -45,6 +88,9 @@ func NewBurrow(digs [][]Hollow) *Burrow {
 			d.reach = math.Max(d.reach, math.Max(h.A.Sub(d.mid).Length(), h.B.Sub(d.mid).Length())+far)
 		}
 		b.digs = append(b.digs, d)
+	}
+	if len(b.digs) == 0 {
+		return nil
 	}
 	return b
 }
@@ -72,9 +118,8 @@ func (h Hollow) in(p vec3) (beyond, floor, ceiling float64, ok bool) {
 	return math.Max(0, math.Max(-t, t-long)), floor, ceiling, r > floor-hollowUnder && r < ceiling
 }
 
-// At is the floor and the ceiling of the burrow around a point, from Mars'
-// center; ok if it is in it.
-func (b *Burrow) At(p vec3) (floor, ceiling float64, ok bool) {
+// At is the floor and the ceiling of the digs around a point (Volume).
+func (b *Digs) At(p vec3) (floor, ceiling float64, ok bool) {
 	if b == nil {
 		return 0, 0, false
 	}
@@ -90,4 +135,27 @@ func (b *Burrow) At(p vec3) (floor, ceiling float64, ok bool) {
 		}
 	}
 	return floor, ceiling, ok
+}
+
+// Places are where one may stand: on the relief, or in a hollow under it.
+type Places struct {
+	Relief Relief
+	Burrow *Burrow
+}
+
+// Ground is the floor at p's place and at its height: in a hollow, its
+// floor; outside, the relief's. under tells which.
+func (pl Places) Ground(p vec3) (at vec3, under bool) {
+	if f, _, ok := pl.Burrow.At(p); ok {
+		return p.Norm().Scale(f), true
+	}
+	return pl.Relief.Surface(p), false
+}
+
+// GroundRadius is Ground's distance from Mars' center.
+func (pl Places) GroundRadius(p vec3) float64 {
+	if f, _, ok := pl.Burrow.At(p); ok {
+		return f
+	}
+	return pl.Relief.SurfaceRadius(p.Norm())
 }
